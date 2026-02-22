@@ -1062,7 +1062,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   </div>
                 </div>
                 {/* Action icon buttons — absolute bottom-right, before Sheet's X */}
-                <div className="absolute bottom-3 right-10 flex items-center gap-0.5">
+                <div className="absolute bottom-3 right-5 flex items-center gap-0.5">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button onClick={handleEditUser} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
