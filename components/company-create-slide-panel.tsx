@@ -88,6 +88,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
   const { sidebarWidth } = useSidebar()
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -163,6 +164,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         emailAdmin: "",
       })
       setErrors({})
+      setSubmitAttempted(false)
       setAvatarPreview(null)
       setOriginalRawSrc(null)
       setRawImageSrc(null)
@@ -200,11 +202,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
 
   const handleSubmit = () => {
     if (!validateForm()) {
-      toast({
-        title: "Erro de validação",
-        description: "Por favor, preencha todos os campos obrigatórios",
-        variant: "destructive",
-      })
+      setSubmitAttempted(true)
       return
     }
     setShowConfirmDialog(true)
@@ -313,6 +311,15 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     setCropOpen(false)
     setRawImageSrc(null)
   }
+
+  // Error counts per accordion section
+  const sectionErrors = {
+    cadastrais: [errors.razaoSocial, errors.nomeFantasia, errors.cnpj].filter(Boolean).length,
+    contato: [errors.emailPrincipal, errors.telefone].filter(Boolean).length,
+    endereco: [errors.rua, errors.numero, errors.cidade, errors.estado].filter(Boolean).length,
+    admin: [errors.nomeAdmin, errors.emailAdmin].filter(Boolean).length,
+  }
+  const totalErrors = Object.values(sectionErrors).reduce((a, b) => a + b, 0)
 
   const panelWidth = `calc(100vw - ${sidebarWidth}px)`
 
@@ -455,13 +462,28 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             />
           </div>
 
+          {/* Validation warning banner */}
+          {submitAttempted && totalErrors > 0 && (
+            <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+              <p className="text-xs text-red-700 font-medium">
+                {totalErrors === 1
+                  ? "Falta 1 campo obrigatório para preencher"
+                  : `Faltam ${totalErrors} campos obrigatórios para preencher`}
+              </p>
+            </div>
+          )}
+
           <Accordion type="single" collapsible className="space-y-2">
             {/* SEÇÃO 1: DADOS CADASTRAIS */}
-            <AccordionItem value="cadastrais" className="border border-slate-200 rounded-lg overflow-hidden">
-              <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] text-xs font-semibold">
+            <AccordionItem value="cadastrais" className={cn("border rounded-lg overflow-hidden", sectionErrors.cadastrais > 0 ? "border-red-300" : "border-slate-200")}>
+              <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.cadastrais > 0 ? "bg-red-50 hover:bg-red-100" : "bg-[#eef2f7] hover:bg-[#e2e8f0]")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-blue-100 text-blue-700">1</Badge>
                   Dados Cadastrais da Empresa
+                  {sectionErrors.cadastrais > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.cadastrais}</span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -492,11 +514,14 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             </AccordionItem>
 
             {/* SEÇÃO 2: CONTATO */}
-            <AccordionItem value="contato" className="border border-slate-200 rounded-lg overflow-hidden">
-              <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] text-xs font-semibold">
+            <AccordionItem value="contato" className={cn("border rounded-lg overflow-hidden", sectionErrors.contato > 0 ? "border-red-300" : "border-slate-200")}>
+              <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.contato > 0 ? "bg-red-50 hover:bg-red-100" : "bg-[#eef2f7] hover:bg-[#e2e8f0]")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-green-100 text-green-700">2</Badge>
                   Contato
+                  {sectionErrors.contato > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.contato}</span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -538,11 +563,14 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             </AccordionItem>
 
             {/* SEÇÃO 4: ENDEREÇO */}
-            <AccordionItem value="endereco" className="border border-slate-200 rounded-lg overflow-hidden">
-              <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] text-xs font-semibold">
+            <AccordionItem value="endereco" className={cn("border rounded-lg overflow-hidden", sectionErrors.endereco > 0 ? "border-red-300" : "border-slate-200")}>
+              <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.endereco > 0 ? "bg-red-50 hover:bg-red-100" : "bg-[#eef2f7] hover:bg-[#e2e8f0]")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-purple-100 text-purple-700">4</Badge>
                   Endereço
+                  {sectionErrors.endereco > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.endereco}</span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-4 space-y-6">
@@ -747,11 +775,14 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             </AccordionItem>
 
             {/* SEÇÃO 8: USUÁRIO ADMINISTRADOR */}
-            <AccordionItem value="admin" className="border border-slate-200 rounded-lg overflow-hidden">
-              <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] text-xs font-semibold">
+            <AccordionItem value="admin" className={cn("border rounded-lg overflow-hidden", sectionErrors.admin > 0 ? "border-red-300" : "border-slate-200")}>
+              <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.admin > 0 ? "bg-red-50 hover:bg-red-100" : "bg-[#eef2f7] hover:bg-[#e2e8f0]")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-rose-100 text-rose-700">8</Badge>
                   Usuário Administrador Inicial
+                  {sectionErrors.admin > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.admin}</span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
