@@ -1772,18 +1772,29 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
                   <h3 className="text-lg font-semibold text-slate-900">Dados do Usuário</h3>
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <button
                       onClick={() => {
                         const allOpen = USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
                         setDadosOpenAccordions(allOpen ? [] : USER_DADOS_ALL_ACCORDIONS)
                       }}
-                      className="text-xs"
+                      className="flex items-center gap-2 group"
+                      title={USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
                     >
-                      <ChevronsUpDown className="h-3.5 w-3.5 mr-1.5" />
-                      {USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
-                    </Button>
+                      <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                        {USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                      </span>
+                      <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                        USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                          ? "bg-blue-600"
+                          : "bg-slate-300"
+                      }`}>
+                        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                          USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                            ? "translate-x-4"
+                            : "translate-x-0.5"
+                        }`} />
+                      </div>
+                    </button>
                     {!isDadosEditMode ? (
                       <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
                         <Edit2 className="h-4 w-4 mr-2" />

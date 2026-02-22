@@ -1026,21 +1026,32 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             {/* Dados Tab */}
             <TabsContent value="dados" className="space-y-4 mt-0 px-[50px] py-[50px]">
               {/* Header with Edit Button */}
-              <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4 -mx-6 px-6">
+              <div className="flex items-center justify-between sticky top-0 bg-slate-200 z-10 pb-4 -mx-6 px-6">
                 <h3 className="text-sm font-semibold text-slate-900">Dados da Empresa</h3>
                 <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
+                  <button
                     onClick={() => {
                       const allOpen = DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
                       setDadosOpenAccordions(allOpen ? [] : DADOS_ALL_ACCORDIONS)
                     }}
-                    className="text-xs"
+                    className="flex items-center gap-2 group"
+                    title={DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
                   >
-                    <ChevronsUpDown className="h-3.5 w-3.5 mr-1.5" />
-                    {DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
-                  </Button>
+                    <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                      {DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                    </span>
+                    <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                      DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                        ? "bg-blue-600"
+                        : "bg-slate-300"
+                    }`}>
+                      <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                        DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                          ? "translate-x-4"
+                          : "translate-x-0.5"
+                      }`} />
+                    </div>
+                  </button>
                   {!isDadosEditMode ? (
                     <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
                       <Edit2 className="h-4 w-4 mr-2" />
