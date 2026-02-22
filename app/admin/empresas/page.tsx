@@ -1066,32 +1066,41 @@ export default function EmpresasPage() {
                   {/* Plan */}
                   <td className="px-5 py-3.5">
                     {(() => {
-                      const planMap: Record<string, { name: string; price: string; color: string }> = {
-                        lite:       { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        start:      { name: "Start",      price: "R$ 500/mês",   color: "bg-green-100 text-green-700 border-green-200" },
-                        standard:   { name: "Standard",   price: "R$ 1.000/mês", color: "bg-blue-100 text-blue-700 border-blue-200" },
-                        growth:     { name: "Growth",     price: "R$ 1.500/mês", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-                        scale:      { name: "Scale",      price: "R$ 3.000/mês", color: "bg-violet-100 text-violet-700 border-violet-200" },
-                        squad:      { name: "Squad",      price: "R$ 5.000/mês", color: "bg-orange-100 text-orange-700 border-orange-200" },
-                        enterprise: { name: "Enterprise", price: "R$ 5.000/mês", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                      const planMap: Record<string, { name: string; price: string; discount: string; info: string; color: string }> = {
+                        lite:       { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        start:      { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200" },
+                        standard:   { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        growth:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+                        scale:      { name: "Scale",      price: "R$ 3.000/mês", discount: "20%", info: "20% de desconto em todos os produtos",          color: "bg-violet-100 text-violet-700 border-violet-200" },
+                        squad:      { name: "Squad",      price: "R$ 5.000/mês", discount: "20%", info: "Agências — 20% desconto + pós pago + squad dedicado", color: "bg-orange-100 text-orange-700 border-orange-200" },
+                        enterprise: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200" },
                         // backwards compat
-                        basic:    { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        starter:  { name: "Start",      price: "R$ 500/mês",   color: "bg-green-100 text-green-700 border-green-200" },
-                        premium:  { name: "Standard",   price: "R$ 1.000/mês", color: "bg-blue-100 text-blue-700 border-blue-200" },
-                        gold:     { name: "Growth",     price: "R$ 1.500/mês", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-                        silver:   { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        platinum: { name: "Enterprise", price: "R$ 5.000/mês", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                        basic:    { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        starter:  { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200" },
+                        premium:  { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        gold:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+                        silver:   { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        platinum: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200" },
                       }
                       const key = ((company.partner_level || company.account_type) ?? "").toLowerCase()
                       const plan = planMap[key]
                       if (!plan) return <span className="text-xs text-slate-400">—</span>
                       return (
-                        <div className="flex flex-col gap-0.5">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border w-fit ${plan.color}`}>
-                            {plan.name}
-                          </span>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 pl-0.5">{plan.price}</span>
-                        </div>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border w-fit cursor-default ${plan.color}`}>
+                                {plan.name}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-[200px] space-y-1 p-2.5">
+                              <p className="font-bold">{plan.name}</p>
+                              <p className="text-slate-300">{plan.price}</p>
+                              {plan.discount !== "—" && <p className="text-green-400">{plan.discount} de desconto em produtos</p>}
+                              <p className="text-slate-400 leading-snug">{plan.info}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )
                     })()}
                   </td>
