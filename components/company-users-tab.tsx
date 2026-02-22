@@ -1061,55 +1061,55 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                     <span className="text-[10px] font-medium text-white/70">{selectedUser.status === "online" ? "Online" : "Offline"}</span>
                   </div>
                 </div>
-
-                {/* Action icon buttons — absolute top-right, before Sheet's X */}
-                <div className="absolute top-3 right-10 flex items-center gap-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button onClick={handleEditUser} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
-                        <Edit2 className="h-3.5 w-3.5 text-white/80" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Editar</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button onClick={handleOpenPermissions} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
-                        <Shield className="h-3.5 w-3.5 text-white/80" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Permissões</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => handleBlockToggle(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
-                      >
-                        {selectedUser.isBlocked ? <Unlock className="h-3.5 w-3.5 text-white/80" /> : <Lock className="h-3.5 w-3.5 text-white/80" />}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => handleDeleteUser(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-500/30 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-red-300" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Excluir</TooltipContent>
-                  </Tooltip>
-                </div>
               </header>
+
+              {/* Action buttons bar — below header, right-aligned */}
+              <div className="flex-shrink-0 flex items-center justify-end gap-0.5 px-3 py-1.5 bg-gradient-to-r from-blue-950/90 via-indigo-900/90 to-fuchsia-900/90 pr-14">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={handleEditUser} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
+                      <Edit2 className="h-3.5 w-3.5 text-white/80" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Editar</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={handleOpenPermissions} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
+                      <Shield className="h-3.5 w-3.5 text-white/80" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Permissões</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => handleBlockToggle(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
+                      className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                    >
+                      {selectedUser.isBlocked ? <Unlock className="h-3.5 w-3.5 text-white/80" /> : <Lock className="h-3.5 w-3.5 text-white/80" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => handleDeleteUser(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
+                      className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-500/30 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Excluir</TooltipContent>
+                </Tooltip>
+              </div>
 
               {/* Detail avatar context menu */}
               {detailShowAvatarMenu && selectedUser && (detailAvatarPreview[selectedUser.id] || selectedUser.avatar) && (
                 <>
                   <div className="absolute inset-0 z-40" onClick={() => setDetailShowAvatarMenu(false)} />
-                  <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 24 }}>
+                  <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 142, left: 24 }}>
                     <button
                       onClick={() => { setDetailShowAvatarMenu(false); setTimeout(() => detailFileInputRef.current?.click(), 10) }}
                       className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
