@@ -730,10 +730,10 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
         </div>
 
         {/* Global-standard Table Card */}
-        <div className="mx-10 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
+        <div className="mx-10 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm bg-white">
 
           {/* Top Bar — matches empresas page */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-slate-50/60">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-white">
             {/* Search */}
             <div className="flex-1 relative min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
