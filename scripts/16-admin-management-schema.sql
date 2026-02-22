@@ -83,9 +83,13 @@ CREATE TABLE IF NOT EXISTS accepted_terms (
 
 -- Insert default account plans
 INSERT INTO account_plans (name, type, monthly_price, features) VALUES
-('Básico', 'basic', 99.00, '["Até 5 usuários", "Suporte por email", "Relatórios básicos"]'),
-('Premium', 'premium', 299.00, '["Até 20 usuários", "Suporte prioritário", "Relatórios avançados", "API access"]'),
-('Enterprise', 'enterprise', 599.00, '["Usuários ilimitados", "Suporte dedicado", "Relatórios personalizados", "API completa", "White label"]');
+('Lite',       'lite',       300.00,  '["Ativa conta agency na plataforma", "Acesso ao catálogo básico", "Suporte por email"]'),
+('Start',      'start',      500.00,  '["5% de desconto em todos os produtos", "Catálogo completo", "Suporte por email"]'),
+('Standard',   'standard',   1000.00, '["10% de desconto em todos os produtos", "Relatórios básicos", "Suporte prioritário"]'),
+('Growth',     'growth',     1500.00, '["15% de desconto em todos os produtos", "Relatórios avançados", "Suporte prioritário"]'),
+('Scale',      'scale',      3000.00, '["20% de desconto em todos os produtos", "Relatórios completos", "Account manager"]'),
+('Squad',      'squad',      5000.00, '["20% de desconto em todos os produtos", "Pós pago", "Squad dedicado", "Para agências"]'),
+('Enterprise', 'enterprise', 5000.00, '["Pós pago", "Atendimento exclusivo estratégico", "Squad dedicado", "Para empresas"]');
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_user_management_actions_user_id ON user_management_actions(user_id);

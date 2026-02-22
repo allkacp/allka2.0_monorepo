@@ -86,9 +86,13 @@ const partnershipLevels = [
 ]
 
 const creditPlans = [
-  { value: "R$ 500", discount: "10%", status: "available" },
-  { value: "R$ 1.000", discount: "15%", status: "current" },
-  { value: "R$ 1.500", discount: "20%", status: "available" },
+  { id: "lite",       value: "R$ 300",   name: "Lite",       discount: "—",   status: "available" },
+  { id: "start",      value: "R$ 500",   name: "Start",      discount: "5%",  status: "available" },
+  { id: "standard",   value: "R$ 1.000", name: "Standard",   discount: "10%", status: "available" },
+  { id: "growth",     value: "R$ 1.500", name: "Growth",     discount: "15%", status: "current" },
+  { id: "scale",      value: "R$ 3.000", name: "Scale",      discount: "20%", status: "available" },
+  { id: "squad",      value: "R$ 5.000", name: "Squad",      discount: "20%", status: "available" },
+  { id: "enterprise", value: "R$ 5.000", name: "Enterprise",  discount: "—",   status: "available" },
 ]
 
 export function AgenciasDashboard() {
@@ -141,7 +145,7 @@ export function AgenciasDashboard() {
               <CreditCard className="h-5 w-5 mr-2 text-blue-500" />
               Plano de Crédito Ativo
             </h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {creditPlans.map((plan, index) => (
                 <div
                   key={index}
@@ -149,16 +153,12 @@ export function AgenciasDashboard() {
                     plan.status === "current" ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50"
                   }`}
                 >
-                  <p className="font-semibold text-lg">{plan.value}</p>
-                  <p className="text-sm text-gray-600">{plan.discount} desconto</p>
+                  <p className="font-bold text-base text-gray-900">{plan.name}</p>
+                  <p className="font-semibold text-sm text-blue-600">{plan.value}/mês</p>
+                  <p className="text-xs text-gray-600 mt-1">{plan.discount !== "—" ? `${plan.discount} desconto` : "Sem desconto"}</p>
                   {plan.status === "current" && <Badge className="bg-blue-500 text-white mt-2">Ativo</Badge>}
                 </div>
               ))}
-            </div>
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Plano Atual:</strong> R$ 1.000/mês com 15% de desconto em todos os produtos da plataforma.
-              </p>
             </div>
           </CardContent>
         </Card>

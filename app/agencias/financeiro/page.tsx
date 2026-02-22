@@ -104,31 +104,66 @@ const transactions = [
 
 const creditPlans = [
   {
-    value: "R$ 500",
-    discount: "10%",
-    finalPrice: "R$ 450",
-    credits: "R$ 500",
+    id: "lite",
+    name: "Lite",
+    value: "R$ 300",
+    discount: "—",
+    description: "Ativa conta agency",
+    benefits: ["Acesso à plataforma agency"],
     status: "available",
   },
   {
+    id: "start",
+    name: "Start",
+    value: "R$ 500",
+    discount: "5%",
+    description: "5% de desconto em todos os produtos",
+    benefits: ["5% desconto", "Catálogo completo"],
+    status: "available",
+  },
+  {
+    id: "standard",
+    name: "Standard",
     value: "R$ 1.000",
-    discount: "15%",
-    finalPrice: "R$ 850",
-    credits: "R$ 1.000",
+    discount: "10%",
+    description: "10% de desconto em todos os produtos",
+    benefits: ["10% desconto", "Relatórios básicos", "Suporte prioritário"],
     status: "current",
   },
   {
+    id: "growth",
+    name: "Growth",
     value: "R$ 1.500",
-    discount: "20%",
-    finalPrice: "R$ 1.200",
-    credits: "R$ 1.500",
+    discount: "15%",
+    description: "15% de desconto em todos os produtos",
+    benefits: ["15% desconto", "Relatórios avançados", "Suporte prioritário"],
     status: "available",
   },
   {
-    value: "R$ 2.500",
-    discount: "25%",
-    finalPrice: "R$ 1.875",
-    credits: "R$ 2.500",
+    id: "scale",
+    name: "Scale",
+    value: "R$ 3.000",
+    discount: "20%",
+    description: "20% de desconto em todos os produtos",
+    benefits: ["20% desconto", "Relatórios completos", "Account manager"],
+    status: "available",
+  },
+  {
+    id: "squad",
+    name: "Squad",
+    value: "R$ 5.000",
+    discount: "20%",
+    description: "20% desconto + pós pago + squad dedicado",
+    benefits: ["20% desconto", "Pós pago", "Squad dedicado"],
+    status: "available",
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    value: "R$ 5.000",
+    discount: "—",
+    description: "Pós pago + atendimento exclusivo + squad dedicado",
+    benefits: ["Pós pago", "Atendimento estratégico", "Squad dedicado"],
     status: "available",
   },
 ]
@@ -309,9 +344,9 @@ export default function AgenciasFinanceiroPage() {
           <TabsContent value="credits" className="space-y-6">
             <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
               <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Planos de Crédito Disponíveis</h3>
+                <h3 className="text-lg font-semibold mb-4">Planos Disponíveis</h3>
                 <p className="text-sm text-gray-600 mb-6">
-                  Adquira créditos com desconto para usar na plataforma. Quanto maior o plano, maior o desconto!
+                  Escolha o plano ideal para sua agência. Quanto maior o plano, maior o desconto em todos os produtos!
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {creditPlans.map((plan, index) => (
@@ -325,16 +360,14 @@ export default function AgenciasFinanceiroPage() {
                     >
                       <div className="text-center">
                         <p className="text-sm text-gray-600 font-medium">Plano</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">{plan.value}</p>
-                        <Badge className="bg-green-500 text-white mt-2">{plan.discount} OFF</Badge>
-                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-xs text-gray-600">Você paga</p>
-                          <p className="text-xl font-bold text-green-600">{plan.finalPrice}</p>
-                        </div>
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                          <p className="text-xs text-blue-700">Créditos recebidos</p>
-                          <p className="text-lg font-bold text-blue-900">{plan.credits}</p>
-                        </div>
+                        <p className="text-2xl font-bold text-gray-900 mt-2">{plan.name}</p>
+                        <p className="text-lg font-semibold text-blue-600 mt-1">{plan.value}<span className="text-sm font-normal text-gray-500">/mês</span></p>
+                        {plan.discount !== "—" ? (
+                          <Badge className="bg-green-500 text-white mt-2">{plan.discount} desconto</Badge>
+                        ) : (
+                          <Badge className="bg-slate-400 text-white mt-2">Sem desconto</Badge>
+                        )}
+                        <p className="text-xs text-gray-500 mt-3 leading-relaxed">{plan.description}</p>
                         {plan.status === "current" ? (
                           <Badge className="w-full mt-4 bg-blue-500 text-white py-2">Plano Atual</Badge>
                         ) : (
@@ -342,7 +375,7 @@ export default function AgenciasFinanceiroPage() {
                             className="w-full mt-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                             onClick={() => handleBuyCredits(plan)}
                           >
-                            Adquirir
+                            Contratar
                           </Button>
                         )}
                       </div>

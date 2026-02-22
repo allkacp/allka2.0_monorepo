@@ -10,7 +10,7 @@ export interface UserManagement {
 export interface AccountPlan {
   id: number
   name: string
-  type: "basic" | "premium" | "enterprise"
+  type: "lite" | "start" | "standard" | "growth" | "scale" | "squad" | "enterprise"
   monthly_price: number
   features: string[]
   is_active: boolean

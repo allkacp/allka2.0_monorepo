@@ -620,14 +620,19 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 {/* Credit Plan Badge */}
                 {company.partner_level && (() => {
                   const planMap: Record<string, { name: string; color: string }> = {
-                    starter:    { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
-                    growth:     { name: "Growth",     color: "bg-blue-100 text-blue-700 border border-blue-200" },
+                    lite:       { name: "Lite",       color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    start:      { name: "Start",      color: "bg-green-100 text-green-700 border border-green-200" },
+                    standard:   { name: "Standard",   color: "bg-blue-100 text-blue-700 border border-blue-200" },
+                    growth:     { name: "Growth",     color: "bg-indigo-100 text-indigo-700 border border-indigo-200" },
+                    scale:      { name: "Scale",      color: "bg-violet-100 text-violet-700 border border-violet-200" },
+                    squad:      { name: "Squad",      color: "bg-orange-100 text-orange-700 border border-orange-200" },
                     enterprise: { name: "Enterprise", color: "bg-purple-100 text-purple-700 border border-purple-200" },
                     // backwards compat
-                    basic:    { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
-                    pro:      { name: "Growth",     color: "bg-blue-100 text-blue-700 border border-blue-200" },
-                    gold:     { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
-                    silver:   { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    basic:    { name: "Lite",       color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    starter:  { name: "Start",      color: "bg-green-100 text-green-700 border border-green-200" },
+                    pro:      { name: "Standard",   color: "bg-blue-100 text-blue-700 border border-blue-200" },
+                    gold:     { name: "Growth",     color: "bg-indigo-100 text-indigo-700 border border-indigo-200" },
+                    silver:   { name: "Lite",       color: "bg-slate-100 text-slate-600 border border-slate-200" },
                     platinum: { name: "Enterprise", color: "bg-purple-100 text-purple-700 border border-purple-200" },
                   }
                   const p = planMap[company.partner_level!.toLowerCase()] ?? { name: company.partner_level, color: "bg-slate-100 text-slate-600 border border-slate-200" }
@@ -1621,22 +1626,23 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
                     {(() => {
-                      const planMap: Record<string, { name: string; credits: number }> = {
-                        starter: { name: "Starter", credits: 100 },
-                        growth:  { name: "Growth",  credits: 500 },
-                        enterprise: { name: "Enterprise", credits: 1000 },
+                      const planMap: Record<string, { name: string; credits: number; discount: string; price: string }> = {
+                        lite:       { name: "Lite",       credits: 0,    discount: "—",   price: "R$ 300/mês" },
+                        start:      { name: "Start",      credits: 0,    discount: "5%",  price: "R$ 500/mês" },
+                        standard:   { name: "Standard",   credits: 0,    discount: "10%", price: "R$ 1.000/mês" },
+                        growth:     { name: "Growth",     credits: 0,    discount: "15%", price: "R$ 1.500/mês" },
+                        scale:      { name: "Scale",      credits: 0,    discount: "20%", price: "R$ 3.000/mês" },
+                        squad:      { name: "Squad",      credits: 0,    discount: "20%", price: "R$ 5.000/mês" },
+                        enterprise: { name: "Enterprise", credits: 0,    discount: "—",   price: "R$ 5.000/mês" },
                         // backwards compat
-                        basic: { name: "Starter", credits: 100 },
-                        pro:   { name: "Growth",  credits: 500 },
-                        gold:  { name: "Starter", credits: 100 },
-                        silver: { name: "Starter", credits: 100 },
-                        platinum: { name: "Enterprise", credits: 1000 },
+                        basic:    { name: "Lite",     credits: 0, discount: "—",   price: "R$ 300/mês" },
+                        starter:  { name: "Start",    credits: 0, discount: "5%",  price: "R$ 500/mês" },
+                        pro:      { name: "Standard", credits: 0, discount: "10%", price: "R$ 1.000/mês" },
+                        gold:     { name: "Growth",   credits: 0, discount: "15%", price: "R$ 1.500/mês" },
+                        silver:   { name: "Lite",     credits: 0, discount: "—",   price: "R$ 300/mês" },
+                        platinum: { name: "Enterprise", credits: 0, discount: "—", price: "R$ 5.000/mês" },
                       }
-                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", credits: 0 }
-                      const used = 32
-                      const available = plan.credits
-                      const usedCredits = Math.round(available * used / 100)
-                      const remaining = available - usedCredits
+                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", credits: 0, discount: "—", price: "—" }
                       return (
                     <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
                       <div className="flex items-start justify-between mb-3">
@@ -1650,27 +1656,15 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         </Badge>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
+                      <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Créditos Disponíveis</p>
-                          <p className="text-lg font-bold text-blue-600">{available.toLocaleString("pt-BR")}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Créditos Utilizados</p>
-                          <p className="text-lg font-bold text-orange-600">{usedCredits.toLocaleString("pt-BR")}</p>
+                          <p className="text-xs text-muted-foreground mb-1">Mensalidade</p>
+                          <p className="text-lg font-bold text-blue-600">{plan.price}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Créditos Restantes</p>
-                          <p className="text-lg font-bold text-green-600">{remaining.toLocaleString("pt-BR")}</p>
+                          <p className="text-xs text-muted-foreground mb-1">Desconto em Produtos</p>
+                          <p className="text-lg font-bold text-green-600">{plan.discount}</p>
                         </div>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-muted-foreground">Uso do Plano</span>
-                          <span className="text-xs font-semibold text-blue-600">{used}%</span>
-                        </div>
-                        <Progress value={used} className="h-2" />
                       </div>
                     </Card>
                       )

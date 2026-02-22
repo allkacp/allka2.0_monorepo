@@ -319,9 +319,12 @@ export function PricingCalculator() {
                         <SelectValue placeholder="Plano de crédito" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="500">R$ 500</SelectItem>
-                        <SelectItem value="1000">R$ 1.000</SelectItem>
-                        <SelectItem value="1500">R$ 1.500</SelectItem>
+                        <SelectItem value="300">Lite — R$ 300/mês (0%)</SelectItem>
+                        <SelectItem value="500">Start — R$ 500/mês (5%)</SelectItem>
+                        <SelectItem value="1000">Standard — R$ 1.000/mês (10%)</SelectItem>
+                        <SelectItem value="1500">Growth — R$ 1.500/mês (15%)</SelectItem>
+                        <SelectItem value="3000">Scale — R$ 3.000/mês (20%)</SelectItem>
+                        <SelectItem value="5000">Squad / Enterprise — R$ 5.000/mês (20%)</SelectItem>
                       </SelectContent>
                     </Select>
                   )}

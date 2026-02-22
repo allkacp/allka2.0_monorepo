@@ -212,9 +212,13 @@ export default function AgenciasPage() {
                         <SelectValue placeholder="Selecione o plano" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="starter">Starter</SelectItem>
-                        <SelectItem value="business">Business</SelectItem>
-                        <SelectItem value="premium">Premium</SelectItem>
+                        <SelectItem value="lite">Lite — R$ 300/mês</SelectItem>
+                        <SelectItem value="start">Start — R$ 500/mês</SelectItem>
+                        <SelectItem value="standard">Standard — R$ 1.000/mês</SelectItem>
+                        <SelectItem value="growth">Growth — R$ 1.500/mês</SelectItem>
+                        <SelectItem value="scale">Scale — R$ 3.000/mês</SelectItem>
+                        <SelectItem value="squad">Squad — R$ 5.000/mês</SelectItem>
+                        <SelectItem value="enterprise">Enterprise — R$ 5.000/mês</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

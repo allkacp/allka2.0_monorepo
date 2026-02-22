@@ -725,9 +725,13 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                     <Select value={formData.planoCreditoId} onValueChange={(value) => updateField("planoCreditoId", value)}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="starter">Starter — 100 créditos</SelectItem>
-                        <SelectItem value="growth">Growth — 500 créditos</SelectItem>
-                        <SelectItem value="enterprise">Enterprise — 1.000 créditos</SelectItem>
+                        <SelectItem value="lite">Lite — R$ 300/mês (ativa conta agency)</SelectItem>
+                        <SelectItem value="start">Start — R$ 500/mês (5% desconto)</SelectItem>
+                        <SelectItem value="standard">Standard — R$ 1.000/mês (10% desconto)</SelectItem>
+                        <SelectItem value="growth">Growth — R$ 1.500/mês (15% desconto)</SelectItem>
+                        <SelectItem value="scale">Scale — R$ 3.000/mês (20% desconto)</SelectItem>
+                        <SelectItem value="squad">Squad — R$ 5.000/mês (agências — 20% + pós pago)</SelectItem>
+                        <SelectItem value="enterprise">Enterprise — R$ 5.000/mês (empresas — pós pago)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
