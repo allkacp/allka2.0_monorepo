@@ -1,4 +1,4 @@
-ï»¿
+
 import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -145,7 +145,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const [companyWalletBalance, setCompanyWalletBalance] = useState(5000)
   const [companyWalletStatements, setCompanyWalletStatements] = useState([
     { id: "stmt_1", date: new Date().toISOString(), type: "credit" as const, amount: 1000, reason: "Recarga inicial", balanceAfter: 5000 },
-    { id: "stmt_2", date: new Date(Date.now() - 7*24*60*60*1000).toISOString(), type: "debit" as const, amount: 200, reason: "Pagamento de serviÃ§o", balanceAfter: 4000 },
+    { id: "stmt_2", date: new Date(Date.now() - 7*24*60*60*1000).toISOString(), type: "debit" as const, amount: 200, reason: "Pagamento de serviço", balanceAfter: 4000 },
   ])
   const [showCompanyWalletModal, setShowCompanyWalletModal] = useState(false)
   const [companyWalletType, setCompanyWalletType] = useState<"add" | "remove">("add")
@@ -205,8 +205,8 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const getTypeLabel = (type: CompanyType) => {
     const labels = {
       company: "Empresa",
-      agency: "AgÃªncia",
-      nomad: "NÃ´made",
+      agency: "Agência",
+      nomad: "Nômade",
     }
     return labels[type]
   }
@@ -270,11 +270,11 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
   const handleCompanyWalletSubmit = () => {
     if (!companyWalletAmount || parseFloat(companyWalletAmount) <= 0) {
-      toast({ title: "Erro", description: "Digite um valor vÃ¡lido", variant: "destructive" })
+      toast({ title: "Erro", description: "Digite um valor válido", variant: "destructive" })
       return
     }
     if (!companyWalletReason.trim()) {
-      toast({ title: "Erro", description: "Informe o motivo da operaÃ§Ã£o", variant: "destructive" })
+      toast({ title: "Erro", description: "Informe o motivo da operação", variant: "destructive" })
       return
     }
     setShowWalletConfirmDialog(true)
@@ -290,7 +290,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       newBalance = currentBalance + amount
     } else {
       if (currentBalance < amount) {
-        toast({ title: "Erro", description: "Saldo nÃ£o pode ser negativo", variant: "destructive" })
+        toast({ title: "Erro", description: "Saldo não pode ser negativo", variant: "destructive" })
         setIsApplyingCompanyWallet(false)
         return
       }
@@ -434,35 +434,35 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
     // Required field validation
     if (!name || typeof name !== "string" || !name.trim()) {
-      toast({ title: "Erro", description: "Nome / RazÃ£o Social Ã© obrigatï¿½ï¿½rio", variant: "destructive" })
+      toast({ title: "Erro", description: "Nome / Razão Social é obrigat??rio", variant: "destructive" })
       return
     }
 
     // Email validation
     if (!email || typeof email !== "string" || !email.includes("@")) {
-      toast({ title: "Erro", description: "Email vÃ¡lido Ã© obrigatÃ³rio", variant: "destructive" })
+      toast({ title: "Erro", description: "Email válido é obrigatório", variant: "destructive" })
       return
     }
 
     // Phone validation
     if (!phone || typeof phone !== "string" || phone.trim().length < 10) {
-      toast({ title: "Erro", description: "Telefone principal Ã© obrigatÃ³rio (mÃ­nimo 10 caracteres)", variant: "destructive" })
+      toast({ title: "Erro", description: "Telefone principal é obrigatório (mínimo 10 caracteres)", variant: "destructive" })
       return
     }
 
     // CEP validation (if provided)
     if (zipCode && typeof zipCode === "string" && zipCode.trim().length > 0 && zipCode.trim().length < 8) {
-      toast({ title: "Erro", description: "CEP deve ter no mÃ­nimo 8 caracteres", variant: "destructive" })
+      toast({ title: "Erro", description: "CEP deve ter no mínimo 8 caracteres", variant: "destructive" })
       return
     }
 
-    // Validation passed â€” show confirmation dialog
+    // Validation passed — show confirmation dialog
     setShowSaveConfirm(true)
   }
 
   const performDadosSave = async () => {
     if (!company?.id) {
-      toast({ title: "Erro", description: "ID da empresa nÃ£o encontrado", variant: "destructive" })
+      toast({ title: "Erro", description: "ID da empresa não encontrado", variant: "destructive" })
       return
     }
 
@@ -529,7 +529,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       }
 
       onCompanyUpdate?.(updatedCompany)
-      toast({ title: "Dados salvos!", description: "As informaÃ§Ãµes da empresa foram atualizadas com sucesso." })
+      toast({ title: "Dados salvos!", description: "As informações da empresa foram atualizadas com sucesso." })
       setIsDadosEditMode(false)
       setDadosEditedData({})
     } catch (error) {
@@ -543,9 +543,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const moduleUsageData = [
     { nome: "Vendas", uso: 1200 },
     { nome: "Financeiro", uso: 980 },
-    { nome: "RelatÃ³rios", uso: 850 },
+    { nome: "Relatórios", uso: 850 },
     { nome: "RH", uso: 720 },
-    { nome: "OperaÃ§Ãµes", uso: 650 },
+    { nome: "Operações", uso: 650 },
   ]
 
   const allUserPool = [
@@ -562,18 +562,18 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     { name: "Tatiane Borges",  avatar: "TB" },
     { name: "Rafael Souza",    avatar: "RS" },
     { name: "Camila Nunes",    avatar: "CN" },
-    { name: "VinÃ­cius Prado",  avatar: "VP" },
+    { name: "Vinícius Prado",  avatar: "VP" },
     { name: "Aline Castelo",   avatar: "AC" },
     { name: "Thiago Moreira",  avatar: "TM" },
-    { name: "PatrÃ­cia Dias",   avatar: "PD" },
+    { name: "Patrícia Dias",   avatar: "PD" },
     { name: "Rodrigo Leal",    avatar: "RL" },
     { name: "Isabela Teixeira",avatar: "IT" },
-    { name: "Felipe AraÃºjo",   avatar: "FA" },
+    { name: "Felipe Araújo",   avatar: "FA" },
   ]
   const accessTimes = [
-    "HÃ¡ 10 minutos", "HÃ¡ 25 minutos", "HÃ¡ 1 hora", "HÃ¡ 2 horas", "HÃ¡ 3 horas",
-    "HÃ¡ 5 horas", "HÃ¡ 7 horas", "HÃ¡ 9 horas", "Ontem", "Ontem Ã  tarde",
-    "2 dias atrÃ¡s", "3 dias atrÃ¡s", "4 dias atrÃ¡s", "5 dias atrÃ¡s", "1 semana atrÃ¡s",
+    "Há 10 minutos", "Há 25 minutos", "Há 1 hora", "Há 2 horas", "Há 3 horas",
+    "Há 5 horas", "Há 7 horas", "Há 9 horas", "Ontem", "Ontem à tarde",
+    "2 dias atrás", "3 dias atrás", "4 dias atrás", "5 dias atrás", "1 semana atrás",
   ]
   const seed = company.id * 7
   const recentUsers = Array.from({ length: 5 }, (_, i) => {
@@ -670,7 +670,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   <div className="flex-1">
                     <p className="text-blue-300 text-xs font-semibold uppercase tracking-wide">ALLKOIN</p>
                     <p className="text-white font-bold text-sm">
-                      {showBalance ? "0.00" : "â€¢â€¢â€¢â€¢â€¢"}
+                      {showBalance ? "0.00" : "•••••"}
                     </p>
                   </div>
                   <Eye className="h-4 w-4 text-blue-200" />
@@ -744,7 +744,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
               <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
                 <p className="text-white text-sm font-semibold">Ajustar logo da empresa</p>
-                <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar Â· use o zoom para ajustar</p>
+                <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · use o zoom para ajustar</p>
               </div>
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <div
@@ -792,7 +792,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   value="visao-geral"
                   className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
                 >
-                  VisÃ£o Geral
+                  Visão Geral
                 </TabsTrigger>
                 <TabsTrigger
                   value="dados"
@@ -804,7 +804,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   value="usuarios"
                   className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
                 >
-                  UsuÃ¡rios
+                  Usuários
                 </TabsTrigger>
                 <TabsTrigger
                   value="redes-sociais"
@@ -856,7 +856,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                       <div className="flex-1 min-w-0">
                         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">Tarefas contratadas</span>
                         <div className="text-2xl font-bold text-slate-900 mt-1">1.247</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">Vinculadas Ã  empresa</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">Vinculadas à empresa</div>
                       </div>
                       <div className="p-1.5 bg-white rounded-md border border-blue-200 flex-shrink-0">
                         <TrendingUp className="h-4 w-4 text-blue-600" />
@@ -864,11 +864,11 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
                   </div>
 
-                  {/* Card 2: PontuaÃ§Ã£o total das tarefas */}
+                  {/* Card 2: Pontuação total das tarefas */}
                   <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">PontuaÃ§Ã£o total</span>
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">Pontuação total</span>
                         <div className="text-2xl font-bold text-slate-900 mt-1">8.430 pts</div>
                         <div className="text-[10px] text-slate-500 mt-0.5">Soma dos projetos</div>
                       </div>
@@ -893,13 +893,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </div>
                 </div>
 
-                {/* SeÃ§Ã£o de EstatÃ­sticas - Mesmo padrÃ£o de admin/usuarios */}
+                {/* Seção de Estatísticas - Mesmo padrão de admin/usuarios */}
                 <Accordion type="single" collapsible defaultValue="estatisticas" className="space-y-3">
                   <AccordionItem value="estatisticas" className="border border-slate-200 rounded-lg">
-                    <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                       <div className="flex items-center gap-2">
                         <BarChart3 className="h-4 w-4 text-slate-600" />
-                        <span className="font-semibold text-slate-900">EstatÃ­sticas</span>
+                        <span className="font-semibold text-slate-900">Estatísticas</span>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="border-t border-slate-100 pb-0">
@@ -913,14 +913,14 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
                             {company.status === "active" && company.mau > 0
                               ? `${((company.dau / company.mau) * 100).toFixed(1)}%`
-                              : "â€”"}
+                              : "—"}
                           </p>
                         </Card>
 
                         <Card className="p-2 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200/50 dark:border-blue-800/30 shadow-none">
                           <div className="flex items-center gap-1.5 mb-0.5">
                             <Users className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                            <span className="text-[10px] font-medium text-blue-900 dark:text-blue-300">UsuÃ¡rios</span>
+                            <span className="text-[10px] font-medium text-blue-900 dark:text-blue-300">Usuários</span>
                           </div>
                           <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{company.users_count}</p>
                         </Card>
@@ -940,11 +940,11 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionItem>
                 </Accordion>
 
-                {/* Status de UsuÃ¡rios Row */}
+                {/* Status de Usuários Row */}
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Card: Ãšltimos usuÃ¡rios que acessaram */}
+                  {/* Card: Últimos usuários que acessaram */}
                   <div className="bg-white rounded-lg p-3 border border-slate-200">
-                    <h3 className="text-xs font-semibold text-slate-700 mb-2">Ãšltimos acessos</h3>
+                    <h3 className="text-xs font-semibold text-slate-700 mb-2">Últimos acessos</h3>
                     <div className="space-y-2">
                       {recentUsers.length > 0 ? (
                         recentUsers.map((user) => (
@@ -965,19 +965,19 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
                   </div>
 
-                  {/* Card: UsuÃ¡rios online agora */}
+                  {/* Card: Usuários online agora */}
                   <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col items-center justify-center">
                     <h3 className="text-xs font-semibold text-slate-700 mb-2 w-full">Online agora</h3>
                     <div className="flex flex-col items-center justify-center flex-1">
                       <div className="text-4xl font-bold text-blue-600">{company.users_online}</div>
-                      <p className="text-[10px] text-slate-500 mt-1">usuÃ¡rios ativos</p>
+                      <p className="text-[10px] text-slate-500 mt-1">usuários ativos</p>
                     </div>
                   </div>
                 </div>
 
-                {/* MÃ³dulos Mais Usados - Full Width Chart */}
+                {/* Módulos Mais Usados - Full Width Chart */}
                 <div className="bg-white rounded-lg p-3 border border-slate-200">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-2">MÃ³dulos mais usados</h4>
+                  <h4 className="text-xs font-semibold text-slate-700 mb-2">Módulos mais usados</h4>
                   <ResponsiveContainer width="100%" height={140}>
                     <BarChart data={moduleUsageData} layout="vertical" margin={{ top: 0, right: 30, left: 80, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -989,13 +989,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </ResponsiveContainer>
                 </div>
 
-                {/* InformaÃ§Ãµes Principais - Accordion */}
+                {/* Informações Principais - Accordion */}
                 <Accordion type="multiple" defaultValue={[]} className="space-y-3">
                   <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg">
-                    <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-blue-600" />
-                        <span className="font-semibold text-slate-900">InformaÃ§Ãµes Principais</span>
+                        <span className="font-semibold text-slate-900">Informações Principais</span>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-3 py-2 border-t border-slate-100 pb-0">
@@ -1065,7 +1065,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-3">
                 {/* DADOS CADASTRAIS */}
                 <AccordionItem value="cadastrais" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-blue-600" />
                       <span className="font-semibold text-slate-900">Dados Cadastrais</span>
@@ -1073,13 +1073,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* RazÃ£o Social */}
+                      {/* Razão Social */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">RazÃ£o Social</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Razão Social</label>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("legal_name") as string} onChange={(e) => handleDadosFieldChange("legal_name", e.target.value)} className="border-slate-300" placeholder="Digite a razÃ£o social" />
+                          <Input value={getDadosDisplayValue("legal_name") as string} onChange={(e) => handleDadosFieldChange("legal_name", e.target.value)} className="border-slate-300" placeholder="Digite a razão social" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("legal_name") || company.name || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("legal_name") || company.name || "—"}</div>
                         )}
                       </div>
 
@@ -1089,7 +1089,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("trade_name") as string || ""} onChange={(e) => handleDadosFieldChange("trade_name", e.target.value)} className="border-slate-300" placeholder="Digite o nome fantasia" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("trade_name") || company.name || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("trade_name") || company.name || "—"}</div>
                         )}
                       </div>
 
@@ -1099,17 +1099,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("document") as string || ""} onChange={(e) => handleDadosFieldChange("document", e.target.value)} className="border-slate-300 font-mono" placeholder="00.000.000/0000-00" disabled />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.document || "â€”"}</code>
+                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.document || "—"}</code>
                         )}
                       </div>
 
-                      {/* InscriÃ§Ã£o Estadual */}
+                      {/* Inscrição Estadual */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">InscriÃ§Ã£o Estadual</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Inscrição Estadual</label>
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("ie") as string || ""} onChange={(e) => handleDadosFieldChange("ie", e.target.value)} className="border-slate-300" placeholder="IE" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("ie") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("ie") || "—"}</div>
                         )}
                       </div>
 
@@ -1141,7 +1141,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                 {/* CONTATO */}
                 <AccordionItem value="contato" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-amber-600" />
                       <span className="font-semibold text-slate-900">Contato</span>
@@ -1155,7 +1155,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input type="email" value={getDadosDisplayValue("email") as string} onChange={(e) => handleDadosFieldChange("email", e.target.value)} className="border-slate-300" placeholder="email@example.com" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("email") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("email") || "—"}</div>
                         )}
                       </div>
 
@@ -1165,17 +1165,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input type="tel" value={getDadosDisplayValue("phone") as string || ""} onChange={(e) => handleDadosFieldChange("phone", e.target.value)} className="border-slate-300" placeholder="(00) 0000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone") || "—"}</div>
                         )}
                       </div>
 
-                      {/* Telefone SecundÃ¡rio */}
+                      {/* Telefone Secundário */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Telefone SecundÃ¡rio</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Telefone Secundário</label>
                         {isDadosEditMode ? (
                           <Input type="tel" value={getDadosDisplayValue("phone_secondary") as string || ""} onChange={(e) => handleDadosFieldChange("phone_secondary", e.target.value)} className="border-slate-300" placeholder="(00) 0000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone_secondary") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone_secondary") || "—"}</div>
                         )}
                       </div>
 
@@ -1185,7 +1185,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input type="tel" value={getDadosDisplayValue("whatsapp") as string || ""} onChange={(e) => handleDadosFieldChange("whatsapp", e.target.value)} className="border-slate-300" placeholder="(00) 00000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("whatsapp") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("whatsapp") || "—"}</div>
                         )}
                       </div>
 
@@ -1195,23 +1195,23 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input type="url" value={getDadosDisplayValue("website") as string || ""} onChange={(e) => handleDadosFieldChange("website", e.target.value)} className="border-slate-300" placeholder="https://exemplo.com.br" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("website") || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{getDadosDisplayValue("website") || "—"}</div>
                         )}
                       </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* ENDEREÃ‡O */}
+                {/* ENDEREÇO */}
                 <AccordionItem value="endereco" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-green-600" />
-                      <span className="font-semibold text-slate-900">EndereÃ§o</span>
+                      <span className="font-semibold text-slate-900">Endereço</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    {/* MAP â€” view: static embed | edit: interactive picker */}
+                    {/* MAP — view: static embed | edit: interactive picker */}
                     {!isDadosEditMode ? (
                       (() => {
                         const parts = [
@@ -1228,7 +1228,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         return (
                           <div className="mb-4 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                             <iframe
-                              title="LocalizaÃ§Ã£o da empresa"
+                              title="Localização da empresa"
                               width="100%"
                               height="220"
                               loading="lazy"
@@ -1242,7 +1242,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     ) : (
                       <div className="mb-4">
                         <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">
-                          LocalizaÃ§Ã£o no Mapa
+                          Localização no Mapa
                         </label>
                         <AddressMapPicker
                           address={{
@@ -1271,7 +1271,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("zip_code") as string || ""} onChange={(e) => handleDadosFieldChange("zip_code", e.target.value)} className="border-slate-300 font-mono" placeholder="00000-000" />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.zip_code || "â€”"}</code>
+                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.zip_code || "—"}</code>
                         )}
                       </div>
 
@@ -1281,17 +1281,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("street") as string || ""} onChange={(e) => handleDadosFieldChange("street", e.target.value)} className="border-slate-300" placeholder="Nome da rua" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.street || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.street || "—"}</div>
                         )}
                       </div>
 
-                      {/* NÃºmero */}
+                      {/* Número */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">NÃºmero</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Número</label>
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("number") as string || ""} onChange={(e) => handleDadosFieldChange("number", e.target.value)} className="border-slate-300" placeholder="123" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.number || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.number || "—"}</div>
                         )}
                       </div>
 
@@ -1301,7 +1301,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("complement") as string || ""} onChange={(e) => handleDadosFieldChange("complement", e.target.value)} className="border-slate-300" placeholder="Apto 123, Bloco A" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.complement || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.complement || "—"}</div>
                         )}
                       </div>
 
@@ -1311,7 +1311,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("neighborhood") as string || ""} onChange={(e) => handleDadosFieldChange("neighborhood", e.target.value)} className="border-slate-300" placeholder="Nome do bairro" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.neighborhood || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.neighborhood || "—"}</div>
                         )}
                       </div>
 
@@ -1319,9 +1319,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                       <div>
                         <label className="text-sm font-semibold text-slate-700 block mb-1.5">Cidade</label>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300" placeholder="SÃ£o Paulo" />
+                          <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300" placeholder="São Paulo" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.city || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.city || "—"}</div>
                         )}
                       </div>
 
@@ -1331,13 +1331,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("state") as string || ""} onChange={(e) => handleDadosFieldChange("state", e.target.value.toUpperCase())} className="border-slate-300" placeholder="SP" maxLength={2} />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.state || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.state || "—"}</div>
                         )}
                       </div>
 
-                      {/* PaÃ­s */}
+                      {/* País */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">PaÃ­s</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">País</label>
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("country") as string || "Brasil"} onChange={(e) => handleDadosFieldChange("country", e.target.value)} className="border-slate-300" placeholder="Brasil" />
                         ) : (
@@ -1350,7 +1350,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                 {/* FINANCEIRO */}
                 <AccordionItem value="financeiro" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Wallet className="h-4 w-4 text-red-600" />
                       <span className="font-semibold text-slate-900">Financeiro</span>
@@ -1364,7 +1364,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("pix_key") as string || ""} onChange={(e) => handleDadosFieldChange("pix_key", e.target.value)} className="border-slate-300" placeholder="Chave PIX" />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.pix_key || "â€”"}</code>
+                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.pix_key || "—"}</code>
                         )}
                       </div>
 
@@ -1378,10 +1378,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             <option value="cnpj">CNPJ</option>
                             <option value="email">Email</option>
                             <option value="phone">Telefone</option>
-                            <option value="random">AleatÃ³ria</option>
+                            <option value="random">Aleatória</option>
                           </select>
                         ) : (
-                          <div className="font-medium text-slate-900">{company.pix_type || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.pix_type || "—"}</div>
                         )}
                       </div>
 
@@ -1391,17 +1391,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("bank_name") as string || ""} onChange={(e) => handleDadosFieldChange("bank_name", e.target.value)} className="border-slate-300" placeholder="Nome do banco" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_name || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.bank_name || "—"}</div>
                         )}
                       </div>
 
-                      {/* AgÃªncia */}
+                      {/* Agência */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">AgÃªncia</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Agência</label>
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("bank_agency") as string || ""} onChange={(e) => handleDadosFieldChange("bank_agency", e.target.value)} className="border-slate-300" placeholder="0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_agency || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.bank_agency || "—"}</div>
                         )}
                       </div>
 
@@ -1411,7 +1411,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isDadosEditMode ? (
                           <Input value={getDadosDisplayValue("bank_account") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account", e.target.value)} className="border-slate-300" placeholder="000000-0" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_account || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.bank_account || "—"}</div>
                         )}
                       </div>
 
@@ -1422,43 +1422,43 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           <select value={getDadosDisplayValue("bank_account_type") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account_type", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium">
                             <option value="">Selecione</option>
                             <option value="corrente">Corrente</option>
-                            <option value="poupanca">PoupanÃ§a</option>
+                            <option value="poupanca">Poupança</option>
                           </select>
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_account_type || "â€”"}</div>
+                          <div className="font-medium text-slate-900">{company.bank_account_type || "—"}</div>
                         )}
                       </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* INFORMAÃ‡Ã•ES ADICIONAIS */}
+                {/* INFORMAÇÕES ADICIONAIS */}
                 <AccordionItem value="adicionais" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 text-purple-600" />
-                      <span className="font-semibold text-slate-900">InformaÃ§Ãµes Adicionais</span>
+                      <span className="font-semibold text-slate-900">Informações Adicionais</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
                     <div className="space-y-4">
-                      {/* ObservaÃ§Ãµes Administrativas */}
+                      {/* Observações Administrativas */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">ObservaÃ§Ãµes Administrativas</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Observações Administrativas</label>
                         {isDadosEditMode ? (
-                          <textarea value={getDadosDisplayValue("admin_notes") as string || ""} onChange={(e) => handleDadosFieldChange("admin_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas visÃ­veis para admin" />
+                          <textarea value={getDadosDisplayValue("admin_notes") as string || ""} onChange={(e) => handleDadosFieldChange("admin_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas visíveis para admin" />
                         ) : (
-                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.admin_notes || "â€”"}</div>
+                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.admin_notes || "—"}</div>
                         )}
                       </div>
 
                       {/* Notas Internas */}
                       <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Notas Internas (VisÃ­veis apenas para admin)</label>
+                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Notas Internas (Visíveis apenas para admin)</label>
                         {isDadosEditMode ? (
                           <textarea value={getDadosDisplayValue("internal_notes") as string || ""} onChange={(e) => handleDadosFieldChange("internal_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas internas do sistema" />
                         ) : (
-                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.internal_notes || "â€”"}</div>
+                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.internal_notes || "—"}</div>
                         )}
                       </div>
                     </div>
@@ -1467,7 +1467,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               </Accordion>
             </TabsContent>
 
-            {/* UsuÃ¡rios Tab */}
+            {/* Usuários Tab */}
             <TabsContent value="usuarios" className="flex-1 overflow-y-auto p-0">
               <CompanyUsersTab companyId={company.id} companyName={company.name} />
             </TabsContent>
@@ -1554,12 +1554,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             {/* Plano Tab */}
             <TabsContent value="plano" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <Accordion type="multiple" defaultValue={["admin", "credito", "account", "pagamento", "carteira", "nf"]} className="space-y-3">
-                {/* ACCORDION 1: AÃ‡Ã•ES ADMINISTRATIVAS */}
+                {/* ACCORDION 1: AÇÕES ADMINISTRATIVAS */}
                 <AccordionItem value="admin" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-amber-600" />
-                      <span className="font-semibold text-slate-900">AÃ§Ãµes Administrativas</span>
+                      <span className="font-semibold text-slate-900">Ações Administrativas</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
@@ -1586,7 +1586,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         className="text-xs"
                         onClick={() => handleAdminAction("force-charge")}
                       >
-                        ForÃ§ar CobranÃ§a
+                        Forçar Cobrança
                       </Button>
                       <Button
                         size="sm"
@@ -1600,12 +1600,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* ACCORDION 2: PLANO DE CRÃ‰DITO */}
+                {/* ACCORDION 2: PLANO DE CRÉDITO */}
                 <AccordionItem value="credito" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Crown className="h-4 w-4 text-blue-600" />
-                      <span className="font-semibold text-slate-900">Plano de CrÃ©dito</span>
+                      <span className="font-semibold text-slate-900">Plano de Crédito</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
@@ -1621,7 +1621,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         silver: { name: "Starter", credits: 100 },
                         platinum: { name: "Enterprise", credits: 1000 },
                       }
-                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "NÃ£o definido", credits: 0 }
+                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", credits: 0 }
                       const used = 32
                       const available = plan.credits
                       const usedCredits = Math.round(available * used / 100)
@@ -1641,15 +1641,15 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                       <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">CrÃ©ditos DisponÃ­veis</p>
+                          <p className="text-xs text-muted-foreground mb-1">Créditos Disponíveis</p>
                           <p className="text-lg font-bold text-blue-600">{available.toLocaleString("pt-BR")}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">CrÃ©ditos Utilizados</p>
+                          <p className="text-xs text-muted-foreground mb-1">Créditos Utilizados</p>
                           <p className="text-lg font-bold text-orange-600">{usedCredits.toLocaleString("pt-BR")}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">CrÃ©ditos Restantes</p>
+                          <p className="text-xs text-muted-foreground mb-1">Créditos Restantes</p>
                           <p className="text-lg font-bold text-green-600">{remaining.toLocaleString("pt-BR")}</p>
                         </div>
                       </div>
@@ -1669,7 +1669,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                 {/* ACCORDION 3: TIPO DE CONTA */}
                 <AccordionItem value="account" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-purple-600" />
                       <span className="font-semibold text-slate-900">Tipo de Conta</span>
@@ -1703,7 +1703,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {type === "Company Dependente" && "Empresa vinculada a outra entidade"}
                                   {type === "Company Independente" && "Empresa operacional independente"}
-                                  {type === "Agency" && "AgÃªncia de serviÃ§os"}
+                                  {type === "Agency" && "Agência de serviços"}
                                   {type === "Partner" && "Parceiro da plataforma"}
                                 </p>
                               </div>
@@ -1718,12 +1718,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* ACCORDION 3: MÃ‰TODOS DE PAGAMENTO */}
+                {/* ACCORDION 3: MÉTODOS DE PAGAMENTO */}
                 <AccordionItem value="pagamento" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Wallet className="h-4 w-4 text-emerald-600" />
-                      <span className="font-semibold text-slate-900">MÃ©todos de Pagamento</span>
+                      <span className="font-semibold text-slate-900">Métodos de Pagamento</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 space-y-4">
@@ -1745,12 +1745,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             </div>
                             <div>
                               <p className="text-sm font-semibold">Pix</p>
-                              <p className="text-xs text-muted-foreground">TransferÃªncia instantÃ¢nea</p>
+                              <p className="text-xs text-muted-foreground">Transferência instantânea</p>
                             </div>
                           </div>
                           {defaultPaymentMethod === "pix" && (
                             <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              PadrÃ£o
+                              Padrão
                             </Badge>
                           )}
                         </div>
@@ -1772,12 +1772,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             </div>
                             <div>
                               <p className="text-sm font-semibold">Boleto</p>
-                              <p className="text-xs text-muted-foreground">AtÃ© 3 dias Ãºteis</p>
+                              <p className="text-xs text-muted-foreground">Até 3 dias úteis</p>
                             </div>
                           </div>
                           {defaultPaymentMethod === "boleto" && (
                             <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              PadrÃ£o
+                              Padrão
                             </Badge>
                           )}
                         </div>
@@ -1799,12 +1799,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             </div>
                             <div>
                               <p className="text-sm font-semibold">Allkoins</p>
-                              <p className="text-xs text-muted-foreground">Saldo em crÃ©ditos</p>
+                              <p className="text-xs text-muted-foreground">Saldo em créditos</p>
                             </div>
                           </div>
                           {defaultPaymentMethod === "allkoins" && (
                             <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              PadrÃ£o
+                              Padrão
                             </Badge>
                           )}
                         </div>
@@ -1814,20 +1814,20 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     {/* Credit Cards Section */}
                     <div className="mt-4 pt-4 border-t border-slate-200">
                       <div className="flex items-center justify-between mb-3">
-                        <label className="text-xs font-semibold text-slate-600">CartÃµes de CrÃ©dito/DÃ©bito</label>
+                        <label className="text-xs font-semibold text-slate-600">Cartões de Crédito/Débito</label>
                         <Button
                           onClick={() => setShowAddCardModal(true)}
                           size="sm"
                           className="h-8 gap-1 bg-blue-600 hover:bg-blue-700"
                         >
                           <Plus className="h-4 w-4" />
-                          Novo CartÃ£o
+                          Novo Cartão
                         </Button>
                       </div>
                       {creditCards.length === 0 ? (
                         <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                           <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                          <p className="text-sm text-slate-600">Nenhum cartÃ£o cadastrado</p>
+                          <p className="text-sm text-slate-600">Nenhum cartão cadastrado</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1847,14 +1847,14 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                                   </div>
                                   {defaultPaymentMethod === `card-${card.id}` && (
                                     <div className="bg-white bg-opacity-20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">
-                                      PadrÃ£o
+                                      Padrão
                                     </div>
                                   )}
                                 </div>
 
                                 <div>
-                                  <div className="text-xs font-semibold opacity-75 uppercase tracking-widest mb-2">NÃºmero</div>
-                                  <div className="text-2xl font-mono font-bold tracking-widest">â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ {card.lastFour}</div>
+                                  <div className="text-xs font-semibold opacity-75 uppercase tracking-widest mb-2">Número</div>
+                                  <div className="text-2xl font-mono font-bold tracking-widest">•••• •••• •••• {card.lastFour}</div>
                                 </div>
 
                                 <div className="flex justify-between items-end">
@@ -1873,7 +1873,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                                 <div className="flex gap-2">
                                   {defaultPaymentMethod !== `card-${card.id}` && (
                                     <Button onClick={() => handleSetDefaultCard(card.id)} size="sm" className="bg-white text-slate-900 hover:bg-blue-100 font-semibold h-9 px-4">
-                                      Definir PadrÃ£o
+                                      Definir Padrão
                                     </Button>
                                   )}
                                   <Button onClick={() => handleRemoveCard(card.id)} size="sm" variant="outline" className="bg-white text-slate-900 hover:bg-red-100 h-9 px-3">
@@ -1891,7 +1891,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                 {/* ACCORDION 4: CARTEIRA DA EMPRESA */}
                 <AccordionItem value="carteira" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Wallet className="h-4 w-4 text-cyan-600" />
                       <span className="font-semibold text-slate-900">Carteira da Empresa</span>
@@ -1899,7 +1899,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 space-y-4">
                     <div className="bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 p-6 rounded-xl border border-blue-300 shadow-lg text-white">
-                      <label className="text-xs font-semibold uppercase tracking-wide block mb-2 opacity-90">Saldo DisponÃ­vel</label>
+                      <label className="text-xs font-semibold uppercase tracking-wide block mb-2 opacity-90">Saldo Disponível</label>
                       <div className="text-3xl font-bold mb-1">R$ {companyWalletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                       <p className="text-xs opacity-75">Pronto para usar</p>
                     </div>
@@ -1922,7 +1922,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
 
                     <div>
-                      <label className="text-sm font-semibold text-slate-700 block mb-1.5">Ãšltimas MovimentaÃ§Ãµes</label>
+                      <label className="text-sm font-semibold text-slate-700 block mb-1.5">Últimas Movimentações</label>
                       <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200 max-h-48 overflow-y-auto">
                         {companyWalletStatements.slice(0, 5).map(stmt => (
                           <div key={stmt.id} className="flex justify-between items-center text-xs border-b border-slate-200 pb-2 last:border-0">
@@ -1939,7 +1939,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           </div>
                         ))}
                         {companyWalletStatements.length === 0 && (
-                          <div className="text-center py-4 text-slate-500 text-xs">Nenhuma movimentaÃ§Ã£o</div>
+                          <div className="text-center py-4 text-slate-500 text-xs">Nenhuma movimentação</div>
                         )}
                       </div>
                     </div>
@@ -1948,7 +1948,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                 {/* ACCORDION 5: NOTAS FISCAIS E COMPROVANTES */}
                 <AccordionItem value="nf" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-indigo-600" />
                       <span className="font-semibold text-slate-900">Notas Fiscais e Comprovantes</span>
@@ -1960,7 +1960,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         const methodLabel = {
                           pix: "Pix",
                           boleto: "Boleto",
-                          cartao: "CartÃ£o",
+                          cartao: "Cartão",
                           allkoins: "Allkoins",
                         }[payment.method]
 
@@ -1995,7 +1995,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                                       {payment.type === "nf" ? "Nota Fiscal" : "Comprovante"} - {methodLabel}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                      {new Date(payment.date).toLocaleDateString("pt-BR")} â€¢ R$ {payment.amount.toLocaleString("pt-BR")}
+                                      {new Date(payment.date).toLocaleDateString("pt-BR")} • R$ {payment.amount.toLocaleString("pt-BR")}
                                     </p>
                                   </div>
                                 </div>
@@ -2038,7 +2038,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             </div>
                             {payment.type === "comprovante" && (
                               <p className="text-xs text-muted-foreground mt-2 italic">
-                                Pagamentos com Allkoins nÃ£o geram nota fiscal.
+                                Pagamentos com Allkoins não geram nota fiscal.
                               </p>
                             )}
                           </Card>
@@ -2071,9 +2071,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase">Motivo (obrigatÃ³rio)</label>
+                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase">Motivo (obrigatório)</label>
                           <Input
-                            placeholder="Descreva o motivo da operaÃ§Ã£o"
+                            placeholder="Descreva o motivo da operação"
                             value={companyWalletReason}
                             onChange={(e) => setCompanyWalletReason(e.target.value)}
                             className="border-slate-300"
@@ -2092,7 +2092,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           onClick={handleCompanyWalletSubmit}
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                         >
-                          PrÃ³ximo
+                          Próximo
                         </Button>
                       </div>
                     </div>
@@ -2105,12 +2105,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                   <Card className="w-full max-w-md">
                     <div className="p-6">
-                      <h3 className="text-lg font-bold mb-4">Confirmar MovimentaÃ§Ã£o</h3>
+                      <h3 className="text-lg font-bold mb-4">Confirmar Movimentação</h3>
                       <div className="bg-slate-50 p-4 rounded-lg space-y-2 text-sm mb-4">
                         <div className="flex justify-between">
                           <span className="text-slate-600">Tipo:</span>
                           <span className="font-semibold">
-                            {companyWalletType === "add" ? "CrÃ©dito" : "DÃ©bito"}
+                            {companyWalletType === "add" ? "Crédito" : "Débito"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -2124,7 +2124,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           <span className="font-semibold">{companyWalletReason}</span>
                         </div>
                         <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between">
-                          <span className="font-semibold">Saldo apÃ³s:</span>
+                          <span className="font-semibold">Saldo após:</span>
                           <span className="text-blue-600 font-bold">
                             R$ {(companyWalletType === "add" 
                               ? companyWalletBalance + parseFloat(companyWalletAmount)
@@ -2166,7 +2166,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                   <Card className="w-full max-w-md">
                     <div className="p-6">
-                      <h3 className="text-lg font-bold mb-4">Editar Plano de CrÃ©dito</h3>
+                      <h3 className="text-lg font-bold mb-4">Editar Plano de Crédito</h3>
                       <div className="space-y-3 mb-4">
                         <div>
                           <label className="text-xs font-semibold mb-1 block">Novo Plano</label>
@@ -2177,9 +2177,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             }
                             className="w-full px-3 py-2 border rounded text-sm"
                           >
-                            <option value="starter">Starter â€” 100 crÃ©ditos</option>
-                            <option value="growth">Growth â€” 500 crÃ©ditos</option>
-                            <option value="enterprise">Enterprise â€” 1.000 crÃ©ditos</option>
+                            <option value="starter">Starter — 100 créditos</option>
+                            <option value="growth">Growth — 500 créditos</option>
+                            <option value="enterprise">Enterprise — 1.000 créditos</option>
                           </select>
                         </div>
                       </div>
@@ -2250,9 +2250,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                   <Card className="w-full max-w-md">
                     <div className="p-6">
-                      <h3 className="text-lg font-bold mb-4">ForÃ§ar CobranÃ§a</h3>
+                      <h3 className="text-lg font-bold mb-4">Forçar Cobrança</h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Tem certeza que deseja forÃ§ar a cobranÃ§a agora? Esta aÃ§Ã£o Ã© irreversÃ­vel.
+                        Tem certeza que deseja forçar a cobrança agora? Esta ação é irreversível.
                       </p>
                       <div className="flex gap-2">
                         <Button
@@ -2266,7 +2266,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           onClick={handleConfirmAdminAction}
                           className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                         >
-                          Confirmar CobranÃ§a
+                          Confirmar Cobrança
                         </Button>
                       </div>
                     </div>
@@ -2318,7 +2318,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   <Card className="w-full max-w-md">
                     <div className="p-6">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold">Adicionar CartÃ£o</h3>
+                        <h3 className="text-lg font-bold">Adicionar Cartão</h3>
                         <button
                           onClick={() => setShowAddCardModal(false)}
                           className="text-gray-400 hover:text-gray-600"
@@ -2329,7 +2329,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
                       <div className="space-y-3">
                         <div>
-                          <label className="text-xs font-semibold text-gray-600 block mb-1">NÃºmero do CartÃ£o</label>
+                          <label className="text-xs font-semibold text-gray-600 block mb-1">Número do Cartão</label>
                           <Input
                             value={newCardData.number}
                             onChange={(e) => setNewCardData({ ...newCardData, number: e.target.value.slice(0, 16) })}
@@ -2365,7 +2365,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           <Input
                             value={newCardData.holderName}
                             onChange={(e) => setNewCardData({ ...newCardData, holderName: e.target.value })}
-                            placeholder="JoÃ£o da Silva"
+                            placeholder="João da Silva"
                             className="text-sm h-8"
                           />
                         </div>
@@ -2434,7 +2434,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
           </div>
           <div className="bg-blue-50 border border-blue-200 p-5 rounded-xl">
             <p className="text-sm text-blue-900 leading-relaxed font-medium">
-              Esta aÃ§Ã£o irÃ¡ desbloquear funcionalidades exclusivas para parceiros da plataforma.
+              Esta ação irá desbloquear funcionalidades exclusivas para parceiros da plataforma.
             </p>
           </div>
           <div className="flex gap-3 pt-4">
@@ -2477,7 +2477,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             {/* Main Question */}
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
               <p className="text-sm text-blue-900 leading-relaxed">
-                Deseja tambÃ©m convidar <strong>{company?.name}</strong> para fazer parte do <strong>Programa Partner Leaders</strong>?
+                Deseja também convidar <strong>{company?.name}</strong> para fazer parte do <strong>Programa Partner Leaders</strong>?
               </p>
             </div>
 
@@ -2485,13 +2485,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             <div className="border-l-4 border-blue-600 pl-4 space-y-4">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                 <Gift className="h-5 w-5 text-blue-600" />
-                BenefÃ­cios como Partner Leader:
+                Benefícios como Partner Leader:
               </h3>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
                   <Check className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
                   <p className="text-sm text-gray-700">
-                    Receber <strong className="text-blue-600">comissÃ£o</strong> por cada venda de uma <strong>AgÃªncia liderada</strong>
+                    Receber <strong className="text-blue-600">comissão</strong> por cada venda de uma <strong>Agência liderada</strong>
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
@@ -2507,7 +2507,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex items-start gap-3">
               <Mail className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
               <p className="text-sm text-blue-900">
-                A agÃªncia receberÃ¡ um <strong>convite por e-mail</strong> e <strong>notificaÃ§Ã£o no sistema</strong>
+                A agência receberá um <strong>convite por e-mail</strong> e <strong>notificação no sistema</strong>
               </p>
             </div>
 
@@ -2525,7 +2525,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 onClick={handleMigrateWithoutInvite}
               >
                 <X className="h-5 w-5 mr-2" />
-                NÃ£o, apenas migrar
+                Não, apenas migrar
               </Button>
               <Button
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold h-12 rounded-xl border-0 transition-all duration-200 shadow-md hover:shadow-lg text-base"
@@ -2544,10 +2544,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       open={showSaveConfirm}
       onClose={() => setShowSaveConfirm(false)}
       onConfirm={performDadosSave}
-      title="Salvar alteraÃ§Ãµes?"
-      message={<>Tem certeza que deseja salvar as alteraÃ§Ãµes nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong>? Esta aÃ§Ã£o irÃ¡ atualizar as informaÃ§Ãµes da empresa.</>}
+      title="Salvar alterações?"
+      message={<>Tem certeza que deseja salvar as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong>? Esta ação irá atualizar as informações da empresa.</>}
       confirmText="Sim, salvar"
-      cancelText="Voltar Ã  ediÃ§Ã£o"
+      cancelText="Voltar à edição"
       destructive={false}
     />
 
@@ -2556,10 +2556,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       open={showCancelConfirm}
       onClose={() => setShowCancelConfirm(false)}
       onConfirm={handleDadosCancelEdit}
-      title="Descartar alteraÃ§Ãµes?"
-      message={<>Tem certeza que deseja cancelar? Todas as alteraÃ§Ãµes nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong> serÃ£o descartadas.</>}
+      title="Descartar alterações?"
+      message={<>Tem certeza que deseja cancelar? Todas as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong> serão descartadas.</>}
       confirmText="Sim, descartar"
-      cancelText="Voltar Ã  ediÃ§Ã£o"
+      cancelText="Voltar à edição"
       destructive={true}
     />
     </>

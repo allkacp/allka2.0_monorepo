@@ -1124,7 +1124,7 @@ export default function AdminProdutosPage() {
 
       <Accordion type="single" collapsible className="mb-1">
         <AccordionItem value="stats" className="border rounded-lg bg-blue-50 border-blue-200">
-          <AccordionTrigger className="text-sm font-semibold hover:no-underline px-4 py-3 hover:bg-blue-100 rounded-t-lg transition-colors">
+          <AccordionTrigger className="text-sm font-semibold hover:no-underline px-4 py-3 hover:bg-slate-50 rounded-t-lg transition-colors">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-600" />
               <span className="text-blue-900">Estatísticas de Produtos</span>

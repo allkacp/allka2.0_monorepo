@@ -1445,7 +1445,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 {/* Account Info - Accordion */}
                 <Accordion type="multiple" defaultValue={["info-principais"]} className="space-y-3">
                   <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <UserIcon className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Informações Principais</span>
@@ -1510,7 +1510,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <Accordion type="multiple" value={openAccordions} onValueChange={setOpenAccordions} className="space-y-3">
                   {/* 1. DADOS PRINCIPAIS DA CONTA */}
                   <AccordionItem value="dados-principais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <UserIcon className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Dados Principais da Conta</span>
@@ -1582,7 +1582,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 2. STATUS DA CONTA */}
                   <AccordionItem value="status-conta" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Shield className="h-5 w-5 text-amber-600" />
                         <span className="font-semibold text-slate-900">Status da Conta</span>
@@ -1650,7 +1650,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 3. NÍVEL E PLANO */}
                   <AccordionItem value="nivel-performance" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Zap className="h-5 w-5 text-purple-600" />
                         <span className="font-semibold text-slate-900">Nível e Plano da Conta</span>
@@ -1808,7 +1808,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-3">
                   {/* DADOS PESSOAIS */}
                   <AccordionItem value="pessoais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <UserIcon className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Dados Pessoais</span>
@@ -1887,7 +1887,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* CONTATO */}
                   <AccordionItem value="contato" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Mail className="h-5 w-5 text-amber-600" />
                         <span className="font-semibold text-slate-900">Contato</span>
@@ -1940,7 +1940,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* ENDEREÇO */}
                   <AccordionItem value="endereco" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-5 w-5 text-green-600" />
                         <span className="font-semibold text-slate-900">Endereço</span>
@@ -2033,7 +2033,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* INFORMAÇÕES ADICIONAIS */}
                   <AccordionItem value="adicionais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="h-5 w-5 text-purple-600" />
                         <span className="font-semibold text-slate-900">Informações Adicionais</span>
@@ -2097,7 +2097,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <Accordion type="multiple" value={financialOpenAccordions} onValueChange={setFinancialOpenAccordions} className="space-y-3">
                   {/* MÉTODOS DE PAGAMENTO */}
                   <AccordionItem value="pagamentos" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Métodos de Pagamento</span>
@@ -2250,7 +2250,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* CARTEIRA DIGITAL / ALLKOIN */}
                   <AccordionItem value="carteira" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Wallet className="h-5 w-5 text-amber-600" />
                         <span className="font-semibold text-slate-900">Carteira Digital / Allkoin</span>
@@ -2337,7 +2337,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* DADOS FINANCEIROS GERAIS */}
                   <AccordionItem value="financeiro" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-purple-600" />
                         <span className="font-semibold text-slate-900">Dados Financeiros Gerais</span>
@@ -2440,7 +2440,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <Accordion type="multiple" value={permissionsOpenAccordions} onValueChange={setPermissionsOpenAccordions} className="space-y-3">
                   {/* PERFIL DE ACESSO */}
                   <AccordionItem value="role" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Shield className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Perfil de Acesso</span>
@@ -2485,7 +2485,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* ADMINISTRAÇÃO */}
                   <AccordionItem value="admin" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Lock className="h-5 w-5 text-red-600" />
                         <span className="font-semibold text-slate-900">Administração</span>
@@ -2526,7 +2526,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* FINANCEIRO */}
                   <AccordionItem value="financial" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-5 w-5 text-amber-600" />
                         <span className="font-semibold text-slate-900">Financeiro</span>
@@ -2567,7 +2567,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* OPERACIONAL */}
                   <AccordionItem value="operational" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Zap className="h-5 w-5 text-yellow-600" />
                         <span className="font-semibold text-slate-900">Operacional</span>
@@ -2608,7 +2608,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* RELATÓRIOS */}
                   <AccordionItem value="reports" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <BarChart3 className="h-5 w-5 text-green-600" />
                         <span className="font-semibold text-slate-900">Relatórios</span>
@@ -2647,7 +2647,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* SISTEMA */}
                   <AccordionItem value="system" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Settings className="h-5 w-5 text-purple-600" />
                         <span className="font-semibold text-slate-900">Sistema</span>
@@ -2699,7 +2699,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <Accordion type="multiple" value={securityOpenAccordions} onValueChange={setSecurityOpenAccordions} className="space-y-3">
                   {/* 1. AUTENTICAÇÃO E SENHA */}
                   <AccordionItem value="auth" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Key className="h-5 w-5 text-blue-600" />
                         <span className="font-semibold text-slate-900">Autenticação e Senha</span>
@@ -2741,7 +2741,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 2. AUTENTICAÇÃO EM DOIS FATORES */}
                   <AccordionItem value="2fa" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Smartphone className="h-5 w-5 text-amber-600" />
                         <span className="font-semibold text-slate-900">Autenticação em Dois Fatores (2FA)</span>
@@ -2776,7 +2776,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 3. SESSÕES ATIVAS */}
                   <AccordionItem value="sessions" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-green-600" />
                         <span className="font-semibold text-slate-900">Sessões Ativas</span>
@@ -2818,7 +2818,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 4. DISPOSITIVOS CONECTADOS */}
                   <AccordionItem value="devices" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Tablet className="h-5 w-5 text-purple-600" />
                         <span className="font-semibold text-slate-900">Dispositivos Conectados</span>
@@ -2851,7 +2851,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
                   {/* 5. LOGS E AUDITORIA */}
                   <AccordionItem value="audit" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
                         <Activity className="h-5 w-5 text-red-600" />
                         <span className="font-semibold text-slate-900">Logs e Auditoria</span>

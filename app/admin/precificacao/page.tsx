@@ -367,7 +367,7 @@ setIsOpen(false)
 
       <Accordion type="single" collapsible className="mb-1">
         <AccordionItem value="stats" className="border-none">
-          <AccordionTrigger className="bg-blue-50 hover:bg-blue-100 rounded-lg px-4 py-3 transition-colors">
+          <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-4 py-3 transition-colors">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-600" />
               <span className="font-semibold text-blue-900">Estatísticas e Métricas</span>

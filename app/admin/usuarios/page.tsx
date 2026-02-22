@@ -851,7 +851,7 @@ export default function UsuariosPage() {
 
       <Accordion type="single" collapsible className="mb-0">
         <AccordionItem value="stats" className="border-none">
-          <AccordionTrigger className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-lg px-3 py-2 transition-colors">
+          <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-3 py-2 transition-colors">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <span className="font-semibold text-blue-900 dark:text-blue-300">Estatísticas e Métricas</span>
@@ -1127,7 +1127,7 @@ export default function UsuariosPage() {
                         
                         {/* SEÇÃO: IDENTIFICAÇÃO */}
                         <AccordionItem value="identificacao" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-slate-50 dark:bg-slate-700/40 hover:bg-slate-100 dark:hover:bg-slate-700/60 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Identificação</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1198,7 +1198,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: TIPO E FUNÇÃO */}
                         <AccordionItem value="tipo-funcao" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-slate-50 dark:bg-slate-700/40 hover:bg-slate-100 dark:hover:bg-slate-700/60 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Tipo e Função</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1283,7 +1283,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: DATAS */}
                         <AccordionItem value="datas" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-slate-50 dark:bg-slate-700/40 hover:bg-slate-100 dark:hover:bg-slate-700/60 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Período de Datas</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1333,7 +1333,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: MÉTRICAS */}
                         <AccordionItem value="metricas" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-slate-50 dark:bg-slate-700/40 hover:bg-slate-100 dark:hover:bg-slate-700/60 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Métricas e Pontuação</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1396,7 +1396,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: DADOS COMPLEMENTARES */}
                         <AccordionItem value="complementares" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-slate-50 dark:bg-slate-700/40 hover:bg-slate-100 dark:hover:bg-slate-700/60 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Dados Complementares</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
