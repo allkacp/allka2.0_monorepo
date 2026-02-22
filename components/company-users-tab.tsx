@@ -1484,27 +1484,28 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
             {/* Crop overlay — shown inside the sheet */}
             {cropOpen && rawImageSrc && (
-              <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center gap-6 rounded-none">
-                <div className="flex flex-col items-center gap-1">
+              <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
+
+                {/* Header */}
+                <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
                   <p className="text-white text-sm font-semibold">Ajustar foto de perfil</p>
-                  <p className="text-white/50 text-xs">Arraste para reposicionar · Use o zoom para ajustar</p>
+                  <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · Use o zoom para ajustar</p>
                 </div>
 
-                {/* Crop circle area */}
+                {/* Drag area — full image visible as context */}
                 <div
-                  className="relative overflow-hidden rounded-full border-4 border-white/30 cursor-grab active:cursor-grabbing shadow-2xl"
-                  style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                  className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
                   onMouseDown={handleCropMouseDown}
                   onMouseMove={handleCropMouseMove}
                   onMouseUp={handleCropMouseUp}
                   onMouseLeave={handleCropMouseUp}
                 >
+                  {/* Full image — dimmed as context */}
                   <img
-                    ref={cropImgRef}
                     src={rawImageSrc}
-                    alt="crop preview"
+                    alt=""
                     draggable={false}
-                    className="absolute select-none"
+                    className="absolute pointer-events-none select-none opacity-25"
                     style={{
                       maxWidth: "none",
                       transform: `scale(${cropZoom})`,
@@ -1514,36 +1515,72 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                       translate: "-50% -50%",
                     }}
                   />
-                  {/* grid overlay */}
-                  <div className="absolute inset-0 pointer-events-none" style={{
-                    backgroundImage: "linear-gradient(rgba(255,255,255,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.12) 1px,transparent 1px)",
-                    backgroundSize: "33.3% 33.3%",
-                  }} />
+
+                  {/* Dark vignette with circle hole */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: `radial-gradient(circle ${CROP_SIZE / 2}px at 50% 50%, transparent ${CROP_SIZE / 2}px, rgba(0,0,0,0.72) ${CROP_SIZE / 2}px)` }}
+                  />
+
+                  {/* Bright image clipped to circle */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)` }}
+                  >
+                    <img
+                      ref={cropImgRef}
+                      src={rawImageSrc}
+                      alt="crop preview"
+                      draggable={false}
+                      className="absolute select-none"
+                      style={{
+                        maxWidth: "none",
+                        transform: `scale(${cropZoom})`,
+                        transformOrigin: "center",
+                        left: `calc(50% + ${cropOffset.x}px)`,
+                        top: `calc(50% + ${cropOffset.y}px)`,
+                        translate: "-50% -50%",
+                      }}
+                    />
+                    {/* Rule-of-thirds grid inside circle */}
+                    <div className="absolute inset-0 pointer-events-none" style={{
+                      backgroundImage: "linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)",
+                      backgroundSize: "33.3% 33.3%",
+                    }} />
+                  </div>
+
+                  {/* Circle border */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div
+                      className="rounded-full border-2 border-white/70 shadow-2xl"
+                      style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                    />
+                  </div>
                 </div>
 
                 {/* Zoom slider */}
-                <div className="flex items-center gap-3 w-56">
-                  <ZoomIn className="h-4 w-4 text-white/60 flex-shrink-0" />
+                <div className="flex-shrink-0 px-8 py-4 flex items-center gap-3">
+                  <span className="text-white/40 text-xs w-8 text-right">{Math.round(cropZoom * 100)}%</span>
                   <input
-                    type="range" min="1" max="3" step="0.05"
+                    type="range" min="0.1" max="3" step="0.02"
                     value={cropZoom}
                     onChange={(e) => setCropZoom(Number(e.target.value))}
-                    className="flex-1 accent-white h-1 cursor-pointer"
+                    className="flex-1 accent-white cursor-pointer"
                   />
-                  <span className="text-white/60 text-xs w-8 text-right">{Math.round(cropZoom * 100)}%</span>
+                  <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
                 </div>
 
                 {/* Buttons */}
-                <div className="flex gap-3">
+                <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
                   <button
                     onClick={() => { setCropOpen(false); setRawImageSrc(null) }}
-                    className="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+                    className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleCropConfirm}
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all"
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all"
                   >
                     Usar esta foto
                   </button>
