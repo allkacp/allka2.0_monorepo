@@ -1,5 +1,5 @@
 
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -472,10 +472,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   }
 
   const handleConfirmAddUser = () => {
-    if (!validateNewUser()) {
-      alert("Por favor, preencha todos os campos obrigatórios corretamente.")
-      return
-    }
+    if (!validateNewUser()) return
     setConfirmAddUser(true)
   }
 
@@ -1372,150 +1369,222 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
         destructive={false}
       />
 
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-              <h3 className="text-lg font-bold text-gray-900">Cadastrar Novo Usuário</h3>
+      {/* Add User Sheet — slide from right */}
+      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) setShowAddUserModal(false) }}>
+        <SheetContent
+          side="right"
+          className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
+          style={{ width: 480 }}
+        >
+          <div className="h-full flex flex-col bg-white">
+
+            {/* Gradient Header */}
+            <header className="relative flex items-center gap-4 px-6 py-5 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0">
+              {/* Avatar placeholder */}
+              <div className="h-14 w-14 rounded-2xl bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <UserPlus className="h-7 w-7 text-white/80" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Novo cadastro</p>
+                <h2 className="text-lg font-bold text-white leading-tight truncate">
+                  {newUserData.name.trim() ? newUserData.name : "Novo Usuário"}
+                </h2>
+                <p className="text-xs text-white/60 truncate mt-0.5">{companyName}</p>
+              </div>
               <button
                 onClick={() => setShowAddUserModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 text-white" />
               </button>
-            </div>
+            </header>
 
-            {/* Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="space-y-3">
-                {/* Nome e Email em 2 colunas */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Nome *</label>
-                    <Input
-                      value={newUserData.name}
-                      onChange={(e) => handleNewUserFieldChange("name", e.target.value)}
-                      placeholder="João Silva"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Email *</label>
-                    <Input
-                      value={newUserData.email}
-                      onChange={(e) => handleNewUserFieldChange("email", e.target.value)}
-                      placeholder="joao@empresa.com"
-                      type="email"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                </div>
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-6 py-5 space-y-6">
 
-                {/* CPF e Telefone em 2 colunas */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">CPF *</label>
-                    <Input
-                      value={newUserData.cpf}
-                      onChange={(e) => handleNewUserFieldChange("cpf", e.target.value)}
-                      placeholder="123.456.789-00"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Telefone *</label>
-                    <Input
-                      value={newUserData.phone}
-                      onChange={(e) => handleNewUserFieldChange("phone", e.target.value)}
-                      placeholder="(11) 98765-4321"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                </div>
-
-                {/* Endereço */}
+                {/* Section: Identificação */}
                 <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Endereço</label>
-                  <Input
-                    value={newUserData.address}
-                    onChange={(e) => handleNewUserFieldChange("address", e.target.value)}
-                    placeholder="Rua ou Avenida"
-                    className="text-sm h-8"
-                  />
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                      <User className="h-3 w-3 text-blue-600" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identificação</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">Nome completo <span className="text-red-500">*</span></label>
+                      <Input
+                        value={newUserData.name}
+                        onChange={(e) => handleNewUserFieldChange("name", e.target.value)}
+                        placeholder="Ex: João Silva"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                          <span className="flex items-center gap-1"><CreditCard className="h-3 w-3" /> CPF <span className="text-red-500">*</span></span>
+                        </label>
+                        <Input
+                          value={newUserData.cpf}
+                          onChange={(e) => handleNewUserFieldChange("cpf", e.target.value)}
+                          placeholder="123.456.789-00"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                          <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone <span className="text-red-500">*</span></span>
+                        </label>
+                        <Input
+                          value={newUserData.phone}
+                          onChange={(e) => handleNewUserFieldChange("phone", e.target.value)}
+                          placeholder="(11) 98765-4321"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                        <span className="flex items-center gap-1"><AtSign className="h-3 w-3" /> E-mail <span className="text-red-500">*</span></span>
+                      </label>
+                      <Input
+                        value={newUserData.email}
+                        onChange={(e) => handleNewUserFieldChange("email", e.target.value)}
+                        placeholder="joao@empresa.com"
+                        type="email"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Cidade, Estado e CEP em 3 colunas */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Cidade</label>
-                    <Input
-                      value={newUserData.city}
-                      onChange={(e) => handleNewUserFieldChange("city", e.target.value)}
-                      placeholder="São Paulo"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Estado</label>
-                    <Input
-                      value={newUserData.state}
-                      onChange={(e) => handleNewUserFieldChange("state", e.target.value)}
-                      placeholder="SP"
-                      maxLength={2}
-                      className="text-sm h-8"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">CEP</label>
-                    <Input
-                      value={newUserData.zipCode}
-                      onChange={(e) => handleNewUserFieldChange("zipCode", e.target.value)}
-                      placeholder="01234-567"
-                      className="text-sm h-8"
-                    />
-                  </div>
-                </div>
+                {/* Divider */}
+                <div className="border-t border-slate-100" />
 
-                {/* Perfil */}
+                {/* Section: Endereço */}
                 <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Perfil</label>
-                  <Select value={newUserData.profile} onValueChange={(value) => handleNewUserFieldChange("profile", value)}>
-                    <SelectTrigger className="text-sm h-8">
-                      <SelectValue placeholder="Selecione um perfil" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                      <SelectItem value="User">Usuário</SelectItem>
-                      <SelectItem value="Viewer">Visualizador</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
+                      <MapPin className="h-3 w-3 text-violet-600" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Endereço</span>
+                    <span className="text-[10px] text-slate-400">(opcional)</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">Logradouro</label>
+                      <Input
+                        value={newUserData.address}
+                        onChange={(e) => handleNewUserFieldChange("address", e.target.value)}
+                        placeholder="Rua, Avenida, Nº..."
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-5 gap-3">
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">Cidade</label>
+                        <Input
+                          value={newUserData.city}
+                          onChange={(e) => handleNewUserFieldChange("city", e.target.value)}
+                          placeholder="São Paulo"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">UF</label>
+                        <Input
+                          value={newUserData.state}
+                          onChange={(e) => handleNewUserFieldChange("state", e.target.value)}
+                          placeholder="SP"
+                          maxLength={2}
+                          className="h-9 text-sm uppercase"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">CEP</label>
+                        <Input
+                          value={newUserData.zipCode}
+                          onChange={(e) => handleNewUserFieldChange("zipCode", e.target.value)}
+                          placeholder="01234-567"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="text-xs text-gray-500 mt-2">* Campos obrigatórios</p>
+                {/* Divider */}
+                <div className="border-t border-slate-100" />
+
+                {/* Section: Acesso */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-5 w-5 rounded-md bg-emerald-100 flex items-center justify-center">
+                      <Shield className="h-3 w-3 text-emerald-600" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perfil de Acesso</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "Administrador", label: "Administrador", desc: "Acesso total", color: "violet" },
+                      { value: "Gerente", label: "Gerente", desc: "Gestão geral", color: "blue" },
+                      { value: "Operador", label: "Operador", desc: "Operações", color: "sky" },
+                      { value: "Visualizador", label: "Visualizador", desc: "Somente leitura", color: "slate" },
+                      { value: "Financeiro", label: "Financeiro", desc: "Dados financeiros", color: "emerald" },
+                      { value: "Suporte", label: "Suporte", desc: "Atendimento", color: "amber" },
+                    ].map(({ value, label, desc, color }) => {
+                      const active = newUserData.profile === value
+                      const colors: Record<string, string> = {
+                        violet: active ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50/50",
+                        blue:   active ? "border-blue-500 bg-blue-50 text-blue-700"     : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/50",
+                        sky:    active ? "border-sky-500 bg-sky-50 text-sky-700"         : "border-slate-200 hover:border-sky-300 hover:bg-sky-50/50",
+                        slate:  active ? "border-slate-500 bg-slate-100 text-slate-700" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
+                        emerald:active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50",
+                        amber:  active ? "border-amber-500 bg-amber-50 text-amber-700"  : "border-slate-200 hover:border-amber-300 hover:bg-amber-50/50",
+                      }
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => handleNewUserFieldChange("profile", value)}
+                          className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all text-left ${
+                            colors[color]
+                          } ${active ? "" : "text-slate-600"}`}
+                        >
+                          <span className="text-xs font-semibold leading-tight">{label}</span>
+                          <span className={`text-[10px] mt-0.5 ${ active ? "opacity-80" : "text-slate-400" }`}>{desc}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400"><span className="text-red-500">*</span> Campos obrigatórios</p>
               </div>
             </div>
 
-            {/* Footer - Fixed */}
-            <div className="px-6 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0 bg-gray-50">
+            {/* Sticky footer */}
+            <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
               <Button
                 variant="outline"
                 onClick={() => setShowAddUserModal(false)}
-                className="flex-1 text-sm h-8"
+                className="flex-1 h-10"
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleConfirmAddUser}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm h-8"
+                disabled={!validateNewUser()}
+                className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm disabled:opacity-50"
               >
-                Cadastrar
+                <UserPlus className="h-4 w-4 mr-2" />
+                Cadastrar usuário
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Confirm Add User Dialog */}
       <ConfirmationDialog
