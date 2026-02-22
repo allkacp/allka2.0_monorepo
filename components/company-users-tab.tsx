@@ -225,22 +225,36 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   // Avatar / crop states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
+  const [cropContext, setCropContext] = useState<'add' | 'detail'>('add')
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null)
   const [cropZoom, setCropZoom] = useState(1)
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const detailFileInputRef = useRef<HTMLInputElement>(null)
   const cropImgRef = useRef<HTMLImageElement>(null)
   const CROP_SIZE = 192
   const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
   const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  // Detail panel avatar states
+  const [detailAvatarPreview, setDetailAvatarPreview] = useState<{ [id: number]: string }>({})
+  const [detailOriginalRawSrc, setDetailOriginalRawSrc] = useState<string | null>(null)
+  const [detailShowAvatarMenu, setDetailShowAvatarMenu] = useState(false)
 
   const handleAvatarClick = () => {
     if (avatarPreview) {
       setShowAvatarMenu((prev) => !prev)
     } else {
       fileInputRef.current?.click()
+    }
+  }
+
+  const handleDetailAvatarClick = () => {
+    if (selectedUser && detailAvatarPreview[selectedUser.id]) {
+      setDetailShowAvatarMenu((prev) => !prev)
+    } else {
+      detailFileInputRef.current?.click()
     }
   }
 
@@ -254,6 +268,24 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       setOriginalRawSrc(src)
       setCropZoom(1)
       setCropOffset({ x: 0, y: 0 })
+      setCropContext('add')
+      setCropOpen(true)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  const handleDetailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string
+      setRawImageSrc(src)
+      setDetailOriginalRawSrc(src)
+      setCropZoom(1)
+      setCropOffset({ x: 0, y: 0 })
+      setCropContext('detail')
       setCropOpen(true)
     }
     reader.readAsDataURL(file)
@@ -289,7 +321,12 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     const dx = CROP_SIZE / 2 + cropOffset.x - drawW / 2
     const dy = CROP_SIZE / 2 + cropOffset.y - drawH / 2
     ctx.drawImage(img, dx, dy, drawW, drawH)
-    setAvatarPreview(canvas.toDataURL("image/jpeg", 0.92))
+    const result = canvas.toDataURL("image/jpeg", 0.92)
+    if (cropContext === 'detail' && selectedUser) {
+      setDetailAvatarPreview((prev) => ({ ...prev, [selectedUser.id]: result }))
+    } else {
+      setAvatarPreview(result)
+    }
     setCropOpen(false)
     setRawImageSrc(null)
   }
@@ -981,31 +1018,38 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
           side="right"
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
           style={{ width: 480 }}
+          onPointerDownOutside={(e) => { if (detailShowAvatarMenu || (cropOpen && cropContext === 'detail')) e.preventDefault() }}
+          onInteractOutside={(e) => { if (detailShowAvatarMenu || (cropOpen && cropContext === 'detail')) e.preventDefault() }}
         >
           {selectedUser && (
-            <div className="h-full flex flex-col bg-white">
+            <div className="relative h-full flex flex-col bg-white">
+
+              {/* hidden detail file input */}
+              <input ref={detailFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleDetailFileChange} />
 
               {/* Gradient Header — matches add-user panel */}
               <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 100 }}>
-                {/* Avatar */}
-                <div className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 shadow-lg overflow-hidden">
-                  <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
-                    alt={selectedUser.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
-                  />
+                {/* Clickable avatar — same as add-user panel */}
+                <button
+                  onClick={handleDetailAvatarClick}
+                  className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+                >
+                  {/* fallback initials */}
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                    <span className="text-white text-xl font-bold">
-                      {selectedUser.avatar.length <= 2 ? selectedUser.avatar : selectedUser.name.substring(0, 2).toUpperCase()}
-                    </span>
+                    <span className="text-white text-xl font-bold">{selectedUser.name.substring(0, 2).toUpperCase()}</span>
                   </div>
-                  <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
-                    alt={selectedUser.name}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                </div>
+                  {/* dicebear or uploaded photo */}
+                  {detailAvatarPreview[selectedUser.id] ? (
+                    <img src={detailAvatarPreview[selectedUser.id]} alt="avatar" className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`} alt={selectedUser.name} className="absolute inset-0 w-full h-full object-cover" />
+                  )}
+                  {/* Camera hover overlay */}
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                    <Camera className="h-5 w-5 text-white" />
+                    <span className="text-[9px] text-white/90 font-medium mt-0.5">{detailAvatarPreview[selectedUser.id] ? "Editar" : "Foto"}</span>
+                  </div>
+                </button>
 
                 {/* Name / email / status */}
                 <div className="flex-1 min-w-0">
@@ -1060,6 +1104,82 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   </Tooltip>
                 </div>
               </header>
+
+              {/* Detail avatar context menu */}
+              {detailShowAvatarMenu && selectedUser && detailAvatarPreview[selectedUser.id] && (
+                <>
+                  <div className="absolute inset-0 z-40" onClick={() => setDetailShowAvatarMenu(false)} />
+                  <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 24 }}>
+                    <button
+                      onClick={() => { setDetailShowAvatarMenu(false); setTimeout(() => detailFileInputRef.current?.click(), 10) }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-gray-400" />
+                      Nova foto
+                    </button>
+                    {detailOriginalRawSrc && (
+                      <button
+                        onClick={() => {
+                          setDetailShowAvatarMenu(false)
+                          setRawImageSrc(detailOriginalRawSrc)
+                          setCropZoom(1)
+                          setCropOffset({ x: 0, y: 0 })
+                          setCropContext('detail')
+                          setCropOpen(true)
+                        }}
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                        Reposicionar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setDetailShowAvatarMenu(false)
+                        if (selectedUser) setDetailAvatarPreview((prev) => { const n = { ...prev }; delete n[selectedUser.id]; return n })
+                        setDetailOriginalRawSrc(null)
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover foto
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Detail crop overlay */}
+              {cropOpen && rawImageSrc && cropContext === 'detail' && (
+                <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
+                  <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
+                    <p className="text-white text-sm font-semibold">Ajustar foto de perfil</p>
+                    <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · Use o zoom para ajustar</p>
+                  </div>
+                  <div className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none" onMouseDown={handleCropMouseDown} onMouseMove={handleCropMouseMove} onMouseUp={handleCropMouseUp} onMouseLeave={handleCropMouseUp}>
+                    <img src={rawImageSrc} alt="" draggable={false} className="absolute pointer-events-none select-none opacity-25" style={{ maxWidth:"none", transform:`scale(${cropZoom})`, transformOrigin:"center", left:`calc(50% + ${cropOffset.x}px)`, top:`calc(50% + ${cropOffset.y}px)`, translate:"-50% -50%" }} />
+                    <div className="absolute inset-0 pointer-events-none" style={{ background:`radial-gradient(circle ${CROP_SIZE/2}px at 50% 50%, transparent ${CROP_SIZE/2}px, rgba(0,0,0,0.72) ${CROP_SIZE/2}px)` }} />
+                    <div className="absolute inset-0 pointer-events-none" style={{ clipPath:`circle(${CROP_SIZE/2}px at 50% 50%)` }}>
+                      <img ref={cropImgRef} src={rawImageSrc} alt="crop" draggable={false} className="absolute select-none" style={{ maxWidth:"none", transform:`scale(${cropZoom})`, transformOrigin:"center", left:`calc(50% + ${cropOffset.x}px)`, top:`calc(50% + ${cropOffset.y}px)`, translate:"-50% -50%" }} />
+                      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)", backgroundSize:"33.3% 33.3%" }} />
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="rounded-full border-2 border-white/70 shadow-2xl" style={{ width:CROP_SIZE, height:CROP_SIZE }} />
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 px-8 py-4 flex items-center gap-3">
+                    <span className="text-white/40 text-xs w-8 text-right">{Math.round(cropZoom*100)}%</span>
+                    <input type="range" min="0.1" max="3" step="0.02" value={cropZoom} onChange={(e) => setCropZoom(Number(e.target.value))} className="flex-1 accent-white cursor-pointer" />
+                    <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
+                    <button onClick={() => setCropOffset({ x:0, y:0 })} title="Centralizar" className="flex-shrink-0 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors">
+                      <Crosshair className="h-3.5 w-3.5 text-white/70" />
+                    </button>
+                  </div>
+                  <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
+                    <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors">Cancelar</button>
+                    <button onClick={handleCropConfirm} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all">Usar esta foto</button>
+                  </div>
+                </div>
+              )}
 
               {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto">
@@ -1448,7 +1568,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             )}
 
             {/* Crop overlay — shown inside the sheet */}
-            {cropOpen && rawImageSrc && (
+            {cropOpen && rawImageSrc && cropContext === 'add' && (
               <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
 
                 {/* Header */}
