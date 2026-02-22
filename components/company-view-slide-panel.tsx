@@ -2182,9 +2182,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             }
                             className="w-full px-3 py-2 border rounded text-sm"
                           >
-                            <option value="starter">Starter — 100 créditos</option>
-                            <option value="growth">Growth — 500 créditos</option>
-                            <option value="enterprise">Enterprise — 1.000 créditos</option>
+                            <option value="lite">Lite — R$ 300/mês (ativa conta agency)</option>
+                            <option value="start">Start — R$ 500/mês (5% desconto)</option>
+                            <option value="standard">Standard — R$ 1.000/mês (10% desconto)</option>
+                            <option value="growth">Growth — R$ 1.500/mês (15% desconto)</option>
+                            <option value="scale">Scale — R$ 3.000/mês (20% desconto)</option>
+                            <option value="squad">Squad — R$ 5.000/mês (agências — 20% + pós pago)</option>
+                            <option value="enterprise">Enterprise — R$ 5.000/mês (empresas — pós pago)</option>
                           </select>
                         </div>
                       </div>
