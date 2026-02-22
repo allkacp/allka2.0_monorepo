@@ -12,7 +12,7 @@ interface ModalBrandHeaderProps {
 
 export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose }: ModalBrandHeaderProps) {
   return (
-    <div className="app-brand-header relative flex items-center gap-4 pl-[25px] pr-[90px] py-3 min-h-[100px]">
+    <div className="app-brand-header relative flex items-center gap-4 pl-[25px] pr-[90px] py-3 min-h-[100px] overflow-hidden flex-shrink-0">
       {/* Icon */}
       {icon && (
         <div className="h-14 w-14 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 [&>svg]:h-6 [&>svg]:w-6 [&>svg]:text-white">
