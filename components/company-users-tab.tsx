@@ -965,8 +965,8 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       </div>
 
       {/* User Details Sheet */}
-      <Sheet 
-        open={isDetailsOpen} 
+      <Sheet
+        open={isDetailsOpen}
         onOpenChange={(open) => {
           setIsDetailsOpen(open)
           if (!open) {
@@ -977,343 +977,278 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
           }
         }}
       >
-        <SheetContent side="right" className="!w-1/2 !max-w-none border-l flex flex-col p-0 overflow-hidden" style={{ width: '50vw', right: 0 }}>
+        <SheetContent
+          side="right"
+          className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
+          style={{ width: 480 }}
+        >
           {selectedUser && (
             <div className="h-full flex flex-col bg-white">
-              {/* Header - Platform Standard - Fixed */}
-              <header className="relative flex items-center justify-between gap-4 px-6 py-4 border-b bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 min-h-20">
-                <div className="flex items-center gap-4 flex-1">
-                  <Avatar className="h-16 w-16 border-3 border-white shadow-lg flex-shrink-0">
-                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-600 to-cyan-500 text-white text-lg font-semibold">
-                      {selectedUser.avatar}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <h1 className="text-xl font-bold">{selectedUser.name}</h1>
-                    <p className="text-blue-100 text-xs mt-0.5">{selectedUser.email}</p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className={`inline-flex h-2.5 w-2.5 rounded-full ${selectedUser.status === "online" ? "bg-green-400" : "bg-gray-300"}`} />
-                      <span className="text-xs font-medium">
-                        {selectedUser.status === "online" ? "Online" : "Offline"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-white hover:bg-white/20"
-                          onClick={handleEditUser}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Editar</TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-white hover:bg-white/20"
-                          onClick={handleOpenPermissions}
-                        >
-                          <Shield className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Permissões</TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-white hover:bg-white/20"
-                          onClick={(e) => handleBlockToggle(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
-                        >
-                          {selectedUser.isBlocked ? (
-                            <Unlock className="h-4 w-4" />
-                          ) : (
-                            <Lock className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}
-                      </TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-200 hover:bg-red-600/20"
-                          onClick={(e) => handleDeleteUser(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Deletar</TooltipContent>
-                    </Tooltip>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-white hover:bg-white/20 flex-shrink-0"
-                      onClick={() => setIsDetailsOpen(false)}
-                    >
-                      <X className="h-5 w-5" />
-                    </Button>
+              {/* Gradient Header — matches add-user panel */}
+              <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 100 }}>
+                {/* Avatar */}
+                <div className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 shadow-lg overflow-hidden">
+                  <img
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
+                    alt={selectedUser.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
+                    <span className="text-white text-xl font-bold">
+                      {selectedUser.avatar.length <= 2 ? selectedUser.avatar : selectedUser.name.substring(0, 2).toUpperCase()}
+                    </span>
                   </div>
+                  <img
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
+                    alt={selectedUser.name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Name / email / status */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Perfil do usuário</p>
+                  <h2 className="text-lg font-bold text-white leading-tight truncate">{selectedUser.name}</h2>
+                  <p className="text-xs text-white/60 truncate mt-0.5">{selectedUser.email}</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={`inline-flex h-2 w-2 rounded-full ${selectedUser.status === "online" ? "bg-green-400" : "bg-gray-400"}`} />
+                    <span className="text-[10px] font-medium text-white/70">{selectedUser.status === "online" ? "Online" : "Offline"}</span>
+                  </div>
+                </div>
+
+                {/* Action icon buttons — absolute top-right, before Sheet's X */}
+                <div className="absolute top-3 right-10 flex items-center gap-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={handleEditUser} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
+                        <Edit2 className="h-3.5 w-3.5 text-white/80" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Editar</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={handleOpenPermissions} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors">
+                        <Shield className="h-3.5 w-3.5 text-white/80" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Permissões</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => handleBlockToggle(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
+                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                      >
+                        {selectedUser.isBlocked ? <Unlock className="h-3.5 w-3.5 text-white/80" /> : <Lock className="h-3.5 w-3.5 text-white/80" />}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => handleDeleteUser(selectedUser.id, e as React.MouseEvent<HTMLButtonElement>)}
+                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-500/30 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Excluir</TooltipContent>
+                  </Tooltip>
                 </div>
               </header>
 
-              {/* Content - Scrollable */}
-              <div className={`flex-1 overflow-y-auto p-8 ${editMode || permissionsMode ? 'pb-20' : ''}`}>
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto">
                 {!permissionsMode ? (
-                  <>
-                {/* Two Column Layout */}
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Left Column */}
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Dados da Conta</h2>
-                    <div className="space-y-3">
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                        <span className="text-xs font-semibold text-slate-600 uppercase">ID do Usuário</span>
-                        <code className="text-sm font-mono font-bold text-slate-900 block mt-2">#{selectedUser.id}</code>
-                      </div>
+                  <div className="px-6 py-5 space-y-6">
 
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-                        <span className="text-xs font-semibold text-slate-600 uppercase">Perfil</span>
-                        <p className="text-sm font-bold text-slate-900 mt-2">{selectedUser.profile}</p>
+                    {/* Section: Dados da Conta */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                          <Shield className="h-3 w-3 text-blue-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Dados da Conta</span>
                       </div>
-
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                        <span className="text-xs font-semibold text-slate-600 uppercase">Status</span>
-                        <Badge className={`mt-2 ${selectedUser.isBlocked ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                          {selectedUser.isBlocked ? "Bloqueado" : "Ativo"}
-                        </Badge>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border border-amber-200">
-                        <span className="text-xs font-semibold text-slate-600 uppercase">Último Acesso</span>
-                        <p className="text-sm font-bold text-slate-900 mt-2">{selectedUser.lastAccess}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">ID</p>
+                          <p className="text-sm font-bold text-slate-800 mt-0.5 font-mono">#{selectedUser.id}</p>
+                        </div>
+                        <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</p>
+                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedUser.profile}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</p>
+                          <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${selectedUser.isBlocked ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                            {selectedUser.isBlocked ? "Bloqueado" : "Ativo"}
+                          </span>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Último acesso</p>
+                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedUser.lastAccess}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Right Column */}
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Dados Pessoais</h2>
-                    {!editMode ? (
-                      <div className="space-y-2 text-xs">
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">Nome</label>
-                          <p className="text-slate-900 mt-1 font-medium">{selectedUser.name}</p>
+                    {/* Section: Identificação */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                          <User className="h-3 w-3 text-blue-600" />
                         </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">CPF</label>
-                          <p className="text-slate-900 mt-1 font-medium">{selectedUser.cpf || "Não informado"}</p>
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">Email</label>
-                          <p className="text-slate-900 mt-1 font-medium break-all">{selectedUser.email}</p>
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">Telefone</label>
-                          <p className="text-slate-900 mt-1 font-medium">{selectedUser.phone || "Não informado"}</p>
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">Endereço</label>
-                          <p className="text-slate-900 mt-1 font-medium">{selectedUser.address || "Não informado"}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="font-semibold text-slate-600 uppercase">Cidade</label>
-                            <p className="text-slate-900 mt-1 font-medium">{selectedUser.city || "Não informado"}</p>
-                          </div>
-                          <div>
-                            <label className="font-semibold text-slate-600 uppercase">Estado</label>
-                            <p className="text-slate-900 mt-1 font-medium">{selectedUser.state || "Não informado"}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase">CEP</label>
-                          <p className="text-slate-900 mt-1 font-medium">{selectedUser.zipCode || "Não informado"}</p>
-                        </div>
+                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Identificação</span>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase text-xs">Nome Completo</label>
-                          <Input
-                            value={editData?.name || ""}
-                            onChange={(e) => handleEditFieldChange("name", e.target.value)}
-                            placeholder="Nome completo"
-                            className="mt-1 text-sm"
-                          />
+                      {!editMode ? (
+                        <div className="space-y-2.5">
+                          {[
+                            { label: "Nome completo", value: selectedUser.name },
+                            { label: "CPF", value: selectedUser.cpf || "Não informado" },
+                            { label: "Telefone", value: selectedUser.phone || "Não informado" },
+                            { label: "E-mail", value: selectedUser.email },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
+                              <p className="text-sm font-medium text-slate-800 mt-0.5 break-all">{value}</p>
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase text-xs">Email</label>
-                          <Input
-                            value={editData?.email || ""}
-                            onChange={(e) => handleEditFieldChange("email", e.target.value)}
-                            placeholder="email@exemplo.com"
-                            type="email"
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase text-xs">Telefone</label>
-                          <Input
-                            value={editData?.phone || ""}
-                            onChange={(e) => handleEditFieldChange("phone", e.target.value)}
-                            placeholder="(11) 98765-4321"
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase text-xs">Endereço</label>
-                          <Input
-                            value={editData?.address || ""}
-                            onChange={(e) => handleEditFieldChange("address", e.target.value)}
-                            placeholder="Rua ou Avenida"
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="font-semibold text-slate-600 uppercase text-xs">Cidade</label>
-                            <Input
-                              value={editData?.city || ""}
-                              onChange={(e) => handleEditFieldChange("city", e.target.value)}
-                              placeholder="São Paulo"
-                              className="mt-1 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="font-semibold text-slate-600 uppercase text-xs">Estado</label>
-                            <Input
-                              value={editData?.state || ""}
-                              onChange={(e) => handleEditFieldChange("state", e.target.value)}
-                              placeholder="SP"
-                              maxLength={2}
-                              className="mt-1 text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="font-semibold text-slate-600 uppercase text-xs">CEP</label>
-                          <Input
-                            value={editData?.zipCode || ""}
-                            onChange={(e) => handleEditFieldChange("zipCode", e.target.value)}
-                            placeholder="01234-567"
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Metrics */}
-                <div className="border-t border-slate-200 pt-6">
-                  <h2 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Uso e Métricas</h2>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
-                      <span className="text-xs font-semibold text-slate-600 uppercase">Tempo Online</span>
-                      <p className="text-lg font-bold text-yellow-600 mt-2">{selectedUser.averageOnlineHours || 2.5}h/dia</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                      <span className="text-xs font-semibold text-slate-600 uppercase">Sem Acesso</span>
-                      <p className="text-lg font-bold text-orange-600 mt-2">{selectedUser.averageOfflineDays || 1}d</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Chart */}
-                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-slate-900 mb-4">Tempo Online (7 dias)</h3>
-                  <div className="h-40">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={timelineData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                        <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#9CA3AF" />
-                        <YAxis tick={{ fontSize: 11 }} stroke="#9CA3AF" tickFormatter={(value) => `${value}h`} />
-                        <RechartsTooltip contentStyle={{ backgroundColor: "#1F2937", border: "1px solid #374151", borderRadius: "8px" }} formatter={(value: number) => [`${value}h`, "Online"]} />
-                        <Bar dataKey="hours" radius={[8, 8, 0, 0]} fill="#3B82F6" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Permissions */}
-                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-slate-900 mb-4">Permissões</h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className="bg-blue-100 text-blue-700 text-xs">Visualizar dados</Badge>
-                    <Badge className="bg-green-100 text-green-700 text-xs">Editar configurações</Badge>
-                    <Badge className="bg-purple-100 text-purple-700 text-xs">Gerenciar usuários</Badge>
-                  </div>
-                </div>
-
-                {/* History */}
-                <div className="bg-white border border-slate-200 rounded-lg p-4 pb-6">
-                  <h3 className="text-sm font-bold text-slate-900 mb-4">Histórico de Acessos</h3>
-                  <div className="space-y-1">
-                    {[
-                      { date: "Hoje", time: "14:30" },
-                      { date: "Ontem", time: "10:15" },
-                      { date: "2 dias atrás", time: "09:45" },
-                      { date: "3 dias atrás", time: "16:20" },
-                      { date: "4 dias atrás", time: "11:00" },
-                    ].map((access, idx) => (
-                      <div key={idx} className="flex justify-between text-xs py-2.5 px-2 border-b border-slate-100 last:border-0 hover:bg-slate-50 rounded">
-                        <span className="text-slate-700 font-medium">{access.date}</span>
-                        <span className="text-slate-500">{access.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                  </>
-                ) : (
-                  /* Permissions Mode View */
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-xl font-bold text-slate-900">Gerenciar Permissões</h2>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCancelPermissions}
-                        className="text-slate-500 hover:text-slate-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {permissionsData && Object.entries(permissionsData).map(([categoryKey, categoryData]) => (
-                      <div key={categoryKey} className="bg-white rounded-lg border border-slate-200 p-6">
-                        <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">
-                          {categoryKey === 'gestao' ? 'Gestão' : categoryKey === 'tasks' ? 'Tarefas' : categoryKey === 'projects' ? 'Projetos' : 'Usuários'}
-                        </h3>
+                      ) : (
                         <div className="space-y-3">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome completo</label>
+                            <Input value={editData?.name || ""} onChange={(e) => handleEditFieldChange("name", e.target.value)} placeholder="Nome completo" className="mt-1 h-9 text-sm" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Telefone</label>
+                              <Input value={editData?.phone || ""} onChange={(e) => handleEditFieldChange("phone", e.target.value)} placeholder="(11) 98765-4321" className="mt-1 h-9 text-sm" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">E-mail</label>
+                              <Input value={editData?.email || ""} onChange={(e) => handleEditFieldChange("email", e.target.value)} placeholder="email@exemplo.com" type="email" className="mt-1 h-9 text-sm" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section: Endereço */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
+                          <MapPin className="h-3 w-3 text-violet-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">Endereço</span>
+                        <span className="text-[10px] text-slate-400 font-medium">(opcional)</span>
+                      </div>
+                      {!editMode ? (
+                        <div className="space-y-2.5">
+                          <div className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Logradouro</p>
+                            <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.address || "Não informado"}</p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="col-span-1 border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">UF</p>
+                              <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.state || "—"}</p>
+                            </div>
+                            <div className="col-span-2 border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Cidade</p>
+                              <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.city || "Não informado"}</p>
+                            </div>
+                          </div>
+                          <div className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">CEP</p>
+                            <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.zipCode || "Não informado"}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Logradouro</label>
+                            <Input value={editData?.address || ""} onChange={(e) => handleEditFieldChange("address", e.target.value)} placeholder="Rua, Avenida, Nº..." className="mt-1 h-9 text-sm" />
+                          </div>
+                          <div className="grid grid-cols-5 gap-2">
+                            <div className="col-span-2">
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cidade</label>
+                              <Input value={editData?.city || ""} onChange={(e) => handleEditFieldChange("city", e.target.value)} placeholder="São Paulo" className="mt-1 h-9 text-sm" />
+                            </div>
+                            <div className="col-span-1">
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">UF</label>
+                              <Input value={editData?.state || ""} onChange={(e) => handleEditFieldChange("state", e.target.value)} placeholder="SP" maxLength={2} className="mt-1 h-9 text-sm" />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
+                              <Input value={editData?.zipCode || ""} onChange={(e) => handleEditFieldChange("zipCode", e.target.value)} placeholder="01234-567" className="mt-1 h-9 text-sm" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section: Uso e Métricas */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-5 w-5 rounded-md bg-amber-100 flex items-center justify-center">
+                          <CheckCircle className="h-3 w-3 text-amber-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">Uso e Métricas</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Tempo online</p>
+                          <p className="text-base font-bold text-yellow-600 mt-1">{selectedUser.averageOnlineHours || 2.5}h/dia</p>
+                        </div>
+                        <div className="bg-orange-50 border border-orange-100 rounded-xl p-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sem acesso</p>
+                          <p className="text-base font-bold text-orange-600 mt-1">{selectedUser.averageOfflineDays || 1}d</p>
+                        </div>
+                      </div>
+                      {/* Chart */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/40">
+                        <p className="text-xs font-semibold text-slate-500 mb-3">Tempo online — 7 dias</p>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={timelineData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                              <XAxis dataKey="day" tick={{ fontSize: 10 }} stroke="#9CA3AF" />
+                              <YAxis tick={{ fontSize: 10 }} stroke="#9CA3AF" tickFormatter={(v) => `${v}h`} />
+                              <RechartsTooltip contentStyle={{ backgroundColor: "#1F2937", border: "none", borderRadius: "8px", fontSize: 11 }} formatter={(v: number) => [`${v}h`, "Online"]} />
+                              <Bar dataKey="hours" radius={[6, 6, 0, 0]} fill="#3B82F6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  /* Permissions Mode */
+                  <div className="px-6 py-5 space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                        <Shield className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Permissões</span>
+                    </div>
+                    {permissionsData && Object.entries(permissionsData).map(([categoryKey, categoryData]) => (
+                      <div key={categoryKey} className="border border-slate-100 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                            {categoryKey === "gestao" ? "Gestão" : categoryKey === "tasks" ? "Tarefas" : categoryKey === "projects" ? "Projetos" : "Usuários"}
+                          </p>
+                        </div>
+                        <div className="divide-y divide-slate-100">
                           {categoryData.map((permission) => (
-                            <div key={permission.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
-                              <label className="text-sm font-medium text-slate-900 cursor-pointer">
-                                {permission.name}
-                              </label>
-                              <Switch
-                                checked={permission.enabled}
-                                onCheckedChange={() =>
-                                  handleTogglePermission(categoryKey, permission.id)
-                                }
-                              />
+                            <div key={permission.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors">
+                              <span className="text-sm text-slate-800">{permission.name}</span>
+                              <Switch checked={permission.enabled} onCheckedChange={() => handleTogglePermission(categoryKey, permission.id)} />
                             </div>
                           ))}
                         </div>
@@ -1323,47 +1258,26 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 )}
               </div>
 
-              {/* Edit Mode Footer - Fixed */}
+              {/* Edit footer */}
               {editMode && (
-                <div className="sticky bottom-0 left-0 right-0 flex gap-2 px-6 py-4 border-t bg-white shadow-lg">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveClick}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                  >
+                <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
+                  <Button variant="outline" onClick={handleCancelEdit} className="flex-1 h-10">Cancelar</Button>
+                  <Button onClick={handleSaveClick} className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0">
                     Salvar alterações
                   </Button>
                 </div>
               )}
 
-              {/* Permissions Mode Footer - Fixed (Only show if changes detected) */}
+              {/* Permissions footer */}
               {permissionsMode && hasPermissionChanges && (
-                <div className="sticky bottom-0 left-0 right-0 flex gap-2 px-6 py-4 border-t bg-white shadow-lg">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCancelPermissions}
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSavePermissionsClick}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                  >
+                <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
+                  <Button variant="outline" onClick={handleCancelPermissions} className="flex-1 h-10">Cancelar</Button>
+                  <Button onClick={handleSavePermissionsClick} className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0">
                     Salvar permissões
                   </Button>
                 </div>
               )}
+
             </div>
           )}
         </SheetContent>
