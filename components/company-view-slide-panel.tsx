@@ -10,7 +10,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Input } from "@/components/ui/input"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { useToast } from "@/hooks/use-toast"
@@ -2409,28 +2409,15 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     )}
 
     {/* Save confirmation dialog */}
-    <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Salvar alterações?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja salvar as alterações nos dados de <strong>{company.name}</strong>? Esta ação irá atualizar as informações da empresa.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={() => {
-              setShowSaveConfirm(false)
-              performDadosSave()
-            }}
-          >
-            Sim, salvar
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmationDialog
+      open={showSaveConfirm}
+      onClose={() => setShowSaveConfirm(false)}
+      onConfirm={performDadosSave}
+      title="Salvar alterações?"
+      message={`Tem certeza que deseja salvar as alterações nos dados de "${company.name}"? Esta ação irá atualizar as informações da empresa.`}
+      confirmText="Sim, salvar"
+      destructive={false}
+    />
     </>
   )
 }
