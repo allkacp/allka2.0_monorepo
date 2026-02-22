@@ -782,7 +782,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
           {/* Content Wrapper - scrollable */}
           <div className="flex-1 overflow-y-auto app-brand-soft">
-            {/* Content with Tabs */
+            {/* Content with Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-0">
             <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-200 bg-white px-[50px] py-[15px] overflow-x-auto">
               <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
