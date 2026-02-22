@@ -254,7 +254,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     }
   }
 
-  const panelWidth = `calc(100vw - ${sidebarWidth}px - 80px)`
+  const panelWidth = `calc(100vw - ${sidebarWidth}px)`
 
   if (!mounted) return null
 
@@ -267,7 +267,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
             : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)]",
         )}
-        style={{ left: `${sidebarWidth + 40}px`, width: panelWidth }}
+        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         {/* Header with Brand Theme */}
         <ModalBrandHeader
@@ -278,7 +278,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         />
 
         {/* Conteúdo com Abas em Accordions */}
-        <div className="flex-1 overflow-y-auto p-6 app-brand-soft">
+        <div className="flex-1 overflow-y-auto px-[50px] py-6 app-brand-soft">
           {/* STATUS HEADER - Prominently displayed at the top */}
           <div className="mb-4 px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
             <CompanyStatusSelector
@@ -625,7 +625,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         </div>
 
         {/* Rodapé Fixo */}
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t bg-gray-50 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-[50px] py-4 border-t bg-gray-50 flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>

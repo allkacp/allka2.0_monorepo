@@ -12,7 +12,7 @@ interface ModalBrandHeaderProps {
 
 export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose }: ModalBrandHeaderProps) {
   return (
-    <div className="app-brand-header flex items-center gap-3 pl-5 pr-20 py-3 min-h-[100px]">
+    <div className="app-brand-header relative flex items-center gap-3 pl-[calc(50px+0.25rem)] pr-[calc(90px+0.25rem)] py-3 min-h-[100px]">
       {/* Icon */}
       {icon && (
         <div className="h-8 w-8 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-white">
@@ -50,11 +50,12 @@ export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose }
       {onClose && (
         <button
           onClick={onClose}
-          className="h-8 w-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/20 transition-all flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-white/30"
+          className="absolute top-5 right-5 rounded-lg opacity-100 transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:pointer-events-none p-1.5"
           title="Fechar"
           aria-label="Fechar"
         >
-          <X className="h-4 w-4" />
+          <X className="size-6 text-white drop-shadow-md" />
+          <span className="sr-only">Fechar</span>
         </button>
       )}
     </div>
