@@ -10,7 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 
 import React from "react"
 
-import { X, Mail, Phone, Building2, Shield, UserIcon, Lock, CheckCircle2, AlertCircle, TrendingUp, Activity, Clock, Zap, Search, Edit2, Save, XCircle, Loader2, Download, Copy, Eye, EyeOff, Send, Key, ChevronDown, CreditCard, Plus, Trash2, Wallet, FileText, Check, DollarSign, BarChart3, Settings, Smartphone, Globe, Monitor, Tablet, Star, Upload, ToggleRight, ToggleLeft } from "lucide-react"
+import { X, Mail, Phone, Building2, Shield, UserIcon, Lock, CheckCircle2, AlertCircle, TrendingUp, Activity, Clock, Zap, Search, Edit2, Save, XCircle, Loader2, Download, Copy, Eye, EyeOff, Send, Key, ChevronDown, CreditCard, Plus, Trash2, Wallet, FileText, Check, DollarSign, BarChart3, Settings, Smartphone, Globe, Monitor, Tablet, Star, Upload, ToggleRight, ToggleLeft, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -1772,6 +1772,18 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
                   <h3 className="text-lg font-semibold text-slate-900">Dados do Usuário</h3>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const allOpen = USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                        setDadosOpenAccordions(allOpen ? [] : USER_DADOS_ALL_ACCORDIONS)
+                      }}
+                      className="text-xs"
+                    >
+                      <ChevronsUpDown className="h-3.5 w-3.5 mr-1.5" />
+                      {USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
+                    </Button>
                     {!isDadosEditMode ? (
                       <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
                         <Edit2 className="h-4 w-4 mr-2" />

@@ -1,5 +1,5 @@
 ﻿
-import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair } from "lucide-react"
+import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -99,6 +99,8 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   
   // Edit mode state for Dados tab
   const [isDadosEditMode, setIsDadosEditMode] = useState(false)
+  const DADOS_ALL_ACCORDIONS = ["cadastrais", "contato", "endereco", "financeiro", "adicionais"]
+  const [dadosOpenAccordions, setDadosOpenAccordions] = useState<string[]>([])
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
@@ -1027,6 +1029,18 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4 -mx-6 px-6">
                 <h3 className="text-sm font-semibold text-slate-900">Dados da Empresa</h3>
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const allOpen = DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
+                      setDadosOpenAccordions(allOpen ? [] : DADOS_ALL_ACCORDIONS)
+                    }}
+                    className="text-xs"
+                  >
+                    <ChevronsUpDown className="h-3.5 w-3.5 mr-1.5" />
+                    {DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
+                  </Button>
                   {!isDadosEditMode ? (
                     <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
                       <Edit2 className="h-4 w-4 mr-2" />
@@ -1048,7 +1062,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               </div>
 
               {/* Accordions */}
-              <Accordion type="multiple" defaultValue={[]} className="space-y-3">
+              <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-3">
                 {/* DADOS CADASTRAIS */}
                 <AccordionItem value="cadastrais" className="border border-slate-200 rounded-lg">
                   <AccordionTrigger className="px-3 py-2 bg-[#eef2f7] hover:bg-[#e2e8f0] [&[data-state=open]]:bg-[#e2e8f0] rounded-t-lg text-xs">
