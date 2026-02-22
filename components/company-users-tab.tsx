@@ -1456,7 +1456,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             />
 
             {/* Gradient Header */}
-            <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 50 }}>
+            <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 100 }}>
               {/* Clickable avatar */}
               <button
                 onClick={handleAvatarClick}
