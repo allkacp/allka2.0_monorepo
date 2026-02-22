@@ -1500,13 +1500,18 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 {/* Avatar context menu — portal to body so overflow-hidden doesn't clip it */}
                 {showAvatarMenu && avatarPreview && avatarMenuPos && createPortal(
                   <>
-                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowAvatarMenu(false)} />
+                    <div className="fixed inset-0 z-[9998]" onMouseDown={() => setShowAvatarMenu(false)} />
                     <div
                       className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
                       style={{ top: avatarMenuPos.top, left: avatarMenuPos.left }}
+                      onMouseDown={(e) => e.nativeEvent.stopImmediatePropagation()}
                     >
                       <button
-                        onClick={() => { setShowAvatarMenu(false); fileInputRef.current?.click() }}
+                        onMouseDown={(e) => {
+                          e.nativeEvent.stopImmediatePropagation()
+                          setShowAvatarMenu(false)
+                          setTimeout(() => fileInputRef.current?.click(), 0)
+                        }}
                         className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         <Camera className="h-3.5 w-3.5 text-gray-400" />
@@ -1514,9 +1519,12 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                       </button>
                       {originalRawSrc && (
                         <button
-                          onClick={() => {
+                          onMouseDown={(e) => {
+                            e.nativeEvent.stopImmediatePropagation()
                             setShowAvatarMenu(false)
                             setRawImageSrc(originalRawSrc)
+                            setCropZoom(1)
+                            setCropOffset({ x: 0, y: 0 })
                             setCropOpen(true)
                           }}
                           className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
@@ -1526,7 +1534,12 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                         </button>
                       )}
                       <button
-                        onClick={() => { setShowAvatarMenu(false); setAvatarPreview(null); setOriginalRawSrc(null) }}
+                        onMouseDown={(e) => {
+                          e.nativeEvent.stopImmediatePropagation()
+                          setShowAvatarMenu(false)
+                          setAvatarPreview(null)
+                          setOriginalRawSrc(null)
+                        }}
                         className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
