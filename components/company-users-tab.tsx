@@ -580,41 +580,47 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-8 pt-5 pb-2 space-y-3">
-          {/* Compact Stats Row */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600">
-                <Shield className="h-3.5 w-3.5 text-white" />
+        <div className="px-10 pt-5 pb-3">
+          {/* Stats chips + Adicionar button */}
+          <div className="flex items-center justify-between">
+            {/* Left: compact stat chips */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-600">
+                  <Shield className="h-3 w-3 text-white" />
+                </div>
+                <span className="text-xs text-slate-500">Total</span>
+                <span className="text-sm font-bold text-blue-600">{userList.length}</span>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 leading-none mb-0.5">Total</p>
-                <p className="text-lg font-bold text-blue-600 leading-none">{userList.length}</p>
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-green-600">
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                </div>
+                <span className="text-xs text-slate-500">Online</span>
+                <span className="text-sm font-bold text-green-600">{onlineCount}</span>
               </div>
-            </div>
-            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-white" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 leading-none mb-0.5">Online</p>
-                <p className="text-lg font-bold text-green-600 leading-none">{onlineCount}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500">
-                <Lock className="h-3.5 w-3.5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 leading-none mb-0.5">Bloqueados</p>
-                <p className="text-lg font-bold text-red-600 leading-none">{blockedCount}</p>
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-500">
+                  <Lock className="h-3 w-3 text-white" />
+                </div>
+                <span className="text-xs text-slate-500">Bloqueados</span>
+                <span className="text-sm font-bold text-red-600">{blockedCount}</span>
               </div>
             </div>
+            {/* Right: Add user button */}
+            <Button
+              onClick={handleAddUserClick}
+              size="sm"
+              className="h-9 gap-2 px-4 text-sm bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm"
+            >
+              <Plus className="h-4 w-4" />
+              Adicionar usuário
+            </Button>
           </div>
         </div>
 
         {/* Global-standard Table Card */}
-        <div className="mx-8 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
+        <div className="mx-10 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
 
           {/* Top Bar — matches empresas page */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-slate-50/60">
@@ -643,16 +649,6 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 }
               </span>
             </div>
-
-            {/* Add User button */}
-            <Button
-              onClick={handleAddUserClick}
-              size="sm"
-              className="h-9 gap-2 px-3.5 text-xs bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm flex-shrink-0"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Adicionar
-            </Button>
 
             {/* Pagination */}
             <div className="flex items-center gap-0.5 flex-shrink-0">
