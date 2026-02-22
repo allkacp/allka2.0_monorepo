@@ -302,8 +302,10 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     ctx.beginPath()
     ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
     ctx.clip()
-    const drawW = img.naturalWidth * cropZoom
-    const drawH = img.naturalHeight * cropZoom
+    // objectFit:contain scales the image to fit within CROP_SIZE — we must account for that
+    const fitScale = Math.min(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight)
+    const drawW = img.naturalWidth * fitScale * cropZoom
+    const drawH = img.naturalHeight * fitScale * cropZoom
     const dx = CROP_SIZE / 2 + cropOffset.x - drawW / 2
     const dy = CROP_SIZE / 2 + cropOffset.y - drawH / 2
     ctx.drawImage(img, dx, dy, drawW, drawH)
@@ -338,17 +340,17 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
           left={
             <button
               onClick={handleAvatarClick}
-              className="relative h-14 w-14 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
+              className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
             >
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                <Camera className="h-5 w-5 text-white/70" />
+                <Camera className="h-7 w-7 text-white/70" />
               </div>
               {avatarPreview && (
                 <img src={avatarPreview} alt="logo" className="absolute inset-0 w-full h-full object-cover" />
               )}
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                <Camera className="h-4 w-4 text-white" />
-                <span className="text-[8px] text-white/90 font-medium mt-0.5">{avatarPreview ? "Editar" : "Foto"}</span>
+                <Camera className="h-5 w-5 text-white" />
+                <span className="text-[9px] text-white/90 font-medium mt-0.5">{avatarPreview ? "Editar" : "Foto"}</span>
               </div>
             </button>
           }
