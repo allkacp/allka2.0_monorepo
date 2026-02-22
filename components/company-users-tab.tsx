@@ -18,6 +18,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useState, useRef, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { useSidebar } from "@/contexts/sidebar-context"
 
 interface UserListItem {
@@ -232,13 +233,21 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cropImgRef = useRef<HTMLImageElement>(null)
+  const avatarBtnRef = useRef<HTMLButtonElement>(null)
   const CROP_SIZE = 192
   const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
   const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [avatarMenuPos, setAvatarMenuPos] = useState<{ top: number; left: number } | null>(null)
 
   const handleAvatarClick = () => {
     if (avatarPreview) {
-      setShowAvatarMenu((prev) => !prev)
+      if (showAvatarMenu) {
+        setShowAvatarMenu(false)
+      } else {
+        const rect = avatarBtnRef.current?.getBoundingClientRect()
+        if (rect) setAvatarMenuPos({ top: rect.bottom + 8, left: rect.left })
+        setShowAvatarMenu(true)
+      }
     } else {
       fileInputRef.current?.click()
     }
@@ -573,6 +582,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     setAvatarPreview(null)
     setOriginalRawSrc(null)
     setShowAvatarMenu(false)
+    setAvatarMenuPos(null)
     setNewUserData({
       name: "",
       email: "",
@@ -1446,7 +1456,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       />
 
       {/* Add User Sheet — slide from right */}
-      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) } }}>
+      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setAvatarMenuPos(null); setCropOpen(false); setRawImageSrc(null) } }}>
         <SheetContent
           side="right"
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
@@ -1468,6 +1478,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {/* Clickable avatar wrapper — relative so menu can be positioned below */}
               <div className="relative flex-shrink-0">
                 <button
+                  ref={avatarBtnRef}
                   onClick={handleAvatarClick}
                   className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center shadow-lg group overflow-hidden hover:border-white/60 transition-all"
                 >
@@ -1483,12 +1494,14 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   </div>
                 </button>
 
-                {/* Avatar context menu — appears when image exists */}
-                {showAvatarMenu && avatarPreview && (
+                {/* Avatar context menu — portal to body so overflow-hidden doesn't clip it */}
+                {showAvatarMenu && avatarPreview && avatarMenuPos && createPortal(
                   <>
-                    {/* backdrop to close */}
-                    <div className="fixed inset-0 z-[60]" onClick={() => setShowAvatarMenu(false)} />
-                    <div className="absolute left-0 top-[calc(100%+8px)] z-[61] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowAvatarMenu(false)} />
+                    <div
+                      className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
+                      style={{ top: avatarMenuPos.top, left: avatarMenuPos.left }}
+                    >
                       <button
                         onClick={() => { setShowAvatarMenu(false); fileInputRef.current?.click() }}
                         className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -1517,7 +1530,8 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                         Remover foto
                       </button>
                     </div>
-                  </>
+                  </>,
+                  document.body
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -1804,7 +1818,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) }}
+                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setAvatarMenuPos(null); setCropOpen(false); setRawImageSrc(null) }}
                 className="flex-1 h-10"
               >
                 Cancelar
