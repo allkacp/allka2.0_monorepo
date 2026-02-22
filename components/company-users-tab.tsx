@@ -1460,7 +1460,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {/* Clickable avatar */}
               <button
                 onClick={handleAvatarClick}
-                className="relative h-14 w-14 rounded-2xl bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+                className="relative h-16 w-16 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
               >
                 {avatarPreview ? (
                   <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
@@ -1468,7 +1468,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   <UserPlus className="h-7 w-7 text-white/80" />
                 )}
                 {/* Camera hover overlay */}
-                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
                   <Camera className="h-5 w-5 text-white" />
                   <span className="text-[9px] text-white/90 font-medium mt-0.5">Foto</span>
                 </div>
