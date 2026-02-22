@@ -981,6 +981,7 @@ export default function EmpresasPage() {
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contato</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CNPJ · Usuários</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Plano</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
               </tr>
@@ -1060,6 +1061,39 @@ export default function EmpresasPage() {
                       {company.status === "pending" && <Clock className="h-3.5 w-3.5" />}
                       {company.status === "active" ? "Ativo" : company.status === "inactive" ? "Inativo" : "Pendente"}
                     </span>
+                  </td>
+
+                  {/* Plan */}
+                  <td className="px-5 py-3.5">
+                    {(() => {
+                      const planMap: Record<string, { name: string; price: string; color: string }> = {
+                        lite:       { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        start:      { name: "Start",      price: "R$ 500/mês",   color: "bg-green-100 text-green-700 border-green-200" },
+                        standard:   { name: "Standard",   price: "R$ 1.000/mês", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        growth:     { name: "Growth",     price: "R$ 1.500/mês", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+                        scale:      { name: "Scale",      price: "R$ 3.000/mês", color: "bg-violet-100 text-violet-700 border-violet-200" },
+                        squad:      { name: "Squad",      price: "R$ 5.000/mês", color: "bg-orange-100 text-orange-700 border-orange-200" },
+                        enterprise: { name: "Enterprise", price: "R$ 5.000/mês", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                        // backwards compat
+                        basic:    { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        starter:  { name: "Start",      price: "R$ 500/mês",   color: "bg-green-100 text-green-700 border-green-200" },
+                        premium:  { name: "Standard",   price: "R$ 1.000/mês", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        gold:     { name: "Growth",     price: "R$ 1.500/mês", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+                        silver:   { name: "Lite",       price: "R$ 300/mês",   color: "bg-slate-100 text-slate-600 border-slate-200" },
+                        platinum: { name: "Enterprise", price: "R$ 5.000/mês", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                      }
+                      const key = ((company.partner_level || company.account_type) ?? "").toLowerCase()
+                      const plan = planMap[key]
+                      if (!plan) return <span className="text-xs text-slate-400">—</span>
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border w-fit ${plan.color}`}>
+                            {plan.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 pl-0.5">{plan.price}</span>
+                        </div>
+                      )
+                    })()}
                   </td>
 
                   {/* Type */}
