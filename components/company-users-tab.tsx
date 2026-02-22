@@ -1461,6 +1461,9 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
           side="right"
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
           style={{ width: 480 }}
+          onPointerDownOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
+          onFocusOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
+          onInteractOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
         >
           <div className="relative h-full flex flex-col bg-white">
 
