@@ -1,5 +1,5 @@
 
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -1619,6 +1619,13 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                     className="flex-1 accent-white cursor-pointer"
                   />
                   <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
+                  <button
+                    onClick={() => setCropOffset({ x: 0, y: 0 })}
+                    title="Centralizar"
+                    className="flex-shrink-0 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
+                  >
+                    <Crosshair className="h-3.5 w-3.5 text-white/70" />
+                  </button>
                 </div>
 
                 {/* Buttons */}
