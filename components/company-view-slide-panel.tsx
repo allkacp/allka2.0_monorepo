@@ -1500,13 +1500,29 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100">
+                    {(() => {
+                      const planMap: Record<string, { name: string; credits: number }> = {
+                        starter: { name: "Starter", credits: 100 },
+                        growth:  { name: "Growth",  credits: 500 },
+                        enterprise: { name: "Enterprise", credits: 1000 },
+                        // backwards compat
+                        basic: { name: "Starter", credits: 100 },
+                        pro:   { name: "Growth",  credits: 500 },
+                        gold:  { name: "Starter", credits: 100 },
+                        silver: { name: "Starter", credits: 100 },
+                        platinum: { name: "Enterprise", credits: 1000 },
+                      }
+                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", credits: 0 }
+                      const used = 32
+                      const available = plan.credits
+                      const usedCredits = Math.round(available * used / 100)
+                      const remaining = available - usedCredits
+                      return (
                     <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Plano Atual</p>
-                          <p className="text-xl font-bold text-blue-600 capitalize">
-                            {company.partner_level || "Não definido"}
-                          </p>
+                          <p className="text-xl font-bold text-blue-600">{plan.name}</p>
                         </div>
                         <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">
                           <Check className="h-2.5 w-2.5 mr-1" />
@@ -1517,26 +1533,28 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                       <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Créditos Disponíveis</p>
-                          <p className="text-lg font-bold text-blue-600">10,000</p>
+                          <p className="text-lg font-bold text-blue-600">{available.toLocaleString("pt-BR")}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Créditos Utilizados</p>
-                          <p className="text-lg font-bold text-orange-600">3,200</p>
+                          <p className="text-lg font-bold text-orange-600">{usedCredits.toLocaleString("pt-BR")}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Créditos Restantes</p>
-                          <p className="text-lg font-bold text-green-600">6,800</p>
+                          <p className="text-lg font-bold text-green-600">{remaining.toLocaleString("pt-BR")}</p>
                         </div>
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-medium text-muted-foreground">Uso do Plano</span>
-                          <span className="text-xs font-semibold text-blue-600">32%</span>
+                          <span className="text-xs font-semibold text-blue-600">{used}%</span>
                         </div>
-                        <Progress value={32} className="h-2" />
+                        <Progress value={used} className="h-2" />
                       </div>
                     </Card>
+                      )
+                    })()}
                   </AccordionContent>
                 </AccordionItem>
 
@@ -2050,9 +2068,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             }
                             className="w-full px-3 py-2 border rounded text-sm"
                           >
-                            <option value="basic">Básico</option>
-                            <option value="pro">Pro</option>
-                            <option value="enterprise">Enterprise</option>
+                            <option value="starter">Starter — 100 créditos</option>
+                            <option value="growth">Growth — 500 créditos</option>
+                            <option value="enterprise">Enterprise — 1.000 créditos</option>
                           </select>
                         </div>
                       </div>
