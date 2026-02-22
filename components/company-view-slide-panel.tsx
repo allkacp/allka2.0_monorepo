@@ -753,7 +753,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
             {/* Overview Tab */}
             <TabsContent value="visao-geral" className="flex-1 overflow-y-auto">
-              <div className="p-4 space-y-4">
+              <div className="px-[50px] py-[50px] space-y-4">
                 {/* KPI Cards Row */}
                 <div className="grid grid-cols-3 gap-3">
                   {/* Card 1: Total de tarefas contratadas */}
@@ -930,7 +930,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Dados Tab */}
-            <TabsContent value="dados" className="space-y-4 mt-0 px-4 py-4">
+            <TabsContent value="dados" className="space-y-4 mt-0 px-[50px] py-[50px]">
               {/* Header with Edit Button */}
               <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4 -mx-6 px-6">
                 <h3 className="text-sm font-semibold text-slate-900">Dados da Empresa</h3>
@@ -1367,7 +1367,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Redes Sociais Tab */}
-            <TabsContent value="redes-sociais" className="flex-1 overflow-y-auto px-4 py-4">
+            <TabsContent value="redes-sociais" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 mb-4">Redes Sociais da Empresa</h3>
@@ -1446,7 +1446,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Plano Tab */}
-            <TabsContent value="plano" className="flex-1 overflow-y-auto px-4 py-4">
+            <TabsContent value="plano" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <Accordion type="multiple" defaultValue={["admin", "credito", "account", "pagamento", "carteira", "nf"]} className="space-y-3">
                 {/* ACCORDION 1: AÇÕES ADMINISTRATIVAS */}
                 <AccordionItem value="admin" className="border border-slate-200 rounded-lg">
@@ -2287,22 +2287,22 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Termos Tab */}
-            <TabsContent value="termos" className="flex-1 overflow-y-auto px-6 py-6">
+            <TabsContent value="termos" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <TermsManagementTab company={company} />
             </TabsContent>
 
             {/* Projetos Tab */}
-            <TabsContent value="projetos" className="flex-1 overflow-y-auto px-6 py-6">
+            <TabsContent value="projetos" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <ProjectsManagementTab company={company} />
             </TabsContent>
 
             {/* Tarefas Tab */}
-            <TabsContent value="tarefas" className="flex-1 overflow-y-auto">
+            <TabsContent value="tarefas" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <CompanyTasksTab company={company} />
             </TabsContent>
 
             {/* Log Tab */}
-            <TabsContent value="log" className="flex-1 overflow-y-auto">
+            <TabsContent value="log" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
               <CompanyLogsTab company={company} />
             </TabsContent>
             </Tabs>
