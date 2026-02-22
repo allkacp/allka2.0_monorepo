@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Building2, Mail, Phone, MapPin, CreditCard, User, AlertCircle, Check } from "lucide-react"
+import { Building2, Mail, Phone, MapPin, CreditCard, User, AlertCircle, Check, Camera } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
@@ -273,7 +273,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         <ModalBrandHeader
           title="Nova Empresa"
           subtitle="Configure os dados da empresa"
-          icon={<Building2 />}
+          icon={<Camera />}
           onClose={() => onOpenChange(false)}
         />
 
