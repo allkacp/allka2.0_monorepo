@@ -92,6 +92,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   // Payment methods state
   const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>("pix")
@@ -940,7 +941,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                         {isSaving ? "Salvando..." : "Salvar"}
                       </Button>
-                      <Button onClick={handleDadosCancelEdit} size="sm" variant="outline">
+                      <Button onClick={() => setShowCancelConfirm(true)} size="sm" variant="outline">
                         <XCircle className="h-4 w-4 mr-2" />
                         Cancelar
                       </Button>
@@ -1421,7 +1422,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
                     <Button
                       variant="outline"
-                      onClick={handleDadosCancelEdit}
+                      onClick={() => setShowCancelConfirm(true)}
                       disabled={isSaving}
                     >
                       Cancelar
@@ -2411,12 +2412,25 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     {/* Save confirmation dialog */}
     <ConfirmationDialog
       open={showSaveConfirm}
-      onClose={() => { setShowSaveConfirm(false); handleDadosCancelEdit() }}
+      onClose={() => setShowSaveConfirm(false)}
       onConfirm={performDadosSave}
       title="Salvar alterações?"
       message={<>Tem certeza que deseja salvar as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong>? Esta ação irá atualizar as informações da empresa.</>}
       confirmText="Sim, salvar"
+      cancelText="Voltar à edição"
       destructive={false}
+    />
+
+    {/* Cancel confirmation dialog */}
+    <ConfirmationDialog
+      open={showCancelConfirm}
+      onClose={() => setShowCancelConfirm(false)}
+      onConfirm={handleDadosCancelEdit}
+      title="Descartar alterações?"
+      message={<>Tem certeza que deseja cancelar? Todas as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong> serão descartadas.</>}
+      confirmText="Sim, descartar"
+      cancelText="Voltar à edição"
+      destructive={true}
     />
     </>
   )
