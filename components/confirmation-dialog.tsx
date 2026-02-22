@@ -67,7 +67,8 @@ export function ConfirmationDialog({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 pointer-events-auto"
+      style={{ pointerEvents: 'auto' }}
       onClick={onClose}
     >
       {/* Modal */}
