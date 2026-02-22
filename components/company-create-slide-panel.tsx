@@ -254,7 +254,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     }
   }
 
-  const panelWidth = `calc(100vw - ${sidebarWidth}px)`
+  const panelWidth = `calc(100vw - ${sidebarWidth}px - 80px)`
 
   if (!mounted) return null
 
@@ -267,7 +267,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
             : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)]",
         )}
-        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
+        style={{ left: `${sidebarWidth + 40}px`, width: panelWidth }}
       >
         {/* Header with Brand Theme */}
         <ModalBrandHeader
