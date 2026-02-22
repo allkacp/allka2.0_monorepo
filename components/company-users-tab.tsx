@@ -1,5 +1,5 @@
 
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
 
 interface UserListItem {
@@ -221,6 +221,73 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     status: "active",
   })
   const [confirmAddUser, setConfirmAddUser] = useState(false)
+
+  // Avatar / crop states
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null)
+  const [cropZoom, setCropZoom] = useState(1)
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cropImgRef = useRef<HTMLImageElement>(null)
+  const CROP_SIZE = 192
+
+  const handleAvatarClick = () => fileInputRef.current?.click()
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setRawImageSrc(ev.target?.result as string)
+      setCropZoom(1)
+      setCropOffset({ x: 0, y: 0 })
+      setCropOpen(true)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    setDragStart({ x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y })
+  }
+
+  const handleCropMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return
+    setCropOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
+  }, [isDragging, dragStart])
+
+  const handleCropMouseUp = () => setIsDragging(false)
+
+  const handleCropConfirm = () => {
+    if (!cropImgRef.current) return
+    const canvas = document.createElement("canvas")
+    canvas.width = CROP_SIZE
+    canvas.height = CROP_SIZE
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    ctx.beginPath()
+    ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
+    ctx.clip()
+    const img = cropImgRef.current
+    const scale = cropZoom
+    const iw = img.naturalWidth * scale
+    const ih = img.naturalHeight * scale
+    const aspect = img.naturalWidth / img.naturalHeight
+    let drawW: number, drawH: number
+    if (aspect >= 1) { drawH = CROP_SIZE * scale; drawW = drawH * aspect }
+    else { drawW = CROP_SIZE * scale; drawH = drawW / aspect }
+    const dx = (CROP_SIZE - drawW) / 2 + cropOffset.x
+    const dy = (CROP_SIZE - drawH) / 2 + cropOffset.y
+    ctx.drawImage(img, dx, dy, drawW, drawH)
+    setAvatarPreview(canvas.toDataURL("image/jpeg", 0.92))
+    setCropOpen(false)
+    setRawImageSrc(null)
+  }
+
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   
@@ -481,7 +548,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       id: Math.max(...userList.map((u) => u.id), 0) + 1,
       name: newUserData.name,
       email: newUserData.email,
-      avatar: newUserData.name.substring(0, 2).toUpperCase(),
+      avatar: avatarPreview || newUserData.name.substring(0, 2).toUpperCase(),
       status: "online",
       profile: newUserData.profile,
       lastAccess: "Agora",
@@ -497,6 +564,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     setUserList((prev) => [newUser, ...prev])
     setShowAddUserModal(false)
     setConfirmAddUser(false)
+    setAvatarPreview(null)
     setNewUserData({
       name: "",
       email: "",
@@ -1376,14 +1444,35 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
           style={{ width: 480 }}
         >
-          <div className="h-full flex flex-col bg-white">
+          <div className="relative h-full flex flex-col bg-white">
+
+            {/* hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
 
             {/* Gradient Header */}
-            <header className="relative flex items-center gap-4 px-6 py-5 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0">
-              {/* Avatar placeholder */}
-              <div className="h-14 w-14 rounded-2xl bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg">
-                <UserPlus className="h-7 w-7 text-white/80" />
-              </div>
+            <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 50 }}>
+              {/* Clickable avatar */}
+              <button
+                onClick={handleAvatarClick}
+                className="relative h-14 w-14 rounded-2xl bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+              >
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <UserPlus className="h-7 w-7 text-white/80" />
+                )}
+                {/* Camera hover overlay */}
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                  <Camera className="h-5 w-5 text-white" />
+                  <span className="text-[9px] text-white/90 font-medium mt-0.5">Foto</span>
+                </div>
+              </button>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Novo cadastro</p>
                 <h2 className="text-lg font-bold text-white leading-tight truncate">
@@ -1391,13 +1480,76 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 </h2>
                 <p className="text-xs text-white/60 truncate mt-0.5">{companyName}</p>
               </div>
-              <button
-                onClick={() => setShowAddUserModal(false)}
-                className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
-              >
-                <X className="h-4 w-4 text-white" />
-              </button>
             </header>
+
+            {/* Crop overlay — shown inside the sheet */}
+            {cropOpen && rawImageSrc && (
+              <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center gap-6 rounded-none">
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-white text-sm font-semibold">Ajustar foto de perfil</p>
+                  <p className="text-white/50 text-xs">Arraste para reposicionar · Use o zoom para ajustar</p>
+                </div>
+
+                {/* Crop circle area */}
+                <div
+                  className="relative overflow-hidden rounded-full border-4 border-white/30 cursor-grab active:cursor-grabbing shadow-2xl"
+                  style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                >
+                  <img
+                    ref={cropImgRef}
+                    src={rawImageSrc}
+                    alt="crop preview"
+                    draggable={false}
+                    className="absolute select-none"
+                    style={{
+                      maxWidth: "none",
+                      transform: `scale(${cropZoom})`,
+                      transformOrigin: "center",
+                      left: `calc(50% + ${cropOffset.x}px)`,
+                      top: `calc(50% + ${cropOffset.y}px)`,
+                      translate: "-50% -50%",
+                    }}
+                  />
+                  {/* grid overlay */}
+                  <div className="absolute inset-0 pointer-events-none" style={{
+                    backgroundImage: "linear-gradient(rgba(255,255,255,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.12) 1px,transparent 1px)",
+                    backgroundSize: "33.3% 33.3%",
+                  }} />
+                </div>
+
+                {/* Zoom slider */}
+                <div className="flex items-center gap-3 w-56">
+                  <ZoomIn className="h-4 w-4 text-white/60 flex-shrink-0" />
+                  <input
+                    type="range" min="1" max="3" step="0.05"
+                    value={cropZoom}
+                    onChange={(e) => setCropZoom(Number(e.target.value))}
+                    className="flex-1 accent-white h-1 cursor-pointer"
+                  />
+                  <span className="text-white/60 text-xs w-8 text-right">{Math.round(cropZoom * 100)}%</span>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setCropOpen(false); setRawImageSrc(null) }}
+                    className="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCropConfirm}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all"
+                  >
+                    Usar esta foto
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto">
