@@ -251,7 +251,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   }
 
   const handleDetailAvatarClick = () => {
-    if (selectedUser && detailAvatarPreview[selectedUser.id]) {
+    if (selectedUser && (detailAvatarPreview[selectedUser.id] || selectedUser.avatar)) {
       setDetailShowAvatarMenu((prev) => !prev)
     } else {
       detailFileInputRef.current?.click()
@@ -1106,7 +1106,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               </header>
 
               {/* Detail avatar context menu */}
-              {detailShowAvatarMenu && selectedUser && detailAvatarPreview[selectedUser.id] && (
+              {detailShowAvatarMenu && selectedUser && (detailAvatarPreview[selectedUser.id] || selectedUser.avatar) && (
                 <>
                   <div className="absolute inset-0 z-40" onClick={() => setDetailShowAvatarMenu(false)} />
                   <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 24 }}>
