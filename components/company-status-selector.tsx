@@ -43,7 +43,7 @@ export function CompanyStatusSelector({
   return (
     <div className="flex items-center gap-3">
       {showLabel && (
-        <span className="text-xs font-semibold text-blue-900 whitespace-nowrap">Situação:</span>
+        <span className="text-xs font-semibold text-blue-900 whitespace-nowrap">Status:</span>
       )}
       <div className="flex items-center gap-1.5">
         {statusOptions.map((status) => {

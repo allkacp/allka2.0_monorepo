@@ -1,4 +1,4 @@
-
+Ôªø
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -51,7 +51,7 @@ interface FormData {
   // Redes Sociais
   socialLinks: SocialLink[]
 
-  // EndereÁo
+  // Endere√ßo
   cep: string
   rua: string
   numero: string
@@ -66,15 +66,15 @@ interface FormData {
   // Tipo de Conta
   tipoContato: "dependent" | "independent" | "agency" | "partner"
 
-  // Plano de CrÈditos
+  // Plano de Cr√©ditos
   planoCreditoId: string
   limite: string
   creditosIniciais: string
 
-  // MÈtodos de Pagamento
+  // M√©todos de Pagamento
   metodoPagamento: string
 
-  // Usu·rio Administrador
+  // Usu√°rio Administrador
   nomeAdmin: string
   emailAdmin: string
 }
@@ -176,24 +176,24 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    if (!formData.razaoSocial.trim()) newErrors.razaoSocial = "Raz„o Social È obrigatÛria"
-    if (!formData.nomeFantasia.trim()) newErrors.nomeFantasia = "Nome Fantasia È obrigatÛrio"
-    if (!formData.cnpj.trim()) newErrors.cnpj = "CNPJ È obrigatÛrio"
+    if (!formData.razaoSocial.trim()) newErrors.razaoSocial = "Raz√£o Social √© obrigat√≥ria"
+    if (!formData.nomeFantasia.trim()) newErrors.nomeFantasia = "Nome Fantasia √© obrigat√≥rio"
+    if (!formData.cnpj.trim()) newErrors.cnpj = "CNPJ √© obrigat√≥rio"
     if (!formData.emailPrincipal.trim()) {
-      newErrors.emailPrincipal = "Email È obrigatÛrio"
+      newErrors.emailPrincipal = "Email √© obrigat√≥rio"
     } else if (!/\S+@\S+\.\S+/.test(formData.emailPrincipal)) {
-      newErrors.emailPrincipal = "Email inv·lido"
+      newErrors.emailPrincipal = "Email inv√°lido"
     }
-    if (!formData.telefone.trim()) newErrors.telefone = "Telefone È obrigatÛrio"
-    if (!formData.rua.trim()) newErrors.rua = "Rua È obrigatÛria"
-    if (!formData.numero.trim()) newErrors.numero = "N˙mero È obrigatÛrio"
-    if (!formData.cidade.trim()) newErrors.cidade = "Cidade È obrigatÛria"
-    if (!formData.estado.trim()) newErrors.estado = "Estado È obrigatÛrio"
-    if (!formData.nomeAdmin.trim()) newErrors.nomeAdmin = "Nome do Admin È obrigatÛrio"
+    if (!formData.telefone.trim()) newErrors.telefone = "Telefone √© obrigat√≥rio"
+    if (!formData.rua.trim()) newErrors.rua = "Rua √© obrigat√≥ria"
+    if (!formData.numero.trim()) newErrors.numero = "N√∫mero √© obrigat√≥rio"
+    if (!formData.cidade.trim()) newErrors.cidade = "Cidade √© obrigat√≥ria"
+    if (!formData.estado.trim()) newErrors.estado = "Estado √© obrigat√≥rio"
+    if (!formData.nomeAdmin.trim()) newErrors.nomeAdmin = "Nome do Admin √© obrigat√≥rio"
     if (!formData.emailAdmin.trim()) {
-      newErrors.emailAdmin = "Email do Admin È obrigatÛrio"
+      newErrors.emailAdmin = "Email do Admin √© obrigat√≥rio"
     } else if (!/\S+@\S+\.\S+/.test(formData.emailAdmin)) {
-      newErrors.emailAdmin = "Email do Admin inv·lido"
+      newErrors.emailAdmin = "Email do Admin inv√°lido"
     }
 
     setErrors(newErrors)
@@ -300,7 +300,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     ctx.beginPath()
     ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
     ctx.clip()
-    // objectFit:contain scales the image to fit within CROP_SIZE ó we must account for that
+    // objectFit:contain scales the image to fit within CROP_SIZE ‚Äî we must account for that
     const fitScale = Math.min(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight)
     const drawW = img.naturalWidth * fitScale * cropZoom
     const drawH = img.naturalHeight * fitScale * cropZoom
@@ -401,7 +401,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
           <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
             <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
               <p className="text-white text-sm font-semibold">Ajustar logo da empresa</p>
-              <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar ∑ use o zoom para ajustar</p>
+              <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar ¬∑ use o zoom para ajustar</p>
             </div>
             <div className="flex-1 flex items-center justify-center overflow-hidden">
               <div
@@ -452,10 +452,10 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
           </div>
         )}
 
-        {/* Conte˙do com Abas em Accordions */}
+        {/* Conte√∫do com Abas em Accordions */}
         <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
           {/* STATUS HEADER - Prominently displayed at the top */}
-          <div className="mb-4 px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
+          <div className="mb-4 w-fit px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
             <CompanyStatusSelector
               value={formData.status}
               onChange={(status) => updateField("status", status)}
@@ -468,14 +468,14 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
               <p className="text-xs text-red-700 font-medium">
                 {totalErrors === 1
-                  ? "Falta 1 campo obrigatÛrio para preencher"
-                  : `Faltam ${totalErrors} campos obrigatÛrios para preencher`}
+                  ? "Falta 1 campo obrigat√≥rio para preencher"
+                  : `Faltam ${totalErrors} campos obrigat√≥rios para preencher`}
               </p>
             </div>
           )}
 
           <Accordion type="single" collapsible className="space-y-2">
-            {/* SE«√O 1: DADOS CADASTRAIS */}
+            {/* SE√á√ÉO 1: DADOS CADASTRAIS */}
             <AccordionItem value="cadastrais" className={cn("border rounded-lg overflow-hidden", sectionErrors.cadastrais > 0 ? "border-red-300" : "border-slate-200")}>
               <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.cadastrais > 0 ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-slate-50")}>
                 <div className="flex items-center gap-2">
@@ -490,7 +490,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                 <div className="border-t bg-white px-3 py-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">Raz„o Social *</Label>
+                      <Label className="text-xs font-medium text-slate-600">Raz√£o Social *</Label>
                       <Input placeholder="Empresa LTDA" value={formData.razaoSocial} onChange={(e) => updateField("razaoSocial", e.target.value)} className={cn("h-8 text-xs", errors.razaoSocial && "border-red-400")} />
                       {errors.razaoSocial && <p className="text-xs text-red-500">{errors.razaoSocial}</p>}
                     </div>
@@ -505,7 +505,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                       {errors.cnpj && <p className="text-xs text-red-500">{errors.cnpj}</p>}
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">InscriÁ„o Estadual</Label>
+                      <Label className="text-xs font-medium text-slate-600">Inscri√ß√£o Estadual</Label>
                       <Input placeholder="Opcional" value={formData.inscricaoEstadual} onChange={(e) => updateField("inscricaoEstadual", e.target.value)} className="h-8 text-xs" />
                     </div>
                   </div>
@@ -513,7 +513,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 2: CONTATO */}
+            {/* SE√á√ÉO 2: CONTATO */}
             <AccordionItem value="contato" className={cn("border rounded-lg overflow-hidden", sectionErrors.contato > 0 ? "border-red-300" : "border-slate-200")}>
               <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.contato > 0 ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-slate-50")}>
                 <div className="flex items-center gap-2">
@@ -546,7 +546,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 3: REDES SOCIAIS */}
+            {/* SE√á√ÉO 3: REDES SOCIAIS */}
             <AccordionItem value="social" className="border border-slate-200 rounded-lg overflow-hidden">
               <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                 <div className="flex items-center gap-2">
@@ -562,21 +562,21 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 4: ENDERE«O */}
+            {/* SE√á√ÉO 4: ENDERE√áO */}
             <AccordionItem value="endereco" className={cn("border rounded-lg overflow-hidden", sectionErrors.endereco > 0 ? "border-red-300" : "border-slate-200")}>
               <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.endereco > 0 ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-slate-50")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-purple-100 text-purple-700">4</Badge>
-                  EndereÁo
+                  Endere√ßo
                   {sectionErrors.endereco > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.endereco}</span>
                   )}
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-4 space-y-6">
-                {/* Seletor de EndereÁo com Mapa */}
+                {/* Seletor de Endere√ßo com Mapa */}
                 <div className="col-span-2">
-                  <Label className="text-sm font-semibold mb-3 block">LocalizaÁ„o (Selecione no Mapa) *</Label>
+                  <Label className="text-sm font-semibold mb-3 block">Localiza√ß√£o (Selecione no Mapa) *</Label>
                   <AddressMapPicker
                     address={{
                       street: formData.rua,
@@ -603,9 +603,9 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                   />
                 </div>
 
-                {/* Campos Manuais (para correÁ„o r·pida) */}
+                {/* Campos Manuais (para corre√ß√£o r√°pida) */}
                 <div className="border-t pt-4">
-                  <p className="text-xs text-gray-600 mb-4">VocÍ tambÈm pode editar os campos abaixo manualmente</p>
+                  <p className="text-xs text-gray-600 mb-4">Voc√™ tamb√©m pode editar os campos abaixo manualmente</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
                       <Label className="text-sm font-semibold">CEP</Label>
@@ -628,7 +628,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                     </div>
 
                     <div>
-                      <Label className="text-sm font-semibold">N˙mero *</Label>
+                      <Label className="text-sm font-semibold">N√∫mero *</Label>
                       <Input
                         placeholder="1000"
                         value={formData.numero}
@@ -650,7 +650,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                     <div>
                       <Label className="text-sm font-semibold">Cidade *</Label>
                       <Input
-                        placeholder="S„o Paulo"
+                        placeholder="S√£o Paulo"
                         value={formData.cidade}
                         onChange={(e) => updateField("cidade", e.target.value)}
                         className={errors.cidade ? "border-red-500" : ""}
@@ -680,7 +680,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 5: TIPO DE CONTA */}
+            {/* SE√á√ÉO 5: TIPO DE CONTA */}
             <AccordionItem value="tipoConta" className="border border-slate-200 rounded-lg overflow-hidden">
               <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                 <div className="flex items-center gap-2">
@@ -710,12 +710,12 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 6: PLANO DE CR…DITOS */}
+            {/* SE√á√ÉO 6: PLANO DE CR√âDITOS */}
             <AccordionItem value="plano" className="border border-slate-200 rounded-lg overflow-hidden">
               <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                 <div className="flex items-center gap-2">
                   <Badge className="bg-indigo-100 text-indigo-700">6</Badge>
-                  Plano de CrÈditos
+                  Plano de Cr√©ditos
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -725,9 +725,9 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                     <Select value={formData.planoCreditoId} onValueChange={(value) => updateField("planoCreditoId", value)}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="starter">Starter ó 100 crÈditos</SelectItem>
-                        <SelectItem value="growth">Growth ó 500 crÈditos</SelectItem>
-                        <SelectItem value="enterprise">Enterprise ó 1.000 crÈditos</SelectItem>
+                        <SelectItem value="starter">Starter ‚Äî 100 cr√©ditos</SelectItem>
+                        <SelectItem value="growth">Growth ‚Äî 500 cr√©ditos</SelectItem>
+                        <SelectItem value="enterprise">Enterprise ‚Äî 1.000 cr√©ditos</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -737,7 +737,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                       <Input type="number" placeholder="1000" value={formData.limite} onChange={(e) => updateField("limite", e.target.value)} className="h-8 text-xs" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">CrÈditos Iniciais</Label>
+                      <Label className="text-xs font-medium text-slate-600">Cr√©ditos Iniciais</Label>
                       <Input type="number" placeholder="100" value={formData.creditosIniciais} onChange={(e) => updateField("creditosIniciais", e.target.value)} className="h-8 text-xs" />
                     </div>
                   </div>
@@ -745,23 +745,23 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 7: M…TODOS DE PAGAMENTO */}
+            {/* SE√á√ÉO 7: M√âTODOS DE PAGAMENTO */}
             <AccordionItem value="pagamento" className="border border-slate-200 rounded-lg overflow-hidden">
               <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                 <div className="flex items-center gap-2">
                   <Badge className="bg-cyan-100 text-cyan-700">7</Badge>
-                  MÈtodos de Pagamento
+                  M√©todos de Pagamento
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="border-t bg-white px-3 py-3">
-                  <p className="text-xs font-medium text-slate-600 mb-2">MÈtodo Padr„o</p>
+                  <p className="text-xs font-medium text-slate-600 mb-2">M√©todo Padr√£o</p>
                   <RadioGroup value={formData.metodoPagamento} onValueChange={(value) => updateField("metodoPagamento", value)} className="grid grid-cols-2 gap-2">
                     {[
-                      { value: "pix", label: "PIX", emoji: "?" },
-                      { value: "boleto", label: "Boleto", emoji: "??" },
-                      { value: "cartao", label: "Cart„o de CrÈdito", emoji: "??" },
-                      { value: "allkoin", label: "ALLKOIN", emoji: "??" },
+                      { value: "pix", label: "PIX", emoji: "‚ö°" },
+                      { value: "boleto", label: "Boleto", emoji: "üìÑ" },
+                      { value: "cartao", label: "Cart√£o de Cr√©dito", emoji: "üí≥" },
+                      { value: "allkoin", label: "ALLKOIN", emoji: "ü™ô" },
                     ].map((opt) => (
                       <label key={opt.value} className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border bg-white cursor-pointer transition-all text-xs font-medium text-slate-700 hover:border-cyan-300 hover:bg-cyan-50", formData.metodoPagamento === opt.value && "border-cyan-400 bg-cyan-50 ring-2 ring-offset-1 ring-cyan-300")}>
                         <RadioGroupItem value={opt.value} className="flex-shrink-0" />
@@ -774,12 +774,12 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </AccordionContent>
             </AccordionItem>
 
-            {/* SE«√O 8: USU¡RIO ADMINISTRADOR */}
+            {/* SE√á√ÉO 8: USU√ÅRIO ADMINISTRADOR */}
             <AccordionItem value="admin" className={cn("border rounded-lg overflow-hidden", sectionErrors.admin > 0 ? "border-red-300" : "border-slate-200")}>
               <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.admin > 0 ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-slate-50")}>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-rose-100 text-rose-700">8</Badge>
-                  Usu·rio Administrador Inicial
+                  Usu√°rio Administrador Inicial
                   {sectionErrors.admin > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{sectionErrors.admin}</span>
                   )}
@@ -789,13 +789,13 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                 <div className="border-t bg-white px-3 py-3 space-y-3">
                   <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
                     <AlertCircle className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700">Este ser· o primeiro usu·rio com acesso total ‡ empresa</p>
+                    <p className="text-xs text-blue-700">Este ser√° o primeiro usu√°rio com acesso total √† empresa</p>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium text-slate-600">Nome *</Label>
                     <div className="relative">
                       <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                      <Input placeholder="Jo„o Silva" value={formData.nomeAdmin} onChange={(e) => updateField("nomeAdmin", e.target.value)} className={cn("h-8 text-xs pl-8", errors.nomeAdmin && "border-red-400")} />
+                      <Input placeholder="Jo√£o Silva" value={formData.nomeAdmin} onChange={(e) => updateField("nomeAdmin", e.target.value)} className={cn("h-8 text-xs pl-8", errors.nomeAdmin && "border-red-400")} />
                     </div>
                     {errors.nomeAdmin && <p className="text-xs text-red-500">{errors.nomeAdmin}</p>}
                   </div>
@@ -818,12 +818,12 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
 
           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-xs text-amber-800">
-              A empresa ser· criada e o usu·rio administrador receber· um convite por email para configurar sua senha.
+              A empresa ser√° criada e o usu√°rio administrador receber√° um convite por email para configurar sua senha.
             </p>
           </div>
         </div>
 
-        {/* RodapÈ Fixo */}
+        {/* Rodap√© Fixo */}
         <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
@@ -839,13 +839,13 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         </div>
       </div>
 
-      {/* Di·logo de ConfirmaÁ„o */}
+      {/* Di√°logo de Confirma√ß√£o */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar CriaÁ„o de Empresa</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar Cria√ß√£o de Empresa</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja realmente criar a empresa <strong>{formData.nomeFantasia}</strong> com as configuraÁıes informadas?
+              Deseja realmente criar a empresa <strong>{formData.nomeFantasia}</strong> com as configura√ß√µes informadas?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
