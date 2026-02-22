@@ -1307,7 +1307,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
           {/* Tab Content - Scrollable */}
           <ScrollArea className="flex-1 min-h-0 overflow-hidden">
-            <div className="p-6 space-y-6 app-brand-soft">
+            <div className="p-6 space-y-6 bg-slate-200">
               {/* Visão Geral */}
               <TabsContent value="visao-geral" className="space-y-4 mt-0">
                 {/* Partnership Card - Convites Especiais */}

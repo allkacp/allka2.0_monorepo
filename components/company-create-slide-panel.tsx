@@ -453,7 +453,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         )}
 
         {/* Conteúdo com Abas em Accordions */}
-        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] app-brand-soft">
+        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
           {/* STATUS HEADER - Prominently displayed at the top */}
           <div className="mb-4 px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
             <CompanyStatusSelector

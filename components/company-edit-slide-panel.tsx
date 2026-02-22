@@ -657,7 +657,7 @@ export function CompanyEditSlidePanel({ open, onClose, company, onSave }: Compan
             </TabsList>
           </div>
 
-          <div className="flex-1 overflow-hidden bg-muted/20 app-brand-soft">
+          <div className="flex-1 overflow-hidden bg-slate-200">
             <ScrollArea className="h-full">
               <TabsContent value="company-data" className="p-6 space-y-6 mt-0">
                 {/* STATUS HEADER - Prominently displayed at the top */}
