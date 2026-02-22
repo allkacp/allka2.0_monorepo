@@ -2411,7 +2411,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     {/* Save confirmation dialog */}
     <ConfirmationDialog
       open={showSaveConfirm}
-      onClose={() => setShowSaveConfirm(false)}
+      onClose={() => { setShowSaveConfirm(false); handleDadosCancelEdit() }}
       onConfirm={performDadosSave}
       title="Salvar alterações?"
       message={<>Tem certeza que deseja salvar as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong>? Esta ação irá atualizar as informações da empresa.</>}
