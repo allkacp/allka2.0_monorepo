@@ -532,10 +532,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
   return (
     <>
-      <Sheet open={open && !showMigrateModal} onOpenChange={onClose}>
+      <Sheet open={open && !showMigrateModal} onOpenChange={(o) => { if (!o && !showSaveConfirm && !showCancelConfirm) onClose() }}>
         <SheetContent
           side="right"
           hideOverlay={true}
+          onInteractOutside={(e) => { if (showSaveConfirm || showCancelConfirm) e.preventDefault() }}
+          onPointerDownOutside={(e) => { if (showSaveConfirm || showCancelConfirm) e.preventDefault() }}
           className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
           style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
