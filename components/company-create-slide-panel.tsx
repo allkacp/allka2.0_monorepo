@@ -793,7 +793,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         </div>
 
         {/* Rodapé Fixo */}
-        <div className="flex items-center justify-between gap-3 px-[25px] py-[25px] border-t bg-gray-50 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
