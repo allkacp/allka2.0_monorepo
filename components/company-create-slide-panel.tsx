@@ -278,7 +278,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         />
 
         {/* Conteúdo com Abas em Accordions */}
-        <div className="flex-1 overflow-y-auto px-[50px] py-6 app-brand-soft">
+        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] app-brand-soft">
           {/* STATUS HEADER - Prominently displayed at the top */}
           <div className="mb-4 px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
             <CompanyStatusSelector
@@ -625,7 +625,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
         </div>
 
         {/* Rodapé Fixo */}
-        <div className="flex items-center justify-between gap-3 px-[50px] py-4 border-t bg-gray-50 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-[50px] py-[50px] border-t bg-gray-50 flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
