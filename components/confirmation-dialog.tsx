@@ -1,4 +1,5 @@
 
+import React from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,7 @@ interface ConfirmationDialogProps {
   /** Title text for the dialog */
   title: string
   /** Main message explaining the action to be confirmed */
-  message: string
+  message: React.ReactNode
   /** Text for the confirm button (default: "Confirmar") */
   confirmText?: string
   /** Text for the cancel button (default: "Cancelar") */
@@ -73,7 +74,7 @@ export function ConfirmationDialog({
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700">
 
         {/* Top accent bar */}
         <div className={`h-1 w-full ${destructive ? "bg-gradient-to-r from-red-500 to-rose-600" : "bg-gradient-to-r from-blue-500 to-violet-600"}`} />
