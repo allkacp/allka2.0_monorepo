@@ -1,5 +1,5 @@
 
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useState } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -556,10 +557,30 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     setCurrentPage(page)
   }
 
+  const getPageNumbers = (): (number | string)[] => {
+    const pages: (number | string)[] = []
+    const maxVisible = 5
+    const half = Math.floor(maxVisible / 2)
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else if (currentPage <= half + 1) {
+      for (let i = 1; i <= maxVisible; i++) pages.push(i)
+      pages.push("...")
+    } else if (currentPage >= totalPages - half) {
+      pages.push("...")
+      for (let i = totalPages - maxVisible + 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push("...")
+      for (let i = currentPage - half; i <= currentPage + half; i++) pages.push(i)
+      pages.push("...")
+    }
+    return pages
+  }
+
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 space-y-3">
+        <div className="px-4 pt-4 pb-2 space-y-3">
           {/* Compact Stats Row */}
           <div className="grid grid-cols-3 gap-2">
             <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
@@ -590,146 +611,284 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Bar */}
-          <div className="flex gap-2 items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+        {/* Global-standard Table Card */}
+        <div className="mx-4 mb-4 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
+
+          {/* Top Bar — matches empresas page */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-slate-50/60">
+            {/* Search */}
+            <div className="flex-1 relative min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Buscar por nome ou e-mail..."
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-8 h-8 text-sm bg-white"
+                className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-blue-500 w-full"
               />
             </div>
-            <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-slate-50 px-1.5 py-0.5">
-              {[10, 25, 50, 100].map((size) => (
-                <button
-                  key={size}
-                  onClick={() => handlePageSizeChange(size)}
-                  className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                    pageSize === size ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+
+            {/* Items per page + count */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <ItemsPerPageSelect
+                value={pageSize.toString()}
+                onValueChange={(value) => { handlePageSizeChange(Number(value)) }}
+                variant="top"
+              />
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {filteredUsers.length !== userList.length
+                  ? <>de <span className="font-semibold text-blue-500">{filteredUsers.length}</span> de {userList.length} usuário{userList.length !== 1 ? "s" : ""}</>
+                  : <>de <span className="font-semibold text-slate-600">{userList.length}</span> usuário{userList.length !== 1 ? "s" : ""}</>
+                }
+              </span>
             </div>
-            <Button onClick={handleAddUserClick} size="sm" className="h-8 gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+
+            {/* Add User button */}
+            <Button
+              onClick={handleAddUserClick}
+              size="sm"
+              className="h-9 gap-2 px-3.5 text-xs bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm flex-shrink-0"
+            >
               <Plus className="h-3.5 w-3.5" />
               Adicionar
             </Button>
+
+            {/* Pagination */}
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              {getPageNumbers().map((page, index) =>
+                page === "..." ? (
+                  <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+                ) : (
+                  <button
+                    key={index}
+                    onClick={() => handlePageClick(Number(page))}
+                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                      page === currentPage
+                        ? "bg-blue-500 text-white shadow-sm shadow-blue-200"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Users List */}
-          <div className="space-y-1">
-            {paginatedUsers.length > 0 ? (
-              paginatedUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center gap-3 px-3 py-2 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 transition-colors"
-                >
-                  {/* Avatar */}
-                  <div className="relative shrink-0">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar}`} />
-                      <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
-                        {user.avatar}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${user.status === "online" ? "bg-green-500" : "bg-slate-300"}`} />
-                  </div>
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200/60">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Usuário</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">E-mail</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Perfil · Último acesso</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginatedUsers.length > 0 ? (
+                  paginatedUsers.map((user) => (
+                    <tr
+                      key={user.id}
+                      className="group hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      {/* Usuário */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="relative shrink-0">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar}`} />
+                              <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
+                                {user.avatar}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${user.status === "online" ? "bg-green-500" : "bg-slate-300"}`} />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-slate-900">{user.name}</p>
+                            {user.isBlocked && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 mt-0.5">Bloqueado</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900 truncate leading-none">{user.name}</p>
-                      {user.isBlocked && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4">Bloqueado</Badge>}
-                    </div>
-                    <p className="text-xs text-slate-400 truncate leading-none mt-0.5">{user.email}</p>
-                  </div>
+                      {/* E-mail */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                          <span className="text-xs text-slate-600 truncate max-w-[160px]">{user.email}</span>
+                        </div>
+                      </td>
 
-                  {/* Profile badge + last access */}
-                  <div className="hidden sm:flex flex-col items-end gap-0.5 shrink-0">
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{user.profile}</Badge>
-                    <span className="text-[10px] text-slate-400">{user.lastAccess}</span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => handleViewDetails(user)}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Ver detalhes</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost" size="sm"
-                          className={`h-7 w-7 p-0 ${user.isBlocked ? "text-red-500 hover:text-red-600 hover:bg-red-50" : "text-green-600 hover:text-green-700 hover:bg-green-50"}`}
-                          onClick={(e) => handleBlockToggle(user.id, e)}
+                      {/* Status */}
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            user.isBlocked
+                              ? "bg-red-100 text-red-700 border border-red-200"
+                              : user.status === "online"
+                              ? "bg-emerald-500 text-white"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
                         >
-                          {user.isBlocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{user.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={(e) => handleDeleteUser(user.id, e)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Excluir</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-10">
-                <p className="text-slate-400 text-sm">
-                  {searchTerm ? "Nenhum usuário encontrado" : "Nenhum usuário cadastrado"}
-                </p>
-              </div>
-            )}
+                          {user.isBlocked ? (
+                            <Lock className="h-3 w-3" />
+                          ) : user.status === "online" ? (
+                            <CheckCircle className="h-3 w-3" />
+                          ) : (
+                            <PauseCircle className="h-3 w-3" />
+                          )}
+                          {user.isBlocked ? "Bloqueado" : user.status === "online" ? "Online" : "Offline"}
+                        </span>
+                      </td>
+
+                      {/* Perfil + Último acesso */}
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                            user.profile === "Administrador"
+                              ? "bg-violet-50 text-violet-700 border-violet-200"
+                              : user.profile === "Gerente"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-slate-50 text-slate-600 border-slate-200"
+                          }`}>
+                            {user.profile}
+                          </span>
+                          <p className="text-xs text-slate-400 pl-0.5">{user.lastAccess}</p>
+                        </div>
+                      </td>
+
+                      {/* Ações */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-8 w-8 p-0 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => handleViewDetails(user)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">Ver detalhes</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost" size="sm"
+                                className={`h-8 w-8 p-0 rounded-lg ${
+                                  user.isBlocked
+                                    ? "text-red-400 hover:text-red-600 hover:bg-red-50"
+                                    : "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                }`}
+                                onClick={(e) => handleBlockToggle(user.id, e)}
+                              >
+                                {user.isBlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">{user.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-8 w-8 p-0 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={(e) => handleDeleteUser(user.id, e)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">Excluir</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
+                          <Shield className="h-6 w-6 opacity-40" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">
+                          {searchTerm ? "Nenhum usuário encontrado" : "Nenhum usuário cadastrado"}
+                        </p>
+                        {searchTerm && (
+                          <p className="text-xs text-slate-400">Tente ajustar o termo de busca</p>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-          {/* Pagination */}
+          {/* Bottom Pagination — matches empresas page */}
           {filteredUsers.length > 0 && (
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-slate-500">
-                {startIndex + 1}–{Math.min(endIndex, filteredUsers.length)} de {filteredUsers.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={currentPage === 1} className="h-7 px-2 text-xs">
-                  Anterior
-                </Button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = i + 1
-                  if (totalPages > 5 && currentPage > 3) {
-                    pageNum = currentPage - 2 + i
-                  }
-                  if (pageNum <= totalPages) {
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handlePageClick(pageNum)}
-                        className="h-7 w-7 p-0 text-xs"
-                      >
-                        {pageNum}
-                      </Button>
-                    )
-                  }
-                  return null
-                })}
-                <Button variant="outline" size="sm" onClick={handleNextPage} disabled={currentPage === totalPages} className="h-7 px-2 text-xs">
-                  Próximo
-                </Button>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/40">
+              <div className="flex items-center gap-2">
+                <ItemsPerPageSelect
+                  value={pageSize.toString()}
+                  onValueChange={(value) => { handlePageSizeChange(Number(value)) }}
+                  variant="bottom"
+                />
+                <span className="text-xs text-slate-400">
+                  de {filteredUsers.length} usuário{filteredUsers.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                {getPageNumbers().map((page, index) =>
+                  page === "..." ? (
+                    <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+                  ) : (
+                    <button
+                      key={index}
+                      onClick={() => handlePageClick(Number(page))}
+                      className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                        page === currentPage
+                          ? "bg-blue-500 text-white shadow-sm shadow-blue-200"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           )}
