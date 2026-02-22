@@ -1183,74 +1183,74 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto">
                 {!permissionsMode ? (
-                  <div className="px-6 py-5 space-y-6">
+                  <div className="px-4 py-3 space-y-4">
 
                     {/* Section: Dados da Conta */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
-                          <Shield className="h-3 w-3 text-blue-600" />
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="h-4 w-4 rounded bg-blue-100 flex items-center justify-center">
+                          <Shield className="h-2.5 w-2.5 text-blue-600" />
                         </div>
-                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Dados da Conta</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Dados da Conta</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">ID</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5 font-mono">#{selectedUser.id}</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">ID</p>
+                          <p className="text-xs font-bold text-slate-800 mt-0.5 font-mono">#{selectedUser.id}</p>
                         </div>
-                        <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedUser.profile}</p>
+                        <div className="bg-purple-50 border border-purple-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</p>
+                          <p className="text-xs font-bold text-slate-800 mt-0.5">{selectedUser.profile}</p>
                         </div>
-                        <div className="bg-green-50 border border-green-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</p>
-                          <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${selectedUser.isBlocked ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                        <div className="bg-green-50 border border-green-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Status</p>
+                          <span className={`inline-flex items-center mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${selectedUser.isBlocked ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
                             {selectedUser.isBlocked ? "Bloqueado" : "Ativo"}
                           </span>
                         </div>
-                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Último acesso</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedUser.lastAccess}</p>
+                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Último acesso</p>
+                          <p className="text-xs font-bold text-slate-800 mt-0.5">{selectedUser.lastAccess}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Section: Identificação */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
-                          <User className="h-3 w-3 text-blue-600" />
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="h-4 w-4 rounded bg-blue-100 flex items-center justify-center">
+                          <User className="h-2.5 w-2.5 text-blue-600" />
                         </div>
-                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Identificação</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Identificação</span>
                       </div>
                       {!editMode ? (
-                        <div className="space-y-2.5">
+                        <div className="space-y-1.5">
                           {[
                             { label: "Nome completo", value: selectedUser.name },
                             { label: "CPF", value: selectedUser.cpf || "Não informado" },
                             { label: "Telefone", value: selectedUser.phone || "Não informado" },
                             { label: "E-mail", value: selectedUser.email },
                           ].map(({ label, value }) => (
-                            <div key={label} className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
-                              <p className="text-sm font-medium text-slate-800 mt-0.5 break-all">{value}</p>
+                            <div key={label} className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
+                              <p className="text-xs font-medium text-slate-800 mt-0.5 break-all">{value}</p>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome completo</label>
-                            <Input value={editData?.name || ""} onChange={(e) => handleEditFieldChange("name", e.target.value)} placeholder="Nome completo" className="mt-1 h-9 text-sm" />
+                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Nome completo</label>
+                            <Input value={editData?.name || ""} onChange={(e) => handleEditFieldChange("name", e.target.value)} placeholder="Nome completo" className="mt-1 h-8 text-xs" />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Telefone</label>
-                              <Input value={editData?.phone || ""} onChange={(e) => handleEditFieldChange("phone", e.target.value)} placeholder="(11) 98765-4321" className="mt-1 h-9 text-sm" />
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Telefone</label>
+                              <Input value={editData?.phone || ""} onChange={(e) => handleEditFieldChange("phone", e.target.value)} placeholder="(11) 98765-4321" className="mt-1 h-8 text-xs" />
                             </div>
                             <div>
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">E-mail</label>
-                              <Input value={editData?.email || ""} onChange={(e) => handleEditFieldChange("email", e.target.value)} placeholder="email@exemplo.com" type="email" className="mt-1 h-9 text-sm" />
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">E-mail</label>
+                              <Input value={editData?.email || ""} onChange={(e) => handleEditFieldChange("email", e.target.value)} placeholder="email@exemplo.com" type="email" className="mt-1 h-8 text-xs" />
                             </div>
                           </div>
                         </div>
@@ -1259,52 +1259,52 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
                     {/* Section: Endereço */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
-                          <MapPin className="h-3 w-3 text-violet-600" />
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="h-4 w-4 rounded bg-violet-100 flex items-center justify-center">
+                          <MapPin className="h-2.5 w-2.5 text-violet-600" />
                         </div>
-                        <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">Endereço</span>
-                        <span className="text-[10px] text-slate-400 font-medium">(opcional)</span>
+                        <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">Endereço</span>
+                        <span className="text-[9px] text-slate-400 font-medium">(opcional)</span>
                       </div>
                       {!editMode ? (
-                        <div className="space-y-2.5">
-                          <div className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Logradouro</p>
-                            <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.address || "Não informado"}</p>
+                        <div className="space-y-1.5">
+                          <div className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Logradouro</p>
+                            <p className="text-xs font-medium text-slate-800 mt-0.5">{selectedUser.address || "Não informado"}</p>
                           </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="col-span-1 border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">UF</p>
-                              <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.state || "—"}</p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <div className="col-span-1 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">UF</p>
+                              <p className="text-xs font-medium text-slate-800 mt-0.5">{selectedUser.state || "—"}</p>
                             </div>
-                            <div className="col-span-2 border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Cidade</p>
-                              <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.city || "Não informado"}</p>
+                            <div className="col-span-2 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Cidade</p>
+                              <p className="text-xs font-medium text-slate-800 mt-0.5">{selectedUser.city || "Não informado"}</p>
                             </div>
                           </div>
-                          <div className="border border-slate-100 rounded-xl px-4 py-2.5 bg-slate-50/60">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">CEP</p>
-                            <p className="text-sm font-medium text-slate-800 mt-0.5">{selectedUser.zipCode || "Não informado"}</p>
+                          <div className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">CEP</p>
+                            <p className="text-xs font-medium text-slate-800 mt-0.5">{selectedUser.zipCode || "Não informado"}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Logradouro</label>
-                            <Input value={editData?.address || ""} onChange={(e) => handleEditFieldChange("address", e.target.value)} placeholder="Rua, Avenida, Nº..." className="mt-1 h-9 text-sm" />
+                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Logradouro</label>
+                            <Input value={editData?.address || ""} onChange={(e) => handleEditFieldChange("address", e.target.value)} placeholder="Rua, Avenida, Nº..." className="mt-1 h-8 text-xs" />
                           </div>
                           <div className="grid grid-cols-5 gap-2">
                             <div className="col-span-2">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cidade</label>
-                              <Input value={editData?.city || ""} onChange={(e) => handleEditFieldChange("city", e.target.value)} placeholder="São Paulo" className="mt-1 h-9 text-sm" />
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Cidade</label>
+                              <Input value={editData?.city || ""} onChange={(e) => handleEditFieldChange("city", e.target.value)} placeholder="São Paulo" className="mt-1 h-8 text-xs" />
                             </div>
                             <div className="col-span-1">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">UF</label>
-                              <Input value={editData?.state || ""} onChange={(e) => handleEditFieldChange("state", e.target.value)} placeholder="SP" maxLength={2} className="mt-1 h-9 text-sm" />
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">UF</label>
+                              <Input value={editData?.state || ""} onChange={(e) => handleEditFieldChange("state", e.target.value)} placeholder="SP" maxLength={2} className="mt-1 h-8 text-xs" />
                             </div>
                             <div className="col-span-2">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
-                              <Input value={editData?.zipCode || ""} onChange={(e) => handleEditFieldChange("zipCode", e.target.value)} placeholder="01234-567" className="mt-1 h-9 text-sm" />
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
+                              <Input value={editData?.zipCode || ""} onChange={(e) => handleEditFieldChange("zipCode", e.target.value)} placeholder="01234-567" className="mt-1 h-8 text-xs" />
                             </div>
                           </div>
                         </div>
@@ -1313,33 +1313,33 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
                     {/* Section: Uso e Métricas */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-5 w-5 rounded-md bg-amber-100 flex items-center justify-center">
-                          <CheckCircle className="h-3 w-3 text-amber-600" />
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="h-4 w-4 rounded bg-amber-100 flex items-center justify-center">
+                          <CheckCircle className="h-2.5 w-2.5 text-amber-600" />
                         </div>
-                        <span className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">Uso e Métricas</span>
+                        <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Uso e Métricas</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Tempo online</p>
-                          <p className="text-base font-bold text-yellow-600 mt-1">{selectedUser.averageOnlineHours || 2.5}h/dia</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Tempo online</p>
+                          <p className="text-sm font-bold text-yellow-600 mt-0.5">{selectedUser.averageOnlineHours || 2.5}h/dia</p>
                         </div>
-                        <div className="bg-orange-50 border border-orange-100 rounded-xl p-3">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sem acesso</p>
-                          <p className="text-base font-bold text-orange-600 mt-1">{selectedUser.averageOfflineDays || 1}d</p>
+                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-2">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Sem acesso</p>
+                          <p className="text-sm font-bold text-orange-600 mt-0.5">{selectedUser.averageOfflineDays || 1}d</p>
                         </div>
                       </div>
                       {/* Chart */}
-                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/40">
-                        <p className="text-xs font-semibold text-slate-500 mb-3">Tempo online — 7 dias</p>
-                        <div className="h-32">
+                      <div className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
+                        <p className="text-[10px] font-semibold text-slate-500 mb-2">Tempo online — 7 dias</p>
+                        <div className="h-24">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={timelineData}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                              <XAxis dataKey="day" tick={{ fontSize: 10 }} stroke="#9CA3AF" />
-                              <YAxis tick={{ fontSize: 10 }} stroke="#9CA3AF" tickFormatter={(v) => `${v}h`} />
-                              <RechartsTooltip contentStyle={{ backgroundColor: "#1F2937", border: "none", borderRadius: "8px", fontSize: 11 }} formatter={(v: number) => [`${v}h`, "Online"]} />
-                              <Bar dataKey="hours" radius={[6, 6, 0, 0]} fill="#3B82F6" />
+                              <XAxis dataKey="day" tick={{ fontSize: 9 }} stroke="#9CA3AF" />
+                              <YAxis tick={{ fontSize: 9 }} stroke="#9CA3AF" tickFormatter={(v) => `${v}h`} />
+                              <RechartsTooltip contentStyle={{ backgroundColor: "#1F2937", border: "none", borderRadius: "8px", fontSize: 10 }} formatter={(v: number) => [`${v}h`, "Online"]} />
+                              <Bar dataKey="hours" radius={[4, 4, 0, 0]} fill="#3B82F6" />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
