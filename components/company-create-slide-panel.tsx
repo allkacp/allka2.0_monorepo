@@ -320,13 +320,14 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     <>
       <div
         className={cn(
-          "fixed top-0 right-0 h-full bg-white flex flex-col border-l border-gray-200 z-50 shadow-2xl relative",
+          "fixed top-0 right-0 h-full bg-white flex flex-col border-l border-gray-200 z-50 shadow-2xl",
           open
             ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
             : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)]",
         )}
         style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
+        <div className="relative h-full flex flex-col overflow-hidden">
         {/* Hidden file input */}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
@@ -801,6 +802,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
           >
             {loading ? "Criando..." : "Criar Empresa"}
           </Button>
+        </div>
         </div>
       </div>
 
