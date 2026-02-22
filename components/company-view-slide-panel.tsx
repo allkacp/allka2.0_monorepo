@@ -1,5 +1,5 @@
 ﻿
-import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle } from "lucide-react"
+import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -22,7 +22,7 @@ import { CompanyLogsTab } from "@/components/company-logs-tab"
 import { CompanyStatusSelector } from "@/components/company-status-selector"
 import { CompanySocialLinksManager, type SocialLink } from "@/components/company-social-links-manager"
 import { AddressMapPicker } from "@/components/address/address-map-picker"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 type CompanyType = "company" | "agency" | "nomad"
 type CompanyStatus = "active" | "inactive" | "pending"
@@ -84,7 +84,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const [showMigrateModal, setShowMigrateModal] = useState(false)
   const [migrationStep, setMigrationStep] = useState<"confirm" | "leader">("confirm")
   const [avatar, setAvatar] = useState<string | null>(company?.avatar || null)
-  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false)
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [cropZoom, setCropZoom] = useState(1)
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cropImgRef = useRef<HTMLImageElement>(null)
+  const CROP_SIZE = 192
   const [showBalance, setShowBalance] = useState(false)
   
   // Edit mode state for Dados tab
@@ -149,6 +159,46 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   }, [company])
 
   if (!company) return null
+
+  // Avatar handlers
+  const handleAvatarClick = () => {
+    if (avatar) { setShowAvatarMenu((p) => !p) } else { fileInputRef.current?.click() }
+  }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string
+      setRawImageSrc(src)
+      setOriginalRawSrc(src)
+      setCropZoom(1)
+      setCropOffset({ x: 0, y: 0 })
+      setCropOpen(true)
+    }
+    reader.readAsDataURL(file)
+  }
+  const handleCropConfirm = () => {
+    const img = cropImgRef.current
+    if (!img) return
+    const canvas = document.createElement("canvas")
+    canvas.width = CROP_SIZE
+    canvas.height = CROP_SIZE
+    const ctx = canvas.getContext("2d")!
+    ctx.beginPath()
+    ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
+    ctx.clip()
+    const fitScale = Math.min(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight)
+    const drawW = img.naturalWidth * fitScale * cropZoom
+    const drawH = img.naturalHeight * fitScale * cropZoom
+    const dx = CROP_SIZE / 2 + cropOffset.x - drawW / 2
+    const dy = CROP_SIZE / 2 + cropOffset.y - drawH / 2
+    ctx.drawImage(img, dx, dy, drawW, drawH)
+    setAvatar(canvas.toDataURL("image/jpeg", 0.92))
+    setCropOpen(false)
+    setRawImageSrc(null)
+  }
 
   const getTypeLabel = (type: CompanyType) => {
     const labels = {
@@ -541,6 +591,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
           className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
           style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
+          <div className="relative flex flex-col h-full overflow-hidden">
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <ModalBrandHeader
             right={
               <div className="flex items-center gap-3 flex-shrink-0">
@@ -626,24 +679,22 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             left={
               <div className="flex items-center gap-4 flex-1 min-w-0">
                 {/* Avatar Section */}
-                <div className="flex-shrink-0 relative">
-                  <div className="relative">
-                    <Avatar className="h-16 w-16 border-2 border-white/20">
-                      <AvatarImage src={avatar || undefined} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-600 to-cyan-500 text-white font-bold text-lg">
-                        {company.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <button
-                      onClick={() => setIsAvatarModalOpen(true)}
-                      className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 p-1.5 rounded-full border border-white shadow transition"
-                      title="Alterar imagem"
-                    >
-                      <Camera className="h-3 w-3 text-white" />
-                    </button>
+                <button
+                  onClick={handleAvatarClick}
+                  className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
+                >
+                  {avatar ? (
+                    <img src={avatar} alt="logo" className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-500">
+                      <span className="text-white font-bold text-2xl">{company.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                    <Camera className="h-5 w-5 text-white" />
+                    <span className="text-[9px] text-white/90 font-medium mt-0.5">{avatar ? "Editar" : "Foto"}</span>
                   </div>
-                </div>
+                </button>
 
                 {/* Main Info Section */}
                 <div className="flex-1 min-w-0">
@@ -654,43 +705,84 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               </div>
             }
           />
-          {/* Content Wrapper - scrollable */}
-          <div className="flex-1 overflow-y-auto app-brand-soft">
-            {/* Avatar Upload Modal */}
-            {isAvatarModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="bg-white rounded-xl shadow-xl p-4 max-w-xs w-full mx-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-semibold text-sm">Alterar imagem</span>
-                    <button
-                      onClick={() => setIsAvatarModalOpen(false)}
-                      className="text-gray-500 hover:text-gray-700"
-                      title="Fechar"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+          {/* Avatar menu */}
+          {showAvatarMenu && avatar && (
+            <>
+              <div className="absolute inset-0 z-40" onClick={() => setShowAvatarMenu(false)} />
+              <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 22 }}>
+                <button
+                  onClick={() => { setShowAvatarMenu(false); setTimeout(() => fileInputRef.current?.click(), 10) }}
+                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Camera className="h-3.5 w-3.5 text-gray-400" />
+                  Nova foto
+                </button>
+                {originalRawSrc && (
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setRawImageSrc(originalRawSrc); setCropZoom(1); setCropOffset({ x: 0, y: 0 }); setCropOpen(true) }}
+                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                  >
+                    <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                    Reposicionar
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowAvatarMenu(false); setAvatar(null); setOriginalRawSrc(null) }}
+                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remover foto
+                </button>
+              </div>
+            </>
+          )}
 
-                  <div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-gray-400 transition-colors">
-                    <p className="text-sm text-gray-500">Arraste uma imagem ou clique para escolher</p>
+          {/* Crop overlay */}
+          {cropOpen && rawImageSrc && (
+            <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
+              <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
+                <p className="text-white text-sm font-semibold">Ajustar logo da empresa</p>
+                <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · use o zoom para ajustar</p>
+              </div>
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
+                <div
+                  className="relative flex-shrink-0"
+                  style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                  onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y }) }}
+                  onMouseMove={(e) => { if (!isDragging) return; setCropOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }) }}
+                  onMouseUp={() => setIsDragging(false)}
+                  onMouseLeave={() => setIsDragging(false)}
+                >
+                  <img ref={cropImgRef} src={rawImageSrc} alt="crop" draggable={false}
+                    style={{ transform: `translate(${cropOffset.x}px,${cropOffset.y}px) scale(${cropZoom})`, transformOrigin: "center", userSelect: "none", width: "100%", height: "100%", objectFit: "contain", opacity: 0.35 }}
+                  />
+                  <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)`, pointerEvents: "none" }}>
+                    <img src={rawImageSrc} alt="crop-bright" draggable={false}
+                      style={{ transform: `translate(${cropOffset.x}px,${cropOffset.y}px) scale(${cropZoom})`, transformOrigin: "center", userSelect: "none", width: "100%", height: "100%", objectFit: "contain" }}
+                    />
                   </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setIsAvatarModalOpen(false)}
-                      className="flex-1 rounded border border-gray-300 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button className="flex-1 rounded bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
-                      Salvar
-                    </button>
-                  </div>
+                  <div className="absolute inset-0 rounded-full border-2 border-white/60 pointer-events-none" style={{ borderRadius: "50%" }} />
                 </div>
               </div>
-            )}
+              <div className="flex-shrink-0 px-6 pb-3 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Camera className="h-4 w-4 text-white/60 flex-shrink-0" />
+                  <input type="range" min={0.1} max={3} step={0.01} value={cropZoom} onChange={(e) => setCropZoom(parseFloat(e.target.value))} className="flex-1 accent-white" />
+                  <button onClick={() => setCropOffset({ x: 0, y: 0 })} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0" title="Centralizar">
+                    <Crosshair className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 h-9 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10 transition-colors">Cancelar</button>
+                  <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 transition-colors">Usar esta foto</button>
+                </div>
+              </div>
+            </div>
+          )}
 
-            {/* Content with Tabs */}
+          {/* Content Wrapper - scrollable */}
+          <div className="flex-1 overflow-y-auto app-brand-soft">
+            {/* Content with Tabs */
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-0">
             <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-200 bg-white px-[50px] py-[15px] overflow-x-auto">
               <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
@@ -2307,6 +2399,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
             </Tabs>
             </div>
+          </div>
       </SheetContent>
     </Sheet>
 
