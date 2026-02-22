@@ -580,7 +580,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 pt-4 pb-2 space-y-3">
+        <div className="px-6 pt-5 pb-2 space-y-3">
           {/* Compact Stats Row */}
           <div className="grid grid-cols-3 gap-2">
             <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
@@ -614,7 +614,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
         </div>
 
         {/* Global-standard Table Card */}
-        <div className="mx-4 mb-4 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
+        <div className="mx-6 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm">
 
           {/* Top Bar — matches empresas page */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-slate-50/60">
