@@ -233,15 +233,25 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cropImgRef = useRef<HTMLImageElement>(null)
   const CROP_SIZE = 192
+  const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
 
-  const handleAvatarClick = () => fileInputRef.current?.click()
+  const handleAvatarClick = () => {
+    if (avatarPreview) {
+      setShowAvatarMenu((prev) => !prev)
+    } else {
+      fileInputRef.current?.click()
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      setRawImageSrc(ev.target?.result as string)
+      const src = ev.target?.result as string
+      setRawImageSrc(src)
+      setOriginalRawSrc(src)
       setCropZoom(1)
       setCropOffset({ x: 0, y: 0 })
       setCropOpen(true)
@@ -273,15 +283,11 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
     ctx.clip()
     const img = cropImgRef.current
-    const scale = cropZoom
-    const iw = img.naturalWidth * scale
-    const ih = img.naturalHeight * scale
-    const aspect = img.naturalWidth / img.naturalHeight
-    let drawW: number, drawH: number
-    if (aspect >= 1) { drawH = CROP_SIZE * scale; drawW = drawH * aspect }
-    else { drawW = CROP_SIZE * scale; drawH = drawW / aspect }
-    const dx = (CROP_SIZE - drawW) / 2 + cropOffset.x
-    const dy = (CROP_SIZE - drawH) / 2 + cropOffset.y
+    // Replicate exactly the CSS transform: scale(cropZoom) centered + cropOffset translation
+    const drawW = img.naturalWidth * cropZoom
+    const drawH = img.naturalHeight * cropZoom
+    const dx = CROP_SIZE / 2 + cropOffset.x - drawW / 2
+    const dy = CROP_SIZE / 2 + cropOffset.y - drawH / 2
     ctx.drawImage(img, dx, dy, drawW, drawH)
     setAvatarPreview(canvas.toDataURL("image/jpeg", 0.92))
     setCropOpen(false)
@@ -565,6 +571,8 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     setShowAddUserModal(false)
     setConfirmAddUser(false)
     setAvatarPreview(null)
+    setOriginalRawSrc(null)
+    setShowAvatarMenu(false)
     setNewUserData({
       name: "",
       email: "",
@@ -1438,7 +1446,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       />
 
       {/* Add User Sheet — slide from right */}
-      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) setShowAddUserModal(false) }}>
+      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) } }}>
         <SheetContent
           side="right"
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
@@ -1457,22 +1465,61 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
             {/* Gradient Header */}
             <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 100 }}>
-              {/* Clickable avatar */}
-              <button
-                onClick={handleAvatarClick}
-                className="relative h-16 w-16 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
-              >
-                {avatarPreview ? (
-                  <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserPlus className="h-7 w-7 text-white/80" />
+              {/* Clickable avatar wrapper — relative so menu can be positioned below */}
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={handleAvatarClick}
+                  className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+                >
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserPlus className="h-8 w-8 text-white/80" />
+                  )}
+                  {/* Camera hover overlay */}
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                    <Camera className="h-5 w-5 text-white" />
+                    <span className="text-[9px] text-white/90 font-medium mt-0.5">{avatarPreview ? "Editar" : "Foto"}</span>
+                  </div>
+                </button>
+
+                {/* Avatar context menu — appears when image exists */}
+                {showAvatarMenu && avatarPreview && (
+                  <>
+                    {/* backdrop to close */}
+                    <div className="fixed inset-0 z-[60]" onClick={() => setShowAvatarMenu(false)} />
+                    <div className="absolute left-0 top-[calc(100%+8px)] z-[61] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
+                      <button
+                        onClick={() => { setShowAvatarMenu(false); fileInputRef.current?.click() }}
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Camera className="h-3.5 w-3.5 text-gray-400" />
+                        Nova foto
+                      </button>
+                      {originalRawSrc && (
+                        <button
+                          onClick={() => {
+                            setShowAvatarMenu(false)
+                            setRawImageSrc(originalRawSrc)
+                            setCropOpen(true)
+                          }}
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                        >
+                          <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                          Reposicionar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setShowAvatarMenu(false); setAvatarPreview(null); setOriginalRawSrc(null) }}
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remover foto
+                      </button>
+                    </div>
+                  </>
                 )}
-                {/* Camera hover overlay */}
-                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                  <Camera className="h-5 w-5 text-white" />
-                  <span className="text-[9px] text-white/90 font-medium mt-0.5">Foto</span>
-                </div>
-              </button>
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Novo cadastro</p>
                 <h2 className="text-lg font-bold text-white leading-tight truncate">
@@ -1757,7 +1804,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => setShowAddUserModal(false)}
+                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) }}
                 className="flex-1 h-10"
               >
                 Cancelar
