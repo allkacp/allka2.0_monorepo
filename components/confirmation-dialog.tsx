@@ -66,15 +66,18 @@ export function ConfirmationDialog({
   }
 
   const modal = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* Backdrop - pointer-events-none to avoid compositing layer swallowing mouse events */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none" />
 
       {/* Modal */}
-      <div className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div
+        className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* Top accent bar */}
         <div className={`h-1 w-full ${destructive ? "bg-gradient-to-r from-red-500 to-rose-600" : "bg-gradient-to-r from-blue-500 to-violet-600"}`} />
