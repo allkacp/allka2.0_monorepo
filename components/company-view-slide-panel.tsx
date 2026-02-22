@@ -564,19 +564,22 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 )}
                 {/* Credit Plan Badge */}
                 {company.partner_level && (() => {
-                  const plan = company.partner_level!.toLowerCase()
-                  const planColor =
-                    plan === "enterprise" ? "bg-purple-100 text-purple-700 border border-purple-200"
-                    : plan === "platinum"  ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-                    : plan === "gold"      ? "bg-amber-100 text-amber-700 border border-amber-200"
-                    : plan === "growth"    ? "bg-blue-100 text-blue-700 border border-blue-200"
-                    : plan === "silver"    ? "bg-slate-200 text-slate-600 border border-slate-300"
-                    : plan === "starter"   ? "bg-slate-100 text-slate-500 border border-slate-200"
-                    :                        "bg-slate-100 text-slate-600 border border-slate-200"
+                  const planMap: Record<string, { name: string; color: string }> = {
+                    starter:    { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    growth:     { name: "Growth",     color: "bg-blue-100 text-blue-700 border border-blue-200" },
+                    enterprise: { name: "Enterprise", color: "bg-purple-100 text-purple-700 border border-purple-200" },
+                    // backwards compat
+                    basic:    { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    pro:      { name: "Growth",     color: "bg-blue-100 text-blue-700 border border-blue-200" },
+                    gold:     { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    silver:   { name: "Starter",    color: "bg-slate-100 text-slate-600 border border-slate-200" },
+                    platinum: { name: "Enterprise", color: "bg-purple-100 text-purple-700 border border-purple-200" },
+                  }
+                  const p = planMap[company.partner_level!.toLowerCase()] ?? { name: company.partner_level, color: "bg-slate-100 text-slate-600 border border-slate-200" }
                   return (
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${planColor}`}>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${p.color}`}>
                       <Crown className="h-3.5 w-3.5" />
-                      {company.partner_level}
+                      {p.name}
                     </span>
                   )
                 })()}
