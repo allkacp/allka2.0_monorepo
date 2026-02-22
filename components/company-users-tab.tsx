@@ -18,7 +18,6 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useState, useRef, useCallback } from "react"
-import { createPortal } from "react-dom"
 import { useSidebar } from "@/contexts/sidebar-context"
 
 interface UserListItem {
@@ -233,21 +232,13 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cropImgRef = useRef<HTMLImageElement>(null)
-  const avatarBtnRef = useRef<HTMLButtonElement>(null)
   const CROP_SIZE = 192
   const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
   const [showAvatarMenu, setShowAvatarMenu] = useState(false)
-  const [avatarMenuPos, setAvatarMenuPos] = useState<{ top: number; left: number } | null>(null)
 
   const handleAvatarClick = () => {
     if (avatarPreview) {
-      if (showAvatarMenu) {
-        setShowAvatarMenu(false)
-      } else {
-        const rect = avatarBtnRef.current?.getBoundingClientRect()
-        if (rect) setAvatarMenuPos({ top: rect.bottom + 8, left: rect.left })
-        setShowAvatarMenu(true)
-      }
+      setShowAvatarMenu((prev) => !prev)
     } else {
       fileInputRef.current?.click()
     }
@@ -582,7 +573,6 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     setAvatarPreview(null)
     setOriginalRawSrc(null)
     setShowAvatarMenu(false)
-    setAvatarMenuPos(null)
     setNewUserData({
       name: "",
       email: "",
@@ -1456,14 +1446,13 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
       />
 
       {/* Add User Sheet — slide from right */}
-      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setAvatarMenuPos(null); setCropOpen(false); setRawImageSrc(null) } }}>
+      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) } }}>
         <SheetContent
           side="right"
           className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
           style={{ width: 480 }}
-          onPointerDownOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
-          onFocusOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
-          onInteractOutside={(e) => { if (showAvatarMenu) e.preventDefault() }}
+          onPointerDownOutside={(e) => { if (showAvatarMenu || cropOpen) e.preventDefault() }}
+          onInteractOutside={(e) => { if (showAvatarMenu || cropOpen) e.preventDefault() }}
         >
           <div className="relative h-full flex flex-col bg-white">
 
@@ -1481,7 +1470,6 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {/* Clickable avatar wrapper — relative so menu can be positioned below */}
               <div className="relative flex-shrink-0">
                 <button
-                  ref={avatarBtnRef}
                   onClick={handleAvatarClick}
                   className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center shadow-lg group overflow-hidden hover:border-white/60 transition-all"
                 >
@@ -1497,58 +1485,6 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   </div>
                 </button>
 
-                {/* Avatar context menu — portal to body so overflow-hidden doesn't clip it */}
-                {showAvatarMenu && avatarPreview && avatarMenuPos && createPortal(
-                  <>
-                    <div className="fixed inset-0 z-[9998]" onMouseDown={() => setShowAvatarMenu(false)} />
-                    <div
-                      className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                      style={{ top: avatarMenuPos.top, left: avatarMenuPos.left }}
-                      onMouseDown={(e) => e.nativeEvent.stopImmediatePropagation()}
-                    >
-                      <button
-                        onMouseDown={(e) => {
-                          e.nativeEvent.stopImmediatePropagation()
-                          setShowAvatarMenu(false)
-                          setTimeout(() => fileInputRef.current?.click(), 0)
-                        }}
-                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <Camera className="h-3.5 w-3.5 text-gray-400" />
-                        Nova foto
-                      </button>
-                      {originalRawSrc && (
-                        <button
-                          onMouseDown={(e) => {
-                            e.nativeEvent.stopImmediatePropagation()
-                            setShowAvatarMenu(false)
-                            setRawImageSrc(originalRawSrc)
-                            setCropZoom(1)
-                            setCropOffset({ x: 0, y: 0 })
-                            setCropOpen(true)
-                          }}
-                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                        >
-                          <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                          Reposicionar
-                        </button>
-                      )}
-                      <button
-                        onMouseDown={(e) => {
-                          e.nativeEvent.stopImmediatePropagation()
-                          setShowAvatarMenu(false)
-                          setAvatarPreview(null)
-                          setOriginalRawSrc(null)
-                        }}
-                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remover foto
-                      </button>
-                    </div>
-                  </>,
-                  document.body
-                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Novo cadastro</p>
@@ -1558,6 +1494,44 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 <p className="text-xs text-white/60 truncate mt-0.5">{companyName}</p>
               </div>
             </header>
+
+            {/* Avatar context menu — inside Sheet DOM but outside overflow-hidden header */}
+            {showAvatarMenu && avatarPreview && (
+              <>
+                <div className="absolute inset-0 z-40" onClick={() => setShowAvatarMenu(false)} />
+                <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 24 }}>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setTimeout(() => fileInputRef.current?.click(), 10) }}
+                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-gray-400" />
+                    Nova foto
+                  </button>
+                  {originalRawSrc && (
+                    <button
+                      onClick={() => {
+                        setShowAvatarMenu(false)
+                        setRawImageSrc(originalRawSrc)
+                        setCropZoom(1)
+                        setCropOffset({ x: 0, y: 0 })
+                        setCropOpen(true)
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                      Reposicionar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setAvatarPreview(null); setOriginalRawSrc(null) }}
+                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remover foto
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Crop overlay — shown inside the sheet */}
             {cropOpen && rawImageSrc && (
@@ -1834,7 +1808,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setAvatarMenuPos(null); setCropOpen(false); setRawImageSrc(null) }}
+                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) }}
                 className="flex-1 h-10"
               >
                 Cancelar
