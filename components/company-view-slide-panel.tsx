@@ -101,6 +101,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const [isDadosEditMode, setIsDadosEditMode] = useState(false)
   const DADOS_ALL_ACCORDIONS = ["cadastrais", "contato", "endereco", "financeiro", "adicionais"]
   const [dadosOpenAccordions, setDadosOpenAccordions] = useState<string[]>([])
+  const VISAO_ALL_ACCORDIONS = ["estatisticas", "info-principais"]
+  const [visaoOpenAccordions, setVisaoOpenAccordions] = useState<string[]>(["estatisticas"])
+  const PLANO_ALL_ACCORDIONS = ["admin", "credito", "account", "pagamento", "carteira", "nf"]
+  const [planoOpenAccordions, setPlanoOpenAccordions] = useState<string[]>(["admin", "credito", "account", "pagamento", "carteira", "nf"])
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
@@ -853,6 +857,28 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             {/* Overview Tab */}
             <TabsContent value="visao-geral" className="flex-1 overflow-y-auto">
               <div className="px-[50px] py-[50px] space-y-4">
+                {/* Expandir toggle */}
+                <div className="flex items-center justify-end sticky top-0 bg-slate-200 z-10 pb-2 -mx-[50px] px-[50px]">
+                  <button
+                    onClick={() => {
+                      const allOpen = VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a))
+                      setVisaoOpenAccordions(allOpen ? [] : VISAO_ALL_ACCORDIONS)
+                    }}
+                    className="flex items-center gap-2 group"
+                    title={VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
+                  >
+                    <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                      {VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                    </span>
+                    <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                      VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"
+                    }`}>
+                      <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                        VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"
+                      }`} />
+                    </div>
+                  </button>
+                </div>
                 {/* KPI Cards Row */}
                 <div className="grid grid-cols-3 gap-3">
                   {/* Card 1: Total de tarefas contratadas */}
@@ -899,7 +925,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </div>
 
                 {/* Seção de Estatísticas - Mesmo padrão de admin/usuarios */}
-                <Accordion type="single" collapsible defaultValue="estatisticas" className="space-y-3">
+                <Accordion type="multiple" value={visaoOpenAccordions.filter(a => a === "estatisticas")} onValueChange={(vals) => setVisaoOpenAccordions(prev => [...prev.filter(a => a !== "estatisticas"), ...vals])} className="space-y-3">
                   <AccordionItem value="estatisticas" className="border border-slate-200 rounded-lg">
                     <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                       <div className="flex items-center gap-2">
@@ -995,7 +1021,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </div>
 
                 {/* Informações Principais - Accordion */}
-                <Accordion type="multiple" defaultValue={[]} className="space-y-3">
+                <Accordion type="multiple" value={visaoOpenAccordions.filter(a => a === "info-principais")} onValueChange={(vals) => setVisaoOpenAccordions(prev => [...prev.filter(a => a !== "info-principais"), ...vals])} className="space-y-3">
                   <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg">
                     <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                       <div className="flex items-center gap-2">
@@ -1569,7 +1595,29 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
             {/* Plano Tab */}
             <TabsContent value="plano" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
-              <Accordion type="multiple" defaultValue={["admin", "credito", "account", "pagamento", "carteira", "nf"]} className="space-y-3">
+              <div className="flex items-center justify-between sticky top-0 bg-slate-200 z-10 pb-4 -mx-[50px] px-[50px]">
+                <h3 className="text-sm font-semibold text-slate-900">Plano</h3>
+                <button
+                  onClick={() => {
+                    const allOpen = PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a))
+                    setPlanoOpenAccordions(allOpen ? [] : PLANO_ALL_ACCORDIONS)
+                  }}
+                  className="flex items-center gap-2 group"
+                  title={PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
+                >
+                  <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                    {PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                  </span>
+                  <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                    PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"
+                  }`}>
+                    <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                      PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"
+                    }`} />
+                  </div>
+                </button>
+              </div>
+              <Accordion type="multiple" value={planoOpenAccordions} onValueChange={setPlanoOpenAccordions} className="space-y-3">
                 {/* ACCORDION 1: AÇÕES ADMINISTRATIVAS */}
                 <AccordionItem value="admin" className="border border-slate-200 rounded-lg">
                   <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">

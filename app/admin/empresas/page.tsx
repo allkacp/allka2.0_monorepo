@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -427,6 +427,31 @@ export default function EmpresasPage() {
   }
   const [headerHeight, setHeaderHeight] = useState(64)
   const [footerHeight, setFooterHeight] = useState(40)
+
+  // ── Column resize ──────────────────────────────────────────────
+  const defaultColWidths = [220, 210, 175, 120, 115, 110, 80]
+  // mínimo por coluna: Empresa, Contato, CNPJ·Usu, Status, Plano, Tipo, Ações
+  const minColWidths =   [160,   160,   150,  100,    90,   90,  80]
+  const [colWidths, setColWidths] = useState<number[]>(defaultColWidths)
+  const dragState = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null)
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent, colIndex: number) => {
+    e.preventDefault()
+    dragState.current = { colIndex, startX: e.clientX, startWidth: colWidths[colIndex] }
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragState.current) return
+      const delta = ev.clientX - dragState.current.startX
+      const newWidth = Math.max(minColWidths[dragState.current.colIndex], dragState.current.startWidth + delta)
+      setColWidths(prev => { const next = [...prev]; next[dragState.current!.colIndex] = newWidth; return next })
+    }
+    const onMouseUp = () => {
+      dragState.current = null
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onMouseUp)
+    }
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onMouseUp)
+  }, [colWidths])
   useEffect(() => {
     const measure = () => {
       const h = document.querySelector("header")
@@ -974,16 +999,36 @@ export default function EmpresasPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="text-sm" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
+            <colgroup>
+              {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Empresa</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contato</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CNPJ · Usuários</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Plano</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
+                {(["Empresa", "Contato", "CNPJ · Usuários", "Status", "Plano", "Tipo", "Ações"] as const).map((label, i) => (
+                  <th
+                    key={label}
+                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
+                    style={{
+                      paddingLeft: 20,
+                      paddingRight: 20,
+                      textAlign: i === 6 ? "right" : "left",
+                      borderRight: "1px solid",
+                      borderRightColor: "rgba(148,163,184,0.25)",
+                    }}
+                  >
+                    {label}
+                    {i < 6 && (
+                      <span
+                        onMouseDown={(e) => onResizeMouseDown(e, i)}
+                        className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                        style={{ transform: "translateX(50%)" }}
+                      >
+                        <span className="h-4 w-px bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
+                      </span>
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -993,7 +1038,7 @@ export default function EmpresasPage() {
                   className="group hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
                 >
                   {/* Company */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="flex items-center gap-3">
                       <CompanyAvatar company={company} />
                       <div>
@@ -1004,7 +1049,7 @@ export default function EmpresasPage() {
                   </td>
 
                   {/* Contact */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="space-y-1">
                       <a
                         href={`mailto:${company.email}`}
@@ -1032,7 +1077,7 @@ export default function EmpresasPage() {
                   </td>
 
                   {/* CNPJ + Users */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5">
                         <Hash className="h-3 w-3 text-slate-400" />
@@ -1046,7 +1091,7 @@ export default function EmpresasPage() {
                   </td>
 
                   {/* Status */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                         company.status === "active"
@@ -1064,7 +1109,7 @@ export default function EmpresasPage() {
                   </td>
 
                   {/* Plan */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     {(() => {
                       const planMap: Record<string, { name: string; price: string; discount: string; info: string; color: string }> = {
                         lite:       { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -1106,7 +1151,7 @@ export default function EmpresasPage() {
                   </td>
 
                   {/* Type */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
                       company.type === "company"
                         ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"

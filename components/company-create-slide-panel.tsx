@@ -89,6 +89,8 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  const CREATE_ALL_ACCORDIONS = ["cadastrais", "contato", "social", "endereco", "tipoConta", "plano", "pagamento", "admin"]
+  const [createOpenAccordions, setCreateOpenAccordions] = useState<string[]>(["cadastrais"])
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -474,7 +476,28 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             </div>
           )}
 
-          <Accordion type="single" collapsible className="space-y-2">
+          <div className="flex items-center justify-end sticky top-0 bg-slate-200 z-10 pb-3 -mx-[50px] px-[50px]">
+            <button
+              onClick={() => {
+                const allOpen = CREATE_ALL_ACCORDIONS.every(a => createOpenAccordions.includes(a))
+                setCreateOpenAccordions(allOpen ? [] : CREATE_ALL_ACCORDIONS)
+              }}
+              className="flex items-center gap-2 group"
+              title={CREATE_ALL_ACCORDIONS.every(a => createOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
+            >
+              <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                {CREATE_ALL_ACCORDIONS.every(a => createOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+              </span>
+              <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                CREATE_ALL_ACCORDIONS.every(a => createOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"
+              }`}>
+                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                  CREATE_ALL_ACCORDIONS.every(a => createOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"
+                }`} />
+              </div>
+            </button>
+          </div>
+          <Accordion type="multiple" value={createOpenAccordions} onValueChange={setCreateOpenAccordions} className="space-y-2">
             {/* SEÇÃO 1: DADOS CADASTRAIS */}
             <AccordionItem value="cadastrais" className={cn("border rounded-lg overflow-hidden", sectionErrors.cadastrais > 0 ? "border-red-300" : "border-slate-200")}>
               <AccordionTrigger className={cn("px-3 py-2 text-xs font-semibold", sectionErrors.cadastrais > 0 ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-slate-50")}>
@@ -734,16 +757,6 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
                         <SelectItem value="enterprise">Enterprise — R$ 5.000/mês (empresas — pós pago)</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">Limite</Label>
-                      <Input type="number" placeholder="1000" value={formData.limite} onChange={(e) => updateField("limite", e.target.value)} className="h-8 text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">Créditos Iniciais</Label>
-                      <Input type="number" placeholder="100" value={formData.creditosIniciais} onChange={(e) => updateField("creditosIniciais", e.target.value)} className="h-8 text-xs" />
-                    </div>
                   </div>
                 </div>
               </AccordionContent>
