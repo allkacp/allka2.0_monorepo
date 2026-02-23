@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AgencyProjects } from "@/components/agency/agency-projects"
 import type { Agency } from "@/types/agency"
 

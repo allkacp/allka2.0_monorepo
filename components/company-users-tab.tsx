@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair, Settings2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"

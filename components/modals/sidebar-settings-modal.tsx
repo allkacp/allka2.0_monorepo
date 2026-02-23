@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import type React from "react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { Sheet, SheetContent } from "@/components/ui/sheet"

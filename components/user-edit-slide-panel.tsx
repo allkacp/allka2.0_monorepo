@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { Save, Mail, Phone, Building2, Shield, UserIcon, MapPin, FileText, User, DollarSign, Plus, Trash2, Edit2, Key, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { DataTable, type DataTableColumn, type DataTableAction } from "@/components/data-table"

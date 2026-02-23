@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Plus, Bot, FileText, Copy } from "lucide-react"

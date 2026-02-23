@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"

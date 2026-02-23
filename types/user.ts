@@ -14,7 +14,7 @@ export interface User {
   last_project_date?: string
   created_at: string
   updated_at: string
-  online_status: "online" | "offline" | "busy" | "away"
+  online_status?: "online" | "offline" | "busy" | "away"
   last_login?: string
   address?: {
     cep: string
