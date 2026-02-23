@@ -689,8 +689,8 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-10 pt-5 pb-3">
+      <div className="flex-1 overflow-y-auto px-[50px]">
+        <div className="pt-[25px] pb-3">
           {/* Stats chips + Adicionar button */}
           <div className="flex items-center justify-between">
             {/* Left: compact stat chips */}
@@ -730,7 +730,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
         </div>
 
         {/* Global-standard Table Card */}
-        <div className="mx-10 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm bg-white">
+        <div className="mx-0 mb-5 border border-slate-200/70 rounded-lg overflow-hidden shadow-sm bg-white">
 
           {/* Top Bar — matches empresas page */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 bg-white">

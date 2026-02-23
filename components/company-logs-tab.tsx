@@ -281,7 +281,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
   }
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 px-[50px] pt-[25px]">
       {/* Filtros */}
       <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>

@@ -263,7 +263,7 @@ export function ProjectSlidePanel({ open, onClose, onEdit, project, tasks = [], 
 
       <div
         className={cn(
-          "fixed top-0 right-0 h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800 z-50",
+          "fixed top-0 right-0 h-[calc(100%-32px)] bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800 z-50",
           "transition-transform duration-500 ease-in-out",
           leftPosition,
           open ? "translate-x-0" : "translate-x-full"

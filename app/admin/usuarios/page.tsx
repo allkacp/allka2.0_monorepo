@@ -1,4 +1,4 @@
-﻿
+
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -1508,7 +1508,7 @@ export default function UsuariosPage() {
                             Nome do Filtro *
                           </label>
                           <Input
-                            placeholder={isDuplicatingFilter ? "Ex: Nomads Ativos (Cópia)" : "Ex: Nomads Ativos com Pontuaç����o Alta"}
+                            placeholder={isDuplicatingFilter ? "Ex: Nomads Ativos (Cópia)" : "Ex: Nomads Ativos com Pontuação Alta"}
                             value={filterName}
                             onChange={(e) => setFilterName(e.target.value)}
                             className="h-8 text-sm rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600"

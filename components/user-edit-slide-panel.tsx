@@ -162,7 +162,7 @@ export function UserEditSlidePanel({ open, onClose, user, isAdmin = false }: Use
       {/* // Modal panel without overlay, sliding from right to sidebar */}
       <div
         style={{ width: `calc(100% - ${sidebarWidth}px)` }}
-        className={`fixed top-0 right-0 h-full bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
+        className={`fixed top-0 right-0 h-[calc(100%-32px)] bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
           open && !isClosing ? "translate-x-0" : "translate-x-full"
         }`}
       >

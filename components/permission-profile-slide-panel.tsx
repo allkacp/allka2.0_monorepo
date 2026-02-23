@@ -81,7 +81,7 @@ export function PermissionProfileSlidePanel({ open, onClose, profile, onSave }: 
   return (
     <div
       style={{ width: `calc(100% - ${sidebarWidth}px)` }}
-      className={`fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
+      className={`fixed top-0 bottom-8 right-0 bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
         isClosing ? "translate-x-full" : "translate-x-0"
       }`}
     >

@@ -691,7 +691,7 @@ export function NotificationPreferencesPanel({
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-screen w-[800px] bg-white shadow-2xl z-50 transform transition-all duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-[calc(100vh-32px)] w-[800px] bg-white shadow-2xl z-50 transform transition-all duration-300 ease-out ${
           open ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
         }`}
       >

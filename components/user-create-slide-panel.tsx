@@ -206,7 +206,7 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
     <>
       <div
         className={cn(
-          "fixed top-0 z-40 h-screen",
+          "fixed top-0 z-40 h-[calc(100vh-32px)]",
           "bg-background overflow-hidden flex flex-col",
           "transition-all duration-500 ease-in-out",
           isClosing ? "slide-out-to-right opacity-0" : "slide-in-from-right opacity-100",

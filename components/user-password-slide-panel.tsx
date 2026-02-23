@@ -100,7 +100,7 @@ export function UserPasswordSlidePanel({ open, onClose, user }: UserPasswordSlid
     <>
       {/* // Smaller modal for password reset */}
       <div
-        className={`fixed top-0 right-0 h-full w-[500px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-500 ease-out ${
+        className={`fixed top-0 right-0 h-[calc(100%-32px)] w-[500px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-500 ease-out ${
           open && !isClosing ? "translate-x-0" : "translate-x-full"
         }`}
       >

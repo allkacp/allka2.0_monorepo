@@ -75,7 +75,7 @@ export default function ProjectWizardSlidePanel({
 
   return (
     <div
-      className="fixed top-0 right-0 h-full bg-white shadow-2xl z-50 flex flex-col transition-all duration-500"
+      className="fixed top-0 right-0 h-[calc(100%-32px)] bg-white shadow-2xl z-50 flex flex-col transition-all duration-500"
       style={{ width: `calc(100% - ${sidebarWidth}px)` }}
     >
       {/* Header */}

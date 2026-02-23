@@ -242,7 +242,7 @@ export function UserManagementModal({ user, open, onOpenChange, onSave }: UserMa
         <DialogOverlay />
         <DialogPrimitive.Content
           className={cn(
-            "fixed top-0 right-0 z-50 h-screen bg-background w-[800px]",
+            "fixed top-0 right-0 z-50 h-[calc(100vh-32px)] bg-background w-[800px]",
             "shadow-[rgba(0,0,0,0.2)_-8px_0px_32px_0px,rgba(0,0,0,0.1)_-4px_0px_16px_0px]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",

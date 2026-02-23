@@ -330,7 +330,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
   const allStatuses = ["Aprovada", "Em Execução", "Para Aprovação", "Entregue", "Atrasada"]
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 px-[50px] pt-[25px]">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>

@@ -107,7 +107,7 @@ export function TaskDetailSlidePanel({ open, onClose, task }: TaskDetailSlidePan
 
       <div
         className={cn(
-          "fixed top-0 right-0 h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800",
+          "fixed top-0 right-0 h-[calc(100%-32px)] bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800",
           "transition-transform duration-500 ease-in-out z-[90]",
           leftPosition,
           open ? "translate-x-0" : "translate-x-full"

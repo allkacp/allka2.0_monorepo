@@ -353,7 +353,7 @@ export function UserDetailsSlidePanel({ open, onClose, user, onEdit }: UserDetai
       {/* Modal panel without overlay */}
       <div
         style={{ width: '50vw' }}
-        className={`fixed top-0 right-0 h-full bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
+        className={`fixed top-0 right-0 h-[calc(100%-32px)] bg-white shadow-2xl z-50 flex flex-col transition-all duration-500 ease-out ${
           open && !isClosing ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -363,7 +363,7 @@ export function UserDetailsSlidePanel({ open, onClose, user, onEdit }: UserDetai
             <Eye className="h-5 w-5 text-white" />
             <div>
               <h2 className="text-lg font-bold text-white">Detalhes do Usuário</h2>
-              <p className="text-xs text-blue-100">Visualize todas as informações do usu��rio</p>
+              <p className="text-xs text-blue-100">Visualize todas as informações do usuário</p>
             </div>
           </div>
           <Button onClick={handleClose} size="sm" variant="ghost" className="h-8 w-8 p-0 text-white hover:bg-white/20">

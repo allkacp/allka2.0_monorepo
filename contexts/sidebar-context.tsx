@@ -200,6 +200,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   const sidebarWidth = sidebarCollapsed ? 64 : 256
 
+  // Sync CSS variable so footer and other elements can use it
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", `${sidebarWidth}px`)
+  }, [sidebarWidth])
+
   return (
     <SidebarContext.Provider
       value={{

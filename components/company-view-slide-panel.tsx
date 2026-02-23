@@ -1,10 +1,11 @@
-﻿
+
 import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
@@ -74,6 +75,20 @@ interface CompanyViewSlidePanelProps {
   onCompanyUpdate?: (updatedCompany: Company) => void
 }
 
+const SOCIAL_PLATFORM_META: Record<string, { label: string; bg: string; iconBg: string; iconColor: string; svgPath: string }> = {
+  instagram: { label: "Instagram", bg: "from-pink-50 to-rose-50", iconBg: "bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400", iconColor: "text-white", svgPath: "M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" },
+  facebook: { label: "Facebook", bg: "from-blue-50 to-indigo-50", iconBg: "bg-blue-600", iconColor: "text-white", svgPath: "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" },
+  linkedin: { label: "LinkedIn", bg: "from-sky-50 to-blue-50", iconBg: "bg-[#0077B5]", iconColor: "text-white", svgPath: "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" },
+  whatsapp: { label: "WhatsApp", bg: "from-green-50 to-emerald-50", iconBg: "bg-[#25D366]", iconColor: "text-white", svgPath: "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" },
+  tiktok: { label: "TikTok", bg: "from-slate-50 to-zinc-50", iconBg: "bg-black", iconColor: "text-white", svgPath: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" },
+  youtube: { label: "YouTube", bg: "from-red-50 to-rose-50", iconBg: "bg-[#FF0000]", iconColor: "text-white", svgPath: "M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z" },
+  x: { label: "X (Twitter)", bg: "from-slate-50 to-zinc-50", iconBg: "bg-black", iconColor: "text-white", svgPath: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" },
+  site: { label: "Site", bg: "from-purple-50 to-violet-50", iconBg: "bg-violet-600", iconColor: "text-white", svgPath: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" },
+  telegram: { label: "Telegram", bg: "from-sky-50 to-cyan-50", iconBg: "bg-[#229ED9]", iconColor: "text-white", svgPath: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" },
+  google_business: { label: "Google Meu Negócio", bg: "from-yellow-50 to-amber-50", iconBg: "bg-white border border-slate-200", iconColor: "text-slate-700", svgPath: "M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" },
+  pinterest: { label: "Pinterest", bg: "from-red-50 to-pink-50", iconBg: "bg-[#E60023]", iconColor: "text-white", svgPath: "M12 0C5.373 0 0 5.372 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" },
+}
+
 export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate }: CompanyViewSlidePanelProps) {
   // Guard: Return null if company is not provided
   if (!company) return null
@@ -102,16 +117,25 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const DADOS_ALL_ACCORDIONS = ["cadastrais", "contato", "endereco", "financeiro", "adicionais"]
   const [dadosOpenAccordions, setDadosOpenAccordions] = useState<string[]>([])
   const VISAO_ALL_ACCORDIONS = ["estatisticas", "info-principais"]
-  const [visaoOpenAccordions, setVisaoOpenAccordions] = useState<string[]>(["estatisticas"])
+  const [visaoOpenAccordions, setVisaoOpenAccordions] = useState<string[]>([])
   const PLANO_ALL_ACCORDIONS = ["admin", "credito", "account", "pagamento", "carteira", "nf"]
   const [planoOpenAccordions, setPlanoOpenAccordions] = useState<string[]>(["admin", "credito", "account", "pagamento", "carteira", "nf"])
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [editingSocialId, setEditingSocialId] = useState<string | null>(null)
+  const [editingSocialUrl, setEditingSocialUrl] = useState("")
+  const [showSocialModal, setShowSocialModal] = useState(false)
+  const [socialLinksBuffer, setSocialLinksBuffer] = useState<SocialLink[]>([])
+  const [isSavingSocial, setIsSavingSocial] = useState(false)
+  const [showSocialEditConfirm, setShowSocialEditConfirm] = useState(false)
+  const [showSocialDeleteConfirm, setShowSocialDeleteConfirm] = useState(false)
+  const [pendingSocialSave, setPendingSocialSave] = useState<{ id: string; url: string } | null>(null)
+  const [pendingSocialDelete, setPendingSocialDelete] = useState<string | null>(null)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   // Payment methods state
-  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>("pix")
+  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>("card-1")
   const [creditCards, setCreditCards] = useState<Array<{
     id: string
     brand: string
@@ -119,7 +143,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     expiry: string
     holderName: string
   }>>([
-    { id: "1", brand: "Visa", lastFour: "4242", expiry: "12/25", holderName: "John Doe" },
+    { id: "1", brand: "Visa", lastFour: "4242", expiry: "12/27", holderName: "João da Silva" },
+    { id: "2", brand: "Mastercard", lastFour: "8831", expiry: "09/28", holderName: "Maria Santos" },
+    { id: "3", brand: "Elo", lastFour: "5590", expiry: "03/24", holderName: "Carlos Oliveira" },
   ])
   const [showAddCardModal, setShowAddCardModal] = useState(false)
   const [newCardData, setNewCardData] = useState({
@@ -138,6 +164,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     paymentDate: "",
     dueDate: "",
   })
+  const [showAdminConfirmDialog, setShowAdminConfirmDialog] = useState(false)
   const [paymentHistory, setPaymentHistory] = useState([
     { id: "1", date: "2024-01-15", amount: 1500, method: "pix", status: "Pago", type: "nf" },
     { id: "2", date: "2024-01-10", amount: 2000, method: "boleto", status: "Pago", type: "nf" },
@@ -241,9 +268,19 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const handleAddCard = () => {
     if (newCardData.number && newCardData.expiry && newCardData.cvv && newCardData.holderName) {
       const lastFour = newCardData.number.slice(-4)
+      const detectBrand = (num: string) => {
+        if (num.startsWith("4")) return "Visa"
+        if (/^5[1-5]/.test(num) || /^2[2-7]/.test(num)) return "Mastercard"
+        if (/^(636368|438935|504175|451416|636297|5067|4576|4011|506699)/.test(num)) return "Elo"
+        if (/^3[47]/.test(num)) return "Amex"
+        if (/^(6011|65|644|645|646|647|648|649)/.test(num)) return "Discover"
+        if (/^(301|305|36|38)/.test(num)) return "Diners"
+        if (/^(606282|3841)/.test(num)) return "Hipercard"
+        return "Outro"
+      }
       const newCard = {
         id: Math.random().toString(),
-        brand: newCardData.number.startsWith("4") ? "Visa" : "Mastercard",
+        brand: detectBrand(newCardData.number),
         lastFour,
         expiry: newCardData.expiry,
         holderName: newCardData.holderName,
@@ -329,8 +366,20 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   }
 
   const handleConfirmAdminAction = () => {
-    // Mock implementation - in real app would call backend
-    console.log("[v0] Admin action confirmed:", adminActionModal, adminFormData)
+    if (adminActionModal === "edit-plan") {
+      const planNames: Record<string, string> = {
+        lite: "Lite", start: "Start", standard: "Standard",
+        growth: "Growth", scale: "Scale", squad: "Squad", enterprise: "Enterprise",
+      }
+      if (onCompanyUpdate) {
+        onCompanyUpdate({ ...company, partner_level: adminFormData.creditPlan })
+      }
+      toast({
+        title: "Plano atualizado!",
+        description: `Plano alterado para ${planNames[adminFormData.creditPlan] ?? adminFormData.creditPlan}.`,
+      })
+    }
+    setShowAdminConfirmDialog(false)
     setAdminActionModal(null)
   }
 
@@ -429,6 +478,46 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     setDadosEditedData({})
   }
 
+  const saveSocialLinksDirectly = async (links: SocialLink[]) => {
+    if (!company?.id) return
+    setIsSavingSocial(true)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      onCompanyUpdate?.({ ...company, social_links: links })
+      toast({ title: "Redes sociais salvas!", description: "Links atualizados com sucesso." })
+    } catch {
+      toast({ title: "Erro", description: "Falha ao salvar redes sociais", variant: "destructive" })
+    } finally {
+      setIsSavingSocial(false)
+    }
+  }
+
+  const SOCIAL_DEMO_LINKS: SocialLink[] = [
+    { id: "demo-ig", platform: "instagram", url: "https://instagram.com/empresa", order: 0 },
+    { id: "demo-fb", platform: "facebook", url: "https://facebook.com/empresa", order: 1 },
+    { id: "demo-li", platform: "linkedin", url: "https://linkedin.com/company/empresa", order: 2 },
+    { id: "demo-wa", platform: "whatsapp", url: "https://wa.me/5511999999999", order: 3 },
+  ]
+
+  const confirmSaveSocialCard = async () => {
+    if (!pendingSocialSave) return
+    const base = (company?.social_links && company.social_links.length > 0 ? company.social_links : SOCIAL_DEMO_LINKS) as SocialLink[]
+    const updated = base.map(l => l.id === pendingSocialSave.id ? { ...l, url: pendingSocialSave.url } : l)
+    setEditingSocialId(null)
+    setShowSocialEditConfirm(false)
+    setPendingSocialSave(null)
+    await saveSocialLinksDirectly(updated)
+  }
+
+  const confirmDeleteSocialCard = async () => {
+    if (!pendingSocialDelete) return
+    const base = (company?.social_links && company.social_links.length > 0 ? company.social_links : SOCIAL_DEMO_LINKS) as SocialLink[]
+    const updated = base.filter(l => l.id !== pendingSocialDelete)
+    setShowSocialDeleteConfirm(false)
+    setPendingSocialDelete(null)
+    await saveSocialLinksDirectly(updated)
+  }
+
   const handleDadosSaveClick = () => {
     // Validation
     const name = getDadosDisplayValue("legal_name") || getDadosDisplayValue("trade_name")
@@ -438,19 +527,19 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
     // Required field validation
     if (!name || typeof name !== "string" || !name.trim()) {
-      toast({ title: "Erro", description: "Nome / Razão Social é obrigat��rio", variant: "destructive" })
+      toast({ title: "Erro", description: "Nome / Razão Social  obrigatório", variant: "destructive" })
       return
     }
 
     // Email validation
     if (!email || typeof email !== "string" || !email.includes("@")) {
-      toast({ title: "Erro", description: "Email válido é obrigatório", variant: "destructive" })
+      toast({ title: "Erro", description: "Email válido  obrigatório", variant: "destructive" })
       return
     }
 
     // Phone validation
     if (!phone || typeof phone !== "string" || phone.trim().length < 10) {
-      toast({ title: "Erro", description: "Telefone principal é obrigatório (mínimo 10 caracteres)", variant: "destructive" })
+      toast({ title: "Erro", description: "Telefone principal  obrigatório (mínimo 10 caracteres)", variant: "destructive" })
       return
     }
 
@@ -460,7 +549,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       return
     }
 
-    // Validation passed — show confirmation dialog
+    // Validation passed  show confirmation dialog
     setShowSaveConfirm(true)
   }
 
@@ -576,7 +665,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   ]
   const accessTimes = [
     "Há 10 minutos", "Há 25 minutos", "Há 1 hora", "Há 2 horas", "Há 3 horas",
-    "Há 5 horas", "Há 7 horas", "Há 9 horas", "Ontem", "Ontem à tarde",
+    "Há 5 horas", "Há 7 horas", "Há 9 horas", "Ontem", "Ontem  tarde",
     "2 dias atrás", "3 dias atrás", "4 dias atrás", "5 dias atrás", "1 semana atrás",
   ]
   const seed = company.id * 7
@@ -592,8 +681,8 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
         <SheetContent
           side="right"
           hideOverlay={true}
-          onInteractOutside={(e) => { if (showSaveConfirm || showCancelConfirm) e.preventDefault() }}
-          onPointerDownOutside={(e) => { if (showSaveConfirm || showCancelConfirm) e.preventDefault() }}
+          onInteractOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal) e.preventDefault() }}
+          onPointerDownOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal) e.preventDefault() }}
           className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
           style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
@@ -679,7 +768,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   <div className="flex-1">
                     <p className="text-blue-300 text-xs font-semibold uppercase tracking-wide">ALLKOIN</p>
                     <p className="text-white font-bold text-sm">
-                      {showBalance ? "0.00" : "•••••"}
+                      {showBalance ? "0.00" : ""}
                     </p>
                   </div>
                   <Eye className="h-4 w-4 text-blue-200" />
@@ -753,7 +842,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
               <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
                 <p className="text-white text-sm font-semibold">Ajustar logo da empresa</p>
-                <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · use o zoom para ajustar</p>
+                <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar  use o zoom para ajustar</p>
               </div>
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <div
@@ -791,11 +880,11 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </div>
           )}
 
-          {/* Content Wrapper - scrollable */}
-          <div className="flex-1 overflow-y-auto bg-slate-200">
+          {/* Content Wrapper */}
+          <div className="flex-1 flex flex-col bg-white overflow-hidden">
             {/* Content with Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-0">
-            <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-200 bg-white px-[50px] py-[15px] overflow-x-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <div className="flex-shrink-0 border-b border-slate-200 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
               <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
                 <TabsTrigger
                   value="visao-geral"
@@ -855,10 +944,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </div>
 
             {/* Overview Tab */}
-            <TabsContent value="visao-geral" className="flex-1 overflow-y-auto">
-              <div className="px-[50px] py-[50px] space-y-4">
+            <TabsContent value="visao-geral" className="flex-1 overflow-y-auto bg-slate-200">
+              <div className="px-[50px] py-[50px] pb-[80px] space-y-4">
                 {/* Expandir toggle */}
-                <div className="flex items-center justify-end sticky top-0 bg-slate-200 z-10 pb-2 -mx-[50px] px-[50px]">
+                <div className="flex items-center justify-end pb-2">
                   <button
                     onClick={() => {
                       const allOpen = VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a))
@@ -944,7 +1033,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
                             {company.status === "active" && company.mau > 0
                               ? `${((company.dau / company.mau) * 100).toFixed(1)}%`
-                              : "—"}
+                              : ""}
                           </p>
                         </Card>
 
@@ -1055,9 +1144,9 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Dados Tab */}
-            <TabsContent value="dados" className="space-y-4 mt-0 px-[50px] py-[50px]">
+            <TabsContent value="dados" className="flex-1 overflow-y-auto bg-slate-200 space-y-4 mt-0 px-[50px] pt-[25px] pb-[80px]">
               {/* Header with Edit Button */}
-              <div className="flex items-center justify-between sticky top-0 bg-slate-200 z-10 pb-4 -mx-6 px-6">
+              <div className="flex items-center justify-between pb-4">
                 <h3 className="text-sm font-semibold text-slate-900">Dados da Empresa</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -1104,60 +1193,60 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               </div>
 
               {/* Accordions */}
-              <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-3">
+              <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-2">
                 {/* DADOS CADASTRAIS */}
-                <AccordionItem value="cadastrais" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="cadastrais" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-blue-600" />
-                      <span className="font-semibold text-slate-900">Dados Cadastrais</span>
+                      <span className="font-semibold text-slate-800">Dados Cadastrais</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {/* Razão Social */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Razão Social</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Razão Social</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("legal_name") as string} onChange={(e) => handleDadosFieldChange("legal_name", e.target.value)} className="border-slate-300" placeholder="Digite a razão social" />
+                          <Input value={getDadosDisplayValue("legal_name") as string} onChange={(e) => handleDadosFieldChange("legal_name", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Digite a razão social" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("legal_name") || company.name || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("legal_name") || company.name || ""}</p>
                         )}
                       </div>
 
                       {/* Nome Fantasia */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Nome Fantasia</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome Fantasia</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("trade_name") as string || ""} onChange={(e) => handleDadosFieldChange("trade_name", e.target.value)} className="border-slate-300" placeholder="Digite o nome fantasia" />
+                          <Input value={getDadosDisplayValue("trade_name") as string || ""} onChange={(e) => handleDadosFieldChange("trade_name", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Digite o nome fantasia" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("trade_name") || company.name || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("trade_name") || company.name || ""}</p>
                         )}
                       </div>
 
                       {/* CNPJ */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">CNPJ</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">CNPJ</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("document") as string || ""} onChange={(e) => handleDadosFieldChange("document", e.target.value)} className="border-slate-300 font-mono" placeholder="00.000.000/0000-00" disabled />
+                          <Input value={getDadosDisplayValue("document") as string || ""} onChange={(e) => handleDadosFieldChange("document", e.target.value)} className="border-slate-300 h-8 font-mono text-sm" placeholder="00.000.000/0000-00" disabled />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.document || "—"}</code>
+                          <p className="text-sm font-mono font-bold text-slate-700">{company.document || ""}</p>
                         )}
                       </div>
 
                       {/* Inscrição Estadual */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Inscrição Estadual</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Inscrição Estadual</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("ie") as string || ""} onChange={(e) => handleDadosFieldChange("ie", e.target.value)} className="border-slate-300" placeholder="IE" />
+                          <Input value={getDadosDisplayValue("ie") as string || ""} onChange={(e) => handleDadosFieldChange("ie", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="IE" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("ie") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("ie") || ""}</p>
                         )}
                       </div>
 
                       {/* Status da Empresa */}
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Status da Empresa</label>
+                      <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Status da Empresa</p>
                         {isDadosEditMode ? (
                           <CompanyStatusSelector
                             value={getDadosDisplayValue("status") as CompanyStatus || "active"}
@@ -1182,62 +1271,62 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* CONTATO */}
-                <AccordionItem value="contato" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="contato" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-amber-600" />
-                      <span className="font-semibold text-slate-900">Contato</span>
+                      <Mail className="h-4 w-4 text-amber-500" />
+                      <span className="font-semibold text-slate-800">Contato</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {/* Email Principal */}
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Email Principal</label>
+                      <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Email Principal</p>
                         {isDadosEditMode ? (
-                          <Input type="email" value={getDadosDisplayValue("email") as string} onChange={(e) => handleDadosFieldChange("email", e.target.value)} className="border-slate-300" placeholder="email@example.com" />
+                          <Input type="email" value={getDadosDisplayValue("email") as string} onChange={(e) => handleDadosFieldChange("email", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="email@example.com" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("email") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("email") || ""}</p>
                         )}
                       </div>
 
                       {/* Telefone Principal */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Telefone Principal</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Telefone Principal</p>
                         {isDadosEditMode ? (
-                          <Input type="tel" value={getDadosDisplayValue("phone") as string || ""} onChange={(e) => handleDadosFieldChange("phone", e.target.value)} className="border-slate-300" placeholder="(00) 0000-0000" />
+                          <Input type="tel" value={getDadosDisplayValue("phone") as string || ""} onChange={(e) => handleDadosFieldChange("phone", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="(00) 0000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("phone") || ""}</p>
                         )}
                       </div>
 
                       {/* Telefone Secundário */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Telefone Secundário</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Telefone Secundário</p>
                         {isDadosEditMode ? (
-                          <Input type="tel" value={getDadosDisplayValue("phone_secondary") as string || ""} onChange={(e) => handleDadosFieldChange("phone_secondary", e.target.value)} className="border-slate-300" placeholder="(00) 0000-0000" />
+                          <Input type="tel" value={getDadosDisplayValue("phone_secondary") as string || ""} onChange={(e) => handleDadosFieldChange("phone_secondary", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="(00) 0000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("phone_secondary") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("phone_secondary") || ""}</p>
                         )}
                       </div>
 
                       {/* WhatsApp */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">WhatsApp</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">WhatsApp</p>
                         {isDadosEditMode ? (
-                          <Input type="tel" value={getDadosDisplayValue("whatsapp") as string || ""} onChange={(e) => handleDadosFieldChange("whatsapp", e.target.value)} className="border-slate-300" placeholder="(00) 00000-0000" />
+                          <Input type="tel" value={getDadosDisplayValue("whatsapp") as string || ""} onChange={(e) => handleDadosFieldChange("whatsapp", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="(00) 00000-0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("whatsapp") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("whatsapp") || ""}</p>
                         )}
                       </div>
 
                       {/* Site */}
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Site</label>
+                      <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Site</p>
                         {isDadosEditMode ? (
-                          <Input type="url" value={getDadosDisplayValue("website") as string || ""} onChange={(e) => handleDadosFieldChange("website", e.target.value)} className="border-slate-300" placeholder="https://exemplo.com.br" />
+                          <Input type="url" value={getDadosDisplayValue("website") as string || ""} onChange={(e) => handleDadosFieldChange("website", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="https://exemplo.com.br" />
                         ) : (
-                          <div className="font-medium text-slate-900">{getDadosDisplayValue("website") || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("website") || ""}</p>
                         )}
                       </div>
                     </div>
@@ -1245,15 +1334,15 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* ENDEREÇO */}
-                <AccordionItem value="endereco" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="endereco" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-green-600" />
-                      <span className="font-semibold text-slate-900">Endereço</span>
+                      <MapPin className="h-4 w-4 text-emerald-500" />
+                      <span className="font-semibold text-slate-800">Endereço</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    {/* MAP — view: static embed | edit: interactive picker */}
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    {/* MAP  view: static embed | edit: interactive picker */}
                     {!isDadosEditMode ? (
                       (() => {
                         const parts = [
@@ -1306,84 +1395,84 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         />
                       </div>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {/* CEP */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">CEP</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">CEP</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("zip_code") as string || ""} onChange={(e) => handleDadosFieldChange("zip_code", e.target.value)} className="border-slate-300 font-mono" placeholder="00000-000" />
+                          <Input value={getDadosDisplayValue("zip_code") as string || ""} onChange={(e) => handleDadosFieldChange("zip_code", e.target.value)} className="border-slate-300 h-8 font-mono text-sm" placeholder="00000-000" />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.zip_code || "—"}</code>
+                          <p className="text-sm font-mono font-bold text-slate-700">{company.zip_code || ""}</p>
                         )}
                       </div>
 
                       {/* Rua */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Rua</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Rua</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("street") as string || ""} onChange={(e) => handleDadosFieldChange("street", e.target.value)} className="border-slate-300" placeholder="Nome da rua" />
+                          <Input value={getDadosDisplayValue("street") as string || ""} onChange={(e) => handleDadosFieldChange("street", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Nome da rua" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.street || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.street || ""}</p>
                         )}
                       </div>
 
                       {/* Número */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Número</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Número</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("number") as string || ""} onChange={(e) => handleDadosFieldChange("number", e.target.value)} className="border-slate-300" placeholder="123" />
+                          <Input value={getDadosDisplayValue("number") as string || ""} onChange={(e) => handleDadosFieldChange("number", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="123" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.number || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.number || ""}</p>
                         )}
                       </div>
 
                       {/* Complemento */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Complemento</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Complemento</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("complement") as string || ""} onChange={(e) => handleDadosFieldChange("complement", e.target.value)} className="border-slate-300" placeholder="Apto 123, Bloco A" />
+                          <Input value={getDadosDisplayValue("complement") as string || ""} onChange={(e) => handleDadosFieldChange("complement", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Apto 123, Bloco A" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.complement || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.complement || ""}</p>
                         )}
                       </div>
 
                       {/* Bairro */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Bairro</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Bairro</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("neighborhood") as string || ""} onChange={(e) => handleDadosFieldChange("neighborhood", e.target.value)} className="border-slate-300" placeholder="Nome do bairro" />
+                          <Input value={getDadosDisplayValue("neighborhood") as string || ""} onChange={(e) => handleDadosFieldChange("neighborhood", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Nome do bairro" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.neighborhood || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.neighborhood || ""}</p>
                         )}
                       </div>
 
                       {/* Cidade */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Cidade</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Cidade</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300" placeholder="São Paulo" />
+                          <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="São Paulo" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.city || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.city || ""}</p>
                         )}
                       </div>
 
                       {/* Estado */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Estado</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Estado</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("state") as string || ""} onChange={(e) => handleDadosFieldChange("state", e.target.value.toUpperCase())} className="border-slate-300" placeholder="SP" maxLength={2} />
+                          <Input value={getDadosDisplayValue("state") as string || ""} onChange={(e) => handleDadosFieldChange("state", e.target.value.toUpperCase())} className="border-slate-300 h-8 text-sm" placeholder="SP" maxLength={2} />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.state || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.state || ""}</p>
                         )}
                       </div>
 
                       {/* País */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">País</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">País</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("country") as string || "Brasil"} onChange={(e) => handleDadosFieldChange("country", e.target.value)} className="border-slate-300" placeholder="Brasil" />
+                          <Input value={getDadosDisplayValue("country") as string || "Brasil"} onChange={(e) => handleDadosFieldChange("country", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Brasil" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.country || "Brasil"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.country || "Brasil"}</p>
                         )}
                       </div>
                     </div>
@@ -1391,30 +1480,30 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* FINANCEIRO */}
-                <AccordionItem value="financeiro" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="financeiro" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-red-600" />
-                      <span className="font-semibold text-slate-900">Financeiro</span>
+                      <Wallet className="h-4 w-4 text-rose-500" />
+                      <span className="font-semibold text-slate-800">Financeiro</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {/* Chave PIX */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Chave PIX</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Chave PIX</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("pix_key") as string || ""} onChange={(e) => handleDadosFieldChange("pix_key", e.target.value)} className="border-slate-300" placeholder="Chave PIX" />
+                          <Input value={getDadosDisplayValue("pix_key") as string || ""} onChange={(e) => handleDadosFieldChange("pix_key", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Chave PIX" />
                         ) : (
-                          <code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-900">{company.pix_key || "—"}</code>
+                          <p className="text-sm font-mono font-bold text-slate-700">{company.pix_key || ""}</p>
                         )}
                       </div>
 
                       {/* Tipo de Chave PIX */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Tipo de Chave PIX</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Tipo de Chave PIX</p>
                         {isDadosEditMode ? (
-                          <select value={getDadosDisplayValue("pix_type") as string || ""} onChange={(e) => handleDadosFieldChange("pix_type", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium">
+                          <select value={getDadosDisplayValue("pix_type") as string || ""} onChange={(e) => handleDadosFieldChange("pix_type", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium">
                             <option value="">Selecione</option>
                             <option value="cpf">CPF</option>
                             <option value="cnpj">CNPJ</option>
@@ -1423,51 +1512,51 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             <option value="random">Aleatória</option>
                           </select>
                         ) : (
-                          <div className="font-medium text-slate-900">{company.pix_type || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.pix_type || ""}</p>
                         )}
                       </div>
 
                       {/* Banco */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Banco</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Banco</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("bank_name") as string || ""} onChange={(e) => handleDadosFieldChange("bank_name", e.target.value)} className="border-slate-300" placeholder="Nome do banco" />
+                          <Input value={getDadosDisplayValue("bank_name") as string || ""} onChange={(e) => handleDadosFieldChange("bank_name", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="Nome do banco" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_name || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.bank_name || ""}</p>
                         )}
                       </div>
 
                       {/* Agência */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Agência</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Agência</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("bank_agency") as string || ""} onChange={(e) => handleDadosFieldChange("bank_agency", e.target.value)} className="border-slate-300" placeholder="0000" />
+                          <Input value={getDadosDisplayValue("bank_agency") as string || ""} onChange={(e) => handleDadosFieldChange("bank_agency", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="0000" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_agency || "—"}</div>
+                          <p className="text-sm font-mono font-bold text-slate-700">{company.bank_agency || ""}</p>
                         )}
                       </div>
 
                       {/* Conta */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Conta</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Conta</p>
                         {isDadosEditMode ? (
-                          <Input value={getDadosDisplayValue("bank_account") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account", e.target.value)} className="border-slate-300" placeholder="000000-0" />
+                          <Input value={getDadosDisplayValue("bank_account") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account", e.target.value)} className="border-slate-300 h-8 text-sm" placeholder="000000-0" />
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_account || "—"}</div>
+                          <p className="text-sm font-mono font-bold text-slate-700">{company.bank_account || ""}</p>
                         )}
                       </div>
 
                       {/* Tipo de Conta */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Tipo de Conta</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Tipo de Conta</p>
                         {isDadosEditMode ? (
-                          <select value={getDadosDisplayValue("bank_account_type") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account_type", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium">
+                          <select value={getDadosDisplayValue("bank_account_type") as string || ""} onChange={(e) => handleDadosFieldChange("bank_account_type", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium">
                             <option value="">Selecione</option>
                             <option value="corrente">Corrente</option>
                             <option value="poupanca">Poupança</option>
                           </select>
                         ) : (
-                          <div className="font-medium text-slate-900">{company.bank_account_type || "—"}</div>
+                          <p className="text-sm font-semibold text-slate-800">{company.bank_account_type || ""}</p>
                         )}
                       </div>
                     </div>
@@ -1475,32 +1564,32 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* INFORMAÇÕES ADICIONAIS */}
-                <AccordionItem value="adicionais" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="adicionais" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-purple-600" />
-                      <span className="font-semibold text-slate-900">Informações Adicionais</span>
+                      <AlertCircle className="h-4 w-4 text-violet-500" />
+                      <span className="font-semibold text-slate-800">Informações Adicionais</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="space-y-4">
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    <div className="space-y-2">
                       {/* Observações Administrativas */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Observações Administrativas</label>
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Observações Administrativas</p>
                         {isDadosEditMode ? (
                           <textarea value={getDadosDisplayValue("admin_notes") as string || ""} onChange={(e) => handleDadosFieldChange("admin_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas visíveis para admin" />
                         ) : (
-                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.admin_notes || "—"}</div>
+                          <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{company.admin_notes || ""}</p>
                         )}
                       </div>
 
                       {/* Notas Internas */}
-                      <div>
-                        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Notas Internas (Visíveis apenas para admin)</label>
+                      <div className="bg-amber-50/60 rounded-lg border-l-4 border-l-amber-400 px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 mb-1.5">Notas Internas <span className="normal-case text-[9px] text-amber-400">(apenas admin)</span></p>
                         {isDadosEditMode ? (
                           <textarea value={getDadosDisplayValue("internal_notes") as string || ""} onChange={(e) => handleDadosFieldChange("internal_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas internas do sistema" />
                         ) : (
-                          <div className="font-medium text-slate-900 whitespace-pre-wrap">{company.internal_notes || "—"}</div>
+                          <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{company.internal_notes || ""}</p>
                         )}
                       </div>
                     </div>
@@ -1510,93 +1599,167 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Usuários Tab */}
-            <TabsContent value="usuarios" className="flex-1 overflow-y-auto p-0">
+            <TabsContent value="usuarios" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
               <CompanyUsersTab companyId={company.id} companyName={company.name} />
             </TabsContent>
 
             {/* Redes Sociais Tab */}
-            <TabsContent value="redes-sociais" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 mb-4">Redes Sociais da Empresa</h3>
-                  {isDadosEditMode ? (
-                    <CompanySocialLinksManager
-                      socialLinks={getDadosDisplayValue("social_links") as SocialLink[] || []}
-                      onChange={(links) => handleDadosFieldChange("social_links", links)}
-                      isEditMode={true}
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex justify-end mb-4">
-                        <Button
-                          onClick={handleDadosEditMode}
-                          className="gap-2"
-                          size="sm"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                          Editar
-                        </Button>
-                      </div>
-                      {(company.social_links && company.social_links.length > 0) ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {company.social_links.map((link) => (
-                            <div key={link.id} className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
-                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-600 hover:underline text-sm truncate font-medium">
-                                {link.platform}
-                              </a>
-                              <Badge variant="outline" className="text-xs flex-shrink-0">
-                                Ativo
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Card className="border border-dashed border-slate-300 bg-slate-50/50">
-                          <div className="p-8 text-center">
-                            <Share2 className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                            <p className="text-slate-500 font-medium mb-2">Nenhuma rede social adicionada</p>
-                            <p className="text-xs text-slate-400 mb-4">Adicione redes sociais para aumentar a visibilidade da sua empresa</p>
-                            <Button
-                              onClick={handleDadosEditMode}
-                              size="sm"
-                              className="gap-2"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Adicionar Redes Sociais
-                            </Button>
-                          </div>
-                        </Card>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {isDadosEditMode && (
+            <TabsContent value="redes-sociais" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
+              {isDadosEditMode ? (
+                <div className="space-y-4">
+                  <CompanySocialLinksManager
+                    socialLinks={getDadosDisplayValue("social_links") as SocialLink[] || []}
+                    onChange={(links) => handleDadosFieldChange("social_links", links)}
+                    isEditMode={true}
+                  />
                   <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowCancelConfirm(true)}
-                      disabled={isSaving}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleDadosSaveClick}
-                      disabled={isSaving}
-                      className="gap-2"
-                    >
+                    <Button variant="outline" onClick={() => setShowCancelConfirm(true)} disabled={isSaving}>Cancelar</Button>
+                    <Button onClick={handleDadosSaveClick} disabled={isSaving} className="gap-2">
                       {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                       Salvar
                     </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (() => {
+                const DEMO_LINKS: SocialLink[] = [
+                  { id: "demo-ig", platform: "instagram", url: "https://instagram.com/empresa", order: 0 },
+                  { id: "demo-fb", platform: "facebook", url: "https://facebook.com/empresa", order: 1 },
+                  { id: "demo-li", platform: "linkedin", url: "https://linkedin.com/company/empresa", order: 2 },
+                  { id: "demo-wa", platform: "whatsapp", url: "https://wa.me/5511999999999", order: 3 },
+                ]
+
+                const displayLinks: SocialLink[] = (company.social_links && company.social_links.length > 0)
+                  ? company.social_links
+                  : DEMO_LINKS
+
+                const handleSaveSocialCard = (linkId: string) => {
+                  setPendingSocialSave({ id: linkId, url: editingSocialUrl })
+                  setShowSocialEditConfirm(true)
+                }
+
+                const handleDeleteSocialCard = (linkId: string) => {
+                  setPendingSocialDelete(linkId)
+                  setShowSocialDeleteConfirm(true)
+                }
+
+                return (
+                  <div className="space-y-5">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Redes Sociais da Empresa</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">{displayLinks.length} perfil{displayLinks.length !== 1 ? "s" : ""} cadastrado{displayLinks.length !== 1 ? "s" : ""}</p>
+                      </div>
+                      <Button
+                        onClick={() => { setSocialLinksBuffer([]); setShowSocialModal(true) }}
+                        size="sm"
+                        className="gap-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white shadow-sm"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar
+                      </Button>
+                    </div>
+
+                    {/* 3-column grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {displayLinks.map((link) => {
+                        const key = (link.platform || "").toLowerCase().trim()
+                        const meta = SOCIAL_PLATFORM_META[key] || SOCIAL_PLATFORM_META.site
+                        const isEditing = editingSocialId === link.id
+                        return (
+                          <div key={link.id} className={`group relative bg-gradient-to-br ${meta.bg} border border-white/80 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all`}>
+                            <div className="flex items-start gap-3">
+                              {/* Icon */}
+                              <div className={`h-11 w-11 rounded-xl ${meta.iconBg} flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5`}>
+                                <svg viewBox="0 0 24 24" className={`h-5 w-5 ${meta.iconColor} fill-current`}>
+                                  <path d={meta.svgPath} />
+                                </svg>
+                              </div>
+
+                              {/* Info / edit area */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <p className="text-sm font-bold text-slate-800 leading-tight">{meta.label}</p>
+                                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                                    Ativo
+                                  </span>
+                                </div>
+
+                                {isEditing ? (
+                                  <div className="mt-2 space-y-2">
+                                    <input
+                                      type="url"
+                                      value={editingSocialUrl}
+                                      onChange={(e) => setEditingSocialUrl(e.target.value)}
+                                      className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      placeholder="https://"
+                                      autoFocus
+                                    />
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        onClick={() => handleSaveSocialCard(link.id)}
+                                        className="flex-1 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-1 transition-colors"
+                                      >
+                                        Salvar
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingSocialId(null)}
+                                        className="flex-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg py-1 transition-colors"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {link.url ? (
+                                      <a
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-slate-500 hover:text-blue-600 transition-colors truncate block"
+                                      >
+                                        {link.url.replace(/^https?:\/\//, "")}
+                                      </a>
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic">Sem URL cadastrada</p>
+                                    )}
+                                    <div className="mt-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => { setEditingSocialId(link.id); setEditingSocialUrl(link.url || "") }}
+                                        className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 transition-colors"
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                        Editar
+                                      </button>
+                                      <span className="text-slate-300">·</span>
+                                      <button
+                                        onClick={() => handleDeleteSocialCard(link.id)}
+                                        className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-red-500 transition-colors"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                        Excluir
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </TabsContent>
 
             {/* Plano Tab */}
-            <TabsContent value="plano" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
-              <div className="flex items-center justify-between sticky top-0 bg-slate-200 z-10 pb-4 -mx-[50px] px-[50px]">
-                <h3 className="text-sm font-semibold text-slate-900">Plano</h3>
+            <TabsContent value="plano" className="flex-1 overflow-y-auto bg-slate-200">
+              <div className="px-[50px] pt-[25px] pb-[80px]">
+                <div className="flex items-center justify-between pb-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Plano</h3>
                 <button
                   onClick={() => {
                     const allOpen = PLANO_ALL_ACCORDIONS.every(a => planoOpenAccordions.includes(a))
@@ -1619,152 +1782,129 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
               </div>
               <Accordion type="multiple" value={planoOpenAccordions} onValueChange={setPlanoOpenAccordions} className="space-y-3">
                 {/* ACCORDION 1: AÇÕES ADMINISTRATIVAS */}
-                <AccordionItem value="admin" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="admin" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-amber-600" />
-                      <span className="font-semibold text-slate-900">Ações Administrativas</span>
+                      <Shield className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Ações Administrativas</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs"
-                        onClick={() => handleAdminAction("edit-plan")}
-                      >
-                        Editar Plano
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs"
-                        onClick={() => handleAdminAction("change-account")}
-                      >
-                        Alterar Tipo Conta
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs"
-                        onClick={() => handleAdminAction("force-charge")}
-                      >
-                        Forçar Cobrança
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs"
-                        onClick={() => handleAdminAction("generate-boleto")}
-                      >
-                        Gerar Boleto
-                      </Button>
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: "Editar Plano", action: "edit-plan", icon: Edit2, color: "text-blue-600 bg-blue-50 hover:bg-blue-100 border-blue-200" },
+                        { label: "Alterar Conta", action: "change-account", icon: Building2, color: "text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-200" },
+                        { label: "Forçar Cobrança", action: "force-charge", icon: Zap, color: "text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-200" },
+                        { label: "Gerar Boleto", action: "generate-boleto", icon: FileText, color: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border-indigo-200" },
+                      ].map(({ label, action, icon: Icon, color }) => (
+                        <button
+                          key={action}
+                          onClick={() => handleAdminAction(action)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors ${color}`}
+                        >
+                          <Icon className="h-3 w-3" />
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
                 {/* ACCORDION 2: PLANO DE CRÉDITO */}
-                <AccordionItem value="credito" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="credito" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Crown className="h-4 w-4 text-blue-600" />
-                      <span className="font-semibold text-slate-900">Plano de Crédito</span>
+                      <Crown className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Plano de Crédito</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
                     {(() => {
-                      const planMap: Record<string, { name: string; credits: number; discount: string; price: string }> = {
-                        lite:       { name: "Lite",       credits: 0,    discount: "—",   price: "R$ 300/mês" },
-                        start:      { name: "Start",      credits: 0,    discount: "5%",  price: "R$ 500/mês" },
-                        standard:   { name: "Standard",   credits: 0,    discount: "10%", price: "R$ 1.000/mês" },
-                        growth:     { name: "Growth",     credits: 0,    discount: "15%", price: "R$ 1.500/mês" },
-                        scale:      { name: "Scale",      credits: 0,    discount: "20%", price: "R$ 3.000/mês" },
-                        squad:      { name: "Squad",      credits: 0,    discount: "20%", price: "R$ 5.000/mês" },
-                        enterprise: { name: "Enterprise", credits: 0,    discount: "—",   price: "R$ 5.000/mês" },
-                        // backwards compat
-                        basic:    { name: "Lite",     credits: 0, discount: "—",   price: "R$ 300/mês" },
-                        starter:  { name: "Start",    credits: 0, discount: "5%",  price: "R$ 500/mês" },
-                        pro:      { name: "Standard", credits: 0, discount: "10%", price: "R$ 1.000/mês" },
-                        gold:     { name: "Growth",   credits: 0, discount: "15%", price: "R$ 1.500/mês" },
-                        silver:   { name: "Lite",     credits: 0, discount: "—",   price: "R$ 300/mês" },
-                        platinum: { name: "Enterprise", credits: 0, discount: "—", price: "R$ 5.000/mês" },
+                      const planMap: Record<string, { name: string; discount: string; price: string }> = {
+                        lite:       { name: "Lite",       discount: "",    price: "R$ 300/mês" },
+                        start:      { name: "Start",      discount: "5%",  price: "R$ 500/mês" },
+                        standard:   { name: "Standard",   discount: "10%", price: "R$ 1.000/mês" },
+                        growth:     { name: "Growth",     discount: "15%", price: "R$ 1.500/mês" },
+                        scale:      { name: "Scale",      discount: "20%", price: "R$ 3.000/mês" },
+                        squad:      { name: "Squad",      discount: "20%", price: "R$ 5.000/mês" },
+                        enterprise: { name: "Enterprise", discount: "",    price: "R$ 5.000/mês" },
+                        basic:      { name: "Lite",       discount: "",    price: "R$ 300/mês" },
+                        starter:    { name: "Start",      discount: "5%",  price: "R$ 500/mês" },
+                        pro:        { name: "Standard",   discount: "10%", price: "R$ 1.000/mês" },
+                        gold:       { name: "Growth",     discount: "15%", price: "R$ 1.500/mês" },
+                        silver:     { name: "Lite",       discount: "",    price: "R$ 300/mês" },
+                        platinum:   { name: "Enterprise", discount: "",    price: "R$ 5.000/mês" },
                       }
-                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", credits: 0, discount: "—", price: "—" }
+                      const plan = planMap[(company.partner_level || "").toLowerCase()] || { name: company.partner_level || "Não definido", discount: "", price: "" }
                       return (
-                    <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Plano Atual</p>
-                          <p className="text-xl font-bold text-blue-600">{plan.name}</p>
+                        <div className="flex items-center gap-3 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl px-4 py-3 text-white shadow-sm">
+                          <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <Crown className="h-4.5 w-4.5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-bold leading-tight">{plan.name}</span>
+                              <span className="inline-flex items-center gap-0.5 bg-white/20 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
+                                Ativo
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              <span className="text-xs font-semibold text-blue-100">{plan.price}</span>
+                              {plan.discount && (
+                                <span className="inline-flex items-center gap-1 bg-emerald-400/30 text-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                  <TrendingUp className="h-2.5 w-2.5" />{plan.discount} desc.
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                          <Check className="h-2.5 w-2.5 mr-1" />
-                          Ativo
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Mensalidade</p>
-                          <p className="text-lg font-bold text-blue-600">{plan.price}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Desconto em Produtos</p>
-                          <p className="text-lg font-bold text-green-600">{plan.discount}</p>
-                        </div>
-                      </div>
-                    </Card>
                       )
                     })()}
                   </AccordionContent>
                 </AccordionItem>
 
                 {/* ACCORDION 3: TIPO DE CONTA */}
-                <AccordionItem value="account" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="account" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-purple-600" />
-                      <span className="font-semibold text-slate-900">Tipo de Conta</span>
+                      <Building2 className="h-3.5 w-3.5 text-purple-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Tipo de Conta</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="grid grid-cols-2 gap-3">
-                      {["Company Dependente", "Company Independente", "Agency", "Partner"].map((type) => {
-                        const isSelected = company.type === "company" && company.account_type === "independent" 
-                          ? type === "Company Independente"
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: "Company Dependente", desc: "Vinculada a outra entidade" },
+                        { label: "Company Independente", desc: "Operação independente" },
+                        { label: "Agency", desc: "Agência de serviços" },
+                        { label: "Partner", desc: "Parceiro da plataforma" },
+                      ].map(({ label, desc }) => {
+                        const isSelected = company.type === "company" && company.account_type === "independent"
+                          ? label === "Company Independente"
                           : company.type === "company" && company.account_type !== "independent"
-                          ? type === "Company Dependente"
+                          ? label === "Company Dependente"
                           : company.type === "agency"
-                          ? type === "Agency"
+                          ? label === "Agency"
                           : company.type === "nomad"
-                          ? type === "Partner"
+                          ? label === "Partner"
                           : false
-
                         return (
-                          <Card
-                            key={type}
-                            className={`p-3 cursor-pointer transition-all border-2 ${
+                          <div
+                            key={label}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
                               isSelected
-                                ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                                : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                                ? "border-blue-400 bg-blue-50 shadow-sm"
+                                : "border-slate-200 bg-white hover:border-slate-300"
                             }`}
                           >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold">{type}</p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {type === "Company Dependente" && "Empresa vinculada a outra entidade"}
-                                  {type === "Company Independente" && "Empresa operacional independente"}
-                                  {type === "Agency" && "Agência de serviços"}
-                                  {type === "Partner" && "Parceiro da plataforma"}
-                                </p>
-                              </div>
-                              {isSelected && (
-                                <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                              )}
+                            <div className={`h-2 w-2 rounded-full flex-shrink-0 ${isSelected ? "bg-blue-500" : "bg-slate-300"}`} />
+                            <div className="min-w-0">
+                              <p className={`text-[11px] font-semibold leading-tight ${isSelected ? "text-blue-700" : "text-slate-700"}`}>{label}</p>
+                              <p className="text-[10px] text-slate-400 leading-tight">{desc}</p>
                             </div>
-                          </Card>
+                            {isSelected && <Check className="h-3 w-3 text-blue-500 flex-shrink-0 ml-auto" />}
+                          </div>
                         )
                       })}
                     </div>
@@ -1772,227 +1912,225 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* ACCORDION 3: MÉTODOS DE PAGAMENTO */}
-                <AccordionItem value="pagamento" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="pagamento" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-emerald-600" />
-                      <span className="font-semibold text-slate-900">Métodos de Pagamento</span>
+                      <Wallet className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Métodos de Pagamento</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100 space-y-4">
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-3">
                     {/* Payment Methods List */}
-                    <div className="space-y-3">
-                      {/* Pix */}
-                      <Card
-                        className={`p-3 cursor-pointer transition-all border-2 ${
-                          defaultPaymentMethod === "pix"
-                            ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                        }`}
-                        onClick={() => handleSetDefaultMethod("pix")}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                              <Wallet className="h-4 w-4 text-purple-600" />
+                    <div className="space-y-1.5">
+                      {[
+                        { id: "pix",      label: "Pix",      desc: "Transferência instantânea", iconBg: "bg-purple-100", iconColor: "text-purple-600", Icon: Wallet },
+                        { id: "boleto",   label: "Boleto",   desc: "Até 3 dias úteis",         iconBg: "bg-orange-100", iconColor: "text-orange-600", Icon: Download },
+                        { id: "allkoins", label: "Allkoins", desc: "Saldo em créditos",         iconBg: "bg-yellow-100", iconColor: "text-yellow-600", Icon: Gift },
+                      ].map(({ id, label, desc, iconBg, iconColor, Icon }) => {
+                        const isDefault = defaultPaymentMethod === id
+                        return (
+                          <div
+                            key={id}
+                            onClick={() => handleSetDefaultMethod(id)}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                              isDefault ? "border-blue-400 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
+                            }`}
+                          >
+                            <div className={`h-7 w-7 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+                              <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold">Pix</p>
-                              <p className="text-xs text-muted-foreground">Transferência instantânea</p>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-[11px] font-semibold ${isDefault ? "text-blue-700" : "text-slate-700"}`}>{label}</p>
+                              <p className="text-[10px] text-slate-400">{desc}</p>
                             </div>
+                            {isDefault && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Padrão</span>}
                           </div>
-                          {defaultPaymentMethod === "pix" && (
-                            <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              Padrão
-                            </Badge>
-                          )}
-                        </div>
-                      </Card>
-
-                      {/* Boleto */}
-                      <Card
-                        className={`p-3 cursor-pointer transition-all border-2 ${
-                          defaultPaymentMethod === "boleto"
-                            ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                        }`}
-                        onClick={() => handleSetDefaultMethod("boleto")}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                              <Download className="h-4 w-4 text-orange-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Boleto</p>
-                              <p className="text-xs text-muted-foreground">Até 3 dias úteis</p>
-                            </div>
-                          </div>
-                          {defaultPaymentMethod === "boleto" && (
-                            <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              Padrão
-                            </Badge>
-                          )}
-                        </div>
-                      </Card>
-
-                      {/* Allkoins */}
-                      <Card
-                        className={`p-3 cursor-pointer transition-all border-2 ${
-                          defaultPaymentMethod === "allkoins"
-                            ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                        }`}
-                        onClick={() => handleSetDefaultMethod("allkoins")}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                              <Gift className="h-4 w-4 text-yellow-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Allkoins</p>
-                              <p className="text-xs text-muted-foreground">Saldo em créditos</p>
-                            </div>
-                          </div>
-                          {defaultPaymentMethod === "allkoins" && (
-                            <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                              Padrão
-                            </Badge>
-                          )}
-                        </div>
-                      </Card>
+                        )
+                      })}
                     </div>
 
                     {/* Credit Cards Section */}
-                    <div className="mt-4 pt-4 border-t border-slate-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="text-xs font-semibold text-slate-600">Cartões de Crédito/Débito</label>
-                        <Button
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Cartões</label>
+                        <button
                           onClick={() => setShowAddCardModal(true)}
-                          size="sm"
-                          className="h-8 gap-1 bg-blue-600 hover:bg-blue-700"
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full transition-colors"
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-2.5 w-2.5" />
                           Novo Cartão
-                        </Button>
+                        </button>
                       </div>
-                      {creditCards.length === 0 ? (
-                        <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                          <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                          <p className="text-sm text-slate-600">Nenhum cartão cadastrado</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {creditCards.map(card => (
-                            <div key={card.id} className={`relative h-56 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group ${defaultPaymentMethod === `card-${card.id}` ? "ring-2 ring-blue-500" : ""}`} style={{
-                              background: defaultPaymentMethod === `card-${card.id}` ? "linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)" : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
-                            }}>
-                              <div className="absolute inset-0 opacity-10">
-                                <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full blur-3xl" />
-                              </div>
-                              
-                              <div className="relative h-full p-6 flex flex-col justify-between text-white">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">BANCO</div>
-                                    <div className="text-lg font-bold">{card.brand}</div>
+                      {(() => {
+                        // Card brand colors and logos
+                        const CARD_BRANDS: Record<string, { bg: string, logo: React.ReactNode }> = {
+                          Visa: {
+                            bg: "linear-gradient(135deg, #1a1f71 0%, #2a3fa0 100%)",
+                            logo: <svg viewBox="0 0 48 16" className="h-5 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontStyle="italic" fontSize="16">VISA</text></svg>
+                          },
+                          Mastercard: {
+                            bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+                            logo: <div className="flex items-center gap-0"><div className="w-5 h-5 rounded-full bg-red-500 opacity-90" /><div className="w-5 h-5 rounded-full bg-yellow-400 opacity-90 -ml-2" /></div>
+                          },
+                          Elo: {
+                            bg: "linear-gradient(135deg, #000000 0%, #1a1a1a 100%)",
+                            logo: <svg viewBox="0 0 40 16" className="h-4 w-auto" fill="none"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#FFD600">e</text><text x="10" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#EF4123">l</text><text x="16" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#00A4E0">o</text></svg>
+                          },
+                          Amex: {
+                            bg: "linear-gradient(135deg, #006fcf 0%, #004080 100%)",
+                            logo: <svg viewBox="0 0 48 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="11">AMEX</text></svg>
+                          },
+                          Hipercard: {
+                            bg: "linear-gradient(135deg, #822124 0%, #5a1517 100%)",
+                            logo: <svg viewBox="0 0 48 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="9">HIPERCARD</text></svg>
+                          },
+                          Diners: {
+                            bg: "linear-gradient(135deg, #004080 0%, #002850 100%)",
+                            logo: <svg viewBox="0 0 48 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="10">DINERS</text></svg>
+                          },
+                          Discover: {
+                            bg: "linear-gradient(135deg, #f47216 0%, #d45e0a 100%)",
+                            logo: <svg viewBox="0 0 52 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="10">DISCOVER</text></svg>
+                          },
+                          Outro: {
+                            bg: "linear-gradient(135deg, #475569 0%, #334155 100%)",
+                            logo: <CreditCard className="h-5 w-5 text-white" />
+                          },
+                        }
+
+                        const isExpired = (expiry: string) => {
+                          const [m, y] = expiry.split("/").map(Number)
+                          const expDate = new Date(2000 + y, m)
+                          return expDate < new Date()
+                        }
+
+                        return creditCards.length === 0 ? (
+                          <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                            <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                            <p className="text-sm text-slate-600">Nenhum cartão cadastrado</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-3">
+                            {creditCards.map(card => {
+                              const brandInfo = CARD_BRANDS[card.brand] || CARD_BRANDS.Outro
+                              const isDefault = defaultPaymentMethod === `card-${card.id}`
+                              const expired = isExpired(card.expiry)
+                              return (
+                                <div key={card.id} className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 group ${isDefault ? "ring-2 ring-blue-400" : ""} ${expired ? "opacity-75" : ""}`} style={{ background: brandInfo.bg }}>
+                                  {/* Decorative circles */}
+                                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/5 rounded-full" />
+                                    <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-white/5 rounded-full" />
                                   </div>
-                                  {defaultPaymentMethod === `card-${card.id}` && (
-                                    <div className="bg-white bg-opacity-20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">
-                                      Padrão
+
+                                  <div className="relative p-4 text-white">
+                                    {/* Top row: Brand logo + badges */}
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                        {brandInfo.logo}
+                                        <span className="text-[10px] font-semibold opacity-60 uppercase">{card.brand}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        {isDefault && (
+                                          <span className="bg-white text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">Padrão</span>
+                                        )}
+                                        {expired && (
+                                          <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Expirado</span>
+                                        )}
+                                      </div>
                                     </div>
-                                  )}
-                                </div>
 
-                                <div>
-                                  <div className="text-xs font-semibold opacity-75 uppercase tracking-widest mb-2">Número</div>
-                                  <div className="text-2xl font-mono font-bold tracking-widest">•••• •••• •••• {card.lastFour}</div>
-                                </div>
+                                    {/* Card number */}
+                                    <div className="mb-3">
+                                      <div className="text-sm font-mono tracking-[0.2em] opacity-90">•••• •••• •••• {card.lastFour}</div>
+                                    </div>
 
-                                <div className="flex justify-between items-end">
-                                  <div>
-                                    <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">Titular</div>
-                                    <div className="text-sm font-bold">{card.holderName}</div>
+                                    {/* Bottom: Holder + Expiry */}
+                                    <div className="flex justify-between items-end">
+                                      <div>
+                                        <div className="text-[9px] uppercase opacity-50 tracking-wide">Titular</div>
+                                        <div className="text-[11px] font-semibold truncate max-w-[120px]">{card.holderName}</div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-[9px] uppercase opacity-50 tracking-wide">Validade</div>
+                                        <div className={`text-[11px] font-semibold ${expired ? "text-red-300" : ""}`}>{card.expiry}</div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="text-right">
-                                    <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">Validade</div>
-                                    <div className="text-sm font-bold">{card.expiry}</div>
-                                  </div>
-                                </div>
-                              </div>
 
-                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-end justify-center pb-4 opacity-0 group-hover:opacity-100">
-                                <div className="flex gap-2">
-                                  {defaultPaymentMethod !== `card-${card.id}` && (
-                                    <Button onClick={() => handleSetDefaultCard(card.id)} size="sm" className="bg-white text-slate-900 hover:bg-blue-100 font-semibold h-9 px-4">
-                                      Definir Padrão
+                                  {/* Hover overlay with actions */}
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+                                    {!isDefault && !expired && (
+                                      <Button onClick={() => handleSetDefaultCard(card.id)} size="sm" className="bg-white text-slate-800 hover:bg-blue-50 text-[10px] font-semibold h-7 px-3 shadow-sm">
+                                        Definir Padrão
+                                      </Button>
+                                    )}
+                                    <Button onClick={() => handleRemoveCard(card.id)} size="sm" variant="outline" className="bg-white/90 text-slate-800 hover:bg-red-50 h-7 w-7 p-0 shadow-sm">
+                                      <Trash2 className="h-3 w-3" />
                                     </Button>
-                                  )}
-                                  <Button onClick={() => handleRemoveCard(card.id)} size="sm" variant="outline" className="bg-white text-slate-900 hover:bg-red-100 h-9 px-3">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
                 {/* ACCORDION 4: CARTEIRA DA EMPRESA */}
-                <AccordionItem value="carteira" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="carteira" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-cyan-600" />
-                      <span className="font-semibold text-slate-900">Carteira da Empresa</span>
+                      <Wallet className="h-3.5 w-3.5 text-cyan-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Carteira da Empresa</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100 space-y-4">
-                    <div className="bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 p-6 rounded-xl border border-blue-300 shadow-lg text-white">
-                      <label className="text-xs font-semibold uppercase tracking-wide block mb-2 opacity-90">Saldo Disponível</label>
-                      <div className="text-3xl font-bold mb-1">R$ {companyWalletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                      <p className="text-xs opacity-75">Pronto para usar</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        onClick={() => handleCompanyWalletAction("add")}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Adicionar Saldo
-                      </Button>
-                      <Button
-                        onClick={() => handleCompanyWalletAction("remove")}
-                        className="bg-red-600 hover:bg-red-700 text-white font-semibold gap-2"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Reduzir Saldo
-                      </Button>
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-2.5">
+                    <div className="flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl px-4 py-3 text-white shadow-sm">
+                      <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <Wallet className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Saldo Disponível</p>
+                        <p className="text-xl font-bold leading-tight">R$ {companyWalletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => handleCompanyWalletAction("add")}
+                          className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                        >
+                          <Plus className="h-2.5 w-2.5" />Adicionar
+                        </button>
+                        <button
+                          onClick={() => handleCompanyWalletAction("remove")}
+                          className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                        >
+                          <ArrowDown className="h-2.5 w-2.5" />Reduzir
+                        </button>
+                      </div>
                     </div>
 
                     <div>
-                      <label className="text-sm font-semibold text-slate-700 block mb-1.5">Últimas Movimentações</label>
-                      <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200 max-h-48 overflow-y-auto">
+                      <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Movimentações</label>
+                      <div className="space-y-1 bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-44 overflow-y-auto">
                         {companyWalletStatements.slice(0, 5).map(stmt => (
-                          <div key={stmt.id} className="flex justify-between items-center text-xs border-b border-slate-200 pb-2 last:border-0">
+                          <div key={stmt.id} className="flex justify-between items-center px-3 py-2">
                             <div>
-                              <div className="font-semibold text-slate-900">{stmt.reason}</div>
-                              <div className="text-slate-500 text-xs">{new Date(stmt.date).toLocaleString('pt-BR')}</div>
+                              <div className="text-[11px] font-semibold text-slate-800">{stmt.reason}</div>
+                              <div className="text-[10px] text-slate-400">{new Date(stmt.date).toLocaleString('pt-BR')}</div>
                             </div>
                             <div className="text-right">
-                              <div className={`font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-600"}`}>
-                                {stmt.type === "credit" ? "+" : "-"} R$ {stmt.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              <div className={`text-[11px] font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
+                                {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </div>
-                              <div className="text-slate-500 text-xs">Saldo: R$ {stmt.balanceAfter.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-[10px] text-slate-400">R$ {stmt.balanceAfter.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                             </div>
                           </div>
                         ))}
                         {companyWalletStatements.length === 0 && (
-                          <div className="text-center py-4 text-slate-500 text-xs">Nenhuma movimentação</div>
+                          <div className="text-center py-5 text-slate-400 text-xs">Nenhuma movimentação</div>
                         )}
                       </div>
                     </div>
@@ -2000,15 +2138,15 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </AccordionItem>
 
                 {/* ACCORDION 5: NOTAS FISCAIS E COMPROVANTES */}
-                <AccordionItem value="nf" className="border border-slate-200 rounded-lg">
-                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                <AccordionItem value="nf" className="border border-slate-200 rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-indigo-600" />
-                      <span className="font-semibold text-slate-900">Notas Fiscais e Comprovantes</span>
+                      <FileText className="h-3.5 w-3.5 text-indigo-500" />
+                      <span className="font-semibold text-slate-800 text-[11px]">Notas Fiscais e Comprovantes</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100">
-                    <div className="space-y-2">
+                  <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
+                    <div className="space-y-1.5">
                       {paymentHistory.map((payment) => {
                         const methodLabel = {
                           pix: "Pix",
@@ -2031,70 +2169,49 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         }[payment.status]
 
                         return (
-                          <Card
+                          <div
                             key={payment.id}
-                            className={`p-3 border-2 ${methodColor}`}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${methodColor}`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3">
-                                  {payment.type === "nf" ? (
-                                    <FileText className="h-4 w-4 text-indigo-600" />
-                                  ) : (
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-semibold">
-                                      {payment.type === "nf" ? "Nota Fiscal" : "Comprovante"} - {methodLabel}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {new Date(payment.date).toLocaleDateString("pt-BR")} • R$ {payment.amount.toLocaleString("pt-BR")}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={statusColor}>
-                                  {payment.status}
-                                </Badge>
-                                {payment.type === "nf" && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 w-7 p-0"
-                                      title="Visualizar"
-                                    >
-                                      <Eye className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 w-7 p-0"
-                                      title="Baixar"
-                                    >
-                                      <Download className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </>
+                            <div className={`h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              payment.type === "nf" ? "bg-indigo-100" : "bg-green-100"
+                            }`}>
+                              {payment.type === "nf"
+                                ? <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                                : <CheckCircle className="h-3.5 w-3.5 text-green-600" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold text-slate-800 leading-tight">
+                                {payment.type === "nf" ? "NF" : "Comprovante"} · {methodLabel}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                {new Date(payment.date).toLocaleDateString("pt-BR")} · R$ {payment.amount.toLocaleString("pt-BR")}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusColor}`}>
+                                {payment.status}
+                              </span>
+                              {payment.type === "nf" && (
+                                <>
+                                  <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Visualizar">
+                                    <Eye className="h-3 w-3" />
+                                  </button>
+                                  <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Baixar">
+                                    <Download className="h-3 w-3" />
+                                  </button>
+                                </>
+                              )}
+                              {payment.type === "comprovante" && (
+                                <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Comprovante">
+                                  <CheckCircle className="h-3 w-3" />
+                                </button>
                                 )}
-                                {payment.type === "comprovante" && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 w-7 p-0"
-                                    title="Comprovante"
-                                  >
-                                    <CheckCircle className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </div>
                             </div>
                             {payment.type === "comprovante" && (
-                              <p className="text-xs text-muted-foreground mt-2 italic">
-                                Pagamentos com Allkoins não geram nota fiscal.
-                              </p>
+                              <p className="text-[10px] text-slate-400 mt-1 pl-9 italic">Pagamentos com Allkoins não geram nota fiscal.</p>
                             )}
-                          </Card>
+                          </div>
                         )
                       })}
                     </div>
@@ -2230,13 +2347,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                             }
                             className="w-full px-3 py-2 border rounded text-sm"
                           >
-                            <option value="lite">Lite — R$ 300/mês (ativa conta agency)</option>
-                            <option value="start">Start — R$ 500/mês (5% desconto)</option>
-                            <option value="standard">Standard — R$ 1.000/mês (10% desconto)</option>
-                            <option value="growth">Growth — R$ 1.500/mês (15% desconto)</option>
-                            <option value="scale">Scale — R$ 3.000/mês (20% desconto)</option>
-                            <option value="squad">Squad — R$ 5.000/mês (agências — 20% + pós pago)</option>
-                            <option value="enterprise">Enterprise — R$ 5.000/mês (empresas — pós pago)</option>
+                            <option value="lite">Lite  R$ 300/mês (ativa conta agency)</option>
+                            <option value="start">Start  R$ 500/mês (5% desconto)</option>
+                            <option value="standard">Standard  R$ 1.000/mês (10% desconto)</option>
+                            <option value="growth">Growth  R$ 1.500/mês (15% desconto)</option>
+                            <option value="scale">Scale  R$ 3.000/mês (20% desconto)</option>
+                            <option value="squad">Squad  R$ 5.000/mês (agências  20% + pós pago)</option>
+                            <option value="enterprise">Enterprise  R$ 5.000/mês (empresas  pós pago)</option>
                           </select>
                         </div>
                       </div>
@@ -2249,7 +2366,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           Cancelar
                         </Button>
                         <Button
-                          onClick={handleConfirmAdminAction}
+                          onClick={() => setShowAdminConfirmDialog(true)}
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           Confirmar
@@ -2309,7 +2426,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     <div className="p-6">
                       <h3 className="text-lg font-bold mb-4">Forçar Cobrança</h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Tem certeza que deseja forçar a cobrança agora? Esta ação é irreversível.
+                        Tem certeza que deseja forçar a cobrança agora? Esta ação  irreversível.
                       </p>
                       <div className="flex gap-2">
                         <Button
@@ -2368,6 +2485,27 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </Card>
                 </div>
               )}
+
+              {/* Admin Confirm Dialog */}
+              {(() => {
+                const planNames: Record<string, string> = {
+                  lite: "Lite", start: "Start", standard: "Standard",
+                  growth: "Growth", scale: "Scale", squad: "Squad", enterprise: "Enterprise",
+                }
+                const friendlyPlan = planNames[adminFormData.creditPlan] ?? adminFormData.creditPlan
+                return (
+                  <ConfirmationDialog
+                    open={showAdminConfirmDialog}
+                    onClose={() => setShowAdminConfirmDialog(false)}
+                    onConfirm={handleConfirmAdminAction}
+                    title="Confirmar alteração de plano"
+                    message={`Tem certeza que deseja alterar o plano da empresa para "${friendlyPlan}"? Esta ação pode impactar cobranças e permissões.`}
+                    confirmText="Confirmar"
+                    cancelText="Cancelar"
+                    destructive={false}
+                  />
+                )
+              })()}
 
               {/* Add Card Modal */}
               {showAddCardModal && (
@@ -2447,29 +2585,30 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </Card>
                 </div>
               )}
+              </div>
             </TabsContent>
 
             {/* Termos Tab */}
-            <TabsContent value="termos" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
+            <TabsContent value="termos" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
               <TermsManagementTab company={company} />
             </TabsContent>
 
             {/* Projetos Tab */}
-            <TabsContent value="projetos" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
+            <TabsContent value="projetos" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
               <ProjectsManagementTab company={company} />
             </TabsContent>
 
             {/* Tarefas Tab */}
-            <TabsContent value="tarefas" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
+            <TabsContent value="tarefas" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
               <CompanyTasksTab company={company} />
             </TabsContent>
 
             {/* Log Tab */}
-            <TabsContent value="log" className="flex-1 overflow-y-auto px-[50px] py-[50px]">
+            <TabsContent value="log" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
               <CompanyLogsTab company={company} />
             </TabsContent>
             </Tabs>
-            </div>
+          </div>
           </div>
       </SheetContent>
     </Sheet>
@@ -2604,7 +2743,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       title="Salvar alterações?"
       message={<>Tem certeza que deseja salvar as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong>? Esta ação irá atualizar as informações da empresa.</>}
       confirmText="Sim, salvar"
-      cancelText="Voltar à edição"
+      cancelText="Voltar  edição"
       destructive={false}
     />
 
@@ -2616,9 +2755,67 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       title="Descartar alterações?"
       message={<>Tem certeza que deseja cancelar? Todas as alterações nos dados de <strong className="font-semibold text-slate-700">{company.name}</strong> serão descartadas.</>}
       confirmText="Sim, descartar"
-      cancelText="Voltar à edição"
+      cancelText="Voltar  edição"
       destructive={true}
     />
+
+    {/* Social edit confirmation */}
+    <ConfirmationDialog
+      open={showSocialEditConfirm}
+      onClose={() => { setShowSocialEditConfirm(false); setPendingSocialSave(null) }}
+      onConfirm={confirmSaveSocialCard}
+      title="Salvar alteração?"
+      message="Tem certeza que deseja salvar a edição deste link?"
+      confirmText="Sim, salvar"
+      cancelText="Cancelar"
+      destructive={false}
+    />
+
+    {/* Social delete confirmation */}
+    <ConfirmationDialog
+      open={showSocialDeleteConfirm}
+      onClose={() => { setShowSocialDeleteConfirm(false); setPendingSocialDelete(null) }}
+      onConfirm={confirmDeleteSocialCard}
+      title="Excluir rede social?"
+      message="Tem certeza que deseja excluir este perfil? Esta ação não pode ser desfeita."
+      confirmText="Sim, excluir"
+      cancelText="Cancelar"
+      destructive={true}
+    />
+
+    {/* Social Links Modal */}
+    <Dialog open={showSocialModal} onOpenChange={(open) => { if (!open) setShowSocialModal(false) }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Gerenciar Redes Sociais</DialogTitle>
+          <DialogDescription>Adicione, edite ou remova os links das redes sociais da empresa.</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto py-2">
+          <CompanySocialLinksManager
+            socialLinks={socialLinksBuffer}
+            onChange={(links) => setSocialLinksBuffer(links)}
+            isEditMode={true}
+          />
+        </div>
+        <DialogFooter className="pt-4 border-t border-slate-200 gap-2">
+          <Button variant="outline" onClick={() => setShowSocialModal(false)} disabled={isSavingSocial}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={isSavingSocial}
+            className="gap-2"
+            onClick={async () => {
+              const merged = [...(company.social_links || []), ...socialLinksBuffer]
+              await saveSocialLinksDirectly(merged)
+              setShowSocialModal(false)
+            }}
+          >
+            {isSavingSocial && <Loader2 className="h-4 w-4 animate-spin" />}
+            Salvar redes sociais
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }
