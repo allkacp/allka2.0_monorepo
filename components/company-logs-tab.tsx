@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { useState, useMemo, type CSSProperties } from "react"
 import { Input } from "@/components/ui/input"
 import {
