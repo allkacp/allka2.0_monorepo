@@ -43,7 +43,7 @@ export default function RootLayout({
                       <Sidebar />
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-visible min-w-0">
+                    <div className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ paddingBottom: 36 }}>
                       <Header />
                       <main className="flex-1 overflow-auto bg-slate-200 mx-0 py-12 px-14 pb-mobile-nav">
                         <Suspense

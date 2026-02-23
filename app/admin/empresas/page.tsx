@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock } from "lucide-react"
+import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Settings2 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
@@ -871,11 +873,39 @@ export default function EmpresasPage() {
   const [headerHeight, setHeaderHeight] = useState(64)
   const [footerHeight, setFooterHeight] = useState(40)
 
+  // ── Column visibility ──────────────────────────────────────────
+  type ColKey = "empresa" | "contato" | "cnpj" | "status" | "plano" | "tipo" | "acoes"
+  const allColumns: { key: ColKey; label: string; required?: boolean }[] = [
+    { key: "empresa",  label: "Empresa",          required: true },
+    { key: "contato",  label: "Contato" },
+    { key: "cnpj",     label: "CNPJ · Usuários" },
+    { key: "status",   label: "Status" },
+    { key: "plano",    label: "Plano" },
+    { key: "tipo",     label: "Tipo" },
+    { key: "acoes",    label: "Ações",             required: true },
+  ]
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(allColumns.map(c => c.key)))
+  const [colConfigOpen, setColConfigOpen] = useState(false)
+  const toggleCol = (key: ColKey) => {
+    setVisibleCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+  const visibleColumnsList = allColumns.filter(c => visibleCols.has(c.key))
+
   // ── Column resize ──────────────────────────────────────────────
-  const defaultColWidths = [220, 210, 175, 120, 115, 110, 80]
-  // mínimo por coluna: Empresa, Contato, CNPJ·Usu, Status, Plano, Tipo, Ações
-  const minColWidths =   [160,   160,   150,  100,    90,   90,  80]
+  const allDefaultWidths: Record<ColKey, number> = { empresa: 280, contato: 240, cnpj: 210, status: 145, plano: 145, tipo: 130, acoes: 68 }
+  const allMinWidths: Record<ColKey, number>     = { empresa: 200, contato: 180, cnpj: 180, status: 110, plano: 110, tipo: 100, acoes: 60 }
+  const defaultColWidths = visibleColumnsList.map(c => allDefaultWidths[c.key])
+  const minColWidths     = visibleColumnsList.map(c => allMinWidths[c.key])
   const [colWidths, setColWidths] = useState<number[]>(defaultColWidths)
+
+  // Reset widths when visible columns change
+  useEffect(() => {
+    setColWidths(visibleColumnsList.map(c => allDefaultWidths[c.key]))
+  }, [visibleCols.size])
   const dragState = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null)
 
   const onResizeMouseDown = useCallback((e: React.MouseEvent, colIndex: number) => {
@@ -1442,26 +1472,27 @@ export default function EmpresasPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="text-sm" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
+          <table className="text-sm" style={{ tableLayout: "fixed", width: "100%", minWidth: colWidths.reduce((a, b) => a + b, 0) + 36 }}>
             <colgroup>
               {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+              <col style={{ width: 36 }} />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                {(["Empresa", "Contato", "CNPJ · Usuários", "Status", "Plano", "Tipo", "Ações"] as const).map((label, i) => (
+                {visibleColumnsList.map((col, i) => (
                   <th
-                    key={label}
+                    key={col.key}
                     className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
                     style={{
                       paddingLeft: 20,
                       paddingRight: 20,
-                      textAlign: i === 6 ? "right" : "left",
+                      textAlign: col.key === "acoes" ? "right" : "left",
                       borderRight: "1px solid",
                       borderRightColor: "rgba(148,163,184,0.25)",
                     }}
                   >
-                    {label}
-                    {i < 6 && (
+                    {col.label}
+                    {col.key !== "acoes" && (
                       <span
                         onMouseDown={(e) => onResizeMouseDown(e, i)}
                         className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
@@ -1472,6 +1503,64 @@ export default function EmpresasPage() {
                     )}
                   </th>
                 ))}
+                {/* Column config button */}
+                <th
+                  className="py-3 select-none sticky right-0 bg-white dark:bg-slate-900 z-10"
+                  style={{ width: 36, borderLeft: "1px solid rgba(148,163,184,0.25)" }}
+                >
+                  <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={`mx-auto flex items-center justify-center h-6 w-6 rounded-md transition-colors ${
+                          colConfigOpen
+                            ? "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
+                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                        title="Configurar colunas"
+                      >
+                        <Settings2 className="h-3.5 w-3.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" sideOffset={8} className="w-[260px] p-0">
+                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Colunas visíveis</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Selecione quais colunas exibir na tabela</p>
+                      </div>
+                      <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
+                        {allColumns.map(col => (
+                          <label
+                            key={col.key}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                              visibleCols.has(col.key)
+                                ? "bg-blue-50 dark:bg-blue-900/20"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                            } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
+                          >
+                            <Checkbox
+                              checked={visibleCols.has(col.key)}
+                              onCheckedChange={() => !col.required && toggleCol(col.key)}
+                              disabled={col.required}
+                              className="h-4 w-4"
+                            />
+                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.label}</span>
+                            {col.required && <span className="text-[9px] text-slate-400 ml-auto">obrigatória</span>}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                        <button
+                          onClick={() => setVisibleCols(new Set(allColumns.map(c => c.key)))}
+                          className="text-[10px] font-medium text-blue-500 hover:text-blue-700 transition-colors"
+                        >
+                          Mostrar todas
+                        </button>
+                        <span className="text-[10px] text-slate-400">
+                          {visibleCols.size} de {allColumns.length}
+                        </span>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1481,6 +1570,7 @@ export default function EmpresasPage() {
                   className="group hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
                 >
                   {/* Company */}
+                  {visibleCols.has("empresa") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="flex items-center gap-3">
                       <CompanyAvatar company={company} />
@@ -1490,8 +1580,10 @@ export default function EmpresasPage() {
                       </div>
                     </div>
                   </td>
+                  )}
 
                   {/* Contact */}
+                  {visibleCols.has("contato") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="space-y-1">
                       <a
@@ -1518,8 +1610,10 @@ export default function EmpresasPage() {
                       </a>
                     </div>
                   </td>
+                  )}
 
                   {/* CNPJ + Users */}
+                  {visibleCols.has("cnpj") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5">
@@ -1532,8 +1626,10 @@ export default function EmpresasPage() {
                       </div>
                     </div>
                   </td>
+                  )}
 
                   {/* Status */}
+                  {visibleCols.has("status") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -1550,8 +1646,10 @@ export default function EmpresasPage() {
                       {company.status === "active" ? "Ativo" : company.status === "inactive" ? "Inativo" : "Pendente"}
                     </span>
                   </td>
+                  )}
 
                   {/* Plan */}
+                  {visibleCols.has("plano") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     {(() => {
                       const planMap: Record<string, { name: string; price: string; discount: string; info: string; color: string }> = {
@@ -1592,8 +1690,10 @@ export default function EmpresasPage() {
                       )
                     })()}
                   </td>
+                  )}
 
                   {/* Type */}
+                  {visibleCols.has("tipo") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
                       company.type === "company"
@@ -1605,10 +1705,12 @@ export default function EmpresasPage() {
                       {getTypeLabel(company.type)}
                     </span>
                   </td>
+                  )}
 
                   {/* Actions */}
+                  {visibleCols.has("acoes") && (
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-0">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1616,9 +1718,9 @@ export default function EmpresasPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleViewCompany(company)}
-                              className="h-8 w-8 p-0 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                              className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-2.5 w-2.5" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Ver Detalhes</TooltipContent>
@@ -1631,9 +1733,9 @@ export default function EmpresasPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteCompany(company.id)}
-                              className="h-8 w-8 p-0 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                              className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-2.5 w-2.5" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Excluir</TooltipContent>
@@ -1641,6 +1743,9 @@ export default function EmpresasPage() {
                       </TooltipProvider>
                     </div>
                   </td>
+                  )}
+                  {/* extra td for config column */}
+                  <td className="sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-700/50 transition-colors" style={{ borderLeft: "1px solid rgba(148,163,184,0.15)" }} />
                 </tr>
               ))}
             </tbody>

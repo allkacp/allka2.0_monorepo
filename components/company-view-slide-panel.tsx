@@ -1,5 +1,5 @@
 
-import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown } from "lucide-react"
+import { X, Building2, Users, Mail, Phone, MapPin, Calendar, CheckCircle, AlertCircle, TrendingUp, Wallet, ArrowUp, ArrowDown, Lock, Download, Star, Gift, Check, MessageSquare, Camera, Eye, Clock, Activity, Zap, UserIcon, Edit2, Save, Loader2, XCircle, Crown, Trash2, Plus, CreditCard, MoreVertical, FileText, Shield, BarChart3, Share2, PauseCircle, ZoomIn, Crosshair, ChevronsUpDown, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -184,6 +184,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   const [companyWalletReason, setCompanyWalletReason] = useState("")
   const [showWalletConfirmDialog, setShowWalletConfirmDialog] = useState(false)
   const [isApplyingCompanyWallet, setIsApplyingCompanyWallet] = useState(false)
+  const [showWalletHistoryPanel, setShowWalletHistoryPanel] = useState(false)
+  const [walletHistorySearch, setWalletHistorySearch] = useState("")
+  const [walletHistoryType, setWalletHistoryType] = useState<"all" | "credit" | "debit">("all")
+  const [walletHistoryDateFrom, setWalletHistoryDateFrom] = useState("")
+  const [walletHistoryDateTo, setWalletHistoryDateTo] = useState("")
+  const [showNFHistoryPanel, setShowNFHistoryPanel] = useState(false)
+  const [nfHistorySearch, setNfHistorySearch] = useState("")
+  const [nfHistoryType, setNfHistoryType] = useState<"all" | "nf" | "comprovante">("all")
+  const [nfHistoryStatus, setNfHistoryStatus] = useState<"all" | "Pago" | "Pendente" | "Cancelado">("all")
+  const [nfHistoryDateFrom, setNfHistoryDateFrom] = useState("")
+  const [nfHistoryDateTo, setNfHistoryDateTo] = useState("")
 
   useEffect(() => {
     if (company) {
@@ -362,6 +373,19 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
   // Admin actions handlers
   const handleAdminAction = (action: string) => {
+    if (action === "change-account") {
+      const currentLabel =
+        company.type === "company" && company.account_type === "independent"
+          ? "Company Independente"
+          : company.type === "company"
+          ? "Company Dependente"
+          : company.type === "agency"
+          ? "Agency"
+          : company.type === "nomad"
+          ? "Partner"
+          : "Company Dependente"
+      setAdminFormData(prev => ({ ...prev, accountType: currentLabel }))
+    }
     setAdminActionModal(action)
   }
 
@@ -377,6 +401,22 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
       toast({
         title: "Plano atualizado!",
         description: `Plano alterado para ${planNames[adminFormData.creditPlan] ?? adminFormData.creditPlan}.`,
+      })
+    }
+    if (adminActionModal === "change-account") {
+      const typeMap: Record<string, { type: CompanyType; account_type?: string }> = {
+        "Company Dependente": { type: "company", account_type: undefined },
+        "Company Independente": { type: "company", account_type: "independent" },
+        "Agency": { type: "agency", account_type: undefined },
+        "Partner": { type: "nomad", account_type: undefined },
+      }
+      const mapped = typeMap[adminFormData.accountType]
+      if (mapped && onCompanyUpdate) {
+        onCompanyUpdate({ ...company, type: mapped.type, account_type: mapped.account_type })
+      }
+      toast({
+        title: "Tipo de conta atualizado!",
+        description: `Tipo alterado para ${adminFormData.accountType}.`,
       })
     }
     setShowAdminConfirmDialog(false)
@@ -681,8 +721,8 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
         <SheetContent
           side="right"
           hideOverlay={true}
-          onInteractOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal) e.preventDefault() }}
-          onPointerDownOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal) e.preventDefault() }}
+          onInteractOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal || showWalletHistoryPanel || showNFHistoryPanel) e.preventDefault() }}
+          onPointerDownOutside={(e) => { if (showSaveConfirm || showCancelConfirm || showSocialEditConfirm || showSocialDeleteConfirm || showSocialModal || showWalletHistoryPanel || showNFHistoryPanel) e.preventDefault() }}
           className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
           style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
@@ -884,7 +924,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
           <div className="flex-1 flex flex-col bg-white overflow-hidden">
             {/* Content with Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <div className="flex-shrink-0 border-b border-slate-200 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+            <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
               <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
                 <TabsTrigger
                   value="visao-geral"
@@ -2113,9 +2153,18 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Movimentações</label>
-                      <div className="space-y-1 bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-44 overflow-y-auto">
-                        {companyWalletStatements.slice(0, 5).map(stmt => (
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Movimentações</label>
+                        <button
+                          onClick={() => setShowWalletHistoryPanel(true)}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 px-2 py-0.5 rounded-full transition-colors"
+                        >
+                          <Eye className="h-2.5 w-2.5" />
+                          Ver todas
+                        </button>
+                      </div>
+                      <div className="space-y-1 bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                        {companyWalletStatements.slice(0, 4).map(stmt => (
                           <div key={stmt.id} className="flex justify-between items-center px-3 py-2">
                             <div>
                               <div className="text-[11px] font-semibold text-slate-800">{stmt.reason}</div>
@@ -2146,8 +2195,18 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-slate-400">{paymentHistory.length} documento{paymentHistory.length !== 1 ? "s" : ""}</span>
+                      <button
+                        onClick={() => setShowNFHistoryPanel(true)}
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full transition-colors"
+                      >
+                        <Eye className="h-2.5 w-2.5" />
+                        Ver todas
+                      </button>
+                    </div>
                     <div className="space-y-1.5">
-                      {paymentHistory.map((payment) => {
+                      {paymentHistory.slice(0, 4).map((payment) => {
                         const methodLabel = {
                           pix: "Pix",
                           boleto: "Boleto",
@@ -2218,6 +2277,277 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+
+              {/* NF History Panel */}
+              <Sheet open={showNFHistoryPanel} onOpenChange={setShowNFHistoryPanel}>
+                <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col" onInteractOutside={(e) => e.preventDefault()}>
+                  {/* Header */}
+                  <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileText className="h-5 w-5" />
+                      <h2 className="text-base font-bold">Notas Fiscais e Comprovantes</h2>
+                    </div>
+                    <p className="text-xs opacity-75">{paymentHistory.length} documento{paymentHistory.length !== 1 ? "s" : ""} · {company.name}</p>
+                    <button onClick={() => setShowNFHistoryPanel(false)} className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5">
+                      <X className="size-6 text-white drop-shadow-md" />
+                    </button>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input type="text" placeholder="Buscar por tipo ou método..." value={nfHistorySearch} onChange={e => setNfHistorySearch(e.target.value)}
+                        className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
+                        {(["all", "nf", "comprovante"] as const).map(t => (
+                          <button key={t} onClick={() => setNfHistoryType(t)}
+                            className={`flex-1 py-1.5 font-semibold transition-colors ${nfHistoryType === t ? "bg-indigo-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                            {t === "all" ? "Todos" : t === "nf" ? "NF" : "Comprovantes"}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                        {(["all", "Pago", "Pendente", "Cancelado"] as const).map(s => (
+                          <button key={s} onClick={() => setNfHistoryStatus(s)}
+                            className={`px-2.5 py-1.5 font-semibold transition-colors ${nfHistoryStatus === s ? "bg-indigo-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                            {s === "all" ? "Status" : s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">De</label>
+                        <input type="date" value={nfHistoryDateFrom} onChange={e => setNfHistoryDateFrom(e.target.value)}
+                          className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">Até</label>
+                        <input type="date" value={nfHistoryDateTo} onChange={e => setNfHistoryDateTo(e.target.value)}
+                          className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50" />
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <button
+                          onClick={() => {
+                            const rows = paymentHistory.map(p => {
+                              const label = { pix: "Pix", boleto: "Boleto", cartao: "Cartão", allkoins: "Allkoins" }[p.method] ?? p.method
+                              return `${new Date(p.date).toLocaleDateString('pt-BR')};${p.type === "nf" ? "NF" : "Comprovante"};${label};R$ ${p.amount.toLocaleString('pt-BR')};${p.status}`
+                            })
+                            const csv = ["Data;Tipo;Método;Valor;Status", ...rows].join("\n")
+                            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement("a"); a.href = url; a.download = `notas-fiscais-${company.name.replace(/\s+/g, "-")}.csv`; a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                          className="flex items-center gap-1 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Exportar
+                        </button>
+                        {(nfHistorySearch || nfHistoryType !== "all" || nfHistoryStatus !== "all" || nfHistoryDateFrom || nfHistoryDateTo) && (
+                          <button onClick={() => { setNfHistorySearch(""); setNfHistoryType("all"); setNfHistoryStatus("all"); setNfHistoryDateFrom(""); setNfHistoryDateTo("") }}
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* List */}
+                  <div className="flex-1 overflow-y-auto">
+                    {(() => {
+                      const methodLabel = { pix: "Pix", boleto: "Boleto", cartao: "Cartão", allkoins: "Allkoins" }
+                      const filtered = paymentHistory.filter(p => {
+                        const matchSearch = nfHistorySearch === "" || methodLabel[p.method as keyof typeof methodLabel]?.toLowerCase().includes(nfHistorySearch.toLowerCase()) || (p.type === "nf" ? "nf" : "comprovante").includes(nfHistorySearch.toLowerCase())
+                        const matchType = nfHistoryType === "all" || p.type === nfHistoryType
+                        const matchStatus = nfHistoryStatus === "all" || p.status === nfHistoryStatus
+                        const pDate = new Date(p.date)
+                        const matchFrom = nfHistoryDateFrom === "" || pDate >= new Date(nfHistoryDateFrom)
+                        const matchTo = nfHistoryDateTo === "" || pDate <= new Date(nfHistoryDateTo + "T23:59:59")
+                        return matchSearch && matchType && matchStatus && matchFrom && matchTo
+                      })
+                      if (filtered.length === 0) return (
+                        <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
+                          <FileText className="h-8 w-8 opacity-30" />
+                          <p className="text-sm">Nenhum documento encontrado</p>
+                        </div>
+                      )
+                      return (
+                        <div className="divide-y divide-slate-100">
+                          {filtered.map(payment => {
+                            const ml = methodLabel[payment.method as keyof typeof methodLabel] ?? payment.method
+                            const methodColor = { pix: "bg-purple-50 border-purple-200", boleto: "bg-orange-50 border-orange-200", cartao: "bg-blue-50 border-blue-200", allkoins: "bg-yellow-50 border-yellow-200" }[payment.method] ?? "bg-slate-50 border-slate-200"
+                            const statusColor = { Pago: "bg-green-100 text-green-800", Pendente: "bg-yellow-100 text-yellow-800", Cancelado: "bg-red-100 text-red-800" }[payment.status] ?? "bg-slate-100 text-slate-700"
+                            return (
+                              <div key={payment.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors`}>
+                                <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${payment.type === "nf" ? "bg-indigo-100" : "bg-green-100"}`}>
+                                  {payment.type === "nf"
+                                    ? <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                                    : <CheckCircle className="h-3.5 w-3.5 text-green-600" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-slate-800">{payment.type === "nf" ? "Nota Fiscal" : "Comprovante"} · {ml}</p>
+                                  <p className="text-[10px] text-slate-400">{new Date(payment.date).toLocaleDateString('pt-BR')} · R$ {payment.amount.toLocaleString('pt-BR')}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor}`}>{payment.status}</span>
+                                  {payment.type === "nf" && (
+                                    <>
+                                      <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors" title="Visualizar">
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Baixar">
+                                        <Download className="h-3.5 w-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
+                    {paymentHistory.length} documento{paymentHistory.length !== 1 ? "s" : ""} no total · {company.name}
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              {/* Wallet History Panel */}
+              <Sheet open={showWalletHistoryPanel} onOpenChange={setShowWalletHistoryPanel}>
+                <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col" onInteractOutside={(e) => e.preventDefault()}>
+                  {/* Header */}
+                  <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet className="h-5 w-5" />
+                      <h2 className="text-base font-bold">Movimentações da Carteira</h2>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs opacity-75">Saldo atual:</span>
+                      <span className="text-xl font-bold">R$ {companyWalletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <button onClick={() => setShowWalletHistoryPanel(false)} className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5">
+                      <X className="size-6 text-white drop-shadow-md" />
+                    </button>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por descrição..."
+                        value={walletHistorySearch}
+                        onChange={e => setWalletHistorySearch(e.target.value)}
+                        className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
+                        {(["all", "credit", "debit"] as const).map(t => (
+                          <button key={t} onClick={() => setWalletHistoryType(t)}
+                            className={`flex-1 py-1.5 font-semibold transition-colors ${walletHistoryType === t ? "bg-cyan-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                            {t === "all" ? "Todos" : t === "credit" ? "Entradas" : "Saídas"}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const rows = companyWalletStatements.map(s =>
+                            `${new Date(s.date).toLocaleString('pt-BR')};${s.reason};${s.type === "credit" ? "Entrada" : "Saída"};R$ ${s.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })};R$ ${s.balanceAfter.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                          )
+                          const csv = ["Data;Descrição;Tipo;Valor;Saldo Após", ...rows].join("\n")
+                          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement("a"); a.href = url; a.download = `carteira-${company.name.replace(/\s+/g, "-")}.csv`; a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                        className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Exportar
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">De</label>
+                        <input type="date" value={walletHistoryDateFrom} onChange={e => setWalletHistoryDateFrom(e.target.value)}
+                          className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">Até</label>
+                        <input type="date" value={walletHistoryDateTo} onChange={e => setWalletHistoryDateTo(e.target.value)}
+                          className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50" />
+                      </div>
+                      {(walletHistoryDateFrom || walletHistoryDateTo || walletHistorySearch || walletHistoryType !== "all") && (
+                        <button onClick={() => { setWalletHistorySearch(""); setWalletHistoryType("all"); setWalletHistoryDateFrom(""); setWalletHistoryDateTo("") }}
+                          className="self-end h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* List */}
+                  <div className="flex-1 overflow-y-auto">
+                    {(() => {
+                      const filtered = companyWalletStatements.filter(s => {
+                        const matchSearch = walletHistorySearch === "" || s.reason.toLowerCase().includes(walletHistorySearch.toLowerCase())
+                        const matchType = walletHistoryType === "all" || s.type === walletHistoryType
+                        const sDate = new Date(s.date)
+                        const matchFrom = walletHistoryDateFrom === "" || sDate >= new Date(walletHistoryDateFrom)
+                        const matchTo = walletHistoryDateTo === "" || sDate <= new Date(walletHistoryDateTo + "T23:59:59")
+                        return matchSearch && matchType && matchFrom && matchTo
+                      })
+                      if (filtered.length === 0) return (
+                        <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
+                          <Wallet className="h-8 w-8 opacity-30" />
+                          <p className="text-sm">Nenhuma movimentação encontrada</p>
+                        </div>
+                      )
+                      return (
+                        <div className="divide-y divide-slate-100">
+                          {filtered.map(stmt => (
+                            <div key={stmt.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${stmt.type === "credit" ? "bg-emerald-100" : "bg-red-100"}`}>
+                                  {stmt.type === "credit"
+                                    ? <ArrowDown className="h-3.5 w-3.5 text-emerald-600" />
+                                    : <ArrowUp className="h-3.5 w-3.5 text-red-500" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-800 truncate">{stmt.reason}</p>
+                                  <p className="text-[10px] text-slate-400">{new Date(stmt.date).toLocaleString('pt-BR')}</p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-3">
+                                <p className={`text-xs font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
+                                  {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-[10px] text-slate-400">R$ {stmt.balanceAfter.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Footer count */}
+                  <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
+                    {companyWalletStatements.length} movimentaç{companyWalletStatements.length === 1 ? "ão" : "ões"} no total · desde {new Date(companyWalletStatements[companyWalletStatements.length - 1]?.date ?? Date.now()).toLocaleDateString('pt-BR')}
+                  </div>
+                </SheetContent>
+              </Sheet>
 
               {/* Company Wallet Modal */}
               {showCompanyWalletModal && (
@@ -2599,12 +2929,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </TabsContent>
 
             {/* Tarefas Tab */}
-            <TabsContent value="tarefas" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
+            <TabsContent value="tarefas" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
               <CompanyTasksTab company={company} />
             </TabsContent>
 
             {/* Log Tab */}
-            <TabsContent value="log" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
+            <TabsContent value="log" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
               <CompanyLogsTab company={company} />
             </TabsContent>
             </Tabs>

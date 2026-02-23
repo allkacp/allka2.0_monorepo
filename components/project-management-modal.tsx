@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 
 import React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +57,11 @@ import {
   LayoutGrid,
   Save,
   Trash,
+  Camera,
+  ZoomIn,
+  Crosshair,
+  FolderKanban,
+  Palette,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -64,6 +69,8 @@ import { useToast } from "@/components/ui/use-toast" // Import useToast
 import { DialogFooter } from "@/components/ui/dialog"
 import { ChevronLeft } from "lucide-react"
 import { ChevronRight } from "lucide-react"
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
+import { useSidebar } from "@/contexts/sidebar-context"
 
 interface Project {
   id: number
@@ -94,8 +101,89 @@ interface ProjectManagementModalProps {
 }
 
 export function ProjectManagementModal({ project, open, onOpenChange, mode, onEdit, onClone, onExport, onSave, onCancel }: ProjectManagementModalProps) {
-  const { toast } = useToast() // Initialize useToast
+  const { toast } = useToast()
+  const { sidebarWidth } = useSidebar()
+
+  // Avatar / crop state
+  const [avatar, setAvatar] = useState<string | null>(null)
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null)
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [cropZoom, setCropZoom] = useState(1)
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cropImgRef = useRef<HTMLImageElement>(null)
+  const CROP_SIZE = 192
+
+  // Avatar handlers
+  const handleAvatarClick = () => {
+    if (avatar) { setShowAvatarMenu((p) => !p) } else { fileInputRef.current?.click() }
+  }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string
+      setRawImageSrc(src)
+      setOriginalRawSrc(src)
+      setCropZoom(1)
+      setCropOffset({ x: 0, y: 0 })
+      setCropOpen(true)
+    }
+    reader.readAsDataURL(file)
+  }
+  const handleCropConfirm = () => {
+    const img = cropImgRef.current
+    if (!img) return
+    const canvas = document.createElement("canvas")
+    canvas.width = CROP_SIZE
+    canvas.height = CROP_SIZE
+    const ctx = canvas.getContext("2d")!
+    ctx.beginPath()
+    ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2)
+    ctx.clip()
+    const fitScale = Math.min(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight)
+    const drawW = img.naturalWidth * fitScale * cropZoom
+    const drawH = img.naturalHeight * fitScale * cropZoom
+    const dx = CROP_SIZE / 2 + cropOffset.x - drawW / 2
+    const dy = CROP_SIZE / 2 + cropOffset.y - drawH / 2
+    ctx.drawImage(img, dx, dy, drawW, drawH)
+    setAvatar(canvas.toDataURL("image/jpeg", 0.92))
+    setCropOpen(false)
+    setRawImageSrc(null)
+  }
+
   const [selectedFile, setSelectedFile] = useState<any>(null)
+
+  // Header color / theme
+  const [headerBg, setHeaderBg] = useState<string | null>(null)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [customHeaderColor, setCustomHeaderColor] = useState("#1e293b")
+
+  const HEADER_PRESETS: { label: string; value: string | null; preview: string }[] = [
+    { label: "Padrão",     value: null,                                                                             preview: "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)" },
+    { label: "Oceano",     value: "linear-gradient(135deg,#0f172a 0%,#0e4d8c 50%,#0891b2 100%)",                   preview: "linear-gradient(135deg,#0f172a 0%,#0e4d8c 50%,#0891b2 100%)" },
+    { label: "Pôr do Sol", value: "linear-gradient(135deg,#1c0533 0%,#7c1d6f 50%,#f97316 100%)",                   preview: "linear-gradient(135deg,#1c0533 0%,#7c1d6f 50%,#f97316 100%)" },
+    { label: "Natureza",   value: "linear-gradient(135deg,#052e16 0%,#166534 50%,#4ade80 100%)",                   preview: "linear-gradient(135deg,#052e16 0%,#166534 50%,#4ade80 100%)" },
+    { label: "Fogo",       value: "linear-gradient(135deg,#450a0a 0%,#b91c1c 50%,#f97316 100%)",                   preview: "linear-gradient(135deg,#450a0a 0%,#b91c1c 50%,#f97316 100%)" },
+    { label: "Noite",      value: "linear-gradient(135deg,#0f0f0f 0%,#1e1e3f 50%,#312e81 100%)",                   preview: "linear-gradient(135deg,#0f0f0f 0%,#1e1e3f 50%,#312e81 100%)" },
+    { label: "Aurora",     value: "linear-gradient(135deg,#0f172a 0%,#4f46e5 45%,#06b6d4 100%)",                   preview: "linear-gradient(135deg,#0f172a 0%,#4f46e5 45%,#06b6d4 100%)" },
+    { label: "Rubi",       value: "linear-gradient(135deg,#1c0533 0%,#be123c 50%,#f43f5e 100%)",                   preview: "linear-gradient(135deg,#1c0533 0%,#be123c 50%,#f43f5e 100%)" },
+    { label: "Carvão",     value: "linear-gradient(135deg,#111827 0%,#374151 50%,#6b7280 100%)",                   preview: "linear-gradient(135deg,#111827 0%,#374151 50%,#6b7280 100%)" },
+    { label: "Esmeralda",  value: "linear-gradient(135deg,#022c22 0%,#065f46 50%,#10b981 100%)",                   preview: "linear-gradient(135deg,#022c22 0%,#065f46 50%,#10b981 100%)" },
+    { label: "Índigo",     value: "linear-gradient(135deg,#1e1b4b 0%,#4338ca 50%,#818cf8 100%)",                   preview: "linear-gradient(135deg,#1e1b4b 0%,#4338ca 50%,#818cf8 100%)" },
+    { label: "Âmbar",      value: "linear-gradient(135deg,#451a03 0%,#b45309 50%,#fbbf24 100%)",                   preview: "linear-gradient(135deg,#451a03 0%,#b45309 50%,#fbbf24 100%)" },
+  ]
+
+  const getHeaderStyle = (): React.CSSProperties | undefined => {
+    if (!headerBg) return undefined
+    return { background: headerBg }
+  }
   const [showFileDetails, setShowFileDetails] = useState(false)
   const [fileTypeFilter, setFileTypeFilter] = useState<string>("all")
   const [fileProductFilter, setFileProductFilter] = useState<string>("all")
@@ -1488,114 +1576,261 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="right"
-          className="left-64 w-[calc(100vw-16rem)] sm:max-w-[calc(100vw-16rem)] h-full p-0 flex flex-col gap-0 overflow-hidden"
+          hideOverlay={true}
+          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden"
+          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
-          {/* Header */}
-          <div className="px-6 py-4 border-b shrink-0">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-semibold">{project?.name || "Novo Projeto"}</h2>
-              <div className="flex items-center gap-2">
-                {mode === "view" && project && (
-                  <>
-                    <Button size="sm" variant="outline" className="h-8 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 bg-transparent" onClick={onClone}>
-                      <Copy className="h-3.5 w-3.5 mr-1.5" />
-                      Clonar Projeto
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 bg-transparent" onClick={onExport}>
-                      <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      Exportar Proposta
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs bg-transparent" onClick={onEdit}>
-                      <User className="h-3.5 w-3.5 mr-1.5" />
-                      Editar Projeto
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 bg-transparent" onClick={onCancel}>
-                      <Ban className="h-3.5 w-3.5 mr-1.5" />
-                      Cancelar Projeto
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <div className="relative flex flex-col h-full overflow-hidden">
+            {/* Hidden file input */}
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
-          {/* Info Grid */}
-          <div className="px-6 py-4 bg-gray-50 border-b shrink-0">
-            <div className="grid grid-cols-3 gap-x-8 gap-y-3">
-              <div>
-                <p className="text-[11px] text-gray-500 mb-1">Situação</p>
-                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[11px] px-2 py-0.5 h-5">
-                  {mockData.situacao}
-                </Badge>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-500 mb-1">Agência</p>
-                <Button variant="link" className="h-auto p-0 text-blue-600 text-sm font-semibold">
-                  {mockData.agencia}
-                </Button>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-500 mb-1">Cliente</p>
-                <Button variant="link" className="h-auto p-0 text-blue-600 text-sm font-semibold">
-                  {mockData.cliente}
-                </Button>
-              </div>
-            </div>
-          </div>
+            {/* Brand Header */}
+            <ModalBrandHeader
+              onClose={() => onOpenChange(false)}
+              headerStyle={getHeaderStyle()}
+              right={
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge className="bg-blue-500/90 text-white text-[10px] px-2 py-0.5 font-semibold border-0">
+                    {mockData.situacao}
+                  </Badge>
+                  {/* Palette button */}
+                  <button
+                    onClick={() => setShowColorPicker((p) => !p)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-[10px] font-medium transition-colors border ${
+                      showColorPicker
+                        ? "bg-white/30 border-white/50"
+                        : "bg-white/15 hover:bg-white/25 border-white/20"
+                    }`}
+                    title="Cor do cabeçalho"
+                  >
+                    <Palette className="h-3 w-3" />
+                    Tema
+                  </button>
+                  {mode === "view" && project && (
+                    <>
+                      <button onClick={onClone} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
+                        <Copy className="h-3 w-3" />
+                        Clonar
+                      </button>
+                      <button onClick={onExport} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
+                        <FileText className="h-3 w-3" />
+                        Exportar
+                      </button>
+                      <button onClick={onEdit} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
+                        <Edit className="h-3 w-3" />
+                        Editar
+                      </button>
+                      <button onClick={onCancel} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-white text-[10px] font-medium transition-colors border border-red-400/30">
+                        <Ban className="h-3 w-3" />
+                        Cancelar
+                      </button>
+                    </>
+                  )}
+                </div>
+              }
+              left={
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  {/* Avatar Section */}
+                  <button
+                    onClick={handleAvatarClick}
+                    className="relative h-16 w-16 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
+                  >
+                    {avatar ? (
+                      <img src={avatar} alt="projeto" className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-500">
+                        <FolderKanban className="h-7 w-7 text-white" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                      <Camera className="h-4 w-4 text-white" />
+                      <span className="text-[9px] text-white/90 font-medium mt-0.5">{avatar ? "Editar" : "Foto"}</span>
+                    </div>
+                  </button>
 
-          {/* Tabs */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <Tabs defaultValue="descricao" className="w-full flex flex-col h-full">
-              <TabsList className="w-full justify-start rounded-none border-b bg-gradient-to-r from-gray-50 to-gray-100 h-auto p-0 px-6 shrink-0 flex gap-0 overflow-x-auto">
-                <TabsTrigger
-                  value="dashboard"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[7]"
+                  {/* Project Info */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-white font-bold text-base truncate">{project?.name || "Novo Projeto"}</h2>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-white/70 text-xs flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {mockData.agencia}
+                      </span>
+                      <span className="text-white/70 text-xs flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {mockData.cliente}
+                      </span>
+                      <span className="text-white/70 text-xs flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {mockData.dataCriacao}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+
+            {/* Header color picker */}
+            {showColorPicker && (
+              <>
+                <div className="absolute inset-0 z-40" onClick={() => setShowColorPicker(false)} />
+                <div
+                  className="absolute z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4"
+                  style={{ top: 108, right: 16, width: 300 }}
                 >
-                  <span className="skew-x-12 block">Dashboard</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="descricao"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[6]"
-                >
-                  <span className="skew-x-12 block">Descrição</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="produtos"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[5]"
-                >
-                  <span className="skew-x-12 block">Produtos</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="arquivos"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[4]"
-                >
-                  <span className="skew-x-12 block">Arquivos</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="cofre"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[3]"
-                >
-                  <span className="skew-x-12 block">Cofre</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="tarefas"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[2]"
-                >
-                  <span className="skew-x-12 block">Tarefas</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="faturamento"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 -mr-3 z-[1]"
-                >
-                  <span className="skew-x-12 block">Faturamento</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="pagamento"
-                  className="relative px-4 py-3 text-sm font-semibold transition-all duration-300 border-0 rounded-t-xl -skew-x-12 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:via-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 data-[state=active]:scale-105 data-[state=active]:-translate-y-0.5 bg-gray-300 text-gray-600 hover:bg-gray-400 hover:text-gray-800 z-[0]"
-                >
-                  <span className="skew-x-12 block">Formas de Pagamento</span>
-                </TabsTrigger>
-              </TabsList>
+                  <p className="text-xs font-semibold text-gray-700 mb-3">Cor do cabeçalho</p>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    {HEADER_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        title={preset.label}
+                        onClick={() => { setHeaderBg(preset.value); setShowColorPicker(false) }}
+                        className={`relative h-10 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${
+                          headerBg === preset.value ? "border-blue-500 ring-2 ring-blue-300" : "border-transparent"
+                        }`}
+                        style={{ background: preset.preview }}
+                      >
+                        {!preset.value && (
+                          <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow">
+                            Padrão
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-100 pt-3 flex items-center gap-2">
+                    <label className="text-xs text-gray-500 flex-shrink-0">Cor sólida:</label>
+                    <input
+                      type="color"
+                      value={customHeaderColor}
+                      onChange={(e) => setCustomHeaderColor(e.target.value)}
+                      className="h-7 w-10 rounded border border-gray-200 cursor-pointer"
+                    />
+                    <button
+                      onClick={() => { setHeaderBg(customHeaderColor); setShowColorPicker(false) }}
+                      className="flex-1 px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 font-medium transition-colors"
+                    >
+                      Aplicar
+                    </button>
+                    {headerBg && (
+                      <button
+                        onClick={() => { setHeaderBg(null); setShowColorPicker(false) }}
+                        className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-xs text-red-600 font-medium transition-colors"
+                      >
+                        Resetar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Avatar menu */}
+            {showAvatarMenu && avatar && (
+              <>
+                <div className="absolute inset-0 z-40" onClick={() => setShowAvatarMenu(false)} />
+                <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 22 }}>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setTimeout(() => fileInputRef.current?.click(), 10) }}
+                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-gray-400" />
+                    Nova foto
+                  </button>
+                  {originalRawSrc && (
+                    <button
+                      onClick={() => { setShowAvatarMenu(false); setRawImageSrc(originalRawSrc); setCropZoom(1); setCropOffset({ x: 0, y: 0 }); setCropOpen(true) }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                      Reposicionar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setAvatar(null); setOriginalRawSrc(null) }}
+                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remover foto
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Crop overlay */}
+            {cropOpen && rawImageSrc && (
+              <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
+                <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
+                  <p className="text-white text-sm font-semibold">Ajustar foto do projeto</p>
+                  <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · use o zoom para ajustar</p>
+                </div>
+                <div className="flex-1 flex items-center justify-center overflow-hidden">
+                  <div
+                    className="relative flex-shrink-0"
+                    style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                    onMouseDown={(e) => { setIsDraggingCrop(true); setDragStart({ x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y }) }}
+                    onMouseMove={(e) => { if (!isDraggingCrop) return; setCropOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }) }}
+                    onMouseUp={() => setIsDraggingCrop(false)}
+                    onMouseLeave={() => setIsDraggingCrop(false)}
+                  >
+                    <img ref={cropImgRef} src={rawImageSrc} alt="crop" draggable={false}
+                      style={{ transform: `translate(${cropOffset.x}px,${cropOffset.y}px) scale(${cropZoom})`, transformOrigin: "center", userSelect: "none", width: "100%", height: "100%", objectFit: "contain", opacity: 0.35 }}
+                    />
+                    <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)`, pointerEvents: "none" }}>
+                      <img src={rawImageSrc} alt="crop-bright" draggable={false}
+                        style={{ transform: `translate(${cropOffset.x}px,${cropOffset.y}px) scale(${cropZoom})`, transformOrigin: "center", userSelect: "none", width: "100%", height: "100%", objectFit: "contain" }}
+                      />
+                    </div>
+                    <div className="absolute inset-0 rounded-full border-2 border-white/60 pointer-events-none" style={{ borderRadius: "50%" }} />
+                  </div>
+                </div>
+                <div className="flex-shrink-0 px-6 pb-3 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Camera className="h-4 w-4 text-white/60 flex-shrink-0" />
+                    <input type="range" min={0.1} max={3} step={0.01} value={cropZoom} onChange={(e) => setCropZoom(parseFloat(e.target.value))} className="flex-1 accent-white" />
+                    <button onClick={() => setCropOffset({ x: 0, y: 0 })} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0" title="Centralizar">
+                      <Crosshair className="h-4 w-4 text-white" />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 h-9 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10 transition-colors">Cancelar</button>
+                    <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 transition-colors">Usar esta foto</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tabs + Content */}
+            <div className="flex-1 flex flex-col bg-white overflow-hidden">
+            <Tabs defaultValue="dashboard" className="w-full flex flex-col h-full">
+              <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+                <TabsList className="grid w-max grid-cols-8 gap-1 bg-transparent p-0 h-auto">
+                  <TabsTrigger value="dashboard" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger value="descricao" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Descrição
+                  </TabsTrigger>
+                  <TabsTrigger value="produtos" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Produtos
+                  </TabsTrigger>
+                  <TabsTrigger value="arquivos" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Arquivos
+                  </TabsTrigger>
+                  <TabsTrigger value="cofre" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Cofre
+                  </TabsTrigger>
+                  <TabsTrigger value="tarefas" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Tarefas
+                  </TabsTrigger>
+                  <TabsTrigger value="faturamento" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Faturamento
+                  </TabsTrigger>
+                  <TabsTrigger value="pagamento" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Pagamento
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="dashboard" className="p-6 m-0 flex-1 overflow-y-auto">
                 <div className="space-y-6">
@@ -3033,6 +3268,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                 </div>
               </TabsContent>
             </Tabs>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
@@ -3041,7 +3277,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       <Sheet open={open && mode === "edit"} onOpenChange={onOpenChange}>
         <SheetContent
           side="right"
-          className="left-64 w-[calc(100vw-16rem)] sm:max-w-[calc(100vw-16rem)] h-full p-0 flex flex-col gap-0 overflow-hidden"
+          hideOverlay={true}
+          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden"
+          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
         >
           {/* Edit Header */}
           <SheetHeader className="px-6 py-4 border-b bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 shrink-0">

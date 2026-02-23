@@ -1,5 +1,5 @@
 
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair, Settings2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -17,6 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { useState, useRef, useCallback } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
 
@@ -188,6 +189,16 @@ const timelineData = [
   { day: "Dom", hours: 0.5 },
 ]
 
+type UserColKey = "usuario" | "email" | "status" | "perfil" | "acoes"
+const USER_COLS: { key: UserColKey; label: string; required?: boolean }[] = [
+  { key: "usuario", label: "Usuário",              required: true },
+  { key: "email",   label: "E-mail" },
+  { key: "status",  label: "Status" },
+  { key: "perfil",  label: "Perfil · Último acesso" },
+  { key: "acoes",   label: "Ações",               required: true },
+]
+const USER_COL_DEFAULTS: Record<UserColKey, number> = { usuario: 210, email: 210, status: 115, perfil: 190, acoes: 72 }
+
 export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersTabProps) {
   const { sidebarWidth } = useSidebar()
   const [userList, setUserList] = useState<UserListItem[]>(users || DEFAULT_USERS)
@@ -333,7 +344,32 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
 
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  
+
+  // Column visibility & resize
+  const [visibleCols, setVisibleCols] = useState<Set<UserColKey>>(new Set(["usuario","email","status","perfil","acoes"]))
+  const [colWidths, setColWidths] = useState<Record<UserColKey, number>>(USER_COL_DEFAULTS)
+  const resizingRef = useRef<{ col: UserColKey; startX: number; startW: number } | null>(null)
+  const handleResizeStart = (col: UserColKey, e: React.MouseEvent) => {
+    e.preventDefault()
+    resizingRef.current = { col, startX: e.clientX, startW: colWidths[col] }
+    const onMove = (mv: MouseEvent) => {
+      if (!resizingRef.current) return
+      const delta = mv.clientX - resizingRef.current.startX
+      setColWidths(prev => ({ ...prev, [resizingRef.current!.col]: Math.max(60, resizingRef.current!.startW + delta) }))
+    }
+    const onUp = () => { resizingRef.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp) }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+  const toggleUserCol = (key: UserColKey) => {
+    setVisibleCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key) && !USER_COLS.find(c => c.key === key)?.required) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     action: null as "block" | "delete" | null,
@@ -794,18 +830,71 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            {/* Column config */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex-shrink-0">
+                  <Settings2 className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={8} className="w-[180px] p-2">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Colunas visíveis</p>
+                {USER_COLS.filter(c => !c.required).map(col => (
+                  <button
+                    key={col.key}
+                    onClick={() => toggleUserCol(col.key)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-slate-50 transition-colors"
+                  >
+                    <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center flex-shrink-0 ${visibleCols.has(col.key) ? "bg-blue-500 border-blue-500" : "border-slate-300"}`}>
+                      {visibleCols.has(col.key) && <svg viewBox="0 0 10 10" className="h-2 w-2"><polyline points="1.5,5.5 4,7.5 8.5,2.5" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </div>
+                    <span className="text-xs text-slate-700">{col.label}</span>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-sm" style={{ tableLayout: "fixed", width: "100%" }}>
+              <colgroup>
+                {visibleCols.has("usuario") && <col style={{ width: colWidths.usuario }} />}
+                {visibleCols.has("email")   && <col style={{ width: colWidths.email   }} />}
+                {visibleCols.has("status")  && <col style={{ width: colWidths.status  }} />}
+                {visibleCols.has("perfil")  && <col style={{ width: colWidths.perfil  }} />}
+                {visibleCols.has("acoes")   && <col style={{ width: colWidths.acoes   }} />}
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200/60">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Usuário</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">E-mail</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Perfil · Último acesso</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
+                  {visibleCols.has("usuario") && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-r border-slate-200/50 relative">
+                      Usuário
+                      <div onMouseDown={(e) => handleResizeStart("usuario", e)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity" />
+                    </th>
+                  )}
+                  {visibleCols.has("email") && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-r border-slate-200/50 relative">
+                      E-mail
+                      <div onMouseDown={(e) => handleResizeStart("email", e)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity" />
+                    </th>
+                  )}
+                  {visibleCols.has("status") && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-r border-slate-200/50 relative">
+                      Status
+                      <div onMouseDown={(e) => handleResizeStart("status", e)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity" />
+                    </th>
+                  )}
+                  {visibleCols.has("perfil") && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-r border-slate-200/50 relative">
+                      Perfil · Último acesso
+                      <div onMouseDown={(e) => handleResizeStart("perfil", e)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity" />
+                    </th>
+                  )}
+                  {visibleCols.has("acoes") && (
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -815,8 +904,8 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                       key={user.id}
                       className="group hover:bg-slate-50 transition-colors cursor-pointer"
                     >
-                      {/* Usuário */}
-                      <td className="px-4 py-3.5">
+                      {visibleCols.has("usuario") && (
+                      <td className="px-4 py-3.5 border-r border-slate-100">
                         <div className="flex items-center gap-3">
                           <div className="relative shrink-0">
                             <Avatar className="h-9 w-9">
@@ -828,24 +917,24 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                             <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${user.status === "online" ? "bg-green-500" : "bg-slate-300"}`} />
                           </div>
                           <div>
-                            <p className="font-semibold text-sm text-slate-900">{user.name}</p>
+                            <p className="font-semibold text-xs text-slate-900">{user.name}</p>
                             {user.isBlocked && (
                               <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 mt-0.5">Bloqueado</Badge>
                             )}
                           </div>
                         </div>
                       </td>
-
-                      {/* E-mail */}
-                      <td className="px-4 py-3.5">
+                      )}
+                      {visibleCols.has("email") && (
+                      <td className="px-4 py-3.5 border-r border-slate-100">
                         <div className="flex items-center gap-1.5">
                           <Mail className="h-3 w-3 text-slate-400 flex-shrink-0" />
                           <span className="text-xs text-slate-600 truncate max-w-[160px]">{user.email}</span>
                         </div>
                       </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3.5">
+                      )}
+                      {visibleCols.has("status") && (
+                      <td className="px-4 py-3.5 border-r border-slate-100">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                             user.isBlocked
@@ -865,9 +954,9 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                           {user.isBlocked ? "Bloqueado" : user.status === "online" ? "Online" : "Offline"}
                         </span>
                       </td>
-
-                      {/* Perfil + Último acesso */}
-                      <td className="px-4 py-3.5">
+                      )}
+                      {visibleCols.has("perfil") && (
+                      <td className="px-4 py-3.5 border-r border-slate-100">
                         <div className="space-y-1">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
                             user.profile === "Administrador"
@@ -881,18 +970,18 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                           <p className="text-xs text-slate-400 pl-0.5">{user.lastAccess}</p>
                         </div>
                       </td>
-
-                      {/* Ações */}
+                      )}
+                      {visibleCols.has("acoes") && (
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-0">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost" size="sm"
-                                className="h-8 w-8 p-0 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
                                 onClick={() => handleViewDetails(user)}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-2.5 w-2.5" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">Ver detalhes</TooltipContent>
@@ -901,14 +990,14 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost" size="sm"
-                                className={`h-8 w-8 p-0 rounded-lg ${
+                                className={`h-5 w-5 p-0 rounded ${
                                   user.isBlocked
                                     ? "text-red-400 hover:text-red-600 hover:bg-red-50"
                                     : "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
                                 }`}
                                 onClick={(e) => handleBlockToggle(user.id, e)}
                               >
-                                {user.isBlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                {user.isBlocked ? <Unlock className="h-2.5 w-2.5" /> : <Lock className="h-2.5 w-2.5" />}
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">{user.isBlocked ? "Desbloquear" : "Bloquear"}</TooltipContent>
@@ -917,21 +1006,22 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost" size="sm"
-                                className="h-8 w-8 p-0 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"
+                                className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
                                 onClick={(e) => handleDeleteUser(user.id, e)}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-2.5 w-2.5" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">Excluir</TooltipContent>
                           </Tooltip>
                         </div>
                       </td>
+                      )}
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center">
+                    <td colSpan={visibleCols.size} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
                           <Shield className="h-6 w-6 opacity-40" />
