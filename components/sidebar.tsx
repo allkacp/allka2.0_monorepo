@@ -447,15 +447,15 @@ export function Sidebar() {
             !appliedTheme.backgroundColor.includes("custom-gradient:") &&
             appliedTheme.backgroundColor !== "bg-slate-900" &&
             appliedTheme.backgroundColor,
-          collapsed ? "w-16" : "w-64",
+          collapsed ? "w-16" : "w-52",
         )}
         style={getSidebarStyle()}
       >
         <div className={cn(
           "relative flex items-center border-b border-white/10 backdrop-blur-sm transition-all duration-300 group",
-          collapsed ? "justify-center py-1 px-4 flex-col" : "justify-between p-4 flex-row"
+          collapsed ? "justify-center py-1 px-3 flex-col" : "justify-between px-2 py-2 flex-row"
         )}>
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center">
             {collapsed ? (
               <>
                 <img
@@ -482,7 +482,7 @@ export function Sidebar() {
             )}
           </div>
           {!collapsed && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0">
               <Button
                 variant="ghost"
                 size="sm"
@@ -524,7 +524,7 @@ export function Sidebar() {
         </div>
 
         {accountType === "agencias" && !collapsed && (
-          <div className="relative px-4 py-3 border-b border-white/10 backdrop-blur-sm">
+          <div className="relative px-2 py-2 border-b border-white/10 backdrop-blur-sm">
             <button
               onClick={() => setAgencyModalOpen(true)}
               className="w-full group relative overflow-hidden rounded-xl bg-white/10 hover:bg-white/15 transition-all duration-300 p-3 border border-white/10 hover:border-white/20"
@@ -542,7 +542,7 @@ export function Sidebar() {
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-white truncate group-hover:text-blue-100 transition-colors">
+                  <p className="text-xs font-semibold text-white truncate group-hover:text-blue-100 transition-colors">
                     {agencyProfile.name}
                   </p>
                   <Badge className="mt-1 bg-white/20 hover:bg-white/25 text-white border-white/20 text-xs px-2 py-0.5 transition-colors">
@@ -557,7 +557,7 @@ export function Sidebar() {
         <nav
           ref={navRef}
           className={cn(
-            "relative flex-1 px-3 py-4 space-y-1 backdrop-blur-sm overflow-y-auto sidebar-scrollbar scroll-fade-top scroll-fade-bottom",
+            "relative flex-1 px-2 py-4 space-y-1 backdrop-blur-sm overflow-y-auto sidebar-scrollbar scroll-fade-top scroll-fade-bottom",
             isScrolled && "scrolled",
             hasMoreContent && "has-more",
           )}
@@ -591,7 +591,7 @@ export function Sidebar() {
                           <TooltipTrigger asChild>
                             <button
                               className={cn(
-                                "w-full flex items-center justify-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                                "w-full flex items-center justify-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200",
                                 hasActiveSubitem
                                   ? "bg-white/20 text-white shadow-lg backdrop-blur-sm"
                                   : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -611,7 +611,7 @@ export function Sidebar() {
                       sideOffset={8}
                     >
                       <div className="space-y-1">
-                        <div className="px-3 py-2 text-sm font-semibold text-white/90 border-b border-white/10 mb-2">
+                        <div className="px-3 py-2 text-xs font-semibold text-white/90 border-b border-white/10 mb-2">
                           {item.name}
                         </div>
                         {item.subitems.map((subitem: any) => {
@@ -622,7 +622,7 @@ export function Sidebar() {
                               to={subitem.href}
                               onClick={() => setOpenPopover(null)}
                               className={cn(
-                                "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200",
                                 isActive
                                   ? "bg-white/15 text-white shadow-md"
                                   : "text-white/70 hover:bg-white/10 hover:text-white",
@@ -661,7 +661,7 @@ export function Sidebar() {
                   <button
                     onClick={() => toggleExpanded(item.name)}
                     className={cn(
-                      "w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+                      "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                       hasActiveSubitem
                         ? "bg-white/20 text-white shadow-lg backdrop-blur-sm"
                         : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -669,9 +669,9 @@ export function Sidebar() {
                   >
                     <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
                     <item.icon className="h-5 w-5 mr-3" />
-                    <span className="flex-1 truncate text-left">{item.name}</span>
+                    <span className="truncate text-left mr-1">{item.name}</span>
                     <ChevronDown
-                      className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "transform rotate-180")}
+                      className={cn("h-4 w-4 shrink-0 transition-transform duration-200", isExpanded && "transform rotate-180")}
                     />
                   </button>
 
@@ -698,7 +698,7 @@ export function Sidebar() {
                           >
                             <Link to={subitem.href}
                               className={cn(
-                                "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
+                                "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
                                 isActive
                                   ? "bg-white/15 text-white shadow-md backdrop-blur-sm"
                                   : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -741,7 +741,7 @@ export function Sidebar() {
                   <TooltipTrigger asChild>
                     <Link to={item.href}
                       className={cn(
-                        "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+                        "flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                         isActive
                           ? "bg-white/20 text-white shadow-lg backdrop-blur-sm"
                           : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -783,7 +783,7 @@ export function Sidebar() {
         </nav>
 
         {!collapsed && (
-          <div className="relative px-4 pb-4 backdrop-blur-sm">
+          <div className="relative px-2 pb-3 backdrop-blur-sm">
             <Button
               onClick={() => setRegistrationOpen(true)}
               className="w-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-all duration-200"

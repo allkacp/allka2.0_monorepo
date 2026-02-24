@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
@@ -432,6 +433,37 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
             )
           })()}
 
+          {/* Column config */}
+          <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={`flex items-center justify-center h-7 w-7 rounded-md border transition-colors flex-shrink-0 ${
+                  colConfigOpen
+                    ? "bg-blue-100 text-blue-600 border-blue-200"
+                    : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-100"
+                }`}
+                title="Configurar colunas"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={8} className="w-[220px] p-0">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <p className="text-xs font-semibold text-slate-700">Colunas visíveis</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Todas as colunas estão ativas</p>
+              </div>
+              <div className="p-2 space-y-0.5">
+                {["Projeto · Tipo", "Progresso", "Orçamento", "Prazo", "Ações"].map(col => (
+                  <label key={col} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-50 cursor-default">
+                    <Checkbox checked disabled className="h-4 w-4" />
+                    <span className="text-xs font-medium text-slate-700">{col}</span>
+                    <span className="text-[9px] text-slate-400 ml-auto">obrigatória</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
           {/* Pagination */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
@@ -465,42 +497,6 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                 <th className="py-3 px-5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Orçamento</th>
                 <th className="py-3 px-5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider w-32" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Prazo</th>
                 <th className="py-3 px-5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
-                {/* Column config button */}
-                <th
-                  className="py-3 select-none sticky right-0 bg-white z-10"
-                  style={{ width: 36, borderLeft: "1px solid rgba(148,163,184,0.25)" }}
-                >
-                  <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className={`mx-auto flex items-center justify-center h-6 w-6 rounded-md transition-colors ${
-                          colConfigOpen
-                            ? "bg-blue-100 text-blue-600"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        }`}
-                        title="Configurar colunas"
-                      >
-                        <Settings2 className="h-3.5 w-3.5" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" sideOffset={8} className="w-[220px] p-0">
-                      <div className="px-4 py-3 border-b border-slate-100">
-                        <p className="text-xs font-semibold text-slate-700">Colunas visíveis</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Todas as colunas estão ativas</p>
-                      </div>
-                      <div className="px-4 py-3 space-y-2">
-                        {["Projeto · Tipo", "Progresso", "Orçamento", "Prazo", "Ações"].map(col => (
-                          <div key={col} className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded flex items-center justify-center bg-blue-500 border-blue-500 border-2">
-                              <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-[2]"><path d="M1 4l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                            </div>
-                            <span className="text-xs text-slate-600">{col}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -592,14 +588,13 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                           </button>
                         </div>
                       </td>
-                      {/* sticky empty col for column config */}
-                      <td className="sticky right-0 bg-white group-hover:bg-slate-50 transition-colors" style={{ borderLeft: "1px solid rgba(148,163,184,0.15)" }} />
+
                     </tr>
 
                     {/* Expanded row */}
                     {isExpanded && (
                       <tr key={`${project.id}-expanded`}>
-                        <td colSpan={6} className="bg-slate-50/80 px-5 py-4 border-b border-slate-100">
+                        <td colSpan={5} className="bg-slate-50/80 px-5 py-4 border-b border-slate-100">
                           <div className="grid grid-cols-3 gap-x-8 gap-y-3 text-xs mb-3">
                             <div>
                               <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-0.5">Checkout Agência</p>

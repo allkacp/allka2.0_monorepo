@@ -1434,6 +1434,60 @@ export default function EmpresasPage() {
             Filtros
           </Button>
 
+          {/* Column config */}
+          <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={`flex items-center justify-center h-7 w-7 rounded-md border transition-colors flex-shrink-0 ${
+                  colConfigOpen
+                    ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
+                    : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                }`}
+                title="Configurar colunas"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={8} className="w-[260px] p-0">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Colunas visíveis</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Selecione quais colunas exibir na tabela</p>
+              </div>
+              <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
+                {allColumns.map(col => (
+                  <label
+                    key={col.key}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                      visibleCols.has(col.key)
+                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                    } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
+                  >
+                    <Checkbox
+                      checked={visibleCols.has(col.key)}
+                      onCheckedChange={() => !col.required && toggleCol(col.key)}
+                      disabled={col.required}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.label}</span>
+                    {col.required && <span className="text-[9px] text-slate-400 ml-auto">obrigatória</span>}
+                  </label>
+                ))}
+              </div>
+              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                <button
+                  onClick={() => setVisibleCols(new Set(allColumns.map(c => c.key)))}
+                  className="text-[10px] font-medium text-blue-500 hover:text-blue-700 transition-colors"
+                >
+                  Mostrar todas
+                </button>
+                <span className="text-[10px] text-slate-400">
+                  {visibleCols.size} de {allColumns.length}
+                </span>
+              </div>
+            </PopoverContent>
+          </Popover>
+
           {/* Pagination */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <button
@@ -1472,7 +1526,7 @@ export default function EmpresasPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="text-sm" style={{ tableLayout: "fixed", width: "100%", minWidth: colWidths.reduce((a, b) => a + b, 0) + 36 }}>
+          <table className="text-sm" style={{ tableLayout: "fixed", width: "100%", minWidth: colWidths.reduce((a, b) => a + b, 0) }}>
             <colgroup>
               {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
               <col style={{ width: 36 }} />
@@ -1503,64 +1557,7 @@ export default function EmpresasPage() {
                     )}
                   </th>
                 ))}
-                {/* Column config button */}
-                <th
-                  className="py-3 select-none sticky right-0 bg-white dark:bg-slate-900 z-10"
-                  style={{ width: 36, borderLeft: "1px solid rgba(148,163,184,0.25)" }}
-                >
-                  <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className={`mx-auto flex items-center justify-center h-6 w-6 rounded-md transition-colors ${
-                          colConfigOpen
-                            ? "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        }`}
-                        title="Configurar colunas"
-                      >
-                        <Settings2 className="h-3.5 w-3.5" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" sideOffset={8} className="w-[260px] p-0">
-                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Colunas visíveis</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Selecione quais colunas exibir na tabela</p>
-                      </div>
-                      <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
-                        {allColumns.map(col => (
-                          <label
-                            key={col.key}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                              visibleCols.has(col.key)
-                                ? "bg-blue-50 dark:bg-blue-900/20"
-                                : "hover:bg-slate-50 dark:hover:bg-slate-800"
-                            } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
-                          >
-                            <Checkbox
-                              checked={visibleCols.has(col.key)}
-                              onCheckedChange={() => !col.required && toggleCol(col.key)}
-                              disabled={col.required}
-                              className="h-4 w-4"
-                            />
-                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.label}</span>
-                            {col.required && <span className="text-[9px] text-slate-400 ml-auto">obrigatória</span>}
-                          </label>
-                        ))}
-                      </div>
-                      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                        <button
-                          onClick={() => setVisibleCols(new Set(allColumns.map(c => c.key)))}
-                          className="text-[10px] font-medium text-blue-500 hover:text-blue-700 transition-colors"
-                        >
-                          Mostrar todas
-                        </button>
-                        <span className="text-[10px] text-slate-400">
-                          {visibleCols.size} de {allColumns.length}
-                        </span>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </th>
+
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1744,8 +1741,7 @@ export default function EmpresasPage() {
                     </div>
                   </td>
                   )}
-                  {/* extra td for config column */}
-                  <td className="sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-700/50 transition-colors" style={{ borderLeft: "1px solid rgba(148,163,184,0.15)" }} />
+
                 </tr>
               ))}
             </tbody>
