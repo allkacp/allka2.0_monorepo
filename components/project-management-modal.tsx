@@ -7,6 +7,7 @@ import React from "react"
 
 import { useState, useRef } from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -217,6 +218,8 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [dadosProjOpenAccordions, setDadosProjOpenAccordions] = useState<string[]>(["info"])
   const [isDadosProjEditMode, setIsDadosProjEditMode] = useState(false)
   const [isSavingDados, setIsSavingDados] = useState(false)
+  const [showDadosProjSaveConfirm, setShowDadosProjSaveConfirm] = useState(false)
+  const [showDadosProjCancelConfirm, setShowDadosProjCancelConfirm] = useState(false)
   const [dadosProjForm, setDadosProjForm] = useState({
     situacao: "AGUARDANDO PAGAMENTO",
     agencia: "Lamego Academy",
@@ -2015,11 +2018,11 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         </Button>
                       ) : (
                         <div className="flex gap-2">
-                          <Button onClick={handleDadosProjSave} size="sm" disabled={isSavingDados} className="bg-emerald-600 hover:bg-emerald-700">
+                          <Button onClick={() => setShowDadosProjSaveConfirm(true)} size="sm" disabled={isSavingDados} className="bg-emerald-600 hover:bg-emerald-700">
                             {isSavingDados ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                             {isSavingDados ? "Salvando..." : "Salvar"}
                           </Button>
-                          <Button onClick={() => setIsDadosProjEditMode(false)} size="sm" variant="outline">
+                          <Button onClick={() => setShowDadosProjCancelConfirm(true)} size="sm" variant="outline">
                             <XCircle className="h-4 w-4 mr-2" />
                             Cancelar
                           </Button>
@@ -4326,6 +4329,30 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Dados do Projeto — save confirmation */}
+      <ConfirmationDialog
+        open={showDadosProjSaveConfirm}
+        onClose={() => setShowDadosProjSaveConfirm(false)}
+        onConfirm={handleDadosProjSave}
+        title="Salvar alterações?"
+        message={<>Tem certeza que deseja salvar as alterações nos dados do projeto? Esta ação irá atualizar as informações.</>}
+        confirmText="Sim, salvar"
+        cancelText="Voltar edição"
+        destructive={false}
+      />
+
+      {/* Dados do Projeto — cancel confirmation */}
+      <ConfirmationDialog
+        open={showDadosProjCancelConfirm}
+        onClose={() => setShowDadosProjCancelConfirm(false)}
+        onConfirm={() => { setIsDadosProjEditMode(false); setShowDadosProjCancelConfirm(false) }}
+        title="Descartar alterações?"
+        message={<>Tem certeza que deseja cancelar? Todas as alterações nos dados do projeto serão descartadas.</>}
+        confirmText="Sim, descartar"
+        cancelText="Voltar edição"
+        destructive={true}
+      />
     </>
   )
 }
