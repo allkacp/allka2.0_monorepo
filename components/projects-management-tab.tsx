@@ -496,11 +496,11 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                 <th className="py-3 px-5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-36" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Progresso</th>
                 <th className="py-3 px-5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Orçamento</th>
                 <th className="py-3 px-5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider w-32" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Prazo</th>
-                <th className="py-3 px-5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
+                <th className="py-3 px-5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36 bg-white" style={{ position: "sticky", right: 0, zIndex: 2, borderLeft: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedProjects.map((project) => {
+              {paginatedProjects.map((project, rowIndex) => {
                 const st = STATUS_MAP[project.status] ?? { label: project.status, color: "bg-slate-100 text-slate-600", dot: "bg-slate-400" }
                 const isExpanded = expandedId === project.id
                 const isCanceled = project.status === "canceled"
@@ -508,7 +508,7 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                 return (
                   <>
                     <tr key={project.id}
-                      className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isCanceled ? "opacity-60" : ""}`}
+                      className={`group transition-colors cursor-pointer ${rowIndex % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"} ${isCanceled ? "opacity-60" : ""}`}
                       onClick={() => setExpandedId(isExpanded ? null : project.id)}
                     >
                       {/* Projeto · Tipo */}
@@ -558,7 +558,7 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                       </td>
 
                       {/* Ações */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td className="px-5 py-3.5" style={{ position: "sticky", right: 0, zIndex: 1, background: rowIndex % 2 === 0 ? "#ffffff" : "#f1f4f8", borderLeft: "1px solid rgba(148,163,184,0.25)" }}>
                         <div className="flex items-center justify-end gap-0" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => handleViewProject(project)} title="Visualizar"
                             className="h-7 w-6 rounded-md flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-100 transition-colors">

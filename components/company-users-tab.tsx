@@ -916,16 +916,16 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                     </th>
                   )}
                   {visibleCols.has("acoes") && (
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider bg-white" style={{ position: "sticky", right: 0, zIndex: 2, borderLeft: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
                   )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedUsers.length > 0 ? (
-                  paginatedUsers.map((user) => (
+                  paginatedUsers.map((user, rowIndex) => (
                     <tr
                       key={user.id}
-                      className="group hover:bg-slate-50 transition-colors cursor-pointer"
+                      className={`group transition-colors cursor-pointer ${rowIndex % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"}`}
                     >
                       {visibleCols.has("usuario") && (
                       <td className="px-4 py-3.5 border-r border-slate-100">
@@ -995,7 +995,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                       </td>
                       )}
                       {visibleCols.has("acoes") && (
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5" style={{ position: "sticky", right: 0, zIndex: 1, background: rowIndex % 2 === 0 ? "#ffffff" : "#f1f4f8", borderLeft: "1px solid rgba(148,163,184,0.25)" }}>
                         <div className="flex items-center justify-end gap-0">
                           <Tooltip>
                             <TooltipTrigger asChild>

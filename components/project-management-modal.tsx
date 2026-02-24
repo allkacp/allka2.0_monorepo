@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import React from "react"
 
 import { useState, useRef } from "react"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +58,8 @@ import {
   LayoutGrid,
   Save,
   Trash,
+  XCircle,
+  Loader2,
   Camera,
   ZoomIn,
   Crosshair,
@@ -208,6 +211,30 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
 
   const [productSortBy, setProductSortBy] = useState<string>("nome")
+
+  // Dados do Projeto tab
+  const DADOS_PROJECT_ACCORDIONS = ["info", "descricao"]
+  const [dadosProjOpenAccordions, setDadosProjOpenAccordions] = useState<string[]>(["info"])
+  const [isDadosProjEditMode, setIsDadosProjEditMode] = useState(false)
+  const [isSavingDados, setIsSavingDados] = useState(false)
+  const [dadosProjForm, setDadosProjForm] = useState({
+    situacao: "AGUARDANDO PAGAMENTO",
+    agencia: "Lamego Academy",
+    consultor: "Equipe Lamego",
+    emailConsultor: "contato@lamego.com.vc",
+    cliente: "Florescer",
+    dataCriacao: "19/02/2025",
+    permitePortfolio: false,
+    sincronizadoBitrix: false,
+    descricao: "Projeto de hospedagem e cuidados para idosos da empresa Florescer. Inclui desenvolvimento de website institucional, sistema de gestão de pacientes, e materiais de marketing digital para divulgação dos serviços.",
+  })
+
+  const handleDadosProjSave = async () => {
+    setIsSavingDados(true)
+    await new Promise(r => setTimeout(r, 800))
+    setIsSavingDados(false)
+    setIsDadosProjEditMode(false)
+  }
   const [productSortOrder, setProductSortOrder] = useState<"asc" | "desc">("asc")
   const [productPercentageFilter, setProductPercentageFilter] = useState<string>("all")
   const [showProductFilters, setShowProductFilters] = useState(false)
@@ -1809,7 +1836,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                     Dashboard
                   </TabsTrigger>
                   <TabsTrigger value="descricao" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
-                    Descrição
+                    Dados do Projeto
                   </TabsTrigger>
                   <TabsTrigger value="produtos" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Produtos
@@ -1832,173 +1859,300 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                 </TabsList>
               </div>
 
-              <TabsContent value="dashboard" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-6">
-                  {/* Disclaimer/Summary */}
-                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6 shadow-sm">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shrink-0">
-                        <Activity className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-base font-semibold text-gray-900 mb-2">Status do Projeto</h3>
-                        <p className="text-sm text-gray-700 leading-relaxed">
-                          O projeto está em andamento com 75% das tarefas concluídas. Existem 3 tarefas aguardando
-                          aprovação que necessitam de atenção imediata. O desempenho geral está acima da média com
-                          excelente taxa de aprovação.
-                        </p>
-                      </div>
+              <TabsContent value="dashboard" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-100">
+                <div className="px-[50px] py-[25px] space-y-4">
+
+                  {/* Summary banner */}
+                  <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-700 mb-0.5">Status do Projeto</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        75% das tarefas concluídas · 3 aguardando aprovação · desempenho acima da média
+                      </p>
                     </div>
                   </div>
 
-                  {/* Widgets Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* KPI row – 4 compact stat cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Horas */}
+                    <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl px-4 py-3 text-white shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Horas</span>
+                        <Clock className="w-3.5 h-3.5 opacity-70" />
+                      </div>
+                      <p className="text-2xl font-bold leading-tight">247.5h</p>
+                      <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1"><TrendingUp className="w-3 h-3" />+12.5h esta semana</p>
+                    </div>
+                    {/* Tarefas */}
+                    <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl px-4 py-3 text-white shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Tarefas</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 opacity-70" />
+                      </div>
+                      <p className="text-2xl font-bold leading-tight">45<span className="text-base font-semibold opacity-70">/60</span></p>
+                      <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1"><TrendingUp className="w-3 h-3" />+5 esta semana</p>
+                    </div>
+                    {/* Nota */}
+                    <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl px-4 py-3 text-white shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Nota Média</span>
+                        <Star className="w-3.5 h-3.5 opacity-70" />
+                      </div>
+                      <p className="text-2xl font-bold leading-tight">4.8<span className="text-base font-semibold opacity-70">/5</span></p>
+                      <p className="text-[10px] opacity-75 mt-0.5">Excelente avaliação</p>
+                    </div>
+                    {/* Atenção */}
+                    <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl px-4 py-3 text-white shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Atenção</span>
+                        <AlertTriangle className="w-3.5 h-3.5 opacity-70" />
+                      </div>
+                      <p className="text-2xl font-bold leading-tight">3</p>
+                      <p className="text-[10px] opacity-75 mt-0.5">Tarefas críticas</p>
+                    </div>
+                  </div>
+
+                  {/* Middle row – task status + reprovação */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {/* Tarefas por Status */}
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold text-gray-900">Tarefas por Status</h4>
-                        <BarChart3 className="w-4 h-4 text-blue-500" />
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-slate-700">Tarefas por Status</p>
+                        <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
                       </div>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Concluídas</span>
-                          <span className="text-sm font-semibold text-green-600">45</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Em Andamento</span>
-                          <span className="text-sm font-semibold text-blue-600">8</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Aguardando</span>
-                          <span className="text-sm font-semibold text-amber-600">3</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Bloqueadas</span>
-                          <span className="text-sm font-semibold text-red-600">2</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Horas Dedicadas */}
-                    <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow text-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold">Horas Dedicadas</h4>
-                        <Clock className="w-4 h-4" />
-                      </div>
-                      <div className="mb-2">
-                        <div className="text-3xl font-bold">247.5h</div>
-                        <div className="text-xs opacity-90">Total registrado</div>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>+12.5h esta semana</span>
-                      </div>
-                    </div>
-
-                    {/* Tarefas Executadas */}
-                    <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow text-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold">Tarefas Executadas</h4>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className="mb-2">
-                        <div className="text-3xl font-bold">45/60</div>
-                        <div className="text-xs opacity-90">75% concluído</div>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>+5 esta semana</span>
-                      </div>
-                    </div>
-
-                    {/* Taxa de Reprovação */}
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold text-gray-900">Taxa de Reprovação</h4>
-                        <TrendingDown className="w-4 h-4 text-green-500" />
-                      </div>
-                      <div className="mb-2">
-                        <div className="text-3xl font-bold text-gray-900">8.5%</div>
-                        <div className="text-xs text-gray-600">Abaixo da média</div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
-                        <div className="bg-green-500 h-2 rounded-full" style={{ width: "8.5%" }}></div>
-                      </div>
-                    </div>
-
-                    {/* Nota Média */}
-                    <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow text-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold">Nota Média</h4>
-                        <Star className="w-4 h-4" />
-                      </div>
-                      <div className="mb-2">
-                        <div className="text-3xl font-bold">4.8/5.0</div>
-                        <div className="text-xs opacity-90">Excelente avaliação</div>
-                      </div>
-                      <div className="flex gap-1 mt-2">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`w-4 h-4 ${i < 5 ? "fill-white" : "fill-white/30"}`} />
+                      <div className="space-y-2.5">
+                        {[
+                          { label: "Concluídas", value: 45, total: 60, color: "bg-emerald-500", text: "text-emerald-600" },
+                          { label: "Em Andamento", value: 8, total: 60, color: "bg-blue-500", text: "text-blue-600" },
+                          { label: "Aguardando", value: 3, total: 60, color: "bg-amber-400", text: "text-amber-600" },
+                          { label: "Bloqueadas", value: 2, total: 60, color: "bg-red-500", text: "text-red-500" },
+                        ].map(s => (
+                          <div key={s.label}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] text-slate-500">{s.label}</span>
+                              <span className={`text-[11px] font-semibold ${s.text}`}>{s.value}</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5">
+                              <div className={`${s.color} h-1.5 rounded-full`} style={{ width: `${(s.value / s.total) * 100}%` }} />
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Tarefas que Necessitam Atenção */}
-                    <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow text-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold">Necessitam Atenção</h4>
-                        <AlertTriangle className="w-4 h-4" />
+                    {/* Taxa de Reprovação */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-slate-700">Taxa de Reprovação</p>
+                        <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />
                       </div>
-                      <div className="mb-2">
-                        <div className="text-3xl font-bold">3</div>
-                        <div className="text-xs opacity-90">Tarefas críticas</div>
+                      <div className="flex items-end gap-3 mb-3">
+                        <span className="text-3xl font-bold text-slate-800">8.5%</span>
+                        <span className="text-xs text-emerald-600 font-medium mb-1">Abaixo da média</span>
                       </div>
-                      <button className="mt-2 text-xs underline hover:no-underline">Ver detalhes</button>
+                      <div className="w-full bg-slate-100 rounded-full h-2">
+                        <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: "8.5%" }} />
+                      </div>
+                      <div className="flex justify-between mt-1.5">
+                        <span className="text-[10px] text-slate-400">0%</span>
+                        <span className="text-[10px] text-slate-400">Média: 15%</span>
+                        <span className="text-[10px] text-slate-400">100%</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Recent Activity */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Atividades Recentes</h4>
-                    <div className="space-y-3">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-700 mb-3">Atividades Recentes</p>
+                    <div className="space-y-1">
                       {[
                         { action: "Tarefa #45 concluída", time: "2h atrás", type: "success" },
                         { action: "Nova revisão solicitada na tarefa #38", time: "5h atrás", type: "warning" },
                         { action: "3 novas tarefas adicionadas", time: "1 dia atrás", type: "info" },
                         { action: "Aprovação pendente - Tarefa #42", time: "2 dias atrás", type: "warning" },
                       ].map((activity, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          <div
-                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                              activity.type === "success"
-                                ? "bg-green-500"
-                                : activity.type === "warning"
-                                  ? "bg-amber-500"
-                                  : "bg-blue-500"
-                            }`}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900">{activity.action}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{activity.time}</p>
-                          </div>
+                        <div key={idx} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${activity.type === "success" ? "bg-emerald-500" : activity.type === "warning" ? "bg-amber-400" : "bg-blue-500"}`} />
+                          <p className="flex-1 text-xs text-slate-700">{activity.action}</p>
+                          <p className="text-[10px] text-slate-400 whitespace-nowrap">{activity.time}</p>
                         </div>
                       ))}
                     </div>
                   </div>
+
                 </div>
               </TabsContent>
 
-              <TabsContent value="descricao" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-base font-semibold text-gray-900">Descrição do Projeto</h3>
-                    <div className="w-full p-5 border border-gray-200 rounded-lg text-sm bg-white leading-relaxed text-gray-700">
-                      {mockData.descricao}
+              <TabsContent value="descricao" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between pb-2">
+                    <h3 className="text-sm font-semibold text-slate-900">Dados do Projeto</h3>
+                    <div className="flex items-center gap-2">
+                      {/* Expandir toggle */}
+                      <button
+                        onClick={() => {
+                          const allOpen = DADOS_PROJECT_ACCORDIONS.every(a => dadosProjOpenAccordions.includes(a))
+                          setDadosProjOpenAccordions(allOpen ? [] : DADOS_PROJECT_ACCORDIONS)
+                        }}
+                        className="flex items-center gap-2 group"
+                      >
+                        <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                          {DADOS_PROJECT_ACCORDIONS.every(a => dadosProjOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                        </span>
+                        <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${DADOS_PROJECT_ACCORDIONS.every(a => dadosProjOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"}`}>
+                          <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${DADOS_PROJECT_ACCORDIONS.every(a => dadosProjOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </div>
+                      </button>
+                      {!isDadosProjEditMode ? (
+                        <Button onClick={() => setIsDadosProjEditMode(true)} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                          <Edit2 className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button onClick={handleDadosProjSave} size="sm" disabled={isSavingDados} className="bg-emerald-600 hover:bg-emerald-700">
+                            {isSavingDados ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                            {isSavingDados ? "Salvando..." : "Salvar"}
+                          </Button>
+                          <Button onClick={() => setIsDadosProjEditMode(false)} size="sm" variant="outline">
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancelar
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  <Accordion type="multiple" value={dadosProjOpenAccordions} onValueChange={setDadosProjOpenAccordions} className="space-y-2">
+
+                    {/* Informações do Projeto */}
+                    <AccordionItem value="info" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                      <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                        <div className="flex items-center gap-2">
+                          <FolderKanban className="h-4 w-4 text-blue-600" />
+                          <span className="font-semibold text-slate-800">Informações do Projeto</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Situação</p>
+                            {isDadosProjEditMode ? (
+                              <Select value={dadosProjForm.situacao} onValueChange={v => setDadosProjForm(f => ({ ...f, situacao: v }))}>
+                                <SelectTrigger className="h-8 text-sm border-slate-300"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="AGUARDANDO PAGAMENTO">Aguardando Pagamento</SelectItem>
+                                  <SelectItem value="EM ANDAMENTO">Em Andamento</SelectItem>
+                                  <SelectItem value="CONCLUÍDO">Concluído</SelectItem>
+                                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Agência</p>
+                            {isDadosProjEditMode ? (
+                              <Input value={dadosProjForm.agencia} onChange={e => setDadosProjForm(f => ({ ...f, agencia: e.target.value }))} className="h-8 text-sm border-slate-300" />
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.agencia}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Consultor Responsável</p>
+                            {isDadosProjEditMode ? (
+                              <Input value={dadosProjForm.consultor} onChange={e => setDadosProjForm(f => ({ ...f, consultor: e.target.value }))} className="h-8 text-sm border-slate-300" />
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.consultor}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">E-mail do Consultor</p>
+                            {isDadosProjEditMode ? (
+                              <Input value={dadosProjForm.emailConsultor} onChange={e => setDadosProjForm(f => ({ ...f, emailConsultor: e.target.value }))} className="h-8 text-sm border-slate-300" />
+                            ) : (
+                              <p className="text-sm font-semibold text-blue-600">{dadosProjForm.emailConsultor}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Cliente</p>
+                            {isDadosProjEditMode ? (
+                              <Input value={dadosProjForm.cliente} onChange={e => setDadosProjForm(f => ({ ...f, cliente: e.target.value }))} className="h-8 text-sm border-slate-300" />
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.cliente}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Data de Criação</p>
+                            {isDadosProjEditMode ? (
+                              <Input value={dadosProjForm.dataCriacao} onChange={e => setDadosProjForm(f => ({ ...f, dataCriacao: e.target.value }))} className="h-8 text-sm border-slate-300" />
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.dataCriacao}</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Permite Portfólio</p>
+                            {isDadosProjEditMode ? (
+                              <button
+                                onClick={() => setDadosProjForm(f => ({ ...f, permitePortfolio: !f.permitePortfolio }))}
+                                className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${dadosProjForm.permitePortfolio ? "bg-blue-600" : "bg-slate-300"}`}
+                              >
+                                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${dadosProjForm.permitePortfolio ? "translate-x-4" : "translate-x-0.5"}`} />
+                              </button>
+                            ) : (
+                              <p className={`text-sm font-semibold ${dadosProjForm.permitePortfolio ? "text-emerald-600" : "text-slate-400"}`}>
+                                {dadosProjForm.permitePortfolio ? "Permitido" : "Não permitido"}
+                              </p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Bitrix</p>
+                            {isDadosProjEditMode ? (
+                              <button
+                                onClick={() => setDadosProjForm(f => ({ ...f, sincronizadoBitrix: !f.sincronizadoBitrix }))}
+                                className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${dadosProjForm.sincronizadoBitrix ? "bg-blue-600" : "bg-slate-300"}`}
+                              >
+                                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${dadosProjForm.sincronizadoBitrix ? "translate-x-4" : "translate-x-0.5"}`} />
+                              </button>
+                            ) : (
+                              <p className={`text-sm font-semibold ${dadosProjForm.sincronizadoBitrix ? "text-emerald-600" : "text-slate-400"}`}>
+                                {dadosProjForm.sincronizadoBitrix ? "Sincronizado" : "Não sincronizado"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    {/* Descrição */}
+                    <AccordionItem value="descricao" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                      <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-violet-600" />
+                          <span className="font-semibold text-slate-800">Descrição</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                        {isDadosProjEditMode ? (
+                          <Textarea
+                            value={dadosProjForm.descricao}
+                            onChange={e => setDadosProjForm(f => ({ ...f, descricao: e.target.value }))}
+                            className="min-h-[120px] text-sm border-slate-300 bg-white"
+                            placeholder="Descreva o projeto..."
+                          />
+                        ) : (
+                          <p className="text-sm text-slate-700 leading-relaxed px-1">{dadosProjForm.descricao}</p>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+
+                  </Accordion>
                 </div>
               </TabsContent>
 

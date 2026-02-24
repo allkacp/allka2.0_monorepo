@@ -1529,20 +1529,20 @@ export default function EmpresasPage() {
           <table className="text-sm" style={{ tableLayout: "fixed", width: "100%", minWidth: colWidths.reduce((a, b) => a + b, 0) }}>
             <colgroup>
               {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
-              <col style={{ width: 36 }} />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
+                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white"
                     style={{
                       paddingLeft: 20,
                       paddingRight: 20,
                       textAlign: col.key === "acoes" ? "right" : "left",
-                      borderRight: "1px solid",
-                      borderRightColor: "rgba(148,163,184,0.25)",
+                      borderRight: col.key !== "acoes" ? "1px solid rgba(148,163,184,0.25)" : undefined,
+                      borderLeft: col.key === "acoes" ? "1px solid rgba(148,163,184,0.25)" : undefined,
+                      ...(col.key === "acoes" ? { position: "sticky", right: 0, zIndex: 2, background: "white" } : {}),
                     }}
                   >
                     {col.label}
@@ -1561,10 +1561,10 @@ export default function EmpresasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {paginatedCompanies.map((company) => (
+              {paginatedCompanies.map((company, rowIndex) => (
                 <tr
                   key={company.id}
-                  className="group hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                  className={`group transition-colors cursor-pointer ${rowIndex % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"} dark:hover:bg-slate-700/50`}
                 >
                   {/* Company */}
                   {visibleCols.has("empresa") && (
@@ -1706,7 +1706,16 @@ export default function EmpresasPage() {
 
                   {/* Actions */}
                   {visibleCols.has("acoes") && (
-                  <td className="px-5 py-3.5">
+                  <td
+                    className="px-5 py-3.5"
+                    style={{
+                      position: "sticky",
+                      right: 0,
+                      zIndex: 1,
+                      background: rowIndex % 2 === 0 ? "#ffffff" : "#f1f4f8",
+                      borderLeft: "1px solid rgba(148,163,184,0.25)",
+                    }}
+                  >
                     <div className="flex items-center justify-end gap-0">
                       <TooltipProvider>
                         <Tooltip>
