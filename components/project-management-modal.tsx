@@ -288,6 +288,16 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [taskSearchTerm, setTaskSearchTerm] = useState("")
   // Removed duplicate: const [showProductFilters, setShowProductFilters] = useState(false)
 
+  // Product tasks modal filters
+  const [productTaskSearchTerm, setProductTaskSearchTerm] = useState("")
+  const [productTaskStatusFilter, setProductTaskStatusFilter] = useState("all")
+  const [productTaskSortBy, setProductTaskSortBy] = useState("nome")
+  const [productTaskSortOrder, setProductTaskSortOrder] = useState<"asc" | "desc">("asc")
+  const [productTaskShowFilters, setProductTaskShowFilters] = useState(false)
+  const [productTaskViewMode, setProductTaskViewMode] = useState<"list" | "kanban">("list")
+  const [productTaskCurrentPage, setProductTaskCurrentPage] = useState(1)
+  const [productTaskPerPage, setProductTaskPerPage] = useState(10)
+
   // State for mock credentials, to allow updates
   const [mockCredentials, setMockCredentials] = useState<any[]>([
     {
@@ -3770,94 +3780,358 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto bg-slate-200">
-            <div className="px-[50px] pt-[25px] pb-[80px]">
-              {selectedProduct && (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      Tarefas do Produto
-                    </h3>
-                    <span className="text-xs text-slate-500">
-                      {selectedProduct.tarefas.length} tarefa{selectedProduct.tarefas.length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
+            <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+              {selectedProduct && (() => {
+                const allProdTasks: any[] = selectedProduct.tarefas || []
 
-                  {selectedProduct.tarefas.length > 0 ? (
+                // Stats
+                const ptStats = {
+                  total:     allProdTasks.length,
+                  execucao:  allProdTasks.filter((t: any) => t.status === "Em Execução").length,
+                  aprovada:  allProdTasks.filter((t: any) => t.status === "Aprovada").length,
+                  aprovacao: allProdTasks.filter((t: any) => t.status === "Para Aprovação").length,
+                  entregue:  allProdTasks.filter((t: any) => t.status === "Entregue").length,
+                  atrasada:  allProdTasks.filter((t: any) => t.status === "Atrasada").length,
+                }
+
+                // Filter + search
+                let filtered = allProdTasks.filter((t: any) => {
+                  const term = productTaskSearchTerm.toLowerCase()
+                  const uniqueId = String(selectedProduct.id * 1000 + t.id)
+                  const matchSearch = !term || t.nome?.toLowerCase().includes(term) || uniqueId.includes(term)
+                  const matchStatus = productTaskStatusFilter === "all" || t.status === productTaskStatusFilter
+                  return matchSearch && matchStatus
+                })
+
+                // Sort
+                filtered = [...filtered].sort((a: any, b: any) => {
+                  let cmp = 0
+                  if (productTaskSortBy === "nome") cmp = (a.nome || "").localeCompare(b.nome || "")
+                  else if (productTaskSortBy === "status") cmp = (a.status || "").localeCompare(b.status || "")
+                  else if (productTaskSortBy === "prazo") cmp = (a.prazo || "").localeCompare(b.prazo || "")
+                  return productTaskSortOrder === "asc" ? cmp : -cmp
+                })
+
+                const totalFiltered = filtered.length
+                const totalPtPages = Math.max(1, Math.ceil(totalFiltered / productTaskPerPage))
+                const safePage = Math.min(productTaskCurrentPage, totalPtPages)
+                const paginated = filtered.slice((safePage - 1) * productTaskPerPage, safePage * productTaskPerPage)
+
+                return (
+                  <>
+                    {/* ── Stats bar ── */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                        <div className="h-6 w-6 rounded-md bg-indigo-100 flex items-center justify-center">
+                          <CheckSquare className="h-3.5 w-3.5 text-indigo-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-slate-600">Total</span>
+                        <span className="text-sm font-bold text-slate-900">{ptStats.total}</span>
+                      </div>
+                      {ptStats.execucao > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Em Execução</span>
+                          <span className="text-sm font-bold text-blue-600">{ptStats.execucao}</span>
+                        </div>
+                      )}
+                      {ptStats.aprovada > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Aprovadas</span>
+                          <span className="text-sm font-bold text-emerald-600">{ptStats.aprovada}</span>
+                        </div>
+                      )}
+                      {ptStats.aprovacao > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Para Aprovação</span>
+                          <span className="text-sm font-bold text-amber-500">{ptStats.aprovacao}</span>
+                        </div>
+                      )}
+                      {ptStats.entregue > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-purple-500 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Entregues</span>
+                          <span className="text-sm font-bold text-purple-600">{ptStats.entregue}</span>
+                        </div>
+                      )}
+                      {ptStats.atrasada > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-red-400 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Atrasadas</span>
+                          <span className="text-sm font-bold text-red-500">{ptStats.atrasada}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Main card ── */}
                     <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
-                      {selectedProduct.tarefas.map((tarefa: any, index: number) => {
-                        const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
-                        const isOverdue = tarefa.status === "Atrasada"
 
-                        return (
-                          <div
-                            key={uniqueTaskId}
-                            className={`flex items-center gap-4 px-5 py-3 hover:brightness-95 transition-all ${
-                              index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                      {/* ── Top bar ── */}
+                      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+                        {/* Search */}
+                        <div className="flex-1 relative min-w-0">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Buscar tarefa ou ID..."
+                            value={productTaskSearchTerm}
+                            onChange={(e) => { setProductTaskSearchTerm(e.target.value); setProductTaskCurrentPage(1) }}
+                            className="w-full pl-9 pr-3 h-9 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                          />
+                        </div>
+
+                        {/* Lista / Kanban toggle */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-shrink-0">
+                          <button
+                            onClick={() => setProductTaskViewMode("list")}
+                            className={`flex items-center gap-1.5 h-9 px-3 text-xs font-medium transition-colors ${
+                              productTaskViewMode === "list" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                             }`}
-                            style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
                           >
-                            {/* ID */}
-                            <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
-                              <span className="text-[11px] text-blue-600 font-bold">#{uniqueTaskId}</span>
-                            </div>
+                            <List className="h-3.5 w-3.5" />
+                            Lista
+                          </button>
+                          <button
+                            onClick={() => setProductTaskViewMode("kanban")}
+                            className={`flex items-center gap-1.5 h-9 px-3 text-xs font-medium transition-colors border-l border-slate-200 ${
+                              productTaskViewMode === "kanban" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Kanban
+                          </button>
+                        </div>
 
-                            {/* Main info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                                <span className={`text-sm font-semibold ${isOverdue ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{selectedProduct.nome}</span>
-                              </div>
-                              <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  <span className="font-medium text-slate-600">{tarefa.executor}</span>
-                                </span>
-                                <span>·</span>
-                                <span className="flex items-center gap-1">
-                                  <Users className="h-3 w-3" />
-                                  <span className="font-medium text-slate-600">{tarefa.lider}</span>
-                                </span>
-                                {tarefa.prazo && (
-                                  <>
-                                    <span>·</span>
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      <span className="font-medium text-slate-600">{tarefa.prazo}</span>
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
+                        {/* Items per page + count */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Select value={productTaskPerPage.toString()} onValueChange={(v) => { setProductTaskPerPage(parseInt(v)); setProductTaskCurrentPage(1) }}>
+                            <SelectTrigger className="h-9 w-[72px] text-xs border-slate-200">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <span className="text-xs text-slate-400 whitespace-nowrap">
+                            de <span className="font-semibold text-slate-600">{totalFiltered}</span> tarefa{totalFiltered !== 1 ? "s" : ""}
+                          </span>
+                        </div>
 
-                            {/* Status pill + eye */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-[9px] text-slate-400 font-mono">#{uniqueTaskId}</span>
-                              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
-                                <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
-                                {tarefa.status}
-                              </div>
+                        {/* Filtros */}
+                        <button
+                          onClick={() => setProductTaskShowFilters(!productTaskShowFilters)}
+                          className={`flex items-center gap-1.5 h-9 px-3.5 text-xs font-medium rounded-lg border transition-colors flex-shrink-0 ${
+                            productTaskShowFilters ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          <Filter className="h-3.5 w-3.5" />
+                          Filtros
+                        </button>
+
+                        {/* Pagination */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setProductTaskCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={safePage <= 1}
+                            className="h-7 w-7 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          {Array.from({ length: Math.min(totalPtPages, 5) }, (_, i) => {
+                            const start = Math.max(1, safePage - 2)
+                            const pg = start + i
+                            if (pg > totalPtPages) return null
+                            return (
                               <button
-                                className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title="Visualizar Tarefa"
+                                key={pg}
+                                onClick={() => setProductTaskCurrentPage(pg)}
+                                className={`h-7 w-7 flex items-center justify-center rounded text-xs font-medium transition-colors ${
+                                  pg === safePage ? "bg-blue-600 text-white border border-blue-600" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                }`}
                               >
-                                <Eye className="h-3.5 w-3.5" />
+                                {pg}
+                              </button>
+                            )
+                          })}
+                          {totalPtPages > 5 && safePage < totalPtPages - 2 && (
+                            <>
+                              <span className="text-xs text-slate-400 px-1">·</span>
+                              <button onClick={() => setProductTaskCurrentPage(totalPtPages)} className="h-7 w-7 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-medium">{totalPtPages}</button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => setProductTaskCurrentPage(p => Math.min(totalPtPages, p + 1))}
+                            disabled={safePage >= totalPtPages}
+                            className="h-7 w-7 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ── Filter panel ── */}
+                      {productTaskShowFilters && (
+                        <div className="px-5 py-4 border-b border-slate-200/70 bg-white flex flex-wrap items-end gap-4">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</label>
+                            <Select value={productTaskStatusFilter} onValueChange={(v) => { setProductTaskStatusFilter(v); setProductTaskCurrentPage(1) }}>
+                              <SelectTrigger className="h-8 w-40 text-xs border-slate-200">
+                                <SelectValue placeholder="Todos" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Todos</SelectItem>
+                                <SelectItem value="Em Execução">Em Execução</SelectItem>
+                                <SelectItem value="Aprovada">Aprovada</SelectItem>
+                                <SelectItem value="Para Aprovação">Para Aprovação</SelectItem>
+                                <SelectItem value="Entregue">Entregue</SelectItem>
+                                <SelectItem value="Atrasada">Atrasada</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Ordenar por</label>
+                            <div className="flex items-center gap-1">
+                              <Select value={productTaskSortBy} onValueChange={setProductTaskSortBy}>
+                                <SelectTrigger className="h-8 w-36 text-xs border-slate-200">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="nome">Nome</SelectItem>
+                                  <SelectItem value="status">Status</SelectItem>
+                                  <SelectItem value="prazo">Prazo</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <button
+                                onClick={() => setProductTaskSortOrder(o => o === "asc" ? "desc" : "asc")}
+                                className="h-8 w-8 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-50 text-slate-500"
+                                title={productTaskSortOrder === "asc" ? "Crescente" : "Decrescente"}
+                              >
+                                {productTaskSortOrder === "asc" ? "↑" : "↓"}
                               </button>
                             </div>
                           </div>
-                        )
-                      })}
+                          <button
+                            onClick={() => { setProductTaskStatusFilter("all"); setProductTaskSortBy("nome"); setProductTaskSortOrder("asc"); setProductTaskSearchTerm(""); setProductTaskCurrentPage(1) }}
+                            className="h-8 px-3 text-xs font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+                          >
+                            Limpar Filtros
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── List view ── */}
+                      {productTaskViewMode === "list" && (
+                        <>
+                          {paginated.length > 0 ? paginated.map((tarefa: any, index: number) => {
+                            const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
+                            const isOverdue = tarefa.status === "Atrasada"
+                            return (
+                              <div
+                                key={uniqueTaskId}
+                                className={`flex items-center gap-4 px-5 py-3 hover:brightness-95 transition-all ${
+                                  index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                                }`}
+                                style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
+                              >
+                                <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
+                                  <span className="text-[11px] text-blue-600 font-bold">#{uniqueTaskId}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                    <span className={`text-sm font-semibold ${isOverdue ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{selectedProduct.nome}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
+                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.executor}</span></span>
+                                    <span>·</span>
+                                    <span className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.lider}</span></span>
+                                    {tarefa.prazo && (<><span>·</span><span className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.prazo}</span></span></>)}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[9px] text-slate-400 font-mono">#{uniqueTaskId}</span>
+                                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
+                                    <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
+                                    {tarefa.status}
+                                  </div>
+                                  <button className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Visualizar Tarefa">
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          }) : (
+                            <div className="flex flex-col items-center justify-center py-16 text-center">
+                              <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                                <CheckSquare className="h-7 w-7 opacity-40" />
+                              </div>
+                              <p className="text-sm font-medium text-slate-500">Nenhuma tarefa encontrada</p>
+                              <p className="text-xs text-slate-400 mt-1">Tente ajustar os filtros ou a busca.</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* ── Kanban view ── */}
+                      {productTaskViewMode === "kanban" && (
+                        <div className="p-5 overflow-x-auto">
+                          <div className="flex gap-4 min-w-max">
+                            {["Em Execução", "Para Aprovação", "Aprovada", "Entregue", "Atrasada"].map((col) => {
+                              const colTasks = filtered.filter((t: any) => t.status === col)
+                              const colColors: Record<string, string> = {
+                                "Em Execução": "from-blue-50 to-blue-100/50 border-blue-200",
+                                "Para Aprovação": "from-amber-50 to-amber-100/50 border-amber-200",
+                                "Aprovada": "from-emerald-50 to-emerald-100/50 border-emerald-200",
+                                "Entregue": "from-purple-50 to-purple-100/50 border-purple-200",
+                                "Atrasada": "from-red-50 to-red-100/50 border-red-200",
+                              }
+                              return (
+                                <div key={col} className="w-64 flex-shrink-0">
+                                  <div className={`flex items-center justify-between mb-2 px-3 py-2 rounded-lg bg-gradient-to-br ${colColors[col]} border`}>
+                                    <span className="text-xs font-bold text-slate-700">{col}</span>
+                                    <span className="text-xs font-bold text-slate-500">{colTasks.length}</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {colTasks.map((tarefa: any) => {
+                                      const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
+                                      return (
+                                        <div key={uniqueTaskId} className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm hover:shadow-md transition-shadow" style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}>
+                                          <div className="flex items-center gap-1.5 mb-1">
+                                            <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded">#{uniqueTaskId}</span>
+                                          </div>
+                                          <p className="text-xs font-semibold text-slate-800 mb-1.5 leading-tight">{tarefa.nome}</p>
+                                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                                            <User className="h-2.5 w-2.5" />
+                                            <span>{tarefa.executor}</span>
+                                          </div>
+                                          {tarefa.prazo && (
+                                            <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                                              <Calendar className="h-2.5 w-2.5" />
+                                              <span>{tarefa.prazo}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                    {colTasks.length === 0 && (
+                                      <div className="text-center py-6 text-[11px] text-slate-400 border border-dashed border-slate-200 rounded-lg">Sem tarefas</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-                        <CheckSquare className="h-7 w-7 opacity-40" />
-                      </div>
-                      <p className="text-sm font-medium text-slate-500">Nenhuma tarefa cadastrada</p>
-                      <p className="text-xs text-slate-400 mt-1">Este produto ainda não possui tarefas associadas.</p>
-                    </div>
-                  )}
-                </>
-              )}
+                  </>
+                )
+              })()}
             </div>
           </div>
         </SheetContent>
