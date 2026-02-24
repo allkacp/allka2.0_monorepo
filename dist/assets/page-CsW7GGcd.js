@@ -1,1 +1,0 @@
-import{j as s}from"./index-D2dOrPZ8.js";import{E as a}from"./empresas-dashboard-duaR6JnG.js";import"./funnel-D8IEwOH8.js";import"./download--rFCaPFG.js";function o(){return s.jsx("div",{className:"min-h-screen p-6 px-0 py-0 bg-slate-200",children:s.jsx("div",{className:"max-w-7xl bg-slate-200 mx-0 my-0 px-0 py-0 space-y-6",children:s.jsx(a,{})})})}export{o as default};

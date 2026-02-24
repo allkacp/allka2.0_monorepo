@@ -1,1 +1,0 @@
-import{r as o}from"./index-D2dOrPZ8.js";import"./specialty-context-B5jJAh8-.js";const r=o.createContext(void 0);function u(){const t=o.useContext(r);if(!t)throw new Error("useProducts must be used within a ProductProvider");return t}export{u};

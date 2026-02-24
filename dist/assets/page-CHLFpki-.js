@@ -1,1 +1,0 @@
-import{j as e}from"./index-D2dOrPZ8.js";function s(){return e.jsx("div",{className:"flex items-center justify-center min-h-[calc(100vh-200px)] p-4",children:e.jsx("div",{className:"text-center space-y-4",children:e.jsx("h1",{className:"text-6xl font-bold text-gray-900 dark:text-gray-100",children:"TELA INICIAL"})})})}export{s as default};

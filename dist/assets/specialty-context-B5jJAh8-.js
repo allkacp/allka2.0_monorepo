@@ -1,1 +1,0 @@
-import{r as e}from"./index-D2dOrPZ8.js";const o=e.createContext(void 0);function i(){const t=e.useContext(o);if(t===void 0)throw new Error("useSpecialties must be used within a SpecialtyProvider");return t}export{i as u};

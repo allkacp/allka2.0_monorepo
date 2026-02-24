@@ -1,1 +1,0 @@
-function c(r,t,n){return r==="agencias"?n===500?.1:n===1e3?.15:n===1500?.2:0:r==="empresas"&&t==="company"?.05:0}function f(r,t,n,e){const u=c(t,n,e);return r*(1-u)}function i(r){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(r)}export{f as c,i as f};
