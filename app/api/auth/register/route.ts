@@ -48,14 +48,7 @@ export async function POST(request: NextRequest) {
     // 6. Send verification email
 
     // For now, simulate successful registration
-    console.log("[v0] Registration request:", {
-      name,
-      email,
-      account_type,
-      account_sub_type,
-      company_name,
-      role,
-    })
+    // Process registration
 
     // Simulate database operation
     const newUser = {
