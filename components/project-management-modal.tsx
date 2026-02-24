@@ -3783,7 +3783,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   </div>
 
                   {selectedProduct.tarefas.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
                       {selectedProduct.tarefas.map((tarefa: any, index: number) => {
                         const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
                         const isOverdue = tarefa.status === "Atrasada"
@@ -3791,57 +3791,57 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         return (
                           <div
                             key={uniqueTaskId}
-                            className="bg-white rounded-xl shadow-sm border-l-4 hover:shadow-md transition-all duration-200 overflow-hidden"
-                            style={{ borderLeftColor: getStatusBorderColor(tarefa.status) }}
+                            className={`flex items-center gap-4 px-5 py-3 hover:brightness-95 transition-all ${
+                              index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                            }`}
+                            style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
                           >
-                            <div className="flex items-center gap-3 px-4 py-3">
-                              {/* Index badge */}
-                              <div className="shrink-0 w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
-                                <span className="text-[10px] font-bold text-slate-500">#{index + 1}</span>
-                              </div>
+                            {/* ID */}
+                            <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
+                              <span className="text-[11px] text-blue-600 font-bold">#{uniqueTaskId}</span>
+                            </div>
 
-                              {/* Main info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                  <h4 className={`font-semibold text-sm leading-tight ${isOverdue ? "text-red-600" : "text-slate-800"}`}>
-                                    {tarefa.nome}
-                                  </h4>
-                                </div>
-                                <div className="flex items-center gap-2.5 text-[11px] text-slate-500">
-                                  <span className="flex items-center gap-1">
-                                    <User className="h-2.5 w-2.5" />
-                                    Executor: <span className="font-medium text-slate-700">{tarefa.executor}</span>
-                                  </span>
-                                  <span className="text-slate-300">•</span>
-                                  <span className="flex items-center gap-1">
-                                    <Users className="h-2.5 w-2.5" />
-                                    Líder: <span className="font-medium text-slate-700">{tarefa.lider}</span>
-                                  </span>
-                                  {tarefa.prazo && (
-                                    <>
-                                      <span className="text-slate-300">•</span>
-                                      <span className="flex items-center gap-1">
-                                        <Calendar className="h-2.5 w-2.5" />
-                                        Prazo: <span className="font-medium text-slate-700">{tarefa.prazo}</span>
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
+                            {/* Main info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                <span className={`text-sm font-semibold ${isOverdue ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{selectedProduct.nome}</span>
                               </div>
-
-                              {/* Status badge + ID */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[9px] text-slate-400 font-mono">#{uniqueTaskId}</span>
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
-                                  {tarefa.status}
+                              <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  <span className="font-medium text-slate-600">{tarefa.executor}</span>
                                 </span>
-                                <button
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-blue-300 text-slate-400 hover:text-blue-600 transition-all"
-                                  title="Ver detalhes"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </button>
+                                <span>·</span>
+                                <span className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  <span className="font-medium text-slate-600">{tarefa.lider}</span>
+                                </span>
+                                {tarefa.prazo && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span className="font-medium text-slate-600">{tarefa.prazo}</span>
+                                    </span>
+                                  </>
+                                )}
                               </div>
+                            </div>
+
+                            {/* Status pill + eye */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[9px] text-slate-400 font-mono">#{uniqueTaskId}</span>
+                              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
+                                {tarefa.status}
+                              </div>
+                              <button
+                                className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Visualizar Tarefa"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </div>
                         )
@@ -3849,10 +3849,10 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <div className="w-12 h-12 rounded-full bg-slate-300 flex items-center justify-center mb-3">
-                        <CheckSquare className="h-5 w-5 text-slate-400" />
+                      <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                        <CheckSquare className="h-7 w-7 opacity-40" />
                       </div>
-                      <p className="text-sm font-medium text-slate-600">Nenhuma tarefa cadastrada</p>
+                      <p className="text-sm font-medium text-slate-500">Nenhuma tarefa cadastrada</p>
                       <p className="text-xs text-slate-400 mt-1">Este produto ainda não possui tarefas associadas.</p>
                     </div>
                   )}
