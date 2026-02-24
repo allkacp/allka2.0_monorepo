@@ -290,7 +290,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   // Product tasks modal filters
   const [productTaskSearchTerm, setProductTaskSearchTerm] = useState("")
-  const [productTaskStatusFilter, setProductTaskStatusFilter] = useState("all")
   const [productTaskSortBy, setProductTaskSortBy] = useState("nome")
   const [productTaskSortOrder, setProductTaskSortOrder] = useState<"asc" | "desc">("asc")
   const [productTaskShowFilters, setProductTaskShowFilters] = useState(false)
