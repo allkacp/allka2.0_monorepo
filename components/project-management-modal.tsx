@@ -66,6 +66,7 @@ import {
   Crosshair,
   FolderKanban,
   Palette,
+  CheckSquare,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -3695,91 +3696,155 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       <Sheet open={showProductTasksModal} onOpenChange={setShowProductTasksModal}>
         <SheetContent
           side="right"
-          className="left-64 w-[calc(100vw-16rem)] sm:max-w-[calc(100vw-16rem)] h-full p-0 flex flex-col"
+          className="left-[var(--sidebar-width,64px)] w-[calc(100vw-var(--sidebar-width,64px))] sm:max-w-[calc(100vw-var(--sidebar-width,64px))] h-full p-0 flex flex-col overflow-hidden"
         >
-          <SheetHeader className="px-6 py-5 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 text-white border-b border-white/10 shadow-lg shrink-0">
+          {/* Header */}
+          <SheetHeader className="shrink-0 px-8 py-5 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white border-b border-white/10 shadow-lg">
             {selectedProduct && (
-              <div className="space-y-2">
-                <SheetTitle className="text-xl text-white font-bold">{selectedProduct.nome}</SheetTitle>
-                <div className="flex items-center gap-4 text-sm font-medium">
-                  <span className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
-                    <span>{selectedProduct.progresso}%</span>
-                  </span>
-                  <span className="opacity-90">•</span>
-                  <span className="opacity-90">
-                    {selectedProduct.tarefasConcluidas}/{selectedProduct.tarefasTotais} tarefas
-                  </span>
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                      <Package className="h-4 w-4 text-white/80" />
+                    </div>
+                    <SheetTitle className="text-lg text-white font-bold leading-tight">{selectedProduct.nome}</SheetTitle>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                      selectedProduct.tipo === "Mensal" ? "bg-violet-500/30 text-violet-200" : "bg-blue-500/30 text-blue-200"
+                    }`}>
+                      {selectedProduct.tipo}
+                    </span>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="flex items-center gap-4 pl-11">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-2xl font-black ${getProgressTextColor(selectedProduct.progresso)} drop-shadow-sm`} style={{filter:'brightness(1.4)'}}>
+                        {selectedProduct.progresso}%
+                      </span>
+                      <span className="text-[10px] text-white/50 font-medium">concluído</span>
+                    </div>
+                    <div className="w-px h-5 bg-white/20" />
+                    <span className="text-xs text-white/70">
+                      <span className="font-semibold text-white">{selectedProduct.tarefasConcluidas}</span>/{selectedProduct.tarefasTotais} tarefas
+                    </span>
+                    <div className="w-px h-5 bg-white/20" />
+                    <span className="text-xs text-white/70">
+                      <span className="font-semibold text-white">{selectedProduct.tarefasTotais - selectedProduct.tarefasConcluidas}</span> pendentes
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-3 pl-11">
+                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${getProgressColor(selectedProduct.progresso)} transition-all duration-700`}
+                        style={{ width: `${selectedProduct.progresso}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => setShowProductTasksModal(false)}
+                  className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all mt-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             )}
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {selectedProduct && selectedProduct.tarefas.length > 0 ? (
-              <div className="space-y-2">
-                {selectedProduct.tarefas.map((tarefa: any, index: number) => {
-                  const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
-                  const isOverdue = tarefa.status === "Atrasada"
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto bg-slate-200">
+            <div className="px-[50px] pt-[25px] pb-[80px]">
+              {selectedProduct && (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Tarefas do Produto
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      {selectedProduct.tarefas.length} tarefa{selectedProduct.tarefas.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
 
-                  return (
-                    <Card
-                      key={uniqueTaskId}
-                      className="p-2 hover:shadow-md transition-all border-l-4"
-                      style={{
-                        borderLeftColor: getStatusBorderColor(tarefa.status),
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
-                          <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
-                            <span className="text-[11px] text-blue-600 font-bold">#{index + 1}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <h4 className={`font-semibold text-xs ${isOverdue ? "text-red-600" : "text-gray-900"}`}>
-                                {tarefa.nome}
-                              </h4>
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] px-1 py-0 border-gray-200 text-gray-600 shrink-0"
-                              >
-                                ID: {uniqueTaskId}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                              <span>
-                                Executor: <span className="font-medium text-gray-700">{tarefa.executor}</span>
-                              </span>
-                              <span>•</span>
-                              <span>
-                                Líder: <span className="font-medium text-gray-700">{tarefa.lider}</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge className={`text-[10px] px-2 py-0.5 border ${getStatusBadgeColor(tarefa.status)}`}>
-                            {tarefa.status}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-6 p-0 bg-transparent"
-                            title="Visualizar Tarefa"
+                  {selectedProduct.tarefas.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedProduct.tarefas.map((tarefa: any, index: number) => {
+                        const uniqueTaskId = selectedProduct.id * 1000 + tarefa.id
+                        const isOverdue = tarefa.status === "Atrasada"
+
+                        return (
+                          <div
+                            key={uniqueTaskId}
+                            className="bg-white rounded-xl shadow-sm border-l-4 hover:shadow-md transition-all duration-200 overflow-hidden"
+                            style={{ borderLeftColor: getStatusBorderColor(tarefa.status) }}
                           >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </div>
+                            <div className="flex items-center gap-3 px-4 py-3">
+                              {/* Index badge */}
+                              <div className="shrink-0 w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-slate-500">#{index + 1}</span>
+                              </div>
+
+                              {/* Main info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <h4 className={`font-semibold text-sm leading-tight ${isOverdue ? "text-red-600" : "text-slate-800"}`}>
+                                    {tarefa.nome}
+                                  </h4>
+                                </div>
+                                <div className="flex items-center gap-2.5 text-[11px] text-slate-500">
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-2.5 w-2.5" />
+                                    Executor: <span className="font-medium text-slate-700">{tarefa.executor}</span>
+                                  </span>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Users className="h-2.5 w-2.5" />
+                                    Líder: <span className="font-medium text-slate-700">{tarefa.lider}</span>
+                                  </span>
+                                  {tarefa.prazo && (
+                                    <>
+                                      <span className="text-slate-300">•</span>
+                                      <span className="flex items-center gap-1">
+                                        <Calendar className="h-2.5 w-2.5" />
+                                        Prazo: <span className="font-medium text-slate-700">{tarefa.prazo}</span>
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Status badge + ID */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[9px] text-slate-400 font-mono">#{uniqueTaskId}</span>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
+                                  {tarefa.status}
+                                </span>
+                                <button
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-blue-300 text-slate-400 hover:text-blue-600 transition-all"
+                                  title="Ver detalhes"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-12 h-12 rounded-full bg-slate-300 flex items-center justify-center mb-3">
+                        <CheckSquare className="h-5 w-5 text-slate-400" />
                       </div>
-                    </Card>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-40">
-                <p className="text-sm text-muted-foreground">Nenhuma tarefa cadastrada para este produto.</p>
-              </div>
-            )}
+                      <p className="text-sm font-medium text-slate-600">Nenhuma tarefa cadastrada</p>
+                      <p className="text-xs text-slate-400 mt-1">Este produto ainda não possui tarefas associadas.</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>
