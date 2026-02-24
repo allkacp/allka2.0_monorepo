@@ -13,7 +13,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal"
-import { RegistrationModal } from "@/components/modals/registration-modal"
 import {
   LayoutDashboard,
   Users,
@@ -38,7 +37,6 @@ import {
   BookOpen,
   Palette,
   History,
-  UserPlus,
   Sparkles,
   ChevronDown,
   Calculator,
@@ -148,7 +146,6 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [agencyModalOpen, setAgencyModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [registrationOpen, setRegistrationOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [hasMoreContent, setHasMoreContent] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>([])
@@ -786,18 +783,6 @@ export function Sidebar() {
           })}
         </nav>
 
-        {!collapsed && (
-          <div className="relative px-2 pb-3 backdrop-blur-sm">
-            <Button
-              onClick={() => setRegistrationOpen(true)}
-              className="w-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-all duration-200"
-              size="sm"
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              Criar Conta
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Floating hover buttons outside sidebar, right side, only when collapsed */}
@@ -842,7 +827,6 @@ export function Sidebar() {
 
       {/* Modals */}
       <SidebarSettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
-      <RegistrationModal open={registrationOpen} onClose={() => setRegistrationOpen(false)} />
     </TooltipProvider>
   )
 }

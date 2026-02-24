@@ -102,7 +102,7 @@ components/
   product-selection-modal.tsx
 
   admin/                     → 12 modais/widgets do admin
-  modals/                    → registration-modal, sidebar-settings-modal
+  modals/                    → sidebar-settings-modal
   address/                   → address-map-picker
   ui/                        → 30 componentes shadcn/ui
 

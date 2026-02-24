@@ -1,18 +1,16 @@
 
-import { Search, Bell, Menu, X, UserPlus } from "lucide-react"
+import { Search, Bell, Menu, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useState, useEffect } from "react"
-import { RegistrationModal } from "@/components/modals/registration-modal"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
-  const [registrationOpen, setRegistrationOpen] = useState(false)
   const [notificationListOpen, setNotificationListOpen] = useState(false)
   const [simulatedUser, setSimulatedUser] = useState<any>(null)
   const { unlockAccountType } = useAccountType()
@@ -141,16 +139,6 @@ export function Header() {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:flex p-2 dark:text-white dark:hover:bg-slate-800"
-              onClick={() => setRegistrationOpen(true)}
-              title="Criar Nova Conta"
-            >
-              <UserPlus className="h-5 w-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
               className="relative p-2 dark:text-white dark:hover:bg-slate-800"
               onClick={() => setNotificationListOpen(true)}
             >
@@ -179,7 +167,6 @@ export function Header() {
         </div>
       </header>
 
-      <RegistrationModal open={registrationOpen} onClose={() => setRegistrationOpen(false)} />
     </>
   )
 }
