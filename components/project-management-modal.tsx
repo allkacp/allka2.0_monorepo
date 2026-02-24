@@ -72,8 +72,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast" // Import useToast
 import { DialogFooter } from "@/components/ui/dialog"
-import { ChevronLeft } from "lucide-react"
-import { ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { useSidebar } from "@/contexts/sidebar-context"
 
@@ -286,6 +285,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const [tasksCurrentPage, setTasksCurrentPage] = useState(1)
   const [tasksPerPage, setTasksPerPage] = useState(10)
+  const [taskSearchTerm, setTaskSearchTerm] = useState("")
   // Removed duplicate: const [showProductFilters, setShowProductFilters] = useState(false)
 
   // State for mock credentials, to allow updates
@@ -1520,18 +1520,23 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const getStatusBorderColor = (status: string) => {
     switch (status) {
-      case "Aprovada":
-        return "#10b981"
-      case "Em Execução":
-        return "#3b82f6"
-      case "Para Aprovação":
-        return "#f59e0b"
-      case "Entregue":
-        return "#a855f7"
-      case "Atrasada":
-        return "#ef4444"
-      default:
-        return "#9ca3af"
+      case "Aprovada":        return "#10b981"
+      case "Em Execução":    return "#3b82f6"
+      case "Para Aprovação": return "#f59e0b"
+      case "Entregue":        return "#a855f7"
+      case "Atrasada":        return "#ef4444"
+      default:                return "#9ca3af"
+    }
+  }
+
+  const getStatusDotClass = (status: string) => {
+    switch (status) {
+      case "Aprovada":        return "bg-emerald-500"
+      case "Em Execução":    return "bg-blue-500"
+      case "Para Aprovação": return "bg-amber-400"
+      case "Entregue":        return "bg-purple-500"
+      case "Atrasada":        return "bg-red-500 animate-pulse"
+      default:                return "bg-slate-400"
     }
   }
 
@@ -1566,6 +1571,12 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
     // Apply date filter
     if (taskDateFilter) {
       tasks = tasks.filter((task) => task.prazo === taskDateFilter)
+    }
+
+    // Apply search
+    if (taskSearchTerm) {
+      const s = taskSearchTerm.toLowerCase()
+      tasks = tasks.filter((task) => task.nome.toLowerCase().includes(s) || String(task.uniqueId).toLowerCase().includes(s))
     }
 
     // Apply sorting
@@ -2782,316 +2793,111 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               </TabsContent>
 
               {/* Tarefas */}
-              <TabsContent value="tarefas" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold">Tarefas do Projeto</h3>
-                      <p className={`text-muted-foreground ${fontSizeClasses[taskFontSize]}`}>
-                        {getFilteredAndSortedTasks().length} registro(s) encontrados.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center border rounded-md">
-                        <Button
-                          size="sm"
-                          variant={tasksViewMode === "list" ? "default" : "ghost"}
+              <TabsContent value="tarefas" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+
+                  {/* ── Stats bar ── */}
+                  {(() => {
+                    const allTasks = getAllTasks()
+                    const stats = {
+                      total:     allTasks.length,
+                      execucao:  allTasks.filter(t => t.status === "Em Execução").length,
+                      aprovada:  allTasks.filter(t => t.status === "Aprovada").length,
+                      aprovacao: allTasks.filter(t => t.status === "Para Aprovação").length,
+                      entregue:  allTasks.filter(t => t.status === "Entregue").length,
+                      atrasada:  allTasks.filter(t => t.status === "Atrasada").length,
+                    }
+                    return (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-6 w-6 rounded-md bg-indigo-100 flex items-center justify-center">
+                            <CheckSquare className="h-3.5 w-3.5 text-indigo-600" />
+                          </div>
+                          <span className="text-xs font-semibold text-slate-600">Total</span>
+                          <span className="text-sm font-bold text-slate-900">{stats.total}</span>
+                        </div>
+                        {stats.execucao > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Em Execução</span>
+                            <span className="text-sm font-bold text-blue-600">{stats.execucao}</span>
+                          </div>
+                        )}
+                        {stats.aprovada > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Aprovadas</span>
+                            <span className="text-sm font-bold text-emerald-600">{stats.aprovada}</span>
+                          </div>
+                        )}
+                        {stats.aprovacao > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Para Aprovação</span>
+                            <span className="text-sm font-bold text-amber-500">{stats.aprovacao}</span>
+                          </div>
+                        )}
+                        {stats.entregue > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-purple-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Entregues</span>
+                            <span className="text-sm font-bold text-purple-600">{stats.entregue}</span>
+                          </div>
+                        )}
+                        {stats.atrasada > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-red-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Atrasadas</span>
+                            <span className="text-sm font-bold text-red-500">{stats.atrasada}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* ── Main card ── */}
+                  <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
+
+                    {/* ── Top bar ── */}
+                    <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+                      {/* Search */}
+                      <div className="flex-1 relative min-w-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Buscar tarefa ou ID..."
+                          value={taskSearchTerm}
+                          onChange={(e) => { setTaskSearchTerm(e.target.value); setTasksCurrentPage(1) }}
+                          className="w-full pl-9 pr-3 h-9 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+
+                      {/* Lista / Kanban toggle */}
+                      <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-shrink-0">
+                        <button
                           onClick={() => setTasksViewMode("list")}
-                          className="h-8 rounded-r-none"
+                          className={`flex items-center gap-1.5 h-9 px-3 text-xs font-medium transition-colors ${
+                            tasksViewMode === "list" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
                         >
-                          <List className="h-3.5 w-3.5 mr-1.5" />
+                          <List className="h-3.5 w-3.5" />
                           Lista
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={tasksViewMode === "kanban" ? "default" : "ghost"}
+                        </button>
+                        <button
                           onClick={() => setTasksViewMode("kanban")}
-                          className="h-8 rounded-l-none"
+                          className={`flex items-center gap-1.5 h-9 px-3 text-xs font-medium transition-colors border-l border-slate-200 ${
+                            tasksViewMode === "kanban" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
                         >
-                          <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
+                          <LayoutGrid className="h-3.5 w-3.5" />
                           Kanban
-                        </Button>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowTaskFilters(!showTaskFilters)}
-                        className="h-8"
-                      >
-                        <Filter className="h-3.5 w-3.5 mr-1.5" />
-                        {showTaskFilters ? "Ocultar" : "Filtros"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {showTaskFilters && (
-                    <Card className="p-3 bg-gray-50 border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-gray-700">Status</label>
-                          <Select value={taskStatusFilter} onValueChange={setTaskStatusFilter}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Todos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Todos</SelectItem>
-                              <SelectItem value="Aprovada">Aprovada</SelectItem>
-                              <SelectItem value="Em Execução">Em Execução</SelectItem>
-                              <SelectItem value="Para Aprovação">Para Aprovação</SelectItem>
-                              <SelectItem value="Entregue">Entregue</SelectItem>
-                              <SelectItem value="Atrasada">Atrasada</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-gray-700">Produto</label>
-                          <Select value={taskProductFilter} onValueChange={setTaskProductFilter}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Todos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Todos</SelectItem>
-                              {mockData.produtos.map((produto) => (
-                                <SelectItem key={produto.id} value={produto.id.toString()}>
-                                  {produto.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-gray-700">Ordenar por</label>
-                          <div className="flex gap-1.5">
-                            <Select value={taskSortBy} onValueChange={setTaskSortBy}>
-                              <SelectTrigger className="h-8 text-xs flex-1">
-                                <SelectValue placeholder="Campo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="produto">Produto</SelectItem>
-                                <SelectItem value="nome">Nome</SelectItem>
-                                <SelectItem value="status">Status</SelectItem>
-                                <SelectItem value="prazo">Prazo</SelectItem>
-                                <SelectItem value="executor">Executor</SelectItem>
-                                <SelectItem value="lider">Líder</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 w-8 p-0 bg-transparent"
-                              onClick={() => setTaskSortOrder(taskSortOrder === "asc" ? "desc" : "asc")}
-                            >
-                              {taskSortOrder === "asc" ? (
-                                <ArrowUp className="h-3.5 w-3.5" />
-                              ) : (
-                                <ArrowDown className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
+                        </button>
                       </div>
 
-                      <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-200">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setTaskStatusFilter("all")
-                            setTaskProductFilter("all")
-                            setTaskDateFilter("")
-                            setTaskSortBy("produto")
-                            setTaskSortOrder("asc")
-                          }}
-                          className="h-7 text-xs"
-                        >
-                          Limpar Filtros
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
-
-                  {tasksViewMode === "list" ? (
-                    <div className="space-y-2">
-                      {getPaginatedTasks().length > 0 ? (
-                        getPaginatedTasks().map((tarefa) => {
-                          const isOverdue = tarefa.status === "Atrasada"
-
-                          return (
-                            <Card
-                              key={tarefa.uniqueId}
-                              className="p-2 hover:shadow-md transition-all border-l-4"
-                              style={{
-                                borderLeftColor: getStatusBorderColor(tarefa.status),
-                              }}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-start gap-2 flex-1 min-w-0">
-                                  <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
-                                    <span className="text-[11px] text-blue-600 font-bold">#{tarefa.uniqueId}</span>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                      <h4
-                                        className={`font-semibold text-xs ${isOverdue ? "text-red-600" : "text-gray-900"}`}
-                                      >
-                                        {tarefa.nome}
-                                      </h4>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] px-1.5 py-0 border-gray-200 text-gray-600 shrink-0"
-                                      >
-                                        {tarefa.produtoNome}
-                                      </Badge>
-                                    </div>
-                                    <div className="flex items-center gap-2.5 text-[10px] text-muted-foreground">
-                                      <span className="flex items-center gap-1">
-                                        <User className="h-2.5 w-2.5" />
-                                        Executor: <span className="font-medium text-gray-700">{tarefa.executor}</span>
-                                      </span>
-                                      <span>•</span>
-                                      <span className="flex items-center gap-1">
-                                        <Users className="h-2.5 w-2.5" />
-                                        Líder: <span className="font-medium text-gray-700">{tarefa.lider}</span>
-                                      </span>
-                                      <span>•</span>
-                                      <span className="flex items-center gap-1">
-                                        <Calendar className="h-2.5 w-2.5" />
-                                        Prazo: <span className="font-medium text-gray-700">{tarefa.prazo}</span>
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <Badge
-                                    className={`text-[9px] px-1.5 py-0.5 border ${getStatusBadgeColor(tarefa.status)}`}
-                                  >
-                                    {tarefa.status}
-                                  </Badge>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 w-6 p-0 bg-transparent"
-                                    title="Visualizar Tarefa"
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </Card>
-                          )
-                        })
-                      ) : (
-                        <div className="flex items-center justify-center h-40">
-                          <p className="text-sm text-muted-foreground">
-                            Nenhuma tarefa encontrada com os filtros aplicados.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                      {["Aprovada", "Em Execução", "Para Aprovação", "Entregue", "Atrasada"].map((status) => {
-                        const statusTasks = getFilteredAndSortedTasks().filter((t) => t.status === status)
-                        const columnColor = getStatusBorderColor(status)
-
-                        return (
-                          <div key={status} className="flex-shrink-0 w-64">
-                            <div
-                              className="rounded-t-lg p-2 mb-2"
-                              style={{
-                                background: `linear-gradient(135deg, ${columnColor}15, ${columnColor}30)`,
-                                borderBottom: `3px solid ${columnColor}`,
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <h3 className="font-semibold text-xs" style={{ color: columnColor }}>
-                                  {status}
-                                </h3>
-                                <Badge
-                                  variant="outline"
-                                  className="text-[9px] px-1.5 py-0"
-                                  style={{ borderColor: columnColor, color: columnColor }}
-                                >
-                                  {statusTasks.length}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                              {statusTasks.length > 0 ? (
-                                statusTasks.map((tarefa) => (
-                                  <Card
-                                    key={tarefa.uniqueId}
-                                    className="p-2 hover:shadow-md transition-all border-l-4 bg-white"
-                                    style={{
-                                      borderLeftColor: columnColor,
-                                    }}
-                                  >
-                                    <div className="space-y-1.5">
-                                      <div className="flex items-center justify-between gap-1">
-                                        <div className="flex items-center justify-center bg-blue-50 rounded px-1.5 py-0.5">
-                                          <span className="text-[9px] text-blue-600 font-bold">#{tarefa.uniqueId}</span>
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-5 w-5 p-0 bg-transparent"
-                                          title="Visualizar Tarefa"
-                                        >
-                                          <Eye className="h-2.5 w-2.5" />
-                                        </Button>
-                                      </div>
-                                      <h4 className="font-semibold text-xs text-gray-900 line-clamp-2">
-                                        {tarefa.nome}
-                                      </h4>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] px-1.5 py-0 border-gray-200 text-gray-600 w-full justify-center"
-                                      >
-                                        {tarefa.produtoNome}
-                                      </Badge>
-                                      <div className="space-y-0.5 text-[9px] text-muted-foreground pt-1 border-t">
-                                        <div className="flex items-center gap-1">
-                                          <User className="h-2.5 w-2.5" />
-                                          <span className="font-medium text-gray-700">{tarefa.executor}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Users className="h-2.5 w-2.5" />
-                                          <span className="font-medium text-gray-700">{tarefa.lider}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Calendar className="h-2.5 w-2.5" />
-                                          <span className="font-medium text-gray-700">{tarefa.prazo}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </Card>
-                                ))
-                              ) : (
-                                <div className="flex items-center justify-center h-20 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                                  <p className="text-[10px] text-muted-foreground">Vazio</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {getFilteredAndSortedTasks().length > 0 && tasksViewMode === "list" && (
-                    <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Itens por página:</span>
-                        <Select
-                          value={tasksPerPage.toString()}
-                          onValueChange={(value) => {
-                            setTasksPerPage(Number.parseInt(value))
-                            setTasksCurrentPage(1)
-                          }}
-                        >
-                          <SelectTrigger className="h-8 w-20 text-xs">
+                      {/* Items per page + count */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Select value={tasksPerPage.toString()} onValueChange={(v) => { setTasksPerPage(parseInt(v)); setTasksCurrentPage(1) }}>
+                          <SelectTrigger className="h-9 w-[72px] text-xs border-slate-200">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -3101,37 +2907,245 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                             <SelectItem value="100">100</SelectItem>
                           </SelectContent>
                         </Select>
-                        <span className="text-xs text-muted-foreground">
-                          Mostrando {(tasksCurrentPage - 1) * tasksPerPage + 1}-
-                          {Math.min(tasksCurrentPage * tasksPerPage, getFilteredAndSortedTasks().length)} de{" "}
-                          {getFilteredAndSortedTasks().length}
+                        <span className="text-xs text-slate-400 whitespace-nowrap">
+                          de <span className="font-semibold text-slate-600">{getFilteredAndSortedTasks().length}</span> tarefa{getFilteredAndSortedTasks().length !== 1 ? "s" : ""}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0 bg-transparent"
-                          onClick={() => setTasksCurrentPage(tasksCurrentPage - 1)}
+
+                      {/* Filtros */}
+                      <button
+                        onClick={() => setShowTaskFilters(!showTaskFilters)}
+                        className={`flex items-center gap-1.5 h-9 px-3.5 text-xs font-medium rounded-lg border transition-colors flex-shrink-0 ${
+                          showTaskFilters ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <Filter className="h-3.5 w-3.5" />
+                        Filtros
+                      </button>
+
+                      {/* Pagination */}
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <button
+                          onClick={() => setTasksCurrentPage(p => Math.max(1, p - 1))}
                           disabled={tasksCurrentPage === 1}
+                          className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-xs font-medium px-3">
-                          Página {tasksCurrentPage} de {getTotalTaskPages()}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0 bg-transparent"
-                          onClick={() => setTasksCurrentPage(tasksCurrentPage + 1)}
-                          disabled={tasksCurrentPage === getTotalTaskPages()}
+                          <ChevronDown className="h-3.5 w-3.5 rotate-90" />
+                        </button>
+                        {(() => {
+                          const totalPages = getTotalTaskPages() || 1
+                          const pages: (number|string)[] = []
+                          if (totalPages <= 7) { for (let i = 1; i <= totalPages; i++) pages.push(i) }
+                          else {
+                            pages.push(1)
+                            if (tasksCurrentPage > 3) pages.push("...")
+                            for (let i = Math.max(2, tasksCurrentPage - 1); i <= Math.min(totalPages - 1, tasksCurrentPage + 1); i++) pages.push(i)
+                            if (tasksCurrentPage < totalPages - 2) pages.push("...")
+                            pages.push(totalPages)
+                          }
+                          return pages.map((page, idx) =>
+                            page === "..." ? (
+                              <span key={idx} className="text-xs text-slate-300 px-0.5">·</span>
+                            ) : (
+                              <button key={idx} onClick={() => setTasksCurrentPage(Number(page))}
+                                className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                                  page === tasksCurrentPage ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                                }`}>
+                                {page}
+                              </button>
+                            )
+                          )
+                        })()}
+                        <button
+                          onClick={() => setTasksCurrentPage(p => Math.min(getTotalTaskPages(), p + 1))}
+                          disabled={tasksCurrentPage === getTotalTaskPages() || getTotalTaskPages() === 0}
+                          className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
+                          <ChevronDown className="h-3.5 w-3.5 -rotate-90" />
+                        </button>
                       </div>
                     </div>
-                  )}
+
+                    {/* ── Filter panel ── */}
+                    {showTaskFilters && (
+                      <div className="px-5 py-3.5 border-b border-slate-200/70 bg-white">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Status</label>
+                            <Select value={taskStatusFilter} onValueChange={setTaskStatusFilter}>
+                              <SelectTrigger className="h-8 text-xs border-slate-200"><SelectValue placeholder="Todos" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Todos</SelectItem>
+                                <SelectItem value="Aprovada">Aprovada</SelectItem>
+                                <SelectItem value="Em Execução">Em Execução</SelectItem>
+                                <SelectItem value="Para Aprovação">Para Aprovação</SelectItem>
+                                <SelectItem value="Entregue">Entregue</SelectItem>
+                                <SelectItem value="Atrasada">Atrasada</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Produto</label>
+                            <Select value={taskProductFilter} onValueChange={setTaskProductFilter}>
+                              <SelectTrigger className="h-8 text-xs border-slate-200"><SelectValue placeholder="Todos" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Todos</SelectItem>
+                                {mockData.produtos.map((produto) => (
+                                  <SelectItem key={produto.id} value={produto.id.toString()}>{produto.nome}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Ordenar por</label>
+                            <div className="flex gap-1.5">
+                              <Select value={taskSortBy} onValueChange={setTaskSortBy}>
+                                <SelectTrigger className="h-8 text-xs flex-1 border-slate-200"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="produto">Produto</SelectItem>
+                                  <SelectItem value="nome">Nome</SelectItem>
+                                  <SelectItem value="status">Status</SelectItem>
+                                  <SelectItem value="prazo">Prazo</SelectItem>
+                                  <SelectItem value="executor">Executor</SelectItem>
+                                  <SelectItem value="lider">Líder</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <button
+                                onClick={() => setTaskSortOrder(taskSortOrder === "asc" ? "desc" : "asc")}
+                                className="h-8 w-8 flex items-center justify-center border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-500"
+                              >
+                                {taskSortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-2">
+                          <button
+                            onClick={() => { setTaskStatusFilter("all"); setTaskProductFilter("all"); setTaskDateFilter(""); setTaskSortBy("produto"); setTaskSortOrder("asc"); setTaskSearchTerm("") }}
+                            className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+                          >
+                            Limpar Filtros
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Content ── */}
+                    {tasksViewMode === "list" ? (
+                      <div>
+                        {getPaginatedTasks().length > 0 ? (
+                          getPaginatedTasks().map((tarefa, idx) => (
+                            <div
+                              key={tarefa.uniqueId}
+                              className={`flex items-center gap-4 px-5 py-3 hover:brightness-95 transition-all ${
+                                idx % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                              }`}
+                              style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
+                            >
+                              {/* ID */}
+                              <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
+                                <span className="text-[11px] text-blue-600 font-bold">#{tarefa.uniqueId}</span>
+                              </div>
+
+                              {/* Main info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                  <span className={`text-sm font-semibold ${tarefa.status === "Atrasada" ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{tarefa.produtoNome}</span>
+                                </div>
+                                <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    <span className="font-medium text-slate-600">{tarefa.executor}</span>
+                                  </span>
+                                  <span>·</span>
+                                  <span className="flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    <span className="font-medium text-slate-600">{tarefa.lider}</span>
+                                  </span>
+                                  <span>·</span>
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    <span className="font-medium text-slate-600">{tarefa.prazo}</span>
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Status pill + eye */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
+                                  {tarefa.status}
+                                </div>
+                                <button
+                                  className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                  title="Visualizar Tarefa"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                              <CheckSquare className="h-7 w-7 opacity-40" />
+                            </div>
+                            <p className="text-sm font-medium text-slate-500">Nenhuma tarefa encontrada</p>
+                            <p className="text-xs text-slate-400 mt-1">Tente ajustar os filtros ou a busca</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex gap-3 overflow-x-auto px-5 pb-4 pt-4">
+                        {["Aprovada", "Em Execução", "Para Aprovação", "Entregue", "Atrasada"].map((status) => {
+                          const statusTasks = getFilteredAndSortedTasks().filter((t) => t.status === status)
+                          const columnColor = getStatusBorderColor(status)
+                          return (
+                            <div key={status} className="flex-shrink-0 w-64">
+                              <div className="rounded-t-xl p-2.5 mb-2" style={{ background: `linear-gradient(135deg, ${columnColor}15, ${columnColor}30)`, borderBottom: `3px solid ${columnColor}` }}>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 rounded-full ${getStatusDotClass(status)}`} />
+                                    <span className="font-semibold text-xs" style={{ color: columnColor }}>{status}</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border" style={{ borderColor: columnColor, color: columnColor }}>{statusTasks.length}</span>
+                                </div>
+                              </div>
+                              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                                {statusTasks.length > 0 ? (
+                                  statusTasks.map((tarefa) => (
+                                    <div key={tarefa.uniqueId} className="bg-white rounded-lg p-2.5 shadow-sm border-l-4 hover:shadow-md transition-all" style={{ borderLeftColor: columnColor }}>
+                                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                                        <div className="flex items-center justify-center bg-blue-50 rounded px-1.5 py-0.5">
+                                          <span className="text-[9px] text-blue-600 font-bold">#{tarefa.uniqueId}</span>
+                                        </div>
+                                        <button className="h-5 w-5 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
+                                          <Eye className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                      <p className="font-semibold text-xs text-slate-800 line-clamp-2 mb-1.5">{tarefa.nome}</p>
+                                      <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 mb-1.5">{tarefa.produtoNome}</span>
+                                      <div className="space-y-0.5 text-[9px] text-slate-400 pt-1.5 border-t border-slate-100">
+                                        <div className="flex items-center gap-1"><User className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.executor}</span></div>
+                                        <div className="flex items-center gap-1"><Users className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.lider}</span></div>
+                                        <div className="flex items-center gap-1"><Calendar className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.prazo}</span></div>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center justify-center h-20 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                                    <p className="text-[10px] text-slate-400">Sem tarefas</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                  </div>
                 </div>
               </TabsContent>
 
