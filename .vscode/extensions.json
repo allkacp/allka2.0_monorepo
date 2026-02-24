@@ -1,0 +1,28 @@
+{
+  "recommendations": [
+    // React / TypeScript
+    "dsznajder.es7-react-js-snippets",
+    "ms-vscode.vscode-typescript-next",
+
+    // Formatação
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+
+    // Tailwind CSS
+    "bradlc.vscode-tailwindcss",
+
+    // Git
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+
+    // Produtividade
+    "christian-kohler.path-intellisense",
+    "formulahendry.auto-rename-tag",
+    "ms-vscode.vscode-json",
+    "PKief.material-icon-theme"
+  ],
+  "unwantedRecommendations": [
+    // Extensões que prejudicam performance em projetos grandes
+    "ms-vscode.live-server"
+  ]
+}
