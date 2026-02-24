@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     // 5. Return user data
 
     // For now, simulate successful login with mock data
-    console.log("[v0] Login request:", { email })
+    // Process login
 
     // Mock user data based on email pattern
     let mockUser

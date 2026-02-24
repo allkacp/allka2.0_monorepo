@@ -41,8 +41,7 @@ export async function PUT(
     const companyId = params.id
     const body: UpdateCompanyPayload = await request.json()
 
-    console.log("[v0-api] PUT /api/admin/companies/{id}:", companyId)
-    console.log("[v0-api] Request body:", body)
+    console.log("[Internal] PUT /api/admin/companies/{id}:", companyId)
 
     // Validate required fields
     if (!body.email || !body.phone) {
@@ -68,10 +67,7 @@ export async function PUT(
 
     // In a real application, update the database here
     // For now, we'll just log and return success
-    console.log("[v0-api] Updating company:", {
-      id: companyId,
-      ...body,
-    })
+    // Update company in database
 
     // Store in mock database
     mockCompanies.set(companyId, {
@@ -92,12 +88,11 @@ export async function PUT(
       { status: 200 }
     )
   } catch (error) {
-    console.error("[v0-api] Error updating company:", error)
+    console.error("[Internal] Error updating company:", error)
     return NextResponse.json(
       {
         success: false,
         message: "Failed to update company",
-        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     )
