@@ -44,3 +44,6 @@ pnpm-debug.log*
 # Lock files alternativos (manter apenas um)
 yarn.lock
 pnpm-lock.yaml
+
+# Vite output logs
+vite-output.log

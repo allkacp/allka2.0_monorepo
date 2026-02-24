@@ -8,13 +8,11 @@
   "editor.renderWhitespace": "none",
   "editor.bracketPairColorization.enabled": true,
   "editor.guides.bracketPairs": "active",
-
   // ── TypeScript ───────────────────────────────────────────────
   "typescript.preferences.importModuleSpecifier": "relative",
   "typescript.tsserver.maxTsServerMemory": 2048,
   "typescript.disableAutomaticTypeAcquisition": true,
   "typescript.suggest.autoImports": true,
-
   // ── File Watcher (reduz CPU/RAM) ────────────────────────────
   "files.watcherExclude": {
     "**/.git/**": true,
@@ -23,9 +21,9 @@
     "**/.next/**": true,
     "**/build/**": true,
     "**/.cache/**": true,
-    "**/coverage/**": true
+    "**/coverage/**": true,
+    "**/ARQUIVOS_NAO_USADOS_NO_MOMENTO/**": true
   },
-
   // ── Search exclude ──────────────────────────────────────────
   "search.exclude": {
     "**/node_modules": true,
@@ -35,16 +33,16 @@
     "**/build": true,
     "**/coverage": true,
     "**/*.min.js": true,
-    "**/*.min.css": true
+    "**/*.min.css": true,
+    "**/ARQUIVOS_NAO_USADOS_NO_MOMENTO": true
   },
-
   // ── Files exclude (oculta do Explorer) ─────────────────────
   "files.exclude": {
     "**/node_modules": true,
     "**/.next": true,
-    "**/.cache": true
+    "**/.cache": true,
+    "**/ARQUIVOS_NAO_USADOS_NO_MOMENTO": true
   },
-
   // ── Extensões ───────────────────────────────────────────────
   "eslint.enable": true,
   "css.validate": false,
@@ -52,18 +50,21 @@
   "less.validate": false,
   "tailwindCSS.emmetCompletions": true,
   "tailwindCSS.experimental.classRegex": [
-    ["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
-    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"]
+    [
+      "cn\\(([^)]*)\\)",
+      "[\"'`]([^\"'`]*).*?[\"'`]"
+    ],
+    [
+      "cva\\(([^)]*)\\)",
+      "[\"'`]([^\"'`]*).*?[\"'`]"
+    ]
   ],
-
   // ── Git ─────────────────────────────────────────────────────
   "git.autofetch": true,
   "git.confirmSync": false,
-
   // ── Telemetry / Updates ─────────────────────────────────────
   "telemetry.telemetryLevel": "off",
   "extensions.autoUpdate": false,
-
   // ── Formatador padrão para TSX/TS ───────────────────────────
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"

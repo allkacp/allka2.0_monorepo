@@ -11,6 +11,7 @@ import { SidebarProvider } from "@/contexts/sidebar-context"
 import { CompanyProvider } from "@/contexts/company-context"
 import { SettingsProvider } from "@/contexts/settings-context"
 import { SpecialtyProvider } from "@/lib/contexts/specialty-context"
+import { PricingProvider } from "@/lib/contexts/pricing-context"
 import { ProductProvider } from "@/lib/contexts/product-context"
 
 // ─── Admin Pages ────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarProvider>
           <CompanyProvider>
             <SpecialtyProvider>
+              <PricingProvider>
               <ProductProvider>
                 <MobileLayoutWrapper>
                   <div className="flex h-screen bg-gray-50 overflow-visible font-sans">
@@ -125,6 +127,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 </MobileLayoutWrapper>
               </ProductProvider>
+              </PricingProvider>
             </SpecialtyProvider>
           </CompanyProvider>
         </SidebarProvider>

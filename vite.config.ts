@@ -15,5 +15,21 @@ export default defineConfig({
   server: {
     port: 8080,
     open: true,
+    watch: {
+      ignored: ['**/ARQUIVOS_NAO_USADOS_NO_MOMENTO/**', '**/node_modules/**', '**/.git/**'],
+    },
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'lucide-react',
+      'recharts',
+      'clsx',
+      'tailwind-merge',
+      'class-variance-authority',
+      'date-fns',
+    ],
   },
 })
