@@ -1302,11 +1302,21 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   }
 
   const getProgressColor = (progress: number) => {
-    if (progress === 100) return "bg-blue-100"
-    if (progress >= 70) return "bg-green-100"
-    if (progress >= 30) return "bg-yellow-100"
-    if (progress === 0) return "bg-red-200"
-    return "bg-orange-100"
+    if (progress === 100) return "bg-gradient-to-r from-blue-400 to-blue-500"
+    if (progress >= 75) return "bg-gradient-to-r from-emerald-400 to-green-500"
+    if (progress >= 50) return "bg-gradient-to-r from-teal-400 to-emerald-400"
+    if (progress >= 25) return "bg-gradient-to-r from-amber-400 to-yellow-400"
+    if (progress === 0) return "bg-slate-200"
+    return "bg-gradient-to-r from-orange-400 to-amber-400"
+  }
+
+  const getProgressTextColor = (progress: number) => {
+    if (progress === 100) return "text-blue-700"
+    if (progress >= 75) return "text-emerald-700"
+    if (progress >= 50) return "text-teal-700"
+    if (progress >= 25) return "text-amber-700"
+    if (progress === 0) return "text-slate-400"
+    return "text-orange-700"
   }
 
   const getProgressBgColor = (progress: number) => {
@@ -2159,24 +2169,25 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                 </div>
               </TabsContent>
 
-              <TabsContent value="produtos" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-gray-900">Produtos Contratados</h3>
+              <TabsContent value="produtos" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
 
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">Produtos Contratados</h3>
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 text-xs bg-transparent"
+                        className={`h-8 text-xs border-slate-300 bg-white hover:bg-slate-50 ${showProductFilters ? "border-blue-400 text-blue-600" : ""}`}
                         onClick={() => setShowProductFilters(!showProductFilters)}
                       >
                         <Filter className="h-3.5 w-3.5 mr-1.5" />
                         Filtros
                       </Button>
                       <Select value={productSortBy} onValueChange={setProductSortBy}>
-                        <SelectTrigger className="h-8 w-[180px] text-xs">
-                          <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                        <SelectTrigger className="h-8 w-[175px] text-xs border-slate-300 bg-white">
+                          <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -2189,45 +2200,37 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 w-8 p-0 bg-transparent"
+                        className="h-8 w-8 p-0 border-slate-300 bg-white hover:bg-slate-50"
                         onClick={toggleSortOrder}
                         title={productSortOrder === "asc" ? "Ordem Crescente" : "Ordem Decrescente"}
                       >
-                        {productSortOrder === "asc" ? (
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        )}
+                        {productSortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
                   </div>
 
                   {/* Filter panel */}
                   {showProductFilters && (
-                    <div className="p-4 border rounded-lg bg-gray-50 space-y-3">
+                    <div className="p-4 border border-slate-200/80 rounded-xl bg-white shadow-sm space-y-3">
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="text-xs font-medium mb-1.5 block">Porcentagem</label>
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Porcentagem</label>
                           <Select value={productPercentageFilter} onValueChange={setProductPercentageFilter}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs border-slate-300"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">Todos</SelectItem>
-                              <SelectItem value="0-25">0% - 25%</SelectItem>
-                              <SelectItem value="25-50">25% - 50%</SelectItem>
-                              <SelectItem value="50-75">50% - 75%</SelectItem>
-                              <SelectItem value="75-100">75% - 100%</SelectItem>
+                              <SelectItem value="0-25">0% – 25%</SelectItem>
+                              <SelectItem value="25-50">25% – 50%</SelectItem>
+                              <SelectItem value="50-75">50% – 75%</SelectItem>
+                              <SelectItem value="75-100">75% – 100%</SelectItem>
                               <SelectItem value="concluido">Concluído (100%)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <label className="text-xs font-medium mb-1.5 block">Status</label>
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Status</label>
                           <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs border-slate-300"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">Todos</SelectItem>
                               <SelectItem value="Não Iniciado">Não Iniciado</SelectItem>
@@ -2239,11 +2242,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                           </Select>
                         </div>
                         <div>
-                          <label className="text-xs font-medium mb-1.5 block">Tipo</label>
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">Tipo</label>
                           <Select value={productTypeFilter} onValueChange={setProductTypeFilter}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs border-slate-300"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">Todos</SelectItem>
                               <SelectItem value="Avulso">Avulso</SelectItem>
@@ -2253,89 +2254,103 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         </div>
                       </div>
                       <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setProductPercentageFilter("all")
-                            setProductStatusFilter("all")
-                            setProductTypeFilter("all")
-                          }}
-                        >
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-500"
+                          onClick={() => { setProductPercentageFilter("all"); setProductStatusFilter("all"); setProductTypeFilter("all") }}>
                           Limpar Filtros
                         </Button>
                       </div>
                     </div>
                   )}
 
-                  <div className="space-y-2">
+                  {/* Product cards */}
+                  <div className="space-y-2.5">
                     {getSortedAndFilteredProducts().map((produto) => (
                       <div
                         key={produto.id}
-                        className="relative overflow-hidden rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all"
+                        className="relative overflow-hidden rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 group"
+                        style={{ minHeight: 72 }}
                       >
-                        {/* Progress Background */}
+                        {/* Animated progress fill */}
                         <div className="absolute inset-0 flex">
                           <div
-                            className={`${getProgressColor(produto.progresso)} transition-all duration-500`}
+                            className={`${getProgressColor(produto.progresso)} transition-all duration-700 ease-out opacity-30`}
                             style={{ width: `${produto.progresso}%` }}
                           />
-                          <div className="flex-1 bg-gray-50" />
+                          <div className="flex-1 bg-white" />
                         </div>
+                        {/* Stronger left accent line */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${getProgressColor(produto.progresso)} opacity-80`} />
 
-                        {/* Content - Even more reduced padding */}
-                        <div className="relative px-3 py-1.5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-xs text-gray-900 truncate">{produto.nome}</h4>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <p className="text-[11px] text-gray-600">
-                                  {produto.progresso}% - {produto.tarefasConcluidas}/{produto.tarefasTotais} tarefas
-                                </p>
-                                <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    Contratação: {produto.dataContratacao}
-                                  </span>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    Entrega: {produto.dataEntrega}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Badge
-                                variant="secondary"
-                                className="text-[11px] font-medium bg-white/80 backdrop-blur-sm px-2 py-0.5"
-                              >
+                        {/* Content */}
+                        <div className="relative flex items-center gap-4 px-4 py-3 pl-5">
+                          {/* Progress ring / percentage */}
+                          <div className="shrink-0 flex flex-col items-center justify-center w-12">
+                            <span className={`text-lg font-black leading-none ${getProgressTextColor(produto.progresso)}`}>
+                              {produto.progresso}%
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium tracking-wide mt-0.5">progresso</span>
+                          </div>
+
+                          {/* Divider */}
+                          <div className="w-px h-10 bg-slate-200 shrink-0" />
+
+                          {/* Main info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-bold text-sm text-slate-800 truncate">{produto.nome}</h4>
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                                produto.tipo === "Mensal" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"
+                              }`}>
                                 {produto.tipo}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 w-7 p-0 bg-white/80 backdrop-blur-sm"
-                                onClick={() => {
-                                  setSelectedProduct(produto)
-                                  setShowProductTasksModal(true)
-                                }}
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
+                              </span>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mb-1.5">
+                              <div
+                                className={`h-full ${getProgressColor(produto.progresso)} transition-all duration-700 ease-out`}
+                                style={{ width: `${produto.progresso}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                              <span className="font-medium text-slate-600">
+                                {produto.tarefasConcluidas}/{produto.tarefasTotais} tarefas
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Contratação: <span className="font-medium">{produto.dataContratacao}</span>
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Entrega: <span className="font-medium">{produto.dataEntrega}</span>
+                              </span>
                             </div>
                           </div>
+
+                          {/* Actions */}
+                          <button
+                            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 hover:border-blue-300 text-slate-400 hover:text-blue-600 transition-all"
+                            onClick={() => { setSelectedProduct(produto); setShowProductTasksModal(true) }}
+                            title="Ver tarefas"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
 
                   {getSortedAndFilteredProducts().length === 0 && (
-                    <p className="text-sm text-center text-muted-foreground py-8">
-                      Nenhum produto encontrado com os filtros selecionados.
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-3">
+                        <Package className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-600">Nenhum produto encontrado</p>
+                      <p className="text-xs text-slate-400 mt-1">Tente alterar os filtros selecionados</p>
+                    </div>
                   )}
+
                 </div>
               </TabsContent>
 
