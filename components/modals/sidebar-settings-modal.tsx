@@ -106,7 +106,7 @@ const DEFAULT_THEME_V2 = {
 }
 
 export function SidebarSettingsModal({ open, onClose }: SidebarSettingsModalProps) {
-  const { sidebarSettings, updateSidebarSettings, applyFullTheme, sidebarCollapsed } = useSidebar()
+  const { sidebarSettings, updateSidebarSettings, applyFullTheme, sidebarCollapsed, sidebarWidth } = useSidebar()
   const originalSettingsRef = useRef(sidebarSettings)
   const [openResetDialog, setOpenResetDialog] = useState(false)
   const [confirmAction, setConfirmAction] = useState<"discard" | "save" | null>(null)
@@ -251,14 +251,21 @@ export function SidebarSettingsModal({ open, onClose }: SidebarSettingsModalProp
       <SheetContent
         side="right"
         hideOverlay={true}
-        className={`${sidebarCollapsed ? "left-0" : "left-64"} w-[calc(100vw-16rem)] sm:max-w-[calc(100vw-16rem)] p-0 h-screen bg-white shadow-2xl flex flex-col gap-0`}
+        className="p-0 h-screen bg-white shadow-2xl flex flex-col gap-0"
+        style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
       >
         {/* Header */}
         <header className="relative flex items-center justify-between px-6 py-5 border-b app-brand-header flex-shrink-0">
           <div className="flex items-center gap-2">
             <Palette className="h-5 w-5" />
-            <h2 className="text-lg font-bold">Personalizar cores do layout</h2>
+            <h2 className="text-lg font-bold">Personalizar Tema</h2>
           </div>
+          <button
+            onClick={handleAttemptClose}
+            className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </header>
 
         {/* Tabs Header - FIXO */}

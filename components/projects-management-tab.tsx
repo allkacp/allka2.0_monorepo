@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useMemo, type CSSProperties } from "react"
 import { ProjectManagementModal } from "@/components/project-management-modal"
-import { Eye, Copy, FileText, Edit, Ban, ExternalLink, Search, ChevronDown, ChevronUp, Briefcase, CheckCircle2, Clock, XCircle, DollarSign, TrendingUp, Filter, X, Pencil, GripVertical, Settings2, FolderKanban } from "lucide-react"
+import { Eye, Copy, FileText, Edit, Ban, ExternalLink, Search, ChevronDown, ChevronUp, Briefcase, CheckCircle2, Clock, XCircle, DollarSign, TrendingUp, Filter, X, Pencil, GripVertical, Cog, FolderKanban } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -444,7 +444,7 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                 }`}
                 title="Configurar colunas"
               >
-                <Settings2 className="h-3.5 w-3.5" />
+                <Cog className="h-3.5 w-3.5" />
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" sideOffset={8} className="w-[220px] p-0">

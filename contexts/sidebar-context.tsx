@@ -53,6 +53,7 @@ interface SidebarContextType {
   updateAgencyProfile: (profile: Partial<AgencyProfile>) => void
   updateUserProfile: (profile: Partial<UserProfile>) => void
   setSidebarCollapsed: (collapsed: boolean) => void
+  setSidebarWidth: (width: number) => void
   setPreviewTheme: (theme: SidebarSettings | null) => void
   setPreviewEnabled: (enabled: boolean) => void
   applyFullTheme: (theme: Partial<SidebarSettings>) => void
@@ -106,6 +107,18 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   })
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sidebar-width")
+      return saved ? Number(saved) : 208
+    } catch { return 208 }
+  })
+
+  const setSidebarWidth = (width: number) => {
+    const clamped = Math.min(400, Math.max(160, width))
+    setCustomSidebarWidth(clamped)
+    try { localStorage.setItem("sidebar-width", String(clamped)) } catch {}
+  }
 
   // Carregar tema do localStorage ao montar
   useEffect(() => {
@@ -198,7 +211,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setUserProfile((prev) => ({ ...prev, ...profile }))
   }
 
-  const sidebarWidth = sidebarCollapsed ? 64 : 256
+  const sidebarWidth = sidebarCollapsed ? 64 : customSidebarWidth
 
   // Sync CSS variable so footer and other elements can use it
   useEffect(() => {
@@ -213,6 +226,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         userProfile,
         sidebarCollapsed,
         sidebarWidth,
+        setSidebarWidth,
         previewTheme,
         previewEnabled,
         updateSidebarSettings,

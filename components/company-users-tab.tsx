@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair, Settings2 } from "lucide-react"
+import { Trash2, Edit2, Eye, Lock, Unlock, Shield, Plus, Search, X, ChevronLeft, ChevronRight, Filter, Mail, CheckCircle, PauseCircle, UserPlus, MapPin, Phone, CreditCard, AtSign, User, Camera, ZoomIn, Crosshair, Cog } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -804,7 +804,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
                   title="Configurar colunas"
                 >
-                  <Settings2 className="h-3.5 w-3.5" />
+                  <Cog className="h-3.5 w-3.5" />
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={8} className="w-[220px] p-0">

@@ -160,11 +160,37 @@ export function Sidebar() {
   const [customOrder, setCustomOrder] = useState<string[]>([])
   const [openPopover, setOpenPopover] = useState<string | null>(null)
   const navRef = useRef<HTMLDivElement>(null)
+  const isResizingRef = useRef(false)
+  const resizeStartRef = useRef<{ x: number; startW: number } | null>(null)
 
   const location = useLocation()
   const pathname = location.pathname
   const { accountType, accountSubType } = useAccountType()
-  const { sidebarSettings, agencyProfile, userProfile, setSidebarCollapsed, previewTheme, previewEnabled } = useSidebar()
+  const { sidebarSettings, agencyProfile, userProfile, setSidebarCollapsed, setSidebarWidth, sidebarWidth: ctxWidth, previewTheme, previewEnabled } = useSidebar()
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    if (collapsed) return
+    e.preventDefault()
+    isResizingRef.current = true
+    resizeStartRef.current = { x: e.clientX, startW: ctxWidth }
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    const onMove = (mv: MouseEvent) => {
+      if (!isResizingRef.current || !resizeStartRef.current) return
+      const delta = mv.clientX - resizeStartRef.current.x
+      setSidebarWidth(resizeStartRef.current.startW + delta)
+    }
+    const onUp = () => {
+      isResizingRef.current = false
+      resizeStartRef.current = null
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
 
   // Decide which theme to use: preview or saved
   const appliedTheme = previewTheme || sidebarSettings
@@ -439,6 +465,7 @@ export function Sidebar() {
 
   return (
     <TooltipProvider delayDuration={300}>
+      <div className="relative group/sbhover h-screen flex-shrink-0">
       <div
         data-sidebar-root
         className={cn(
@@ -447,32 +474,28 @@ export function Sidebar() {
             !appliedTheme.backgroundColor.includes("custom-gradient:") &&
             appliedTheme.backgroundColor !== "bg-slate-900" &&
             appliedTheme.backgroundColor,
-          collapsed ? "w-16" : "w-52",
+          collapsed ? "w-16" : "",
         )}
-        style={getSidebarStyle()}
+        style={{ ...getSidebarStyle(), ...(collapsed ? {} : { width: ctxWidth, minWidth: ctxWidth }) }}
       >
+        {/* Resize handle */}
+        {!collapsed && (
+          <div
+            onMouseDown={handleResizeMouseDown}
+            className="absolute right-0 top-0 h-full w-1 cursor-col-resize z-50 hover:bg-white/30 transition-colors"
+          />
+        )}
         <div className={cn(
           "relative flex items-center border-b border-white/10 backdrop-blur-sm transition-all duration-300 group",
           collapsed ? "justify-center py-1 px-3 flex-col" : "justify-between px-2 py-2 flex-row"
         )}>
           <div className="relative flex items-center">
             {collapsed ? (
-              <>
-                <img
-                  src="/logo-allka-icon.png"
-                  alt="ALLKA"
-                  className="h-20 w-20 object-contain transition-all duration-300 drop-shadow-lg"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleCollapsed}
-                  className="hidden lg:flex absolute -right-6 top-1/2 -translate-y-1/2 text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full opacity-0 group-hover:opacity-100"
-                  title="Expandir Sidebar"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </Button>
-              </>
+              <img
+                src="/logo-allka-icon.png"
+                alt="ALLKA"
+                className="h-20 w-20 object-contain transition-all duration-300 drop-shadow-lg"
+              />
             ) : (
               <img
                 src="/logo-allka-full.png"
@@ -503,24 +526,6 @@ export function Sidebar() {
             </div>
           )}
 
-          {collapsed && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSettingsModalOpen(true)}
-                  className="text-white hover:bg-white/10 backdrop-blur-sm transition-all duration-200 p-1.5 h-8 w-8 flex items-center justify-center"
-                  title="Personalizar Cores"
-                >
-                  <Palette className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="bg-white/90 text-gray-900 text-xs font-medium">
-                Personalizar Cores
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
 
         {accountType === "agencias" && !collapsed && (
@@ -794,6 +799,46 @@ export function Sidebar() {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Floating hover buttons outside sidebar, right side, only when collapsed */}
+      {collapsed && (
+        <div
+          className="absolute top-0 left-full flex flex-col gap-1 px-1 pt-3 pb-2 rounded-r-xl opacity-0 group-hover/sbhover:opacity-100 transition-opacity duration-200 z-[60] pointer-events-none group-hover/sbhover:pointer-events-auto brand-surface"
+          style={getSidebarStyle()}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleCollapsed}
+                className="text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-white/90 text-gray-900 text-xs font-medium">
+              Expandir Sidebar
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSettingsModalOpen(true)}
+                className="text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center"
+              >
+                <Palette className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-white/90 text-gray-900 text-xs font-medium">
+              Personalizar Cores
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
       </div>
 
       {/* Modals */}
