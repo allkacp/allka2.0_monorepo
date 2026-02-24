@@ -2,6 +2,145 @@
 
 Plataforma web moderna para gestão de empresas, projetos, equipes e serviços com interface responsiva em português brasileiro.
 
+> **⚡ DESENVOLVIMENTO POR MÓDULOS**
+> O projeto está sendo desenvolvido, testado e refinado módulo por módulo para manter o ambiente de trabalho leve e focado.
+> **Módulo ativo no momento: ADMIN**
+
+---
+
+## 🧩 Módulo Atual: ADMIN
+
+### Rota inicial
+Ao abrir o projeto (`npm run dev`), a tela inicial já é o dashboard do Admin:
+```
+http://localhost:8080/ → redireciona para → /admin/dashboard
+```
+
+### Como acessar
+O fluxo de entrada ainda está disponível via Sidebar:
+```
+Sidebar → Criar Conta → Administrador → Simular Conta (teste) → Começar a Explorar
+```
+
+### Arquivos ativos deste módulo
+
+#### Pages (app/admin/)
+Todas as 32 rotas admin estão ativas:
+`dashboard`, `dashboard-config`, `usuarios`, `usuarios-internos`, `users`, `empresas`, `nomades`, `agencias`, `projetos`, `produtos`, `precificacao`, `niveis`, `niveis-nomades`, `levels`, `especialidades`, `allkademy`, `financeiro`, `relatorios`, `disponibilidade`, `comissionamentos`, `commissions`, `promocoes`, `campanhas-indicacao`, `onboarding`, `permissoes`, `permissions`, `terms`, `notifications`, `clientes`, `configuracoes`, `configuracion`, `sistema`
+
+#### Layout e navegação
+- `App.tsx` — rotas limpas, apenas admin
+- `app/admin/layout.tsx` — layout do módulo admin
+- `components/sidebar.tsx` — navegação lateral
+- `components/header.tsx` — header simplificado (sem carrinho, sem troca empresa)
+- `components/footer.tsx`, `components/theme-provider.tsx`
+- Componentes mobile: `mobile-layout-wrapper`, `mobile-bottom-nav`, `mobile-horizontal-nav`, `mobile-menu-sheet`, `app-menu-drawer`, `horizontal-menu-bar`
+
+#### Componentes admin-específicos
+- `components/admin/` — 17 modais e widgets do admin
+- `components/dashboards/admin-dashboard.tsx`
+- `components/modals/registration-modal.tsx` — fluxo de entrada
+- `components/modals/sidebar-settings-modal.tsx`
+
+#### Componentes compartilhados (usados pelo admin)
+`page-header`, `confirmation-dialog`, `pagination-controls`, `items-per-page-select`, `advanced-date-filter`, `data-table`, `file-upload-zone`, `account-type-selector`, `notification-preferences-panel`, `permission-profile-slide-panel`, `user-view-slide-panel`, `user-view-header`, `company-create-slide-panel`, `company-edit-slide-panel`, `company-view-slide-panel`, `company-status-selector`, `company-social-links-manager`, `company-users-tab`, `company-tasks-tab`, `company-logs-tab`, `terms-management-tab`, `projects-management-tab`, `project-management-modal`, `project-create-slide-panel`, `project-wizard-slide-panel`, `project-type-breakdown`, `checkout-flow`, `product-selection-modal`, `address/`
+
+#### Contextos, Lib e Hooks
+- `contexts/`: `account-type-context`, `sidebar-context`, `company-context`, `settings-context`
+- `lib/contexts/`: `specialty-context`, `product-context`
+- `lib/`: `utils.ts`, `api.ts`, `api-client.ts`, `export-utils`, `user-permissions.ts`
+- `hooks/use-toast.ts`
+- `types/`: `user.ts`, `terms.ts`, `dashboard.ts`
+
+---
+
+## 📦 ARQUIVOS_NAO_USADOS_NO_MOMENTO/
+
+Esta pasta contém todos os módulos que **não estão em desenvolvimento agora**, preservando sua estrutura original para reintegração futura.
+
+### O que está dentro
+```
+ARQUIVOS_NAO_USADOS_NO_MOMENTO/
+├── components/
+│   ├── account/           → Perfil e configurações de conta
+│   ├── agency/            → Componentes específicos de agency
+│   ├── dashboards/        → Dashboards: agencias, empresas, leader, nomades
+│   ├── modals/            → agency-profile-modal, user-profile-modal
+│   ├── premium-projects/  → Módulo premium
+│   ├── pricing/           → Módulo de precificação
+│   ├── project-configuration/
+│   ├── project-creation/
+│   ├── project-history/
+│   ├── project-purchases/
+│   ├── shopping/          → Carrinho e compras
+│   ├── tactical-plan/
+│   ├── user-management/
+│   ├── user-preferences/
+│   └── [arquivos soltos]  → dashboard-stats, floating-create-project,
+│                             import-task-template-modal, logo-editor,
+│                             notification-list-panel, payment-configuration,
+│                             pending-tasks, settings-panel, shopping-cart-panel,
+│                             task-detail-slide-panel, user-details-slide-panel,
+│                             user-edit-slide-panel, user-partnership-card,
+│                             user-password-slide-panel, user-profile-panel,
+│                             user-usage-dashboard, company-agency-switcher, etc.
+```
+
+### Módulos futuros disponíveis
+| Módulo | Pasta |
+|--------|-------|
+| Agências | `components/dashboards/agencias-dashboard.tsx` + rotas agencias |
+| Agency | `components/agency/` + `components/dashboards/leader-dashboard.tsx` |
+| Nômades | `components/dashboards/nomades-dashboard.tsx` |
+| Empresas | `components/dashboards/empresas-dashboard.tsx` |
+| Catálogo | `components/shopping/` + `components/pricing/` |
+| Premium | `components/premium-projects/` |
+| Conta / Perfil | `components/account/` + `components/user-preferences/` + painéis de usuário |
+| Projetos avançados | `components/project-creation/`, `project-history/`, `project-purchases/`, `tactical-plan/` |
+
+### 🔄 Como reintegrar um módulo
+
+Quando um novo módulo for iniciado:
+
+1. **Mover arquivos de volta:**
+   ```powershell
+   # Exemplo: reintegrando o módulo Agency
+   Move-Item "ARQUIVOS_NAO_USADOS_NO_MOMENTO\components\agency" "components\agency"
+   ```
+
+2. **Adicionar as rotas em `App.tsx`:**
+   ```tsx
+   const AgencyDashboardPage = React.lazy(() => import("@/app/agency/dashboard/page"))
+   // ... adicionar <Route path="/agency/dashboard" element={<AgencyDashboardPage />} />
+   ```
+
+3. **Restaurar imports no `header.tsx` ou `sidebar.tsx`** se necessário.
+
+4. **Testar:** `npm run dev` e navegar para a rota do módulo.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+- **Vite + React 19 + TypeScript** — build toolchain
+- **Tailwind CSS v4** — estilização
+- **React Router DOM v7** — roteamento
+- **shadcn/ui + Radix UI** — componentes base
+- **lucide-react** — ícones
+- **recharts** — gráficos
+- **date-fns** — datas
+- **@dnd-kit** — drag and drop
+- **react-day-picker** — seleção de datas
+
+## 📋 Scripts
+
+```bash
+npm run dev      # Inicia servidor de desenvolvimento (http://localhost:8080)
+npm run build    # Build de produção
+npm run preview  # Visualiza build de produção
+```
+
+
 ## 🛠️ Tecnologias Utilizadas
 
 ### **Frontend Framework**

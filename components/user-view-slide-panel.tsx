@@ -20,7 +20,6 @@ import { Input } from "@/components/ui/input"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { UserViewHeader } from "@/components/user-view-header"
-import { UserPartnershipCard } from "@/components/user-partnership-card"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { useState, useEffect } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -1310,8 +1309,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             <div className="p-6 space-y-6 bg-slate-200">
               {/* Visão Geral */}
               <TabsContent value="visao-geral" className="space-y-4 mt-0">
-                {/* Partnership Card - Convites Especiais */}
-                <UserPartnershipCard user={displayUser} accountType={userAccountType} />
+                {/* Partnership Card - não disponível neste módulo */}
 
                 {/* Key Metrics Grid */}
                 <div className="grid grid-cols-1 gap-3">

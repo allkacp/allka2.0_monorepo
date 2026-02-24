@@ -12,7 +12,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
-import { AgencyProfileModal } from "@/components/modals/agency-profile-modal"
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal"
 import { RegistrationModal } from "@/components/modals/registration-modal"
 import {
@@ -842,7 +841,6 @@ export function Sidebar() {
       </div>
 
       {/* Modals */}
-      <AgencyProfileModal open={agencyModalOpen} onClose={() => setAgencyModalOpen(false)} />
       <SidebarSettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
       <RegistrationModal open={registrationOpen} onClose={() => setRegistrationOpen(false)} />
     </TooltipProvider>

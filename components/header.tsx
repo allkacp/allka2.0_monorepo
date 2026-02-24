@@ -1,36 +1,22 @@
 
-import { Search, Bell, ShoppingCart, Menu, X, UserPlus } from "lucide-react"
+import { Search, Bell, Menu, X, UserPlus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useState, useEffect } from "react"
 import { RegistrationModal } from "@/components/modals/registration-modal"
-import { UserProfileModal } from "@/components/modals/user-profile-modal"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
-import { CompanyAgencySwitcher } from "@/components/company-agency-switcher"
-import { NotificationListPanel } from "@/components/notification-list-panel"
-import { useCompany } from "@/contexts/company-context"
-import { SettingsPanel } from "@/components/settings-panel"
-import { UserProfilePanel } from "@/components/user-profile-panel"
-import { useCart } from "@/contexts/cart-context"
-import { ShoppingCartPanel } from "@/components/shopping-cart-panel"
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [registrationOpen, setRegistrationOpen] = useState(false)
-  const [userProfileOpen, setUserProfileOpen] = useState(false)
-  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false)
   const [notificationListOpen, setNotificationListOpen] = useState(false)
-  const [userProfilePanelOpen, setUserProfilePanelOpen] = useState(false)
-  const [cartPanelOpen, setCartPanelOpen] = useState(false)
   const [simulatedUser, setSimulatedUser] = useState<any>(null)
   const { unlockAccountType } = useAccountType()
   const { userProfile } = useSidebar()
-  const { selectedCompany } = useCompany()
-  const { getTotalItems } = useCart()
 
   useEffect(() => {
     const storedUser = localStorage.getItem("simulatedUser")
@@ -135,8 +121,6 @@ export function Header() {
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
 
-            <CompanyAgencySwitcher />
-
             <div
               className={`flex-1 transition-all duration-200 ${searchFocused ? "max-w-none" : "max-w-xs sm:max-w-lg"}`}
             >
@@ -176,28 +160,9 @@ export function Header() {
               </Badge>
             </Button>
 
-            <div className="hidden sm:flex">
-              <SettingsPanel />
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="relative p-2 dark:text-white dark:hover:bg-slate-800"
-              onClick={() => setCartPanelOpen(true)}
-            >
-              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
-              {getTotalItems() > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center p-0 bg-blue-500 text-white text-xs">
-                  {getTotalItems()}
-                </Badge>
-              )}
-            </Button>
-
             <Button
               variant="ghost"
               className="flex items-center space-x-2 sm:space-x-3 p-1 sm:p-2 h-auto dark:text-white dark:hover:bg-slate-800"
-              onClick={() => setUserProfilePanelOpen(true)}
             >
               <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                 <AvatarImage src={displayAvatar.startsWith("data:") ? displayAvatar : undefined} />
@@ -214,11 +179,7 @@ export function Header() {
         </div>
       </header>
 
-      <UserProfileModal open={userProfileOpen} onClose={() => setUserProfileOpen(false)} />
       <RegistrationModal open={registrationOpen} onClose={() => setRegistrationOpen(false)} />
-      <NotificationListPanel open={notificationListOpen} onClose={() => setNotificationListOpen(false)} />
-      <UserProfilePanel open={userProfilePanelOpen} onClose={() => setUserProfilePanelOpen(false)} />
-      <ShoppingCartPanel open={cartPanelOpen} onClose={() => setCartPanelOpen(false)} />
     </>
   )
 }
