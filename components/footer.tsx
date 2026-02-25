@@ -1,5 +1,6 @@
 
 import type React from "react"
+import { useEffect, useRef } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +26,21 @@ export function Footer() {
   const { sidebarSettings, previewTheme } = useSidebar()
   const appliedTheme = previewTheme || sidebarSettings
   const bg = appliedTheme.backgroundColor
+  const footerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const update = () => {
+      if (footerRef.current) {
+        document.documentElement.style.setProperty(
+          "--footer-height",
+          `${footerRef.current.offsetHeight}px`
+        )
+      }
+    }
+    update()
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
+  }, [])
 
   const getFooterStyle = (): React.CSSProperties => {
     if (!bg || bg === "bg-slate-900") {
@@ -43,6 +59,7 @@ export function Footer() {
 
   return (
     <footer
+      ref={footerRef}
       className={cn("fixed bottom-0 z-[9999] footer-positioned", !isGradientOrDefault && bg)}
       style={getFooterStyle()}
     >

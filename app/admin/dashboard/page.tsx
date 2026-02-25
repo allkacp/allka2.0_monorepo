@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import type React from "react"
 
 import { useState, useEffect } from "react"
@@ -513,6 +513,11 @@ export default function AdminDashboardPage() {
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao")
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false) // New state for the add widget sheet
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false) // State for the save dashboard dialog
+  const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] = useState(false)
+  const [draftWidgets, setDraftWidgets] = useState<WidgetState[]>([])
+  const [modalDraggedId, setModalDraggedId] = useState<string | null>(null)
+  const [modalDragOverId, setModalDragOverId] = useState<string | null>(null)
+  const [editModalMode, setEditModalMode] = useState<"none" | "remover" | "adicionar">("none")
 
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [selectedMetric, setSelectedMetric] = useState<{
@@ -1978,35 +1983,43 @@ export default function AdminDashboardPage() {
 
     let bgColor: string
     let gradientFrom: string
+    let cardBgGradient: string
 
     switch (metricType) {
       case "totalUsers":
-        bgColor = "from-info to-info-foreground"
-        gradientFrom = "from-info/5"
+        bgColor = "from-blue-400 to-blue-600"
+        gradientFrom = "from-blue-600/10"
+        cardBgGradient = "from-blue-500 to-blue-700"
         break
       case "activeUsers":
-        bgColor = "from-success to-success-foreground"
-        gradientFrom = "from-success/5"
+        bgColor = "from-emerald-400 to-emerald-600"
+        gradientFrom = "from-emerald-600/10"
+        cardBgGradient = "from-emerald-500 to-teal-600"
         break
       case "companies":
-        bgColor = "from-chart-4 to-chart-4"
-        gradientFrom = "from-chart-4/5"
+        bgColor = "from-violet-400 to-violet-600"
+        gradientFrom = "from-violet-600/10"
+        cardBgGradient = "from-violet-500 to-purple-700"
         break
       case "activeProjects":
-        bgColor = "from-warning to-warning-foreground"
-        gradientFrom = "from-warning/5"
+        bgColor = "from-orange-400 to-orange-600"
+        gradientFrom = "from-orange-600/10"
+        cardBgGradient = "from-orange-500 to-rose-600"
         break
       case "revenue":
-        bgColor = "from-success to-success-foreground"
-        gradientFrom = "from-success/5"
+        bgColor = "from-green-400 to-green-600"
+        gradientFrom = "from-green-600/10"
+        cardBgGradient = "from-green-500 to-emerald-700"
         break
       case "avgRating":
-        bgColor = "from-warning to-warning-foreground"
-        gradientFrom = "from-warning/5"
+        bgColor = "from-amber-400 to-amber-600"
+        gradientFrom = "from-amber-600/10"
+        cardBgGradient = "from-amber-500 to-orange-600"
         break
       default:
         bgColor = "from-muted to-muted-foreground"
         gradientFrom = "from-muted/5"
+        cardBgGradient = "from-slate-500 to-slate-700"
     }
 
     const cardProps = {
@@ -2027,254 +2040,99 @@ export default function AdminDashboardPage() {
 
     if (metricType === "revenue") {
       return (
-        <Card key={metricType} {...cardProps}>
-          {isEditing && (
-            <>
-              <div className="absolute top-2 left-2 z-10 bg-background/95 border rounded-md shadow-sm p-1 backdrop-blur-sm cursor-grab active:cursor-grabbing">
-                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-              <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-background/95 border rounded-md shadow-sm p-0.5 backdrop-blur-sm">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    toggleMetricVisibility(metricType)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  title="Ocultar métrica"
-                >
-                  <EyeOff className="h-3 w-3" />
-                </Button>
-              </div>
-            </>
+        <div
+          key={metricType}
+          draggable={isEditing}
+          onDragStart={(e: React.DragEvent) => handleMetricDragStart(e, metricType)}
+          onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
+          onDragLeave={handleMetricDragLeave}
+          onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
+          onDragEnd={handleMetricDragEnd}
+          className={cn(
+            `relative rounded-xl overflow-hidden shadow-sm transition-all duration-200 bg-gradient-to-br ${cardBgGradient}`,
+            isEditing && "cursor-grab active:cursor-grabbing",
+            isDragging && "opacity-40 scale-95",
+            isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
+            !isDragging && !isDragOver && !isEditing && "hover:shadow-md hover:scale-[1.02]",
           )}
-          <div
-            className={cn(
-              "absolute inset-0 bg-gradient-to-br to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-              gradientFrom,
-            )}
-          />
-          <CardContent className={cn(cardPadding, "relative")}>
-            <div className="flex items-start justify-between">
-              <div className="flex-1 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className={spacingY}>
-                    <p className={cn(titleSize, "font-medium text-muted-foreground")}>{metricName}</p>
-                    <p className={cn(valueSize, "font-bold text-foreground")}>{metric.value}</p>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        badgeSize,
-                        "font-semibold backdrop-blur-sm",
-                        metric.trend === "up"
-                          ? "bg-success-muted/80 text-success-foreground border-success/50"
-                          : "bg-destructive/10 text-destructive border-destructive/50",
-                      )}
-                    >
-                      {metric.trend === "up" ? (
-                        <TrendingUp className={cn(widgetSize === "compact" ? "h-2.5 w-2.5" : "h-3 w-3", "mr-1")} />
-                      ) : (
-                        <TrendingDown className={cn(widgetSize === "compact" ? "h-2.5 w-2.5" : "h-3 w-3", "mr-1")} />
-                      )}
-                      {Math.abs(metric.change)}%
-                    </Badge>
-                  </div>
-                  <div
-                    className={cn(
-                      "inline-flex rounded-2xl bg-gradient-to-br shadow-lg transition-shadow duration-300",
-                      bgColor,
-                      iconPadding,
-                    )}
-                  >
-                    <Icon className={cn(iconSize, "text-white")} />
-                  </div>
-                </div>
-
-                {/* Revenue breakdown - shown based on widget size */}
-                {widgetSize !== "compact" && metric.breakdown && (
-                  <div className="space-y-2 pt-2 border-t border-border/50">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Plano de Crédito</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-foreground">{metric.breakdown.creditPlan.value}</span>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            metric.breakdown.creditPlan.change >= 0 ? "text-success" : "text-destructive",
-                          )}
-                        >
-                          {metric.breakdown.creditPlan.change >= 0 ? "+" : ""}
-                          {metric.breakdown.creditPlan.change}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Compra Recorrente</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-foreground">{metric.breakdown.recurring.value}</span>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            metric.breakdown.recurring.change >= 0 ? "text-success" : "text-destructive",
-                          )}
-                        >
-                          {metric.breakdown.recurring.change >= 0 ? "+" : ""}
-                          {metric.breakdown.recurring.change}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Compra Avulsa</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-foreground">{metric.breakdown.oneTime.value}</span>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            metric.breakdown.oneTime.change >= 0 ? "text-success" : "text-destructive",
-                          )}
-                        >
-                          {metric.breakdown.oneTime.change >= 0 ? "+" : ""}
-                          {metric.breakdown.oneTime.change}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+        >
+          {isEditing && (
+            <div className="absolute top-1.5 right-1.5 z-10">
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleMetricVisibility(metricType) }}
+                className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
+              >
+                <EyeOff className="h-3 w-3 text-white" />
+              </button>
+            </div>
+          )}
+          <div className="px-3.5 pt-2.5 pb-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
+              <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
+                <Icon className="h-3.5 w-3.5 text-white" />
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-xl font-bold text-white leading-none mb-2">{metric.value}</p>
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                {metric.trend === "up" ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}%
+              </div>
+              <span className="text-[9px] text-white/60">vs. anterior</span>
+            </div>
+          </div>
+        </div>
       )
     }
 
     // Adicionar botão de ver gráfico
     return (
-      <Card key={metricType} {...cardProps}>
-        {isEditing && (
-          <>
-            <div className="absolute top-2 left-2 z-10 bg-background/95 border rounded-md shadow-sm p-1 backdrop-blur-sm cursor-grab active:cursor-grabbing">
-              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-background/95 border rounded-md shadow-sm p-0.5 backdrop-blur-sm">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  toggleMetricVisibility(metricType)
-                }}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                title="Ocultar métrica"
-              >
-                <EyeOff className="h-3 w-3" />
-              </Button>
-            </div>
-          </>
+      <div
+        key={metricType}
+        draggable={isEditing}
+        onDragStart={(e: React.DragEvent) => handleMetricDragStart(e, metricType)}
+        onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
+        onDragLeave={handleMetricDragLeave}
+        onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
+        onDragEnd={handleMetricDragEnd}
+        className={cn(
+          `relative rounded-xl overflow-hidden shadow-sm transition-all duration-200 bg-gradient-to-br ${cardBgGradient}`,
+          isEditing && "cursor-grab active:cursor-grabbing",
+          isDragging && "opacity-40 scale-95",
+          isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
+          !isDragging && !isDragOver && !isEditing && "hover:shadow-md hover:scale-[1.02]",
         )}
-        <div
-          className={cn(
-            "absolute inset-0 bg-gradient-to-br to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-            gradientFrom,
-          )}
-        />
-        <CardContent className={cn(cardPadding, "relative")}>
-          <div className="flex items-center justify-between">
-            <div className={spacingY}>
-              <p className={cn(titleSize, "font-medium text-muted-foreground")}>{metricName}</p>
-              <p className={cn(valueSize, "font-bold text-foreground")}>
-                {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
-              </p>
-              <div className="flex items-center space-x-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    badgeSize,
-                    "font-semibold backdrop-blur-sm",
-                    metric.trend === "up"
-                      ? "bg-success-muted/80 text-success-foreground border-success/50"
-                      : "bg-destructive/10 text-destructive border-destructive/50",
-                  )}
-                >
-                  {metric.trend === "up" ? (
-                    <TrendingUp className={cn(widgetSize === "compact" ? "h-2.5 w-2.5" : "h-3 w-3", "mr-1")} />
-                  ) : (
-                    <TrendingDown className={cn(widgetSize === "compact" ? "h-2.5 w-2.5" : "h-3 w-3", "mr-1")} />
-                  )}
-                  {Math.abs(metric.change)}
-                  {metricType === "avgRating" ? " pts" : "%"}
-                </Badge>
-                <span className={cn(widgetSize === "compact" ? "text-[10px]" : "text-xs", "text-muted-foreground")}>
-                  {metricType === "avgRating" ? "de 5.0" : "vs. período anterior"}
-                </span>
-              </div>
-            </div>
-            <div
-              className={cn(
-                "inline-flex rounded-2xl bg-gradient-to-br shadow-lg transition-shadow duration-300",
-                bgColor,
-                iconPadding,
-              )}
+      >
+        {isEditing && (
+          <div className="absolute top-1.5 right-1.5 z-10">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleMetricVisibility(metricType) }}
+              className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
             >
-              <Icon className={cn(iconSize, "text-white")} />
+              <EyeOff className="h-3 w-3 text-white" />
+            </button>
+          </div>
+        )}
+        <div className="px-3.5 pt-2.5 pb-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
+            <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
+              <Icon className="h-3.5 w-3.5 text-white" />
             </div>
           </div>
-
-          {metricType === "avgRating" && widgetSize !== "compact" && (metric as any).breakdown && (
-            <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Por categoria:</p>
-              {Object.entries((metric as any).breakdown).map(([key, data]: [string, any]) => {
-                const categoryNames: Record<string, string> = {
-                  nomades: "Nômades",
-                  agencies: "Agências",
-                  leadPremium: "Lead Premium",
-                  support: "Atendimento",
-                  projects: "Projetos",
-                }
-                const categoryName = categoryNames[key]
-                const percentage = (data.value / 5) * 100
-
-                return (
-                  <div key={key} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-foreground">{categoryName}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{data.value.toFixed(1)}</span>
-                        <span
-                          className={cn(
-                            "text-[10px] font-medium flex items-center gap-0.5",
-                            data.trend === "up" ? "text-success-foreground" : "text-destructive",
-                          )}
-                        >
-                          {data.trend === "up" ? "↑" : "↓"}
-                          {Math.abs(data.change).toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          data.value >= 4.5
-                            ? "bg-gradient-to-r from-success to-success"
-                            : data.value >= 4.0
-                              ? "bg-gradient-to-r from-warning to-warning"
-                              : "bg-gradient-to-r from-destructive to-destructive",
-                        )}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+          <p className="text-xl font-bold text-white leading-none mb-2">
+            {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+          </p>
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+              {metric.trend === "up" ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+              {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <span className="text-[9px] text-white/60">{metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}</span>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -5005,495 +4863,138 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="container mx-auto space-y-6 px-0 py-0">
+    <div className="container mx-auto space-y-4 px-0 py-0">
       {/* Dashboard Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
             Painel Administrativo
           </h1>
-          <p className="text-gray-600 mt-1">Organize seu dashboard de forma intuitiva e personalizada</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Visão geral da plataforma em tempo real</p>
         </div>
         <Button
-          onClick={toggleCustomizeMode}
-          variant={isCustomizeMode ? "default" : "outline"}
-          className={cn(
-            "h-10 px-4 gap-2",
-            isCustomizeMode && "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          )}
+          onClick={() => {
+            setDraftWidgets([...widgets].sort((a, b) => a.order - b.order))
+            setIsEditDashboardModalOpen(true)
+          }}
+          className="h-8 px-3 gap-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-sm shadow-blue-200 dark:shadow-blue-900/40 border-0 text-white rounded-lg"
         >
-          <Settings className="h-4 w-4" />
-          {isCustomizeMode ? "Finalizar Edição" : "Editar Widgets"}
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Editar Dashboard
         </Button>
       </div>
 
       <AlertsCenter alerts={mockAlerts} />
 
-      {/* Dashboard Header */}
-      <Card className="relative">
-        <CardContent className="p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Period Selection Group */}
-            <div className="flex items-center gap-2 pr-3">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <div className="flex items-center gap-1">
-                <Button
-                  variant={selectedPeriod === "7 dias" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedPeriod("7 dias")}
-                  className="h-8 px-3"
-                >
-                  7 dias
-                </Button>
-                <Button
-                  variant={selectedPeriod === "30 dias" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedPeriod("30 dias")}
-                  className="h-8 px-3"
-                >
-                  30 dias
-                </Button>
-                <Button
-                  variant={selectedPeriod === "90 dias" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedPeriod("90 dias")}
-                  className="h-8 px-3"
-                >
-                  90 dias
-                </Button>
-                <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 px-3 gap-1">
-                      Personalizar
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="start">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-sm mb-2">Selecionar Período</h4>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Este período será aplicado a todos os widgets do dashboard
-                        </p>
-                      </div>
-
-                      <div className="grid gap-2">
-                        {periodOptions.map((option) => (
-                          <button
-                            key={option.type}
-                            onClick={() => handlePeriodChange(option.type, option.label)}
-                            className={cn(
-                              "flex items-center justify-between p-3 rounded-lg border transition-all hover:border-primary",
-                              globalPeriod.type === option.type && "border-primary bg-primary/5",
-                            )}
-                          >
-                            <span className="text-sm">{option.label}</span>
-                            {globalPeriod.type === option.type && (
-                              <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-
-                      {globalPeriod.type === "custom" && (
-                        <div className="pt-3 border-t border-gray-100">
-                          {/* Modern Calendar Date Range Picker */}
-                          <div className="grid grid-cols-2 gap-3">
-                            {/* Start Date Calendar */}
-                            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                              {/* Header with selected date */}
-                              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 flex items-center justify-between">
-                                <span className="text-sm font-medium">
-                                  {customPeriodFrom 
-                                    ? customPeriodFrom.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
-                                    : "Data Inicial"}
-                                </span>
-                                <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-                                  <Calendar className="h-4 w-4" />
-                                </div>
-                              </div>
-                              
-                              <div className="p-3">
-                                {/* Month/Year Selectors */}
-                                <div className="flex gap-2 mb-3">
-                                  <select 
-                                    value={customPeriodFrom?.getMonth() ?? new Date().getMonth()}
-                                    onChange={(e) => {
-                                      const newDate = customPeriodFrom ? new Date(customPeriodFrom) : new Date()
-                                      newDate.setMonth(Number.parseInt(e.target.value))
-                                      setCustomPeriodFrom(newDate)
-                                    }}
-                                    className="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => (
-                                      <option key={m} value={i}>{m}</option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={customPeriodFrom?.getFullYear() ?? new Date().getFullYear()}
-                                    onChange={(e) => {
-                                      const newDate = customPeriodFrom ? new Date(customPeriodFrom) : new Date()
-                                      newDate.setFullYear(Number.parseInt(e.target.value))
-                                      setCustomPeriodFrom(newDate)
-                                    }}
-                                    className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map((y) => (
-                                      <option key={y} value={y}>{y}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                
-                                {/* Calendar Grid */}
-                                <div className="grid grid-cols-7 gap-0.5 text-center mb-2">
-                                  {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
-                                    <div key={i} className="text-xs font-medium text-gray-400 py-1">{d}</div>
-                                  ))}
-                                </div>
-                                <div className="grid grid-cols-7 gap-0.5">
-                                  {(() => {
-                                    const date = customPeriodFrom || new Date()
-                                    const year = date.getFullYear()
-                                    const month = date.getMonth()
-                                    const firstDay = new Date(year, month, 1).getDay()
-                                    const daysInMonth = new Date(year, month + 1, 0).getDate()
-                                    const days = []
-                                    
-                                    for (let i = 0; i < firstDay; i++) {
-                                      days.push(<div key={`empty-${i}`} className="w-6 h-6" />)
-                                    }
-                                    
-                                    for (let day = 1; day <= daysInMonth; day++) {
-                                      const isSelected = customPeriodFrom?.getDate() === day && 
-                                        customPeriodFrom?.getMonth() === month && 
-                                        customPeriodFrom?.getFullYear() === year
-                                      days.push(
-                                        <button
-                                          key={day}
-                                          type="button"
-                                          onClick={() => setCustomPeriodFrom(new Date(year, month, day))}
-                                          className={cn(
-                                            "w-6 h-6 text-xs rounded-full transition-all hover:bg-blue-100",
-                                            isSelected ? "bg-blue-500 text-white font-semibold" : "text-gray-700"
-                                          )}
-                                        >
-                                          {day}
-                                        </button>
-                                      )
-                                    }
-                                    return days
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* End Date Calendar */}
-                            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                              {/* Header with selected date */}
-                              <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white p-3 flex items-center justify-between">
-                                <span className="text-sm font-medium">
-                                  {customPeriodTo 
-                                    ? customPeriodTo.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
-                                    : "Data Final"}
-                                </span>
-                                <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-                                  <Calendar className="h-4 w-4" />
-                                </div>
-                              </div>
-                              
-                              <div className="p-3">
-                                {/* Month/Year Selectors */}
-                                <div className="flex gap-2 mb-3">
-                                  <select 
-                                    value={customPeriodTo?.getMonth() ?? new Date().getMonth()}
-                                    onChange={(e) => {
-                                      const newDate = customPeriodTo ? new Date(customPeriodTo) : new Date()
-                                      newDate.setMonth(Number.parseInt(e.target.value))
-                                      setCustomPeriodTo(newDate)
-                                    }}
-                                    className="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-400"
-                                  >
-                                    {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => (
-                                      <option key={m} value={i}>{m}</option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={customPeriodTo?.getFullYear() ?? new Date().getFullYear()}
-                                    onChange={(e) => {
-                                      const newDate = customPeriodTo ? new Date(customPeriodTo) : new Date()
-                                      newDate.setFullYear(Number.parseInt(e.target.value))
-                                      setCustomPeriodTo(newDate)
-                                    }}
-                                    className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-400"
-                                  >
-                                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map((y) => (
-                                      <option key={y} value={y}>{y}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                
-                                {/* Calendar Grid */}
-                                <div className="grid grid-cols-7 gap-0.5 text-center mb-2">
-                                  {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
-                                    <div key={i} className="text-xs font-medium text-gray-400 py-1">{d}</div>
-                                  ))}
-                                </div>
-                                <div className="grid grid-cols-7 gap-0.5">
-                                  {(() => {
-                                    const date = customPeriodTo || new Date()
-                                    const year = date.getFullYear()
-                                    const month = date.getMonth()
-                                    const firstDay = new Date(year, month, 1).getDay()
-                                    const daysInMonth = new Date(year, month + 1, 0).getDate()
-                                    const days = []
-                                    
-                                    for (let i = 0; i < firstDay; i++) {
-                                      days.push(<div key={`empty-${i}`} className="w-6 h-6" />)
-                                    }
-                                    
-                                    for (let day = 1; day <= daysInMonth; day++) {
-                                      const isSelected = customPeriodTo?.getDate() === day && 
-                                        customPeriodTo?.getMonth() === month && 
-                                        customPeriodTo?.getFullYear() === year
-                                      days.push(
-                                        <button
-                                          key={day}
-                                          type="button"
-                                          onClick={() => setCustomPeriodTo(new Date(year, month, day))}
-                                          className={cn(
-                                            "w-6 h-6 text-xs rounded-full transition-all hover:bg-indigo-100",
-                                            isSelected ? "bg-indigo-500 text-white font-semibold" : "text-gray-700"
-                                          )}
-                                        >
-                                          {day}
-                                        </button>
-                                      )
-                                    }
-                                    return days
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Selected Range Display */}
-                          {customPeriodFrom && customPeriodTo && (
-                            <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                              <Calendar className="h-4 w-4 text-blue-500" />
-                              <span className="text-sm font-medium text-gray-700">
-                                {customPeriodFrom.toLocaleDateString("pt-BR")} 
-                                <span className="mx-2 text-gray-400">ate</span>
-                                {customPeriodTo.toLocaleDateString("pt-BR")}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Action Buttons */}
-                          <div className="mt-3 flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setCustomPeriodFrom(undefined)
-                                setCustomPeriodTo(undefined)
-                              }}
-                              className="flex-1 h-9 text-sm rounded-xl bg-transparent"
-                            >
-                              Cancelar
-                            </Button>
-                            <Button
-                              onClick={applyCustomPeriod}
-                              disabled={!customPeriodFrom || !customPeriodTo}
-                              size="sm"
-                              className="flex-1 h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50"
-                            >
-                              Confirmar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            {/* Layout Controls Group */}
-            <div className="flex items-center gap-2 pr-3">
-              <Popover open={showColumns} onOpenChange={setShowColumns}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 gap-1">
-                    <LayoutGrid className="h-3 w-3" />
-                    Colunas
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80" align="start">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Layout de Colunas</h4>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Escolha como os widgets serão organizados no dashboard
-                      </p>
-                    </div>
-                    <div className="grid gap-2">
-                      {columnLayouts.map((layout) => (
-                        <button
-                          key={layout.id}
-                          onClick={() => {
-                            setColumnLayout(layout.id)
-                            setShowColumns(false)
-                          }}
-                          className={cn(
-                            "flex items-center justify-between p-3 rounded-lg border transition-all hover:border-primary",
-                            columnLayout === layout.id && "border-primary bg-primary/5",
-                          )}
-                        >
-                          <div>
-                            <div className="font-medium text-sm">{layout.label}</div>
-                            <div className="text-xs text-muted-foreground">{layout.description}</div>
-                          </div>
-                          {columnLayout === layout.id && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Export Actions */}
-            <div className="flex items-center gap-2 ml-auto">
-              {savedDashboards.length > 0 && (
-                <Popover open={showDashboardSelector} onOpenChange={setShowDashboardSelector}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 px-3 gap-2 bg-transparent">
-                      <LayoutGrid className="h-3 w-3" />
-                      {currentDashboardId
-                        ? savedDashboards.find((d) => d.id === currentDashboardId)?.name
-                        : "Selecionar Dashboard"}
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-[320px] p-2">
-                    <div className="space-y-1">
-                      {savedDashboards.map((dashboard) => (
-                        <div key={dashboard.id} className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleLoadDashboard(dashboard.id)}
-                            className={cn(
-                              "flex-1 justify-start h-9 px-2",
-                              currentDashboardId === dashboard.id && "bg-primary/10 text-primary",
-                            )}
-                          >
-                            <LayoutGrid className="h-3 w-3 mr-2" />
-                            <span className="flex-1 text-left truncate">{dashboard.name}</span>
-                            {dashboard.isGlobal && <Globe className="h-3 w-3 ml-1 text-blue-500" />}
-                            {dashboard.sharedWith && dashboard.sharedWith.length > 0 && (
-                              <Users className="h-3 w-3 ml-1 text-green-500" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditDashboard(dashboard.id)}
-                            className="h-9 w-9 p-0 hover:bg-blue-500/10 hover:text-blue-500"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenShareDialog(dashboard.id)}
-                            className="h-9 w-9 p-0 hover:bg-green-500/10 hover:text-green-500"
-                          >
-                            <Share2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteDashboard(dashboard.id)}
-                            className="h-9 w-9 p-0 hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+      {/* Compact Controls Bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Calendar className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+        <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5">
+          {[
+            { value: "7 dias", label: "7d" },
+            { value: "30 dias", label: "30d" },
+            { value: "90 dias", label: "90d" },
+          ].map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setSelectedPeriod(value)}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                selectedPeriod === value
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 gap-1 border-success text-success-foreground hover:bg-success-muted bg-transparent"
-                onClick={handleExportPDF}
-                disabled={isExporting}
+            >
+              {label}
+            </button>
+          ))}
+          <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1",
+                  "text-muted-foreground hover:text-foreground"
+                )}
               >
-                <FileText className="h-3 w-3" />
-                {isExporting ? "Exportando..." : "Exportar PDF"}
+                Personalizar
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="start">
+              <div className="space-y-1.5">
+                <h4 className="text-sm font-semibold mb-2">Período</h4>
+                {periodOptions.map((option) => (
+                  <button
+                    key={option.type}
+                    onClick={() => handlePeriodChange(option.type, option.label)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg border transition-all hover:border-primary text-left",
+                      globalPeriod.type === option.type && "border-primary bg-primary/5",
+                    )}
+                  >
+                    {option.label}
+                    {globalPeriod.type === option.type && <Check className="h-3 w-3 text-primary" />}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Popover open={showColumns} onOpenChange={setShowColumns}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs gap-1.5">
+                <LayoutGrid className="h-3 w-3" />
+                Colunas
               </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="end">
+              <div className="space-y-1.5">
+                <h4 className="text-sm font-semibold mb-2">Layout</h4>
+                {columnLayouts.map((layout) => (
+                  <button
+                    key={layout.id}
+                    onClick={() => { setColumnLayout(layout.id); setShowColumns(false) }}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-all hover:border-primary text-left",
+                      columnLayout === layout.id && "border-primary bg-primary/5",
+                    )}
+                  >
+                    <div>
+                      <span className="font-medium">{layout.label}</span>
+                      <span className="text-muted-foreground ml-2">{layout.description}</span>
+                    </div>
+                    {columnLayout === layout.id && <Check className="h-3 w-3 text-primary flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-xs gap-1.5 bg-transparent"
+            onClick={handleExportPDF}
+            disabled={isExporting}
+          >
+            <FileText className="h-3 w-3" />
+            {isExporting ? "Exportando..." : "Exportar PDF"}
+          </Button>
+        </div>
+      </div>
 
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {metricCards
           .filter((m) => m.visible)
           .sort((a, b) => a.order - b.order)
           .map((metric) => renderMetricCard(metric.id))}
       </div>
 
-      {/* Customize Mode Panel */}
-      {isCustomizeMode && (
-        <Card className="border-2 border-dashed">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Settings className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Modo de Organização Ativo</h3>
-                  <p className="text-sm text-muted-foreground">Suas alterações serão salvas automaticamente</p>
-                </div>
-              </div>
-              <Button variant="default" size="sm" onClick={toggleCustomizeMode} className="gap-2">
-                <Check className="h-4 w-4" />
-                Concluir
-              </Button>
-            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                <GripVertical className="h-4 w-4" />
-                Arrastar para reorganizar
-              </Button>
-
-              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                <EyeOff className="h-4 w-4" />
-                Ocultar widget
-              </Button>
-
-              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                <Type className="h-4 w-4" />
-                Renomear
-              </Button>
-
-              <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 bg-transparent">
-                <Trash2 className="h-4 w-4" />
-                Remover
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Widgets Grid */}
-      <div id="dashboard-content" className={cn("grid gap-6 auto-rows-auto", getColumnClasses())}>
+      <div id="dashboard-content" className={cn("grid gap-4 auto-rows-auto", getColumnClasses())}>
         {widgets
           .filter((w) => w.visible)
           .sort((a, b) => a.order - b.order)
@@ -5846,6 +5347,282 @@ export default function AdminDashboardPage() {
           data={selectedMetric.data}
         />
       )}
+
+      {/* Edit Dashboard Panel */}
+      {isEditDashboardModalOpen && (() => {
+        const modalGradientMap: Record<string, string> = {
+          blue: "from-blue-500 to-blue-700",
+          green: "from-green-500 to-green-700",
+          purple: "from-purple-500 to-purple-700",
+          indigo: "from-indigo-500 to-indigo-700",
+          orange: "from-orange-500 to-rose-600",
+          emerald: "from-emerald-500 to-teal-600",
+          teal: "from-teal-500 to-teal-700",
+          amber: "from-amber-500 to-orange-600",
+          yellow: "from-yellow-400 to-amber-600",
+          sky: "from-sky-500 to-blue-600",
+          red: "from-red-500 to-rose-700",
+          cyan: "from-cyan-500 to-sky-600",
+          slate: "from-slate-500 to-slate-700",
+        }
+        const availableWidgets = widgetLibrary.filter(
+          (lib) => !draftWidgets.some((dw) => dw.type === lib.id)
+        )
+        return (
+          <>
+            <div className="fixed top-0 bottom-0 right-0 z-40 bg-black/30 backdrop-blur-[1px]" style={{ left: "var(--sidebar-width)" }} onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }} />
+            <div
+              className="fixed top-0 bg-background z-50 flex flex-col shadow-2xl"
+              style={{ left: "var(--sidebar-width)", right: 0, bottom: "var(--footer-height, 0px)" }}
+            >
+              {/* Header */}
+              <div className="flex-shrink-0 px-6 py-3.5 text-white" style={{ background: "var(--app-brand-gradient)" }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 rounded-lg p-1.5">
+                      <LayoutGrid className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold leading-tight">Editar Dashboard</h2>
+                      <p className="text-white/70 text-[11px] mt-0.5">Arraste para reordenar · {draftWidgets.filter((w) => w.visible).length} widgets ativos</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Mode buttons */}
+                    <button
+                      onClick={() => setEditModalMode((m) => m === "remover" ? "none" : "remover")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                        editModalMode === "remover"
+                          ? "bg-red-500 text-white shadow-md"
+                          : "bg-white/15 hover:bg-white/25 text-white/90"
+                      )}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover
+                    </button>
+                    <button
+                      onClick={() => setEditModalMode((m) => m === "adicionar" ? "none" : "adicionar")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                        editModalMode === "adicionar"
+                          ? "bg-emerald-500 text-white shadow-md"
+                          : "bg-white/15 hover:bg-white/25 text-white/90"
+                      )}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar
+                    </button>
+                    <div className="w-px h-5 bg-white/25 mx-1" />
+                    <button
+                      onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }}
+                      className="bg-white/15 hover:bg-white/30 rounded-lg p-1.5 transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex flex-1 overflow-hidden">
+                {/* Main widgets grid */}
+                <div className={cn(
+                  "flex-1 overflow-y-auto p-5 transition-all duration-300",
+                  editModalMode === "adicionar" && "border-r border-border"
+                )}>
+                  {editModalMode === "remover" && (
+                    <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+                      <Trash2 className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      <p className="text-xs text-red-700 dark:text-red-300 font-medium">Modo remoção ativo — clique no &#128465; para remover um widget permanentemente do dashboard</p>
+                    </div>
+                  )}
+                  {editModalMode === "adicionar" && (
+                    <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                      <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">Clique em um widget disponível à direita para adicioná-lo ao dashboard</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {draftWidgets.map((widget) => {
+                      const libItem = widgetLibrary.find((l) => l.id === widget.type)
+                      const WIcon = libItem?.icon ?? LayoutGrid
+                      const color = libItem?.color ?? "blue"
+                      const title = getWidgetTitle(widget.type, widget.customTitle)
+                      const isDraggingThis = modalDraggedId === widget.id
+                      const isDragOver = modalDragOverId === widget.id && modalDraggedId !== widget.id
+                      const gradient = modalGradientMap[color] ?? modalGradientMap.blue
+
+                      return (
+                        <div
+                          key={widget.id}
+                          draggable={editModalMode !== "remover"}
+                          onDragStart={() => setModalDraggedId(widget.id)}
+                          onDragOver={(e) => { e.preventDefault(); setModalDragOverId(widget.id) }}
+                          onDragLeave={() => setModalDragOverId(null)}
+                          onDrop={() => {
+                            if (!modalDraggedId || modalDraggedId === widget.id) { setModalDraggedId(null); setModalDragOverId(null); return }
+                            const from = draftWidgets.findIndex((w) => w.id === modalDraggedId)
+                            const to = draftWidgets.findIndex((w) => w.id === widget.id)
+                            const next = [...draftWidgets]
+                            const [moved] = next.splice(from, 1)
+                            next.splice(to, 0, moved)
+                            next.forEach((w, i) => { w.order = i })
+                            setDraftWidgets(next)
+                            setModalDraggedId(null)
+                            setModalDragOverId(null)
+                          }}
+                          onDragEnd={() => { setModalDraggedId(null); setModalDragOverId(null) }}
+                          className={cn(
+                            "group relative rounded-xl border-2 overflow-hidden select-none transition-all duration-150",
+                            editModalMode !== "remover" && "cursor-grab active:cursor-grabbing",
+                            widget.visible
+                              ? "border-transparent shadow-sm hover:shadow-md"
+                              : "opacity-50",
+                            isDraggingThis && "opacity-30 scale-95",
+                            isDragOver && "ring-2 ring-blue-500 ring-offset-2 scale-[1.02]",
+                          )}
+                        >
+                          {/* Top gradient strip */}
+                          <div className={cn("h-1.5 w-full bg-gradient-to-r", gradient)} />
+
+                          <div className="px-3 py-2.5 bg-card">
+                            <div className="flex items-start gap-2.5">
+                              {/* Icon */}
+                              <div className={cn("shrink-0 rounded-lg p-2 bg-gradient-to-br text-white mt-0.5 shadow-sm", gradient)}>
+                                <WIcon className="h-3.5 w-3.5" />
+                              </div>
+                              {/* Title + position */}
+                              <div className="flex-1 min-w-0 pr-1">
+                                <p className="text-xs font-semibold text-foreground leading-snug">{title}</p>
+                                <p className="text-[10px] text-muted-foreground mt-1">Posição #{draftWidgets.findIndex((w) => w.id === widget.id) + 1}</p>
+                              </div>
+                            </div>
+
+                            {/* Action row */}
+                            <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/60">
+                              {/* Visibility toggle */}
+                              <button
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); setDraftWidgets((prev) => prev.map((w) => w.id === widget.id ? { ...w, visible: !w.visible } : w)) }}
+                                className={cn(
+                                  "flex items-center gap-1 text-[10px] font-medium rounded-md px-2 py-1 transition-colors",
+                                  widget.visible
+                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100"
+                                    : "text-muted-foreground bg-muted/60 hover:bg-muted"
+                                )}
+                              >
+                                {widget.visible ? <Activity className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                                {widget.visible ? "Visível" : "Oculto"}
+                              </button>
+
+                              {/* Remove button - only in remover mode */}
+                              {editModalMode === "remover" && (
+                                <button
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDraftWidgets((prev) => prev.filter((w) => w.id !== widget.id))
+                                  }}
+                                  className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-md px-2 py-1 transition-colors"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Remover
+                                </button>
+                              )}
+
+                              {/* Drag hint */}
+                              {editModalMode !== "remover" && (
+                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Right panel: available widgets to add */}
+                {editModalMode === "adicionar" && (
+                  <div className="w-80 shrink-0 overflow-y-auto bg-muted/20 border-l border-border flex flex-col">
+                    <div className="sticky top-0 bg-muted/40 backdrop-blur-sm border-b border-border px-4 py-3">
+                      <h3 className="text-sm font-semibold">Widgets disponíveis</h3>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{availableWidgets.length} para adicionar</p>
+                    </div>
+                    <div className="p-3 flex flex-col gap-2">
+                      {availableWidgets.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="bg-emerald-100 dark:bg-emerald-950/40 rounded-full p-3 mb-3">
+                            <Check className="h-5 w-5 text-emerald-600" />
+                          </div>
+                          <p className="text-sm font-medium text-muted-foreground">Todos os widgets já foram adicionados!</p>
+                        </div>
+                      ) : availableWidgets.map((lib) => {
+                        const WIcon = lib.icon
+                        const gradient = modalGradientMap[lib.color ?? "blue"] ?? modalGradientMap.blue
+                        return (
+                          <button
+                            key={lib.id}
+                            onClick={() => {
+                              const maxOrder = Math.max(...draftWidgets.map((w) => w.order), -1)
+                              setDraftWidgets((prev) => [
+                                ...prev,
+                                { id: `${lib.id}-${Date.now()}`, type: lib.id as WidgetType, visible: true, order: maxOrder + 1 }
+                              ])
+                            }}
+                            className="w-full text-left group flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:border-emerald-400 hover:shadow-sm transition-all duration-150"
+                          >
+                            <div className={cn("shrink-0 rounded-lg p-2 bg-gradient-to-br text-white shadow-sm", gradient)}>
+                              <WIcon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-foreground leading-snug">{lib.name}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{lib.description}</p>
+                            </div>
+                            <div className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Plus className="h-4 w-4 text-emerald-500" />
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex-shrink-0 border-t bg-muted/20 px-6 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {draftWidgets.filter((w) => w.visible).length} visíveis · {draftWidgets.filter((w) => !w.visible).length} ocultos · {draftWidgets.length} total
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-8 px-4 text-sm" onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 px-5 text-sm bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 border-0 text-white shadow-sm gap-1.5"
+                    onClick={() => {
+                      const updated = draftWidgets.map((w, i) => ({ ...w, order: i }))
+                      setWidgets(updated)
+                      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated))
+                      setIsEditDashboardModalOpen(false)
+                      setEditModalMode("none")
+                      toast({ title: "Dashboard salvo", description: "Widgets atualizados com sucesso." })
+                    }}
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
     // </CHANGE>
   )
