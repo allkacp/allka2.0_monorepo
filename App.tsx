@@ -47,6 +47,7 @@ const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"))
 const AdminConfiguracoesPage = React.lazy(() => import("@/app/admin/configuracoes/page"))
 const AdminConfiguracionPage = React.lazy(() => import("@/app/admin/configuracion/page"))
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"))
+const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full">
@@ -181,6 +182,7 @@ export default function App() {
               <Route path="/admin/configuracoes" element={<AdminConfiguracoesPage />} />
               <Route path="/admin/configuracion" element={<AdminConfiguracionPage />} />
               <Route path="/admin/sistema" element={<AdminSistemaPage />} />
+              <Route path="/admin/alertas" element={<AdminAlertasPage />} />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

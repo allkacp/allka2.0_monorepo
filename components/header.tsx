@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { useState, useEffect } from "react"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { AlertsHeaderIcon } from "@/components/alerts-header-icon"
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -136,6 +137,7 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <AlertsHeaderIcon />
             <Button
               variant="ghost"
               size="sm"

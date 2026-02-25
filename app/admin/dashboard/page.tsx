@@ -58,6 +58,8 @@ import {
   Globe,
   Pencil,
   Share2,
+  SlidersHorizontal,
+  ImageDown,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns"
@@ -82,13 +84,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { MetricChartModal } from "@/components/admin/metric-chart-modal"
-import html2canvas from "html2canvas" // Import html2canvas
+import { toPng } from "html-to-image"
+import jsPDF from "jspdf"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion" // Import Accordion components
 import { Input } from "@/components/ui/input" // Added Input
 import { Label } from "@/components/ui/label" // Added Label
 import { useSidebar } from "@/contexts/sidebar-context" // Added import for sidebar context
 import { Switch } from "@/components/ui/switch" // Added Switch
 import { useToast } from "@/hooks/use-toast" // Added useToast hook
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 
 // Redeclaration of Alert interface removed due to linting issue.
 // The original code already had an 'Alert' interface which was correct.
@@ -124,7 +128,6 @@ type WidgetType =
   | "accountsReceivable" // Added new accounts receivable widget type
 
 type MetricType = "totalUsers" | "activeUsers" | "companies" | "activeProjects" | "revenue" | "avgRating"
-type ColumnLayout = "1" | "2-equal" | "2-33-66" | "2-66-33" | "3-equal" | "3-25-50-25"
 type WidgetSize = "standard" | "compact"
 
 interface Widget {
@@ -177,7 +180,7 @@ interface WidgetState {
   visible: boolean
   order: number
   customTitle?: string
-  // size?: WidgetSize; // Keep this if specific widgets can have different sizes
+  colSpan?: 1 | 2 | 3 // How many of the 3 dashboard columns this widget occupies
 }
 
 interface SystemAlert {
@@ -505,19 +508,22 @@ export default function AdminDashboardPage() {
   const [showWidgetLibrary, setShowWidgetLibrary] = useState(false) // Changed from isWidgetLibraryOpen
   const [editingWidget, setEditingWidget] = useState<WidgetType | null>(null)
   const [editTitle, setEditTitle] = useState("")
-  const [columnLayout, setColumnLayout] = useState<ColumnLayout>("1")
-  const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"conclude" | "default">("default")
-  const [showColumns, setShowColumns] = useState(false)
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("30 dias")
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao")
-  const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false) // New state for the add widget sheet
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false) // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] = useState(false)
   const [draftWidgets, setDraftWidgets] = useState<WidgetState[]>([])
   const [modalDraggedId, setModalDraggedId] = useState<string | null>(null)
   const [modalDragOverId, setModalDragOverId] = useState<string | null>(null)
   const [editModalMode, setEditModalMode] = useState<"none" | "remover" | "adicionar">("none")
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false)
+  const [showSaveConfirmDialog, setShowSaveConfirmDialog] = useState(false)
+  const [showDeleteDashboardDialog, setShowDeleteDashboardDialog] = useState(false)
+  const [deletingDashboardId, setDeletingDashboardId] = useState<string | null>(null)
+  const [editHeaderName, setEditHeaderName] = useState("")
+  const [isEditingHeaderName, setIsEditingHeaderName] = useState(false)
+  const [isNewDashboardMode, setIsNewDashboardMode] = useState(false)
 
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [selectedMetric, setSelectedMetric] = useState<{
@@ -660,11 +666,11 @@ export default function AdminDashboardPage() {
         ;(btn as HTMLElement).style.display = 'none'
       })
 
-      const canvas = await html2canvas(widgetElement, {
-        backgroundColor: null,
-        scale: 2, // Higher quality
-        useCORS: true,
-        logging: false,
+      const dataUrl = await toPng(widgetElement as HTMLElement, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: "#f1f5f9",
+        cacheBust: true,
       })
 
       // Show export buttons again
@@ -676,7 +682,7 @@ export default function AdminDashboardPage() {
       const dateStr = format(new Date(), "yyyy-MM-dd-HHmm")
       const sanitizedTitle = widgetTitle.replace(/[^a-zA-Z0-9]/g, "_")
       link.download = `widget_${sanitizedTitle}_${dateStr}.png`
-      link.href = canvas.toDataURL("image/png")
+      link.href = dataUrl
       link.click()
 
       toast({
@@ -870,10 +876,11 @@ export default function AdminDashboardPage() {
     name: string
     widgets: WidgetState[]
     createdAt: string
-    updatedAt?: string // Added
-    isGlobal?: boolean // Added
-    sharedWith?: string[] // Added
-    createdBy?: string // Added
+    updatedAt?: string
+    isGlobal?: boolean
+    isDefault?: boolean
+    sharedWith?: string[]
+    createdBy?: string
   }
 
   const [savedDashboards, setSavedDashboards] = useState<SavedDashboard[]>([])
@@ -916,6 +923,76 @@ export default function AdminDashboardPage() {
     setEditingDashboardId(null)
     setEditingDashboardName("")
   }
+
+  const handleSaveHeaderName = () => {
+    if (!editHeaderName.trim()) { setIsEditingHeaderName(false); return }
+    if (currentDashboardId) {
+      const updatedDashboards = savedDashboards.map((d) =>
+        d.id === currentDashboardId
+          ? { ...d, name: editHeaderName.trim(), updatedAt: new Date().toISOString() }
+          : d,
+      )
+      setSavedDashboards(updatedDashboards)
+      localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
+    }
+    setIsEditingHeaderName(false)
+  }
+
+  const handleConfirmSave = () => {
+    const updated = draftWidgets.map((w, i) => ({ ...w, order: i }))
+    if (isNewDashboardMode) {
+      const name = editHeaderName.trim() || "Novo Dashboard"
+      const newDashboard: SavedDashboard = {
+        id: `dashboard-${Date.now()}`,
+        name,
+        widgets: updated,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isGlobal: false,
+        isDefault: false,
+        sharedWith: [],
+        createdBy: "current-user",
+      }
+      const updatedDashboards = [...savedDashboards, newDashboard]
+      setSavedDashboards(updatedDashboards)
+      localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
+      localStorage.setItem("current-dashboard-id", newDashboard.id)
+      setCurrentDashboardId(newDashboard.id)
+      setWidgets(updated)
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated))
+      setShowSaveConfirmDialog(false)
+      setIsEditDashboardModalOpen(false)
+      setEditModalMode("none")
+      setIsEditingHeaderName(false)
+      setIsNewDashboardMode(false)
+      toast({ title: "Dashboard criado", description: `"${name}" foi criado com sucesso.` })
+    } else {
+      setWidgets(updated)
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated))
+      if (currentDashboardId) {
+        const updatedDashboards = savedDashboards.map((d) =>
+          d.id === currentDashboardId
+            ? { ...d, name: editHeaderName.trim() || d.name, widgets: updated, updatedAt: new Date().toISOString() }
+            : d,
+        )
+        setSavedDashboards(updatedDashboards)
+        localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
+      }
+      setShowSaveConfirmDialog(false)
+      setIsEditDashboardModalOpen(false)
+      setEditModalMode("none")
+      setIsEditingHeaderName(false)
+      toast({ title: "Dashboard salvo", description: "Widgets atualizados com sucesso." })
+    }
+  }
+
+  const handleConfirmCancel = () => {
+    setShowCancelConfirmDialog(false)
+    setIsEditDashboardModalOpen(false)
+    setEditModalMode("none")
+    setIsEditingHeaderName(false)
+    setIsNewDashboardMode(false)
+  }
   // End Undeclared Variables Fixes
 
   useEffect(() => {
@@ -941,11 +1018,6 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedLayout = localStorage.getItem("dashboard-column-layout")
-    if (savedLayout) {
-      setColumnLayout(savedLayout as ColumnLayout)
-    }
-
     const savedSize = localStorage.getItem("dashboard-widget-size")
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize)
@@ -961,19 +1033,42 @@ export default function AdminDashboardPage() {
       }
     }
 
-    // Load saved dashboards from localStorage
+    // Load saved dashboards from localStorage, always ensuring the 3 built-in presets exist
+    const mk = (type: string, order: number) => ({ id: `preset-${type}-${order}`, type, visible: true, order })
+    const builtinPresets: SavedDashboard[] = [
+      {
+        id: "preset-financeiro", name: "Visão Financeira", isDefault: true,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: "system", sharedWith: [],
+        widgets: [mk("revenue",0),mk("mrr",1),mk("averageTicket",2),mk("ltv",3),mk("churn",4),mk("cmv",5),mk("accountsReceivable",6),mk("creditPlans",7)],
+      },
+      {
+        id: "preset-vendas", name: "Visão de Vendas", isDefault: false,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: "system", sharedWith: [],
+        widgets: [mk("metrics",0),mk("activeProjectsWidget",1),mk("statusOverview",2),mk("agenciesRanking",3),mk("tasks",4),mk("platformActivities",5),mk("alerts",6),mk("quickActions",7)],
+      },
+      {
+        id: "preset-nomades", name: "Visão de Nômades", isDefault: false,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: "system", sharedWith: [],
+        widgets: [mk("nomads",0),mk("nomadsIndicators",1),mk("nomadsRanking",2),mk("performers",3),mk("userDistribution",4),mk("activeUsers",5)],
+      },
+    ] as SavedDashboard[]
+
     const savedDashboardsData = localStorage.getItem("saved-dashboards")
-    if (savedDashboardsData) {
-      const parsedDashboards = JSON.parse(savedDashboardsData)
-      setSavedDashboards(parsedDashboards)
-      // Try to find the currently active dashboard
-      const currentDashboard = parsedDashboards.find(
-        (d: SavedDashboard) => d.id === localStorage.getItem("current-dashboard-id"),
-      )
-      if (currentDashboard) {
-        setCurrentDashboardId(currentDashboard.id)
-        setWidgets(currentDashboard.widgets)
-      }
+    let parsedDashboards: SavedDashboard[] = savedDashboardsData ? JSON.parse(savedDashboardsData) : []
+    // Merge: add any missing presets (by id) at the front
+    const missingPresets = builtinPresets.filter((p) => !parsedDashboards.some((d) => d.id === p.id))
+    if (missingPresets.length > 0) {
+      parsedDashboards = [...missingPresets, ...parsedDashboards]
+      localStorage.setItem("saved-dashboards", JSON.stringify(parsedDashboards))
+    }
+    setSavedDashboards(parsedDashboards)
+    const storedId = localStorage.getItem("current-dashboard-id")
+    const currentDashboard = parsedDashboards.find((d) => d.id === storedId)
+      ?? parsedDashboards.find((d) => d.isDefault)
+      ?? parsedDashboards[0]
+    if (currentDashboard) {
+      setCurrentDashboardId(currentDashboard.id)
+      setWidgets(currentDashboard.widgets)
     }
   }, [])
 
@@ -992,7 +1087,6 @@ export default function AdminDashboardPage() {
       ),
     )
     localStorage.setItem("dashboard-metric-cards", JSON.stringify(metricCards))
-    localStorage.setItem("dashboard-column-layout", columnLayout)
     localStorage.setItem("dashboard-widget-size", widgetSize)
     // Save widget period overrides to localStorage
     localStorage.setItem("dashboard-widget-periods", JSON.stringify(widgetPeriods))
@@ -1002,7 +1096,7 @@ export default function AdminDashboardPage() {
     if (currentDashboardId) {
       localStorage.setItem("current-dashboard-id", currentDashboardId)
     }
-  }, [widgets, metricCards, columnLayout, widgetSize, widgetPeriods, savedDashboards, currentDashboardId]) // Added savedDashboards and currentDashboardId to dependencies
+  }, [widgets, metricCards, widgetSize, widgetPeriods, savedDashboards, currentDashboardId])
 
   useEffect(() => {
     console.log("[v0] AdminDashboardPage mounted successfully")
@@ -1590,94 +1684,73 @@ export default function AdminDashboardPage() {
     })
   }
 
-  const handleExportPDF = async () => {
-    const visibleWidgets = widgets.filter((w) => w.visible).map((w) => w.type)
-
-    if (visibleWidgets.length === 0) {
-      console.log("[v0] No visible widgets to export")
+  const handleExportAs = async (exportFormat: "pdf" | "png") => {
+    const area = document.getElementById("dashboard-export-area")
+    if (!area) {
+      alert("Nenhum conteúdo encontrado para exportar.")
       return
     }
 
-    console.log("[v0] Starting PDF export with widgets:", visibleWidgets)
     setIsExporting(true)
 
     try {
-      // Create a temporary container with only selected widgets
-      const tempContainer = document.createElement("div")
-      tempContainer.style.position = "absolute"
-      tempContainer.style.left = "-9999px"
-      tempContainer.style.top = "0"
-      tempContainer.style.width = "1200px"
-      tempContainer.style.backgroundColor = "#f1f5f9"
-      tempContainer.style.padding = "40px"
-      document.body.appendChild(tempContainer)
+      const timestamp = format(new Date(), "yyyy-MM-dd-HHmm")
 
-      // Add header
-      const header = document.createElement("div")
-      header.style.marginBottom = "30px"
-      header.innerHTML = `
-        <h1 style="font-size: 32px; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Painel de Administração - Allka</h1>
-        <p style="font-size: 16px; color: #64748b;">Relatório gerado em ${formatDate(new Date(), "dd/MM/yyyy 'às' HH:mm")}</p>
-        <p style="font-size: 14px; color: #64748b; margin-top: 4px;">Período: ${globalPeriod.label}</p>
-      `
-      tempContainer.appendChild(header)
-
-      for (const widgetId of visibleWidgets) {
-        const widgetElement = document.querySelector(`[data-widget-id="${widgetId}"]`)
-        if (widgetElement) {
-          console.log("[v0] Cloning widget:", widgetId)
-          const clone = widgetElement.cloneNode(true) as HTMLElement
-          // Remove customize mode controls
-          const controls = clone.querySelectorAll("[data-customize-control]")
-          controls.forEach((control) => control.remove())
-          clone.style.marginBottom = "24px"
-          convertOklchToRgb(clone)
-          tempContainer.appendChild(clone)
-        }
-      }
-
-      console.log("[v0] Generating canvas with html2canvas")
-      // Generate canvas
-      const canvas = await html2canvas(tempContainer, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
+      // html-to-image handles modern CSS (oklch, etc.) natively
+      const dataUrl = await toPng(area, {
+        quality: 1,
+        pixelRatio: 2,
         backgroundColor: "#f1f5f9",
+        cacheBust: true,
+        skipAutoScale: true,
+        filter: (node: HTMLElement) => {
+          // Skip customize-mode controls if any are present
+          if (node?.dataset?.customizeControl) return false
+          return true
+        },
       })
 
-      // Remove temporary container
-      document.body.removeChild(tempContainer)
+      if (exportFormat === "png") {
+        const a = document.createElement("a")
+        a.href = dataUrl
+        a.download = `dashboard-allka-${timestamp}.png`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } else {
+        // Load image to get dimensions
+        const img = new Image()
+        img.src = dataUrl
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve()
+          img.onerror = reject
+        })
 
-      const imgData = canvas.toDataURL("image/png")
-      const jsPDF = (await import("jspdf")).default
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      })
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+        const marginMm = 10
+        const usableWidth = 210 - marginMm * 2
+        const imgHeight = (img.height * usableWidth) / img.width
+        const pageHeight = 297 - marginMm * 2
+        let heightLeft = imgHeight
+        let currentY = marginMm
 
-      const imgWidth = 210
-      const pageHeight = 297
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = 0
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight
-        pdf.addPage()
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
+        // First page
+        pdf.addImage(dataUrl, "PNG", marginMm, currentY, usableWidth, imgHeight)
         heightLeft -= pageHeight
-      }
 
-      const filename = `dashboard-allka-${formatDate(new Date(), "yyyy-MM-dd-HHmm")}.pdf`
-      console.log("[v0] Saving PDF:", filename)
-      pdf.save(filename)
+        // Additional pages if content overflows
+        while (heightLeft > 0) {
+          pdf.addPage()
+          currentY = marginMm - (imgHeight - heightLeft)
+          pdf.addImage(dataUrl, "PNG", marginMm, currentY, usableWidth, imgHeight)
+          heightLeft -= pageHeight
+        }
+
+        pdf.save(`dashboard-allka-${timestamp}.pdf`)
+      }
     } catch (error) {
-      console.error("[v0] Error exporting PDF:", error)
-      alert("Erro ao gerar PDF. Por favor, tente novamente.")
+      console.error("Export error:", error)
+      alert("Erro ao exportar. Tente novamente.")
     } finally {
       setIsExporting(false)
     }
@@ -1828,7 +1901,6 @@ export default function AdminDashboardPage() {
         },
       ])
     }
-    // setIsAddWidgetOpen(false) // Modal stays open now - only closes when user clicks X or outside
   }
 
   // Helper function to add widget in the library
@@ -1907,34 +1979,6 @@ export default function AdminDashboardPage() {
     const visibleWidgetIds = widgets.filter((w) => w.visible).map((w) => w.type)
     setSelectedWidgetsForExport(visibleWidgetIds)
   }
-
-  const getColumnClasses = () => {
-    switch (columnLayout) {
-      case "1":
-        return "grid-cols-1"
-      case "2-equal":
-        return "grid-cols-1 lg:grid-cols-2"
-      case "2-33-66":
-        return "grid-cols-1 lg:grid-cols-[33%_66%]"
-      case "2-66-33":
-        return "grid-cols-1 lg:grid-cols-[66%_33%]"
-      case "3-equal":
-        return "grid-cols-1 lg:grid-cols-3"
-      case "3-25-50-25":
-        return "grid-cols-1 lg:grid-cols-[25%_50%_25%]"
-      default:
-        return "grid-cols-1"
-    }
-  }
-
-  const columnLayouts = [
-    { id: "1" as ColumnLayout, label: "100", description: "Uma coluna" },
-    { id: "2-equal" as ColumnLayout, label: "50 / 50", description: "Duas colunas iguais" },
-    { id: "2-33-66" as ColumnLayout, label: "33 / 66", description: "Duas colunas (1/3 - 2/3)" },
-    { id: "2-66-33" as ColumnLayout, label: "66 / 33", description: "Duas colunas (2/3 - 1/3)" },
-    { id: "3-equal" as ColumnLayout, label: "33 / 33 / 33", description: "Três colunas iguais" },
-    { id: "3-25-50-25" as ColumnLayout, label: "25 / 50 / 25", description: "Três colunas variadas" },
-  ]
 
   // Helper to get drag over classes for conditional styling
   const getDragOverClasses = (widgetId: string) => {
@@ -2263,7 +2307,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
                   {metricCards
                     .filter((m) => m.visible)
                     .sort((a, b) => a.order - b.order)
@@ -2305,7 +2349,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
                   {usersByType.map((userType, index) => (
                     <div
                       key={index}
@@ -2449,7 +2493,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
                   {adminProfilesData.map((profile, index) => (
                     <div
                       key={index}
@@ -2613,7 +2657,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
                   <Link to="/admin/usuarios">
                     <button
                       className={cn(
@@ -2852,7 +2896,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
                   {topPerformers.map((performer, index) => (
                     <div
                       key={performer.id}
@@ -2923,7 +2967,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
                   <Link to="/admin/usuarios">
                     <Button
                       variant="outline"
@@ -4421,7 +4465,7 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
                 {topPerformers.map((performer, index) => (
                   <div
                     key={performer.id}
@@ -4505,7 +4549,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
                   {[
                     { id: 1, name: "Alpha Solutions", projects: 55, rating: 4.8, contribution: "R$ 150k" },
                     { id: 2, name: "Beta Innovations", projects: 48, rating: 4.7, contribution: "R$ 120k" },
@@ -4570,7 +4614,7 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground" />}
-                    <CardTitle className="text-lg font-semibold">
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <LayoutGrid className="h-5 w-5" />
                       Visão Geral por Status
                     </CardTitle>
@@ -4585,7 +4629,7 @@ export default function AdminDashboardPage() {
                     <Briefcase className="h-4 w-4" />
                     Projetos
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2">
                     {[
                       { label: "Em andamento", count: 45, status: "ongoing", color: "blue" },
                       { label: "Aprovados", count: 18, status: "approved", color: "green" },
@@ -4598,12 +4642,12 @@ export default function AdminDashboardPage() {
                         onClick={() => {
                           window.location.href = `/admin/projects?status=${item.status}`
                         }}
-                        className="p-4 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
+                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
                       >
-                        <div className="text-xs text-muted-foreground mb-1 group-hover:text-foreground transition-colors">
+                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
                           {item.label}
                         </div>
-                        <div className={`text-2xl font-bold text-${item.color}-600`}>{item.count}</div>
+                        <div className={`text-xl font-bold text-${item.color}-600`}>{item.count}</div>
                       </button>
                     ))}
                   </div>
@@ -4615,7 +4659,7 @@ export default function AdminDashboardPage() {
                     <CheckSquare className="h-4 w-4" />
                     Tarefas
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(85px,1fr))] gap-2">
                     {[
                       { label: "Contratadas", count: 87, status: "contracted", color: "purple" },
                       { label: "Em execução", count: 34, status: "inprogress", color: "blue" },
@@ -4627,12 +4671,12 @@ export default function AdminDashboardPage() {
                         onClick={() => {
                           window.location.href = `/admin/tasks?status=${item.status}`
                         }}
-                        className="p-4 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
+                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
                       >
-                        <div className="text-xs text-muted-foreground mb-1 group-hover:text-foreground transition-colors">
+                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
                           {item.label}
                         </div>
-                        <div className={`text-2xl font-bold text-${item.color}-600`}>{item.count}</div>
+                        <div className={`text-xl font-bold text-${item.color}-600`}>{item.count}</div>
                       </button>
                     ))}
                   </div>
@@ -4644,7 +4688,7 @@ export default function AdminDashboardPage() {
                     <Users className="h-4 w-4" />
                     Leads
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2">
                     {[
                       { label: "Novos", count: 56, status: "new", color: "cyan" },
                       { label: "Em contato", count: 32, status: "contacted", color: "blue" },
@@ -4657,12 +4701,12 @@ export default function AdminDashboardPage() {
                         onClick={() => {
                           window.location.href = `/admin/leads?status=${item.status}`
                         }}
-                        className="p-4 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
+                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
                       >
-                        <div className="text-xs text-muted-foreground mb-1 group-hover:text-foreground transition-colors">
+                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
                           {item.label}
                         </div>
-                        <div className={`text-2xl font-bold text-${item.color}-600`}>{item.count}</div>
+                        <div className={`text-xl font-bold text-${item.color}-600`}>{item.count}</div>
                       </button>
                     ))}
                   </div>
@@ -4784,20 +4828,22 @@ export default function AdminDashboardPage() {
       name: newDashboardName.trim(),
       widgets: widgets,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(), // Added
-      isGlobal: false, // Added
-      sharedWith: [], // Added
-      createdBy: "current-user", // Added, replace with actual user ID
+      updatedAt: new Date().toISOString(),
+      isGlobal: false,
+      isDefault: false,
+      sharedWith: [],
+      createdBy: "current-user",
     }
 
     const updatedDashboards = [...savedDashboards, newDashboard]
     setSavedDashboards(updatedDashboards)
     localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
+    localStorage.setItem("current-dashboard-id", newDashboard.id)
 
     setCurrentDashboardId(newDashboard.id)
     setNewDashboardName("")
     setShowSaveDashboardDialog(false)
-    setIsAddWidgetOpen(false)
+    toast({ title: "Dashboard criado", description: `"${newDashboard.name}" foi salvo com sucesso.` })
   }
 
   const handleEditDashboard = (dashboardId: string) => {
@@ -4849,6 +4895,7 @@ export default function AdminDashboardPage() {
       setWidgets(dashboard.widgets)
       setCurrentDashboardId(dashboardId)
       localStorage.setItem("dashboard-widget-config", JSON.stringify(dashboard.widgets))
+      localStorage.setItem("current-dashboard-id", dashboardId)
     }
   }
 
@@ -4856,341 +4903,382 @@ export default function AdminDashboardPage() {
     const updatedDashboards = savedDashboards.filter((d) => d.id !== dashboardId)
     setSavedDashboards(updatedDashboards)
     localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
-
     if (currentDashboardId === dashboardId) {
-      setCurrentDashboardId(null)
+      const fallback = updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0]
+      if (fallback) { setCurrentDashboardId(fallback.id); setWidgets(fallback.widgets) }
+      else setCurrentDashboardId(null)
     }
+  }
+
+  const handleSetDefaultDashboard = (dashboardId: string) => {
+    const updatedDashboards = savedDashboards.map((d) => ({ ...d, isDefault: d.id === dashboardId }))
+    setSavedDashboards(updatedDashboards)
+    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards))
+    toast({ title: "Dashboard padrão definido", description: "Este dashboard será carregado automaticamente." })
+  }
+
+  const getPresetDashboards = (): SavedDashboard[] => {
+    const mk = (type: WidgetType, order: number): WidgetState => ({
+      id: `preset-${type}-${order}`, type, visible: true, order,
+    })
+    return [
+      {
+        id: "preset-financeiro",
+        name: "Visão Financeira",
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system",
+        sharedWith: [],
+        widgets: [
+          mk("revenue", 0), mk("mrr", 1), mk("averageTicket", 2),
+          mk("ltv", 3), mk("churn", 4), mk("cmv", 5),
+          mk("accountsReceivable", 6), mk("creditPlans", 7),
+        ],
+      },
+      {
+        id: "preset-vendas",
+        name: "Visão de Vendas",
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system",
+        sharedWith: [],
+        widgets: [
+          mk("metrics", 0), mk("activeProjectsWidget", 1), mk("statusOverview", 2),
+          mk("agenciesRanking", 3), mk("tasks", 4), mk("platformActivities", 5),
+          mk("alerts", 6), mk("quickActions", 7),
+        ],
+      },
+      {
+        id: "preset-nomades",
+        name: "Visão de Nômades",
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system",
+        sharedWith: [],
+        widgets: [
+          mk("nomads", 0), mk("nomadsIndicators", 1), mk("nomadsRanking", 2),
+          mk("performers", 3), mk("userDistribution", 4), mk("activeUsers", 5),
+        ],
+      },
+    ]
   }
 
   return (
     <div className="container mx-auto space-y-4 px-0 py-0">
       {/* Dashboard Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
             Painel Administrativo
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Visão geral da plataforma em tempo real</p>
         </div>
-        <Button
-          onClick={() => {
-            setDraftWidgets([...widgets].sort((a, b) => a.order - b.order))
-            setIsEditDashboardModalOpen(true)
-          }}
-          className="h-8 px-3 gap-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-sm shadow-blue-200 dark:shadow-blue-900/40 border-0 text-white rounded-lg"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
-          Editar Dashboard
-        </Button>
-      </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Dashboard selector dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-800 hover:border-violet-400">
+                <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                <span className="truncate">{savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}</span>
+                <ChevronDown className="h-3 w-3 shrink-0 opacity-50 ml-auto" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Dashboards salvos</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {savedDashboards.map((db) => (
+                <div key={db.id} className="flex items-center px-1 py-0.5 rounded hover:bg-muted/60 group">
+                  <button
+                    className="flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded text-xs"
+                    onClick={() => { handleLoadDashboard(db.id); toast({ title: `Dashboard carregado`, description: db.name }) }}
+                  >
+                    <LayoutGrid className={cn("h-3.5 w-3.5 shrink-0", currentDashboardId === db.id ? "text-violet-500" : "text-muted-foreground")} />
+                    <span className={cn("truncate font-medium", currentDashboardId === db.id && "text-violet-600 dark:text-violet-400")}>{db.name}</span>
+                    {currentDashboardId === db.id && <Check className="h-3 w-3 text-violet-500 shrink-0 ml-auto" />}
+                  </button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                    <button
+                      onClick={() => handleSetDefaultDashboard(db.id)}
+                      className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                      title={db.isDefault ? "Dashboard padrão" : "Definir como padrão"}
+                    >
+                      <Star className={cn("h-3.5 w-3.5", db.isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400")} />
+                    </button>
+                    <button
+                      onClick={() => { setDeletingDashboardId(db.id); setShowDeleteDashboardDialog(true) }}
+                      className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      title="Excluir dashboard"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {savedDashboards.length === 0 && (
+                <p className="px-3 py-3 text-xs text-muted-foreground text-center">Nenhum dashboard salvo</p>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  setDraftWidgets([])
+                  setEditHeaderName("")
+                  setIsEditingHeaderName(true)
+                  setEditModalMode("adicionar")
+                  setIsNewDashboardMode(true)
+                  setIsEditDashboardModalOpen(true)
+                }}
+                className="text-xs text-violet-600 dark:text-violet-400 font-medium cursor-pointer gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Criar novo dashboard
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-      <AlertsCenter alerts={mockAlerts} />
+          {/* Editar Dashboard */}
+          <Button
+            onClick={() => {
+              setDraftWidgets([...widgets].sort((a, b) => a.order - b.order))
+              const currentDb = savedDashboards.find((d) => d.id === currentDashboardId)
+              setEditHeaderName(currentDb?.name ?? "Dashboard Padrão")
+              setIsEditingHeaderName(false)
+              setIsEditDashboardModalOpen(true)
+            }}
+            className="h-8 px-3 gap-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-sm shadow-blue-200 dark:shadow-blue-900/40 border-0 text-white rounded-lg"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            Editar
+          </Button>
+        </div>
+      </div>
 
       {/* Compact Controls Bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Calendar className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-        <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5">
-          {[
-            { value: "7 dias", label: "7d" },
-            { value: "30 dias", label: "30d" },
-            { value: "90 dias", label: "90d" },
-          ].map(({ value, label }) => (
+        {/* Period selector */}
+        <div className="flex items-center gap-0.5 bg-muted/60 rounded-xl p-1 border border-border/40">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
+          {(
+            [
+              { type: "last_7_days" as const, label: "7d", fullLabel: "Últimos 7 dias" },
+              { type: "last_30_days" as const, label: "30d", fullLabel: "Últimos 30 dias" },
+            ] as const
+          ).map(({ type, label, fullLabel }) => (
             <button
-              key={value}
-              onClick={() => setSelectedPeriod(value)}
+              key={type}
+              onClick={() => {
+                const { from, to } = getDateRangeFromPeriod(type)
+                setGlobalPeriod({ type, from, to, label: fullLabel })
+              }}
               className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                selectedPeriod === value
-                  ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                globalPeriod.type === type
+                  ? "bg-background shadow-sm text-foreground font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {label}
             </button>
           ))}
+          <button
+            onClick={() => {
+              const today = new Date()
+              const ninetyDaysAgo = new Date(today)
+              ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+              setGlobalPeriod({ type: "custom", from: ninetyDaysAgo, to: today, label: "Últimos 90 dias" })
+            }}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+              globalPeriod.label === "Últimos 90 dias"
+                ? "bg-background shadow-sm text-foreground font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            90d
+          </button>
           <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1",
-                  "text-muted-foreground hover:text-foreground"
+                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5",
+                  !["last_7_days", "last_30_days"].includes(globalPeriod.type) &&
+                    globalPeriod.label !== "Últimos 90 dias"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Personalizar
+                {!["last_7_days", "last_30_days"].includes(globalPeriod.type) &&
+                globalPeriod.label !== "Últimos 90 dias" ? (
+                  <span className="max-w-[130px] truncate">{globalPeriod.label}</span>
+                ) : (
+                  <>
+                    <SlidersHorizontal className="h-3 w-3" />
+                    Personalizar
+                  </>
+                )}
                 <ChevronDown className="h-2.5 w-2.5" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-64" align="start">
-              <div className="space-y-1.5">
-                <h4 className="text-sm font-semibold mb-2">Período</h4>
-                {periodOptions.map((option) => (
-                  <button
-                    key={option.type}
-                    onClick={() => handlePeriodChange(option.type, option.label)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg border transition-all hover:border-primary text-left",
-                      globalPeriod.type === option.type && "border-primary bg-primary/5",
-                    )}
-                  >
-                    {option.label}
-                    {globalPeriod.type === option.type && <Check className="h-3 w-3 text-primary" />}
-                  </button>
-                ))}
+            <PopoverContent className="w-72 p-0 overflow-hidden" align="start">
+              <div className="px-3 py-2.5 border-b bg-muted/30">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Período de dados
+                </p>
+              </div>
+              <div className="p-1.5">
+                {periodOptions
+                  .filter((o) => o.type !== "custom")
+                  .map((option) => (
+                    <button
+                      key={option.type}
+                      onClick={() => handlePeriodChange(option.type, option.label)}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all hover:bg-accent text-left",
+                        globalPeriod.type === option.type &&
+                          globalPeriod.label !== "Últimos 90 dias" &&
+                          "bg-primary/10 text-primary font-medium",
+                      )}
+                    >
+                      {option.label}
+                      {globalPeriod.type === option.type && globalPeriod.label !== "Últimos 90 dias" && (
+                        <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+              </div>
+              <div className="border-t p-3 space-y-2.5 bg-muted/20">
+                <p className="text-xs font-semibold">Intervalo personalizado</p>
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[10px] text-muted-foreground font-medium">De</label>
+                    <input
+                      type="date"
+                      value={customPeriodFrom ? format(customPeriodFrom, "yyyy-MM-dd") : ""}
+                      onChange={(e) =>
+                        setCustomPeriodFrom(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)
+                      }
+                      className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[10px] text-muted-foreground font-medium">Até</label>
+                    <input
+                      type="date"
+                      value={customPeriodTo ? format(customPeriodTo, "yyyy-MM-dd") : ""}
+                      onChange={(e) =>
+                        setCustomPeriodTo(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)
+                      }
+                      className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full h-7 text-xs"
+                  disabled={!customPeriodFrom || !customPeriodTo}
+                  onClick={applyCustomPeriod}
+                >
+                  Aplicar período
+                </Button>
               </div>
             </PopoverContent>
           </Popover>
         </div>
+
+        {/* Period label badge */}
+        <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
+          {globalPeriod.label}
+        </span>
+
         <div className="ml-auto flex items-center gap-1.5">
-          <Popover open={showColumns} onOpenChange={setShowColumns}>
+          {/* Export dropdown */}
+          <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs gap-1.5">
-                <LayoutGrid className="h-3 w-3" />
-                Colunas
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-xs gap-1.5 bg-transparent"
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <>
+                    <Download className="h-3 w-3 animate-pulse" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3 w-3" />
+                    Exportar
+                    <ChevronDown className="h-2.5 w-2.5" />
+                  </>
+                )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64" align="end">
-              <div className="space-y-1.5">
-                <h4 className="text-sm font-semibold mb-2">Layout</h4>
-                {columnLayouts.map((layout) => (
-                  <button
-                    key={layout.id}
-                    onClick={() => { setColumnLayout(layout.id); setShowColumns(false) }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-all hover:border-primary text-left",
-                      columnLayout === layout.id && "border-primary bg-primary/5",
-                    )}
-                  >
-                    <div>
-                      <span className="font-medium">{layout.label}</span>
-                      <span className="text-muted-foreground ml-2">{layout.description}</span>
-                    </div>
-                    {columnLayout === layout.id && <Check className="h-3 w-3 text-primary flex-shrink-0" />}
-                  </button>
-                ))}
-              </div>
+            <PopoverContent className="w-48 p-1.5" align="end">
+              <button
+                onClick={() => {
+                  setShowExportMenu(false)
+                  handleExportAs("pdf")
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+              >
+                <FileText className="h-3.5 w-3.5 text-red-500" />
+                Exportar como PDF
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportMenu(false)
+                  handleExportAs("png")
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+              >
+                <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                Exportar como PNG
+              </button>
             </PopoverContent>
           </Popover>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-xs gap-1.5 bg-transparent"
-            onClick={handleExportPDF}
-            disabled={isExporting}
-          >
-            <FileText className="h-3 w-3" />
-            {isExporting ? "Exportando..." : "Exportar PDF"}
-          </Button>
         </div>
       </div>
 
+      {/* Export capture area: metrics + widgets */}
+      <div id="dashboard-export-area" className="flex flex-col gap-4">
+
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
         {metricCards
           .filter((m) => m.visible)
           .sort((a, b) => a.order - b.order)
           .map((metric) => renderMetricCard(metric.id))}
       </div>
 
-
-
       {/* Widgets Grid */}
-      <div id="dashboard-content" className={cn("grid gap-4 auto-rows-auto", getColumnClasses())}>
+      <div id="dashboard-content" className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
         {widgets
           .filter((w) => w.visible)
           .sort((a, b) => a.order - b.order)
-          .map((widget) => renderWidget(widget))}
+          .map((widget) => (
+            <div
+              key={`wrap-${widget.id}`}
+              className={cn(
+                // col-span based on widget config
+                widget.colSpan === 3 ? "sm:col-span-3" :
+                widget.colSpan === 2 ? "sm:col-span-2" :
+                "sm:col-span-1",
+                // propagate height through: grid cell → outer widget div → Card
+                "flex flex-col",
+                "[&>*]:flex-1 [&>*]:flex [&>*]:flex-col",
+                "[&>*>*:last-child]:flex-1",
+              )}
+            >
+              {renderWidget(widget)}
+            </div>
+          ))}
       </div>
-
-      {/* Floating Add Widget Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <Button
-          size="default"
-          onClick={() => setIsAddWidgetOpen(true)}
-          className="gap-2 shadow-lg rounded-full h-12 px-5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar Widget
-        </Button>
+      {/* end dashboard-export-area */}
       </div>
-
-      {isAddWidgetOpen && (
-        <>
-          {/* Custom overlay without dark background */}
-          <div className="fixed inset-0 z-40" onClick={() => setIsAddWidgetOpen(false)} />
-
-          <div
-            className={cn(
-              "fixed top-0 right-0 h-screen bg-background z-50",
-              sidebarCollapsed ? "w-[calc(100vw-4rem)]" : "w-[calc(100vw-16rem)]",
-              "shadow-[rgba(0,0,0,0.2)_-8px_0px_32px_0px,rgba(0,0,0,0.1)_-4px_0px_16px_0px]",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out",
-              "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-              "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-              "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-100",
-              "duration-300 ease-in-out overflow-hidden flex flex-col",
-            )}
-            style={{
-              left: sidebarCollapsed ? "4rem" : "16rem",
-            }}
-          >
-            {/* Header */}
-            <div className="flex-shrink-0 p-6 border-b bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Biblioteca de Widgets
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1.5">
-                    Adicione widgets ao seu dashboard com um clique
-                  </p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setIsAddWidgetOpen(false)} className="h-8 w-8 p-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary" className="bg-white/80 dark:bg-gray-900/80">
-                  {widgets.filter((w) => w.visible).length} widgets ativos
-                </Badge>
-              </div>
-            </div>
-
-            {/* Widgets Grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 gap-2">
-                {widgetLibrary.map((widget) => {
-                  const existingWidget = widgets.find((w) => w.type === widget.id)
-                  const isVisible = existingWidget?.visible ?? false
-                  const Icon = widget.icon
-
-                  const colorClasses = {
-                    blue: "from-blue-500/10 to-blue-600/5 border-blue-200 dark:border-blue-800",
-                    green: "from-green-500/10 to-green-600/5 border-green-200 dark:border-green-800",
-                    purple: "from-purple-500/10 to-purple-600/5 border-purple-200 dark:border-purple-800",
-                    indigo: "from-indigo-500/10 to-indigo-600/5 border-indigo-200 dark:border-indigo-800",
-                    orange: "from-orange-500/10 to-orange-600/5 border-orange-200 dark:border-orange-800",
-                    emerald: "from-emerald-500/10 to-emerald-600/5 border-emerald-200 dark:border-emerald-800",
-                    teal: "from-teal-500/10 to-teal-600/5 border-teal-200 dark:border-teal-800",
-                    amber: "from-amber-500/10 to-amber-600/5 border-amber-200 dark:border-amber-800",
-                    yellow: "from-yellow-500/10 to-yellow-600/5 border-yellow-200 dark:border-yellow-800",
-                    sky: "from-sky-500/10 to-sky-600/5 border-sky-200 dark:border-sky-800",
-                    red: "from-red-500/10 to-red-600/5 border-red-200 dark:border-red-800",
-                    cyan: "from-cyan-500/10 to-cyan-600/5 border-cyan-200 dark:border-cyan-800",
-                    slate: "from-slate-500/10 to-slate-600/5 border-slate-200 dark:border-slate-800",
-                  }
-
-                  const iconColorClasses = {
-                    blue: "text-blue-600 dark:text-blue-400",
-                    green: "text-green-600 dark:text-green-400",
-                    purple: "text-purple-600 dark:text-purple-400",
-                    indigo: "text-indigo-600 dark:text-indigo-400",
-                    orange: "text-orange-600 dark:text-orange-400",
-                    emerald: "text-emerald-600 dark:text-emerald-400",
-                    teal: "text-teal-600 dark:text-teal-400",
-                    amber: "text-amber-600 dark:text-amber-400",
-                    yellow: "text-yellow-600 dark:text-yellow-400",
-                    sky: "text-sky-600 dark:text-sky-400",
-                    red: "text-red-600 dark:text-red-400",
-                    cyan: "text-cyan-600 dark:text-cyan-400",
-                    slate: "text-slate-600 dark:text-slate-400",
-                  }
-
-                  const bgClass = colorClasses[widget.color as keyof typeof colorClasses] || colorClasses.blue
-                  const iconClass =
-                    iconColorClasses[widget.color as keyof typeof iconColorClasses] || iconColorClasses.blue
-
-                  return (
-                    <div
-                      key={widget.id}
-                      className={cn(
-                        "relative p-2.5 rounded-lg border-2 transition-all hover:shadow-md cursor-pointer group",
-                        bgClass,
-                        isVisible ? "shadow-sm" : "opacity-60",
-                      )}
-                      onClick={() => {
-                        if (isVisible) {
-                          handleRemoveWidget(widget.id)
-                        } else {
-                          handleAddWidget(widget.id)
-                        }
-                      }}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div
-                          className={cn("flex-shrink-0 p-1.5 rounded-lg bg-white/50 dark:bg-gray-900/50", iconClass)}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm leading-tight mb-0.5">{widget.name}</h3>
-                          <p className="text-xs text-muted-foreground leading-tight">{widget.description}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-2">
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            "text-[10px] h-4 px-1.5",
-                            isVisible
-                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-                          )}
-                        >
-                          {isVisible ? "Ativo" : "Inativo"}
-                        </Badge>
-
-                        <Button
-                          variant={isVisible ? "ghost" : "default"}
-                          size="sm"
-                          className={cn(
-                            "h-6 px-2 text-xs",
-                            isVisible
-                              ? "hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30"
-                              : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700",
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (isVisible) {
-                              handleRemoveWidget(widget.id)
-                            } else {
-                              handleAddWidget(widget.id)
-                            }
-                          }}
-                        >
-                          {isVisible ? (
-                            <>
-                              <Minus className="h-3 w-3 mr-1" />
-                              Remover
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-3 w-3 mr-1" />
-                              Adicionar
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-950/20 dark:to-purple-950/20">
-              <Button
-                onClick={() => setShowSaveDashboardDialog(true)}
-                className="w-full h-9 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Salvar Dashboard
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-md">
@@ -5370,7 +5458,7 @@ export default function AdminDashboardPage() {
         )
         return (
           <>
-            <div className="fixed top-0 bottom-0 right-0 z-40 bg-black/30 backdrop-blur-[1px]" style={{ left: "var(--sidebar-width)" }} onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }} />
+            <div className="fixed top-0 bottom-0 right-0 z-40 bg-black/30 backdrop-blur-[1px]" style={{ left: "var(--sidebar-width)" }} onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none"); setIsNewDashboardMode(false) }} />
             <div
               className="fixed top-0 bg-background z-50 flex flex-col shadow-2xl"
               style={{ left: "var(--sidebar-width)", right: 0, bottom: "var(--footer-height, 0px)" }}
@@ -5383,8 +5471,35 @@ export default function AdminDashboardPage() {
                       <LayoutGrid className="h-4 w-4" />
                     </div>
                     <div>
-                      <h2 className="text-base font-bold leading-tight">Editar Dashboard</h2>
-                      <p className="text-white/70 text-[11px] mt-0.5">Arraste para reordenar · {draftWidgets.filter((w) => w.visible).length} widgets ativos</p>
+                      <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide leading-tight">{isNewDashboardMode ? "Novo Dashboard" : "Editar Dashboard"}</p>
+                      {isEditingHeaderName ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <input
+                            autoFocus
+                            value={editHeaderName}
+                            onChange={(e) => setEditHeaderName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveHeaderName()
+                              if (e.key === "Escape") setIsEditingHeaderName(false)
+                            }}
+                            onBlur={handleSaveHeaderName}
+                            placeholder={isNewDashboardMode ? "Nome do dashboard..." : ""}
+                            className="bg-white/20 text-white placeholder-white/50 text-sm font-bold leading-tight rounded px-2 py-0.5 border border-white/30 focus:outline-none w-52"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <h2 className="text-base font-bold leading-tight">{editHeaderName || (isNewDashboardMode ? "Novo Dashboard" : "Dashboard Padrão")}</h2>
+                          <button
+                            onClick={() => setIsEditingHeaderName(true)}
+                            className="bg-white/15 hover:bg-white/30 rounded p-0.5 transition-colors"
+                            title="Renomear dashboard"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                      <p className="text-white/70 text-[11px] mt-0.5">{isNewDashboardMode ? "Adicione widgets à direita e dê um nome ao dashboard" : `Arraste para reordenar · ${draftWidgets.filter((w) => w.visible).length} widgets ativos`}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -5415,7 +5530,7 @@ export default function AdminDashboardPage() {
                     </button>
                     <div className="w-px h-5 bg-white/25 mx-1" />
                     <button
-                      onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }}
+                      onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none"); setIsNewDashboardMode(false) }}
                       className="bg-white/15 hover:bg-white/30 rounded-lg p-1.5 transition-colors"
                     >
                       <X className="h-4 w-4" />
@@ -5443,7 +5558,7 @@ export default function AdminDashboardPage() {
                       <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">Clique em um widget disponível à direita para adicioná-lo ao dashboard</p>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {draftWidgets.map((widget) => {
                       const libItem = widgetLibrary.find((l) => l.id === widget.type)
                       const WIcon = libItem?.icon ?? LayoutGrid
@@ -5452,6 +5567,8 @@ export default function AdminDashboardPage() {
                       const isDraggingThis = modalDraggedId === widget.id
                       const isDragOver = modalDragOverId === widget.id && modalDraggedId !== widget.id
                       const gradient = modalGradientMap[color] ?? modalGradientMap.blue
+                      const widgetColSpan = widget.colSpan ?? 1
+                      const posNum = draftWidgets.findIndex((w) => w.id === widget.id) + 1
 
                       return (
                         <div
@@ -5475,6 +5592,7 @@ export default function AdminDashboardPage() {
                           onDragEnd={() => { setModalDraggedId(null); setModalDragOverId(null) }}
                           className={cn(
                             "group relative rounded-xl border-2 overflow-hidden select-none transition-all duration-150",
+                            widgetColSpan === 3 ? "col-span-3" : widgetColSpan === 2 ? "col-span-2" : "col-span-1",
                             editModalMode !== "remover" && "cursor-grab active:cursor-grabbing",
                             widget.visible
                               ? "border-transparent shadow-sm hover:shadow-md"
@@ -5483,24 +5601,55 @@ export default function AdminDashboardPage() {
                             isDragOver && "ring-2 ring-blue-500 ring-offset-2 scale-[1.02]",
                           )}
                         >
-                          {/* Top gradient strip */}
-                          <div className={cn("h-1.5 w-full bg-gradient-to-r", gradient)} />
+                          {/* Top gradient strip with position badge */}
+                          <div className={cn("h-1 w-full bg-gradient-to-r relative", gradient)}>
+                            <span className="absolute -top-0.5 left-1.5 bg-black/30 text-white text-[9px] font-bold rounded-sm px-1 leading-tight">
+                              #{posNum}
+                            </span>
+                          </div>
 
                           <div className="px-3 py-2.5 bg-card">
-                            <div className="flex items-start gap-2.5">
+                            <div className="flex items-center gap-2">
                               {/* Icon */}
-                              <div className={cn("shrink-0 rounded-lg p-2 bg-gradient-to-br text-white mt-0.5 shadow-sm", gradient)}>
+                              <div className={cn("shrink-0 rounded-md p-1.5 bg-gradient-to-br text-white shadow-sm", gradient)}>
                                 <WIcon className="h-3.5 w-3.5" />
                               </div>
-                              {/* Title + position */}
-                              <div className="flex-1 min-w-0 pr-1">
-                                <p className="text-xs font-semibold text-foreground leading-snug">{title}</p>
-                                <p className="text-[10px] text-muted-foreground mt-1">Posição #{draftWidgets.findIndex((w) => w.id === widget.id) + 1}</p>
+                              {/* Title + col indicator */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-foreground leading-snug truncate">{title}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {widgetColSpan === 1 ? "1/3 da largura" : widgetColSpan === 2 ? "2/3 da largura" : "Largura total"}
+                                </p>
                               </div>
+                              {/* Drag hint */}
+                              {editModalMode !== "remover" && (
+                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors shrink-0" />
+                              )}
+                            </div>
+
+                            {/* Col-span selector */}
+                            <div className="flex items-center gap-1.5 mt-2.5">
+                              <span className="text-[10px] text-muted-foreground font-medium shrink-0">Colunas:</span>
+                              {([1, 2, 3] as const).map((n) => (
+                                <button
+                                  key={n}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => { e.stopPropagation(); setDraftWidgets((prev) => prev.map((w) => w.id === widget.id ? { ...w, colSpan: n } : w)) }}
+                                  title={n === 1 ? "1 coluna (1/3)" : n === 2 ? "2 colunas (2/3)" : "3 colunas (100%)"}
+                                  className={cn(
+                                    "flex-1 h-5 text-[10px] font-bold rounded transition-colors border",
+                                    widgetColSpan === n
+                                      ? "bg-blue-600 text-white border-blue-600"
+                                      : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                                  )}
+                                >
+                                  {n}
+                                </button>
+                              ))}
                             </div>
 
                             {/* Action row */}
-                            <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/60">
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/60">
                               {/* Visibility toggle */}
                               <button
                                 onMouseDown={(e) => e.stopPropagation()}
@@ -5529,11 +5678,6 @@ export default function AdminDashboardPage() {
                                   <Trash2 className="h-3 w-3" />
                                   Remover
                                 </button>
-                              )}
-
-                              {/* Drag hint */}
-                              {editModalMode !== "remover" && (
-                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
                               )}
                             </div>
                           </div>
@@ -5568,7 +5712,7 @@ export default function AdminDashboardPage() {
                               const maxOrder = Math.max(...draftWidgets.map((w) => w.order), -1)
                               setDraftWidgets((prev) => [
                                 ...prev,
-                                { id: `${lib.id}-${Date.now()}`, type: lib.id as WidgetType, visible: true, order: maxOrder + 1 }
+                                { id: `${lib.id}-${Date.now()}`, type: lib.id as WidgetType, visible: true, order: maxOrder + 1, colSpan: 1 }
                               ])
                             }}
                             className="w-full text-left group flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:border-emerald-400 hover:shadow-sm transition-all duration-150"
@@ -5599,23 +5743,16 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8 px-4 text-sm" onClick={() => { setIsEditDashboardModalOpen(false); setEditModalMode("none") }}>
+                  <Button variant="outline" size="sm" className="h-8 px-4 text-sm" onClick={() => setShowCancelConfirmDialog(true)}>
                     Cancelar
                   </Button>
                   <Button
                     size="sm"
                     className="h-8 px-5 text-sm bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 border-0 text-white shadow-sm gap-1.5"
-                    onClick={() => {
-                      const updated = draftWidgets.map((w, i) => ({ ...w, order: i }))
-                      setWidgets(updated)
-                      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated))
-                      setIsEditDashboardModalOpen(false)
-                      setEditModalMode("none")
-                      toast({ title: "Dashboard salvo", description: "Widgets atualizados com sucesso." })
-                    }}
+                    onClick={() => setShowSaveConfirmDialog(true)}
                   >
                     <Save className="h-3.5 w-3.5" />
-                    Salvar
+                    {isNewDashboardMode ? "Criar" : "Salvar"}
                   </Button>
                 </div>
               </div>
@@ -5623,6 +5760,47 @@ export default function AdminDashboardPage() {
           </>
         )
       })()}
+      <ConfirmationDialog
+        open={showCancelConfirmDialog}
+        onClose={() => setShowCancelConfirmDialog(false)}
+        onConfirm={handleConfirmCancel}
+        title={isNewDashboardMode ? "Cancelar criação" : "Cancelar edição"}
+        message={isNewDashboardMode ? "Tem certeza que deseja cancelar? O novo dashboard não será criado." : "Tem certeza que deseja cancelar? Todas as alterações não salvas serão perdidas."}
+        confirmText="Sim, cancelar"
+        cancelText="Voltar"
+        destructive={true}
+      />
+      <ConfirmationDialog
+        open={showSaveConfirmDialog}
+        onClose={() => setShowSaveConfirmDialog(false)}
+        onConfirm={handleConfirmSave}
+        title={isNewDashboardMode ? "Criar dashboard" : "Salvar dashboard"}
+        message={isNewDashboardMode ? `Deseja criar o dashboard "${editHeaderName.trim() || "Novo Dashboard"}" com ${draftWidgets.length} widget(s)?` : "Deseja salvar as alterações feitas no dashboard? As mudanças serão aplicadas imediatamente."}
+        confirmText={isNewDashboardMode ? "Criar" : "Salvar"}
+        cancelText="Voltar"
+        destructive={false}
+      />
+      <ConfirmationDialog
+        open={showDeleteDashboardDialog}
+        onClose={() => { setShowDeleteDashboardDialog(false); setDeletingDashboardId(null) }}
+        onConfirm={() => {
+          if (deletingDashboardId) handleDeleteDashboard(deletingDashboardId)
+          setShowDeleteDashboardDialog(false)
+          setDeletingDashboardId(null)
+        }}
+        title="Excluir dashboard"
+        message={
+          <>
+            Tem certeza que deseja excluir o dashboard{" "}
+            <strong>"{savedDashboards.find((d) => d.id === deletingDashboardId)?.name ?? ""}"</strong>?
+            <br />
+            <span className="text-muted-foreground text-xs">Esta ação não pode ser desfeita.</span>
+          </>
+        }
+        confirmText="Sim, excluir"
+        cancelText="Cancelar"
+        destructive={true}
+      />
     </div>
     // </CHANGE>
   )
