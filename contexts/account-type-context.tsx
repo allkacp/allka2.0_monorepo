@@ -17,8 +17,8 @@ interface AccountTypeContextType {
 const AccountTypeContext = createContext<AccountTypeContextType | undefined>(undefined)
 
 export function AccountTypeProvider({ children }: { children: ReactNode }) {
-  const [accountType, setAccountTypeState] = useState<AccountType>("empresas")
-  const [accountSubType, setAccountSubType] = useState<AccountSubType>("company")
+  const [accountType, setAccountTypeState] = useState<AccountType>("admin")
+  const [accountSubType, setAccountSubType] = useState<AccountSubType>(null)
   const [isLocked, setIsLocked] = useState(false)
 
   useEffect(() => {

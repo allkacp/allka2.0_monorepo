@@ -99,10 +99,10 @@ export function Header() {
     return "User"
   }
 
-  const displayName = simulatedUser?.name || userProfile.name || "João Silva"
+  const displayName = simulatedUser?.name || userProfile.name || "Admin Sistema"
   const displayType = simulatedUser
     ? getAccountTypeLabel(simulatedUser.accountType, simulatedUser.accountSubType)
-    : "Agency"
+    : userProfile.role || "Admin"
   const displayInitials = getUserInitials(displayName)
   const displayAvatar = simulatedUser?.avatar || userProfile.avatar || "/placeholder.svg?height=32&width=32"
 

@@ -97,13 +97,13 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   })
 
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: "João Silva",
-    role: "Gestor de Agência",
-    email: "joao@allka.digital",
-    phone: "(11) 98888-8888",
-    avatar: "JS",
-    department: "Gestão",
-    joinDate: "2023-01-15",
+    name: "Admin Sistema",
+    role: "Admin",
+    email: "admin@allka.digital",
+    phone: "(11) 99999-0001",
+    avatar: "AS",
+    department: "Administração",
+    joinDate: "2023-01-01",
   })
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)

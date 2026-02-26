@@ -14,7 +14,7 @@ export default defineConfig({
   },
   server: {
     port: 8080,
-    open: true,
+    open: '/admin/dashboard',
     watch: {
       ignored: ['**/ARQUIVOS_NAO_USADOS_NO_MOMENTO/**', '**/node_modules/**', '**/.git/**'],
     },
