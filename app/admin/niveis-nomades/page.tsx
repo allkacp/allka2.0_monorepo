@@ -98,7 +98,7 @@ export default function NiveisNomadesPage() {
         action={
           <Button
             onClick={() => openEditDialog()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105"
+            className="btn-brand shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105"
           >
             <Plus className="h-4 w-4 mr-2" />
             Novo Nível
@@ -373,7 +373,7 @@ function LevelForm({ level, onSave, onCancel }: any) {
       <div className="flex gap-2 pt-4">
         <Button
           onClick={handleSave}
-          className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+          className="btn-brand"
         >
           Salvar Nível
         </Button>

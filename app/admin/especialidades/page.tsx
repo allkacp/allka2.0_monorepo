@@ -290,7 +290,7 @@ export default function EspecialidadesPage() {
         title="Gestão de Especialidades"
         description="Configure valores por hora para cada especialidade e nível de experiência"
         action={
-          <Button onClick={() => handleOpenDialog()} className="bg-blue-500 hover:bg-blue-600 text-white">
+          <Button onClick={() => handleOpenDialog()} className="btn-brand">
             <Plus className="h-4 w-4 mr-2" />
             Nova Especialidade
           </Button>
@@ -426,7 +426,7 @@ export default function EspecialidadesPage() {
 
             <div className="flex gap-2 pt-4">
               <Button
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                className="flex-1 btn-brand"
                 onClick={handleSave}
                 disabled={isSaving}
               >

@@ -44,6 +44,11 @@
   --cream: oklch(0.96 0.02 85);
   --charcoal: oklch(0.25 0.01 260);
 
+  /* Brand gradient button vars — updated by sidebar theme via JS */
+  --btn-g-from: #000000;
+  --btn-g-mid: #1a2a6f;
+  --btn-g-to: #c81a7f;
+
   /* Added semantic status color tokens */
   --success: oklch(0.65 0.15 145);
   --success-foreground: oklch(0.25 0.08 145);
@@ -599,4 +604,26 @@
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ── Brand gradient button ─────────────────────────────────────── */
+/* Follows the sidebar theme: CSS vars are updated by sidebar.tsx  */
+.btn-brand,
+.btn-brand:not([disabled]) {
+  background-color: var(--btn-g-from) !important;
+  background-image: linear-gradient(135deg, var(--btn-g-from) 0%, var(--btn-g-mid) 45%, var(--btn-g-to) 100%) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+  transition: filter 0.15s ease, box-shadow 0.15s ease !important;
+}
+.btn-brand:hover {
+  filter: brightness(1.18) !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
+}
+.btn-brand:disabled,
+.btn-brand[disabled] {
+  opacity: 0.55 !important;
+  filter: none !important;
+  cursor: not-allowed !important;
 }

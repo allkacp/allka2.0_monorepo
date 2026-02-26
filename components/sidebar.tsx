@@ -351,6 +351,42 @@ export function Sidebar() {
     })
   }, [pathname, navigation])
 
+  // Sync brand-gradient button CSS vars with the sidebar theme
+  useEffect(() => {
+    const bg = appliedTheme?.backgroundColor || ""
+    const root = document.documentElement
+    if (!bg || bg === "bg-slate-900") {
+      root.style.setProperty("--btn-g-from", "#000000")
+      root.style.setProperty("--btn-g-mid",  "#1a2a6f")
+      root.style.setProperty("--btn-g-to",   "#c81a7f")
+    } else if (bg.includes("green") || bg.includes("emerald") || bg.includes("teal")) {
+      root.style.setProperty("--btn-g-from", "#064e3b")
+      root.style.setProperty("--btn-g-mid",  "#065f46")
+      root.style.setProperty("--btn-g-to",   "#0ea5e9")
+    } else if (bg.includes("purple") || bg.includes("violet") || bg.includes("fuchsia")) {
+      root.style.setProperty("--btn-g-from", "#1e1b4b")
+      root.style.setProperty("--btn-g-mid",  "#4c1d95")
+      root.style.setProperty("--btn-g-to",   "#ec4899")
+    } else if (bg.includes("red") || bg.includes("rose") || bg.includes("orange")) {
+      root.style.setProperty("--btn-g-from", "#1c0505")
+      root.style.setProperty("--btn-g-mid",  "#7f1d1d")
+      root.style.setProperty("--btn-g-to",   "#f97316")
+    } else if (bg.includes("slate") || bg.includes("gray") || bg.includes("neutral") || bg.includes("stone") || bg.includes("zinc")) {
+      root.style.setProperty("--btn-g-from", "#0f172a")
+      root.style.setProperty("--btn-g-mid",  "#1e293b")
+      root.style.setProperty("--btn-g-to",   "#6366f1")
+    } else if (bg.includes("indigo")) {
+      root.style.setProperty("--btn-g-from", "#1e1b4b")
+      root.style.setProperty("--btn-g-mid",  "#3730a3")
+      root.style.setProperty("--btn-g-to",   "#c81a7f")
+    } else {
+      // blue (default) or unknown
+      root.style.setProperty("--btn-g-from", "#000000")
+      root.style.setProperty("--btn-g-mid",  "#1a2a6f")
+      root.style.setProperty("--btn-g-to",   "#c81a7f")
+    }
+  }, [appliedTheme?.backgroundColor])
+
   const getSidebarStyle = (): React.CSSProperties => {
     // Default style when no background is set or it's the default
     if (!appliedTheme.backgroundColor || appliedTheme.backgroundColor === "bg-slate-900") {

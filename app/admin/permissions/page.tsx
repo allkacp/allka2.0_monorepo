@@ -104,7 +104,7 @@ export default function PermissionsPage() {
         </div>
         <Button
           onClick={handleCreateProfile}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white h-9"
+          className="btn-brand h-9"
         >
           <Plus className="h-4 w-4 mr-2" />
           Novo Perfil

@@ -1117,7 +1117,7 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
                 (step === 3 && !canProceedFromStep3) ||
                 (step === 4 && !canProceedFromStep4())
               }
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              className="flex-1 btn-brand"
             >
               Próximo
               <ArrowRight className="h-4 w-4 ml-2" />

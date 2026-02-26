@@ -141,7 +141,7 @@ export default function UsuariosInternosPage() {
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+              <Button className="btn-brand">
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Usuário
               </Button>
@@ -207,7 +207,7 @@ export default function UsuariosInternosPage() {
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600">Adicionar Usuário</Button>
+                <Button className="btn-brand">Adicionar Usuário</Button>
               </div>
             </DialogContent>
           </Dialog>

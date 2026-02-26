@@ -267,7 +267,7 @@ export function AlertsHeaderIcon() {
                 <Button
                   variant="default"
                   size="sm"
-                  className="text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                  className="text-xs gap-1.5 btn-brand"
                   onClick={() => {
                     setModalOpen(false)
                     navigate("/admin/alertas")

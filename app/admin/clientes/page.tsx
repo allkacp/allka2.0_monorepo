@@ -177,7 +177,7 @@ export default function ClientesPage() {
           title="Clientes"
           description="Gerencie todos os seus clientes pagantes em um só lugar"
           actions={
-            <Button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white">
+            <Button className="btn-brand">
               <Plus className="h-4 w-4 mr-2" />
               Novo Cliente
             </Button>

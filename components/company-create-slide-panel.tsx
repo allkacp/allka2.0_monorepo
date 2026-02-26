@@ -448,7 +448,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
               </div>
               <div className="flex gap-2">
                 <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 h-9 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10 transition-colors">Cancelar</button>
-                <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 transition-colors">Usar esta foto</button>
+                <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg btn-brand text-sm font-semibold transition-colors">Usar esta foto</button>
               </div>
             </div>
           </div>
@@ -846,7 +846,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
             Cancelar
           </Button>
           <Button
-            className="bg-gradient-to-r from-blue-600 to-fuchsia-600 hover:from-blue-700 hover:to-fuchsia-700"
+            className="btn-brand"
             onClick={handleSubmit}
             disabled={loading}
           >
@@ -867,7 +867,7 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSubmit} className="bg-blue-600 hover:bg-blue-700">
+            <AlertDialogAction onClick={confirmSubmit} className="btn-brand">
               Criar Empresa
             </AlertDialogAction>
           </AlertDialogFooter>

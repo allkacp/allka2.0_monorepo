@@ -436,11 +436,11 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
               return (
                 <div
                   key={log.id}
-                  className={`group transition-all ${idx % 2 === 0 ? "bg-white" : "bg-slate-100/60"}`}
+                  className={`group transition-all ${idx % 2 === 0 ? "bg-white" : "bg-slate-200/50"}`}
                   style={{ borderLeft: `3px solid ${TYPE_BORDER[log.type] || "#6b7280"}` }}
                 >
                   <div
-                    className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                    className={`flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors ${idx % 2 === 0 ? "hover:bg-slate-50" : "hover:bg-slate-200/70"}`}
                     onClick={() => setExpandedLog(isExpanded ? null : log.id)}
                   >
                     {/* Timestamp */}
@@ -727,7 +727,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
                       </div>
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
                         <button onClick={() => setVisibleFields(["tipo","status","papel","data"])} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Recuperar campos padrão</button>
-                        <button onClick={() => setShowFieldPicker(false)} className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-blue-600 to-violet-600 text-white">Confirmar</button>
+                        <button onClick={() => setShowFieldPicker(false)} className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand">Confirmar</button>
                       </div>
                     </div>
                   )}
@@ -850,7 +850,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
                       />
                       <button disabled={!filterNameInput.trim()}
                         onClick={() => { const newId = `filter-${Date.now()}`; setSavedFilters([...savedFilters, { id: newId, name: filterNameInput.trim(), filters: advancedFilters }]); setSelectedFilterId(newId); setUnsavedChanges(false); setShowSaveInput(false); setFilterNameInput("") }}
-                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm">OK</button>
+                        className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand disabled:opacity-40 transition-all">OK</button>
                       <button onClick={() => { setShowSaveInput(false); setFilterNameInput("") }}
                         className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors">
                         <X className="h-3 w-3" />
@@ -869,7 +869,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
                     </div>
                   ) : (
                     <button onClick={() => { setFilterNameInput(`Filtro ${savedFilters.length + 1}`); setShowSaveInput(true) }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm">
+                      className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand transition-all">
                       Salvar filtro
                     </button>
                   )}

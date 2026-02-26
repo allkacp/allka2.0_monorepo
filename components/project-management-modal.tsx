@@ -1,9 +1,10 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { Textarea } from "@/components/ui/textarea"
 
 import { Label } from "@/components/ui/label"
 
 import React from "react"
+import { createPortal } from "react-dom"
 
 import { useState, useRef } from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -67,12 +68,15 @@ import {
   FolderKanban,
   Palette,
   CheckSquare,
+  ShieldCheck,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast" // Import useToast
 import { DialogFooter } from "@/components/ui/dialog"
-import { ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react"
+import { ChevronLeft, ChevronRight, Search, ChevronDown, FolderOpen } from "lucide-react"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { useSidebar } from "@/contexts/sidebar-context"
 
@@ -221,7 +225,8 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [showDadosProjSaveConfirm, setShowDadosProjSaveConfirm] = useState(false)
   const [showDadosProjCancelConfirm, setShowDadosProjCancelConfirm] = useState(false)
   const [dadosProjForm, setDadosProjForm] = useState({
-    situacao: "AGUARDANDO PAGAMENTO",
+    nomeProjeto: project?.name || "Novo Projeto",
+    situacao: "Ag. Pagamento",
     agencia: "Lamego Academy",
     consultor: "Equipe Lamego",
     emailConsultor: "contato@lamego.com.vc",
@@ -237,6 +242,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
     await new Promise(r => setTimeout(r, 800))
     setIsSavingDados(false)
     setIsDadosProjEditMode(false)
+    setShowDadosProjSaveConfirm(false)
   }
   const [productSortOrder, setProductSortOrder] = useState<"asc" | "desc">("asc")
   const [productPercentageFilter, setProductPercentageFilter] = useState<string>("all")
@@ -247,6 +253,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [approvedFileTypeFilter, setApprovedFileTypeFilter] = useState("all")
   const [approvedFileSortOrder, setApprovedFileSortOrder] = useState("recent")
   const [showAddFileDialog, setShowAddFileDialog] = useState(false)
+  const [activeFileTab, setActiveFileTab] = useState<"iniciais" | "aprovados">("iniciais")
   const [newFileName, setNewFileName] = useState("")
   const [editedProject, setEditedProject] = useState<Partial<Project> | null>(null)
   const [editedProducts, setEditedProducts] = useState<any[]>([])
@@ -274,6 +281,10 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   // Added state for share credential sheet
   const [showShareCredential, setShowShareCredential] = useState(false)
+  const [showAddCredentialDialog, setShowAddCredentialDialog] = useState(false)
+  const [newCredentialForm, setNewCredentialForm] = useState({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" })
+  const [newCredentialPasswordVisible, setNewCredentialPasswordVisible] = useState(false)
+  const [newCredentialConfirmVisible, setNewCredentialConfirmVisible] = useState(false)
 
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>("all")
   const [taskProductFilter, setTaskProductFilter] = useState<string>("all")
@@ -1640,6 +1651,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
           hideOverlay={true}
           className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden"
           style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
+          onInteractOutside={(e) => e.preventDefault()}
         >
           <div className="relative flex flex-col h-full overflow-hidden">
             {/* Hidden file input */}
@@ -1652,7 +1664,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               right={
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Badge className="bg-blue-500/90 text-white text-[10px] px-2 py-0.5 font-semibold border-0">
-                    {mockData.situacao}
+                    {dadosProjForm.situacao}
                   </Badge>
                   {/* Palette button */}
                   <button
@@ -1676,14 +1688,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       <button onClick={onExport} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
                         <FileText className="h-3 w-3" />
                         Exportar
-                      </button>
-                      <button onClick={onEdit} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
-                        <Edit className="h-3 w-3" />
-                        Editar
-                      </button>
-                      <button onClick={onCancel} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-white text-[10px] font-medium transition-colors border border-red-400/30">
-                        <Ban className="h-3 w-3" />
-                        Cancelar
                       </button>
                     </>
                   )}
@@ -1711,19 +1715,28 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
                   {/* Project Info */}
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-white font-bold text-base truncate">{project?.name || "Novo Projeto"}</h2>
+                    {isDadosProjEditMode ? (
+                      <input
+                        value={dadosProjForm.nomeProjeto}
+                        onChange={e => setDadosProjForm(f => ({ ...f, nomeProjeto: e.target.value }))}
+                        className="w-full bg-white/15 border border-white/40 rounded-md px-2 py-1 text-white font-bold text-base placeholder-white/50 focus:outline-none focus:border-white/70"
+                        placeholder="Nome do projeto"
+                      />
+                    ) : (
+                      <h2 className="text-white font-bold text-base truncate">{dadosProjForm.nomeProjeto}</h2>
+                    )}
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-white/70 text-xs flex items-center gap-1">
                         <Building2 className="h-3 w-3" />
-                        {mockData.agencia}
+                        {dadosProjForm.agencia}
                       </span>
                       <span className="text-white/70 text-xs flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        {mockData.cliente}
+                        {dadosProjForm.cliente}
                       </span>
                       <span className="text-white/70 text-xs flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {mockData.dataCriacao}
+                        {dadosProjForm.dataCriacao}
                       </span>
                     </div>
                   </div>
@@ -1855,7 +1868,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 h-9 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10 transition-colors">Cancelar</button>
-                    <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 transition-colors">Usar esta foto</button>
+                    <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg btn-brand text-sm font-semibold transition-colors">Usar esta foto</button>
                   </div>
                 </div>
               </div>
@@ -2049,7 +2062,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         </Button>
                       ) : (
                         <div className="flex gap-2">
-                          <Button onClick={() => setShowDadosProjSaveConfirm(true)} size="sm" disabled={isSavingDados} className="bg-emerald-600 hover:bg-emerald-700">
+                          <Button onClick={() => setShowDadosProjSaveConfirm(true)} size="sm" disabled={isSavingDados} className="btn-brand">
                             {isSavingDados ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                             {isSavingDados ? "Salvando..." : "Salvar"}
                           </Button>
@@ -2074,20 +2087,43 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       </AccordionTrigger>
                       <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Situação</p>
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 col-span-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Situação</p>
                             {isDadosProjEditMode ? (
-                              <Select value={dadosProjForm.situacao} onValueChange={v => setDadosProjForm(f => ({ ...f, situacao: v }))}>
-                                <SelectTrigger className="h-8 text-sm border-slate-300"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="AGUARDANDO PAGAMENTO">Aguardando Pagamento</SelectItem>
-                                  <SelectItem value="EM ANDAMENTO">Em Andamento</SelectItem>
-                                  <SelectItem value="CONCLUÍDO">Concluído</SelectItem>
-                                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[
+                                  { value: "Rascunho",      dot: "bg-slate-400",   active: "bg-slate-800 text-white border-slate-800",    idle: "bg-white border-slate-300 text-slate-600 hover:border-slate-500" },
+                                  { value: "Ag. Pagamento", dot: "bg-cyan-500",    active: "bg-cyan-600 text-white border-cyan-600",      idle: "bg-white border-slate-300 text-slate-600 hover:border-cyan-400" },
+                                  { value: "Planejamento",  dot: "bg-orange-500", active: "bg-orange-500 text-white border-orange-500",  idle: "bg-white border-slate-300 text-slate-600 hover:border-orange-400" },
+                                  { value: "Em Andamento",  dot: "bg-blue-500",   active: "bg-blue-600 text-white border-blue-600",      idle: "bg-white border-slate-300 text-slate-600 hover:border-blue-400" },
+                                  { value: "Pausado",       dot: "bg-amber-400",  active: "bg-amber-500 text-white border-amber-500",    idle: "bg-white border-slate-300 text-slate-600 hover:border-amber-400" },
+                                  { value: "Concluído",     dot: "bg-emerald-500",active: "bg-emerald-600 text-white border-emerald-600",idle: "bg-white border-slate-300 text-slate-600 hover:border-emerald-400" },
+                                  { value: "Cancelado",     dot: "bg-red-500",    active: "bg-red-600 text-white border-red-600",        idle: "bg-white border-slate-300 text-slate-600 hover:border-red-400" },
+                                ].map(opt => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setDadosProjForm(f => ({ ...f, situacao: opt.value }))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                                      dadosProjForm.situacao === opt.value ? opt.active : opt.idle
+                                    }`}
+                                  >
+                                    <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
+                                      dadosProjForm.situacao === opt.value ? "bg-white" : opt.dot
+                                    }`} />
+                                    {opt.value}
+                                  </button>
+                                ))}
+                              </div>
                             ) : (
-                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
+                              <div className="flex items-center gap-1.5">
+                                {[{ value: "Rascunho", dot: "bg-slate-400" },{ value: "Ag. Pagamento", dot: "bg-cyan-500" },{ value: "Planejamento", dot: "bg-orange-500" },{ value: "Em Andamento", dot: "bg-blue-500" },{ value: "Pausado", dot: "bg-amber-400" },{ value: "Concluído", dot: "bg-emerald-500" },{ value: "Cancelado", dot: "bg-red-500" }].find(o => o.value === dadosProjForm.situacao) && (
+                                  <>
+                                    <div className={`h-2.5 w-2.5 rounded-full ${{"Rascunho":"bg-slate-400","Ag. Pagamento":"bg-cyan-500","Planejamento":"bg-orange-500","Em Andamento":"bg-blue-500","Pausado":"bg-amber-400","Concluído":"bg-emerald-500","Cancelado":"bg-red-500"}[dadosProjForm.situacao] ?? "bg-slate-400"}`} />
+                                    <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
+                                  </>
+                                )}
+                              </div>
                             )}
                           </div>
                           <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
@@ -2124,11 +2160,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                           </div>
                           <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Data de Criação</p>
-                            {isDadosProjEditMode ? (
-                              <Input value={dadosProjForm.dataCriacao} onChange={e => setDadosProjForm(f => ({ ...f, dataCriacao: e.target.value }))} className="h-8 text-sm border-slate-300" />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">{dadosProjForm.dataCriacao}</p>
-                            )}
+                            <p className="text-sm font-semibold text-slate-800">{dadosProjForm.dataCriacao}</p>
                           </div>
                           <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Permite Portfólio</p>
@@ -2376,428 +2408,334 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               </TabsContent>
 
               {/* Arquivos */}
-              <TabsContent value="arquivos" className="p-6 m-0 flex-1 overflow-y-auto">
-                <Tabs defaultValue="iniciais" className="w-full">
-                  <TabsList className="w-full justify-start rounded-lg bg-gray-100 h-auto p-1 mb-6">
-                    <TabsTrigger
-                      value="iniciais"
-                      className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm px-4 py-2.5 text-sm font-medium transition-all"
-                    >
-                      Arquivos Iniciais
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="aprovados"
-                      className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm px-4 py-2.5 text-sm font-medium transition-all"
-                    >
-                      Arquivos Aprovados
-                    </TabsTrigger>
-                  </TabsList>
+              <TabsContent value="arquivos" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
 
-                  {/* Initial Files Sub-tab */}
-                  <TabsContent value="iniciais" className="m-0">
-                    <div className="space-y-4">
-                      {/* Filters */}
-                      <div className="flex items-center gap-2 pb-4 border-b">
-                        <Select value={fileTypeFilter} onValueChange={setFileTypeFilter}>
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder="Tipo de Arquivo" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos os Tipos</SelectItem>
-                            <SelectItem value="pdf">PDF</SelectItem>
-                            <SelectItem value="image">Imagem</SelectItem>
-                            <SelectItem value="video">Vídeo</SelectItem>
-                            <SelectItem value="document">Documento</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select value={fileSortOrder} onValueChange={setFileSortOrder}>
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder="Ordenar por" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="recent">Mais Recente</SelectItem>
-                            <SelectItem value="oldest">Mais Antigo</SelectItem>
-                            <SelectItem value="name">Nome A-Z</SelectItem>
-                            <SelectItem value="size">Tamanho</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs ml-auto bg-transparent"
-                          onClick={() => setShowAddFileDialog(true)}
-                        >
-                          <Upload className="h-3.5 w-3.5 mr-1.5" />
-                          Adicionar Arquivo
-                        </Button>
-                      </div>
-
-                      <p className="text-xs text-muted-foreground">
-                        Arquivos que a agência anexa ou deleta para usar nas tarefas do projeto (logotipos, briefings,
-                        etc.)
-                      </p>
-
-                      <div className="space-y-2">
-                        <Card className="p-3 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Briefing_Florescer.pdf</p>
-                                <p className="text-xs text-muted-foreground">Adicionado em 19/02/2025 • 2.5 MB</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-
-                        <Card className="p-3 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-purple-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-purple-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Logo_Atual_Florescer.ai</p>
-                                <p className="text-xs text-muted-foreground">Adicionado em 19/02/2025 • 8.3 MB</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-
-                        <Card className="p-3 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Referencias_Visuais.zip</p>
-                                <p className="text-xs text-muted-foreground">Adicionado em 20/02/2025 • 15.7 MB</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  {/* Approved Files Sub-tab */}
-                  <TabsContent value="aprovados" className="m-0">
-                    <div className="space-y-4">
-                      {/* Filters */}
-                      <div className="flex items-center gap-2 pb-4 border-b">
-                        <Select value={approvedFileTypeFilter} onValueChange={setApprovedFileTypeFilter}>
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder="Filtrar por Produto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos os Produtos</SelectItem>
-                            <SelectItem value="product1">Produto 1</SelectItem>
-                            <SelectItem value="product2">Produto 2</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select value={approvedFileSortOrder} onValueChange={setApprovedFileSortOrder}>
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder="Ordenar por" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="recent">Data de Conclusão</SelectItem>
-                            <SelectItem value="task">Número da Tarefa</SelectItem>
-                            <SelectItem value="name">Nome A-Z</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-3">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                        <p className="text-xs text-muted-foreground">
-                          Quando uma tarefa do produto é aprovada, o último arquivo anexado fica disponível aqui
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Card className="p-3 hover:bg-gray-50 transition-colors border-l-4 border-green-500">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Design_Homepage_Final.fig</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Tarefa: Design Homepage • Produto: Website Institucional
-                                </p>
-                                <p className="text-xs text-muted-foreground">Aprovado em 15/02/2025 • 4.2 MB</p>
-                              </div>
-                            </div>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </Card>
-
-                        <Card className="p-3 hover:bg-gray-50 transition-colors border-l-4 border-green-500">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Backend_API_Documentation.pdf</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Tarefa: Desenvolvimento Backend • Produto: Website Institucional
-                                </p>
-                                <p className="text-xs text-muted-foreground">Aprovado em 25/02/2025 • 1.8 MB</p>
-                              </div>
-                            </div>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </Card>
-
-                        <Card className="p-3 hover:bg-gray-50 transition-colors border-l-4 border-green-500">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center">
-                                <File className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Hospedagem_Configuracao.txt</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Tarefa: Configuração Hospedagem • Produto: Website Institucional
-                                </p>
-                                <p className="text-xs text-muted-foreground">Aprovado em 18/02/2025 • 0.1 MB</p>
-                              </div>
-                            </div>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </Card>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </TabsContent>
-
-              <TabsContent value="cofre" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  {/* Header */}
+                  <div className="flex items-center justify-between pb-1">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900">Cofre de Senhas</h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Gerencie credenciais e compartilhe com segurança
-                      </p>
+                      <h3 className="text-sm font-semibold text-slate-900">Arquivos do Projeto</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Gerencie os arquivos e entregáveis deste projeto</p>
                     </div>
-                    <Button
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
-                      onClick={() => setShowShareCredential(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nova Credencial
-                    </Button>
+                    {activeFileTab === "iniciais" && (
+                      <button
+                        onClick={() => setShowAddFileDialog(true)}
+                        className="flex items-center gap-2 h-8 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-semibold shadow-sm shadow-blue-200 transition-all"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Adicionar Arquivo
+                      </button>
+                    )}
                   </div>
 
-                  {/* Credentials List */}
-                  <div className="space-y-3">
-                    {mockCredentials.map((credential) => (
-                      <Card
-                        key={credential.id}
-                        className="p-3 hover:shadow-md transition-all border border-gray-200 hover:border-blue-200"
+                  {/* Single card with tab toggle */}
+                  <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white">
+
+                    {/* Tab toggle bar */}
+                    <div className="flex border-b border-slate-200 bg-slate-50">
+                      <button
+                        onClick={() => setActiveFileTab("iniciais")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold transition-all ${
+                          activeFileTab === "iniciais"
+                            ? "text-blue-600 border-b-2 border-blue-500 bg-white"
+                            : "text-slate-400 hover:text-slate-600 border-b-2 border-transparent"
+                        }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2">
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        Arquivos Iniciais
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          activeFileTab === "iniciais" ? "bg-blue-100 text-blue-600" : "bg-slate-200 text-slate-500"
+                        }`}>3</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveFileTab("aprovados")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold transition-all ${
+                          activeFileTab === "aprovados"
+                            ? "text-emerald-600 border-b-2 border-emerald-500 bg-white"
+                            : "text-slate-400 hover:text-slate-600 border-b-2 border-transparent"
+                        }`}
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Arquivos Aprovados
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          activeFileTab === "aprovados" ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-500"
+                        }`}>3</span>
+                      </button>
+                    </div>
+
+                    {/* ── INICIAIS CONTENT ── */}
+                    {activeFileTab === "iniciais" && (
+                      <>
+                        {/* Toolbar */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-white">
+                          <Select value={fileTypeFilter} onValueChange={setFileTypeFilter}>
+                            <SelectTrigger className="h-7 w-[140px] text-xs border-slate-200 bg-slate-50">
+                              <SelectValue placeholder="Todos os Tipos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos os Tipos</SelectItem>
+                              <SelectItem value="pdf">PDF</SelectItem>
+                              <SelectItem value="image">Imagem</SelectItem>
+                              <SelectItem value="video">Vídeo</SelectItem>
+                              <SelectItem value="document">Documento</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={fileSortOrder} onValueChange={setFileSortOrder}>
+                            <SelectTrigger className="h-7 w-[130px] text-xs border-slate-200 bg-slate-50">
+                              <SelectValue placeholder="Mais Recente" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="recent">Mais Recente</SelectItem>
+                              <SelectItem value="oldest">Mais Antigo</SelectItem>
+                              <SelectItem value="name">Nome A-Z</SelectItem>
+                              <SelectItem value="size">Tamanho</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="ml-auto text-[11px] text-slate-400 italic">
+                            Logotipos, briefings e anexos da agência
+                          </p>
+                        </div>
+                        {/* File list */}
+                        <div className="divide-y divide-slate-100">
+                          {[
+                            { name: "Briefing_Florescer.pdf",   date: "19/02/2025", size: "2.5 MB",  iconBg: "bg-blue-50",    iconColor: "text-blue-500" },
+                            { name: "Logo_Atual_Florescer.ai",  date: "19/02/2025", size: "8.3 MB",  iconBg: "bg-purple-50",  iconColor: "text-purple-500" },
+                            { name: "Referencias_Visuais.zip",  date: "20/02/2025", size: "15.7 MB", iconBg: "bg-emerald-50", iconColor: "text-emerald-500" },
+                          ].map((file, idx) => (
+                            <div
+                              key={file.name}
+                              className={`flex items-center gap-3 px-4 py-3 transition-colors ${idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/70 hover:bg-slate-100/70"}`}
+                            >
+                              <div className={`h-9 w-9 rounded-xl ${file.iconBg} flex items-center justify-center shrink-0`}>
+                                <File className={`h-4 w-4 ${file.iconColor}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 truncate">{file.name}</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Adicionado em {file.date} · {file.size}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-slate-400 hover:text-blue-600 transition-all" title="Baixar">
+                                  <Download className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 text-slate-400 hover:text-red-500 transition-all" title="Excluir">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* ── APROVADOS CONTENT ── */}
+                    {activeFileTab === "aprovados" && (
+                      <>
+                        {/* Toolbar */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-white">
+                          <Select value={approvedFileTypeFilter} onValueChange={setApprovedFileTypeFilter}>
+                            <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200 bg-slate-50">
+                              <SelectValue placeholder="Todos os Produtos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos os Produtos</SelectItem>
+                              <SelectItem value="product1">Produto 1</SelectItem>
+                              <SelectItem value="product2">Produto 2</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={approvedFileSortOrder} onValueChange={setApprovedFileSortOrder}>
+                            <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200 bg-slate-50">
+                              <SelectValue placeholder="Data de Conclusão" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="recent">Data de Conclusão</SelectItem>
+                              <SelectItem value="task">Número da Tarefa</SelectItem>
+                              <SelectItem value="name">Nome A-Z</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="ml-auto text-[11px] text-slate-400 italic">
+                            Gerados automaticamente ao aprovar tarefas
+                          </p>
+                        </div>
+                        {/* Approved file list */}
+                        <div className="divide-y divide-slate-100">
+                          {[
+                            { name: "Design_Homepage_Final.fig",    task: "Design Homepage",         product: "Website Institucional", date: "15/02/2025", size: "4.2 MB" },
+                            { name: "Backend_API_Documentation.pdf", task: "Desenvolvimento Backend",  product: "Website Institucional", date: "25/02/2025", size: "1.8 MB" },
+                            { name: "Hospedagem_Configuracao.txt",   task: "Configuração Hospedagem",  product: "Website Institucional", date: "18/02/2025", size: "0.1 MB" },
+                          ].map((file, idx) => (
+                            <div
+                              key={file.name}
+                              className={`flex items-center gap-3 px-4 py-3 transition-colors ${idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/70 hover:bg-slate-100/70"}`}
+                            >
+                              <div className="relative shrink-0">
+                                <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                  <File className="h-4 w-4 text-emerald-500" />
+                                </div>
+                                <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
+                                  <CheckCircle className="h-2 w-2 text-white" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 truncate">{file.name}</p>
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                  <span className="font-medium text-slate-500">{file.task}</span>
+                                  <span className="mx-1 text-slate-300">·</span>
+                                  {file.product}
+                                </p>
+                                <p className="text-[10px] text-emerald-500 font-medium">✓ Aprovado em {file.date} · {file.size}</p>
+                              </div>
+                              <button className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-slate-400 hover:text-blue-600 transition-all shrink-0" title="Baixar">
+                                <Download className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                  </div>
+
+                </div>
+              </TabsContent>
+
+              <TabsContent value="cofre" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+
+                  {/* Stats bar */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                      <div className="h-6 w-6 rounded-md bg-indigo-100 flex items-center justify-center">
+                        <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Total</span>
+                      <span className="text-sm font-bold text-slate-900">{mockCredentials.length}</span>
+                    </div>
+                    {Array.from(new Set(mockCredentials.map((c: any) => c.category))).map((cat: any) => (
+                      <div key={cat} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                        <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
+                        <span className="text-xs font-semibold text-slate-500">{cat}</span>
+                        <span className="text-sm font-bold text-blue-600">{mockCredentials.filter((c: any) => c.category === cat).length}</span>
+                      </div>
+                    ))}
+                    <div className="ml-auto">
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-9 gap-2" onClick={() => setShowAddCredentialDialog(true)}>
+                        <Plus className="h-4 w-4" />
+                        Adicionar senha ao cofre
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Main card */}
+                  <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
+                    <div className="divide-y divide-slate-100">
+                      {mockCredentials.map((credential: any) => (
+                        <div key={credential.id} className="px-5 py-3.5 hover:bg-slate-50/60 transition-colors group">
+                          <div className="flex items-center gap-4">
+                            {/* Icon */}
+                            <div className="relative flex-shrink-0">
                               {getFaviconUrl(credential.url) ? (
                                 <img
                                   src={getFaviconUrl(credential.url) || ""}
                                   alt={credential.title}
-                                  className="w-8 h-8 rounded"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none"
-                                    e.currentTarget.nextElementSibling?.classList.remove("hidden")
-                                  }}
+                                  className="w-9 h-9 rounded-xl border border-slate-200"
+                                  onError={(e) => { e.currentTarget.style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove("hidden") }}
                                 />
                               ) : null}
-                              <div
-                                className={`w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs ${
-                                  getFaviconUrl(credential.url) ? "hidden" : ""
-                                }`}
-                              >
+                              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm ${getFaviconUrl(credential.url) ? "hidden" : ""}`}>
                                 {getInitials(credential.title)}
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="font-semibold text-sm text-gray-900">{credential.title}</h4>
-                                <Badge variant="outline" className="text-[10px] h-4 px-1">
-                                  {credential.category}
-                                </Badge>
                               </div>
                             </div>
 
-                            <div className="space-y-1.5">
+                            {/* Title + category */}
+                            <div className="w-40 flex-shrink-0">
+                              <p className="text-sm font-semibold text-slate-800 truncate">{credential.title}</p>
+                              <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 mt-0.5">{credential.category}</span>
+                            </div>
+
+                            {/* Fields */}
+                            <div className="flex-1 grid grid-cols-3 gap-2.5">
                               {/* URL */}
-                              <div className="flex items-center gap-2">
-                                <label className="text-[10px] font-medium text-gray-500 w-16 shrink-0">URL:</label>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <Input
-                                    value={credential.url}
-                                    readOnly
-                                    className="h-7 text-[11px] bg-gray-50 border-gray-200 truncate"
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 shrink-0"
-                                    onClick={() => copyToClipboard(credential.url, "Link")} // Updated label
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 shrink-0"
-                                    onClick={() => window.open(credential.url, "_blank")}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                  </Button>
+                              <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200/70 min-w-0">
+                                <span className="text-[9px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">URL</span>
+                                <Input value={credential.url} readOnly className="h-5 text-[11px] bg-transparent border-0 p-0 focus-visible:ring-0 truncate min-w-0" />
+                                <div className="flex gap-0.5 shrink-0">
+                                  <button onClick={() => copyToClipboard(credential.url, "Link")} className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors">
+                                    <Copy className="h-2.5 w-2.5" />
+                                  </button>
+                                  <button onClick={() => window.open(credential.url, "_blank")} className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-400 hover:text-blue-600 transition-colors">
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </button>
                                 </div>
                               </div>
 
                               {/* Username */}
-                              <div className="flex items-center gap-2">
-                                <label className="text-[10px] font-medium text-gray-500 w-16 shrink-0">Usuário:</label>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <Input
-                                    value={credential.username}
-                                    readOnly
-                                    className="h-7 text-[11px] bg-gray-50 border-gray-200 truncate"
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 shrink-0"
-                                    onClick={() => copyToClipboard(credential.username, "Usuário")} // Updated label
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
+                              <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200/70 min-w-0">
+                                <span className="text-[9px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">Usuário</span>
+                                <Input value={credential.username} readOnly className="h-5 text-[11px] bg-transparent border-0 p-0 focus-visible:ring-0 truncate min-w-0" />
+                                <button onClick={() => copyToClipboard(credential.username, "Usuário")} className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+                                  <Copy className="h-2.5 w-2.5" />
+                                </button>
                               </div>
 
                               {/* Password */}
-                              <div className="flex items-center gap-2">
-                                <label className="text-[10px] font-medium text-gray-500 w-16 shrink-0">Senha:</label>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <Input
-                                    type={visiblePasswords[credential.id] ? "text" : "password"}
-                                    value={credential.password}
-                                    readOnly
-                                    className="h-7 text-[11px] bg-gray-50 border-gray-200 truncate"
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 shrink-0"
-                                    onClick={() => togglePasswordVisibility(credential.id)}
-                                  >
-                                    {visiblePasswords[credential.id] ? (
-                                      <EyeOff className="h-3 w-3" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 shrink-0"
-                                    onClick={() => copyToClipboard(credential.password, "Senha")} // Updated label
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-
-                              {/* Shared With */}
-                              <div className="flex items-start gap-2 pt-1.5 border-t">
-                                <Users className="h-3 w-3 text-gray-400 mt-0.5" />
-                                <div className="flex-1">
-                                  <p className="text-[10px] font-medium text-gray-500 mb-1">Compartilhado:</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {credential.sharedWith.map((user: any, idx: number) => (
-                                      <Badge key={idx} variant="secondary" className="text-[10px] h-4 px-1.5">
-                                        {typeof user === "string" ? user : user.name}
-                                      </Badge>
-                                    ))}
-                                  </div>
+                              <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200/70 min-w-0">
+                                <span className="text-[9px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">Senha</span>
+                                <Input type={visiblePasswords[credential.id] ? "text" : "password"} value={credential.password} readOnly className="h-5 text-[11px] bg-transparent border-0 p-0 focus-visible:ring-0 truncate min-w-0" />
+                                <div className="flex gap-0.5 shrink-0">
+                                  <button onClick={() => togglePasswordVisibility(credential.id)} className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors">
+                                    {visiblePasswords[credential.id] ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
+                                  </button>
+                                  <button onClick={() => copyToClipboard(credential.password, "Senha")} className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors">
+                                    <Copy className="h-2.5 w-2.5" />
+                                  </button>
                                 </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Actions */}
-                          <div className="flex flex-col gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 w-7 p-0 bg-transparent"
-                              onClick={() => {
-                                setSelectedCredential(credential)
-                                setShowShareCredential(true)
-                              }}
-                            >
-                              <Share2 className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 w-7 p-0 bg-transparent"
-                              onClick={() => handleEditCredential(credential)}
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 bg-transparent"
-                              onClick={() => {
-                                setEditingCredential(credential)
-                                setShowDeleteCredentialDialog(true)
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            {/* Shared avatars + actions */}
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center -space-x-1.5">
+                                {credential.sharedWith.slice(0, 3).map((user: any, idx: number) => {
+                                  const name = typeof user === "string" ? user : user.name
+                                  return (
+                                    <div key={idx} title={name} className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-white flex items-center justify-center">
+                                      <span className="text-[8px] font-bold text-white">{name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}</span>
+                                    </div>
+                                  )
+                                })}
+                                {credential.sharedWith.length > 3 && (
+                                  <div className="h-6 w-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
+                                    <span className="text-[8px] font-semibold text-slate-500">+{credential.sharedWith.length - 3}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => { setSelectedCredential(credential); setShowShareCredential(true) }} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors" title="Compartilhar">
+                                  <Share2 className="h-3 w-3" />
+                                </button>
+                                <button onClick={() => handleEditCredential(credential)} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 transition-colors" title="Editar">
+                                  <Edit className="h-3 w-3" />
+                                </button>
+                                <button onClick={() => { setEditingCredential(credential); setShowDeleteCredentialDialog(true) }} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Excluir">
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </Card>
-                    ))}
+                      ))}
+                      {mockCredentials.length === 0 && (
+                        <div className="py-16 text-center">
+                          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                            <ShieldCheck className="h-6 w-6 text-slate-400" />
+                          </div>
+                          <p className="text-sm font-medium text-slate-500">Nenhuma credencial salva</p>
+                          <p className="text-xs text-slate-400 mt-1">Clique em "Adicionar senha ao cofre" para começar</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
                 </div>
               </TabsContent>
 
@@ -3046,8 +2984,8 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                           getPaginatedTasks().map((tarefa, idx) => (
                             <div
                               key={tarefa.uniqueId}
-                              className={`flex items-center gap-4 px-5 py-3 hover:brightness-95 transition-all ${
-                                idx % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                              className={`flex items-center gap-4 px-5 py-3 transition-all ${
+                                idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"
                               }`}
                               style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
                             >
@@ -3465,252 +3403,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               </TabsContent>
             </Tabs>
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Edit Mode Sheet */}
-      <Sheet open={open && mode === "edit"} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden"
-          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
-        >
-          {/* Edit Header */}
-          <SheetHeader className="px-6 py-4 border-b bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 shrink-0">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-white text-xl font-bold">Editar Projeto</SheetTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                className="h-8 w-8 hover:bg-white/20"
-              >
-                <X className="h-5 w-5 text-white" />
-              </Button>
-            </div>
-          </SheetHeader>
-
-          {/* Edit Content */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-6 py-6 space-y-6">
-              {/* Project Info Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900">Informações do Projeto</h3>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Nome do Projeto</label>
-                  <Input
-                    value={editedProject?.name || ""}
-                    onChange={(e) => setEditedProject({ ...editedProject!, name: e.target.value })}
-                    placeholder="Digite o nome do projeto"
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Descrição</label>
-                  <textarea
-                    value={editedProject?.descricao || ""}
-                    onChange={(e) => setEditedProject({ ...editedProject!, descricao: e.target.value })}
-                    placeholder="Digite a descrição do projeto"
-                    className="w-full h-24 p-3 border border-gray-300 rounded-lg text-sm font-sans resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Situação</label>
-                    <select
-                      value={editedProject?.situacao || "AGUARDANDO PAGAMENTO"}
-                      onChange={(e) => setEditedProject({ ...editedProject!, situacao: e.target.value })}
-                      className="w-full h-9 px-3 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option>AGUARDANDO PAGAMENTO</option>
-                      <option>EM EXECUÇÃO</option>
-                      <option>PAUSADO</option>
-                      <option>CONCLUÍDO</option>
-                      <option>CANCELADO</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Orçamento Total (R$)</label>
-                    <Input
-                      type="number"
-                      value={editedProject?.budget || 0}
-                      onChange={(e) => setEditedProject({ ...editedProject!, budget: Number(e.target.value) })}
-                      placeholder="0,00"
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Products Section */}
-              <div className="space-y-4 border-t pt-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Produtos Contratados</h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs bg-transparent"
-                    onClick={() => {
-                      // Adicionar novo produto
-                      const newProduct = {
-                        id: Math.max(...(editedProducts.map(p => p.id) || [0])) + 1,
-                        nome: "Novo Produto",
-                        tipo: "Avulso",
-                        valor: 0,
-                        dataContratacao: new Date().toLocaleDateString("pt-BR"),
-                        dataEntrega: "",
-                        status: "Contratado",
-                        progresso: 0,
-                      }
-                      setEditedProducts([...editedProducts, newProduct])
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Adicionar Produto
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  {editedProducts && editedProducts.length > 0 ? (
-                    editedProducts.map((product, idx) => (
-                      <Card key={product.id} className="p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <Input
-                              value={product.nome}
-                              onChange={(e) => {
-                                const updated = [...editedProducts]
-                                updated[idx].nome = e.target.value
-                                setEditedProducts(updated)
-                              }}
-                              placeholder="Nome do produto"
-                              className="text-sm font-medium"
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 text-red-600 hover:bg-red-50"
-                            onClick={() => {
-                              setEditedProducts(editedProducts.filter((_, i) => i !== idx))
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs text-gray-600">Tipo</label>
-                            <select
-                              value={product.tipo || "Avulso"}
-                              onChange={(e) => {
-                                const updated = [...editedProducts]
-                                updated[idx].tipo = e.target.value
-                                setEditedProducts(updated)
-                              }}
-                              className="w-full h-8 px-2 border border-gray-300 rounded text-xs"
-                            >
-                              <option>Avulso</option>
-                              <option>Pacote</option>
-                              <option>Recorrente</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-xs text-gray-600">Valor (R$)</label>
-                            <Input
-                              type="number"
-                              value={product.valor || 0}
-                              onChange={(e) => {
-                                const updated = [...editedProducts]
-                                updated[idx].valor = Number(e.target.value)
-                                setEditedProducts(updated)
-                              }}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-xs text-gray-600">Data de Entrega</label>
-                            <Input
-                              type="date"
-                              value={product.dataEntrega || ""}
-                              onChange={(e) => {
-                                const updated = [...editedProducts]
-                                updated[idx].dataEntrega = e.target.value
-                                setEditedProducts(updated)
-                              }}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-xs text-gray-600">Status</label>
-                            <select
-                              value={product.status || "Contratado"}
-                              onChange={(e) => {
-                                const updated = [...editedProducts]
-                                updated[idx].status = e.target.value
-                                setEditedProducts(updated)
-                              }}
-                              className="w-full h-8 px-2 border border-gray-300 rounded text-xs"
-                            >
-                              <option>Contratado</option>
-                              <option>Em Desenvolvimento</option>
-                              <option>Entregue</option>
-                              <option>Cancelado</option>
-                            </select>
-                          </div>
-                        </div>
-                      </Card>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-sm text-gray-500 bg-gray-50 rounded-lg">
-                      Nenhum produto adicionado. Clique em "Adicionar Produto" para começar.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Edit Footer with Save Button */}
-          <div className="border-t bg-gray-50 p-4 flex gap-3 shrink-0">
-            <Button
-              variant="outline"
-              className="flex-1 bg-white"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-              onClick={() => {
-                // Salvar alterações
-                if (editedProject && onSave) {
-                  const updatedProject = {
-                    ...editedProject,
-                    products: editedProducts,
-                  }
-                  console.log("[v0] Salvando projeto:", updatedProject)
-                  onSave(updatedProject)
-                  toast({
-                    title: "Sucesso!",
-                    description: "Projeto atualizado com sucesso.",
-                  })
-                }
-              }}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Salvar Alterações
-            </Button>
           </div>
         </SheetContent>
       </Sheet>
@@ -4168,119 +3860,225 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       </Dialog>
 
       {/* Edited Edit Credential Dialog */}
-      <Dialog open={showEditCredentialDialog} onOpenChange={setShowEditCredentialDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Credencial</DialogTitle>
-          </DialogHeader>
-          {editingCredential && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Título</label>
-                <Input
-                  value={editingCredential.title}
-                  onChange={(e) => setEditingCredential({ ...editingCredential, title: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">URL</label>
-                <Input
-                  value={editingCredential.url}
-                  onChange={(e) => setEditingCredential({ ...editingCredential, url: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Usuário</label>
-                <Input
-                  value={editingCredential.username}
-                  onChange={(e) => setEditingCredential({ ...editingCredential, username: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Senha</label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type={editPasswordVisible ? "text" : "password"}
-                    value={editingCredential.password}
-                    onChange={(e) => setEditingCredential({ ...editingCredential, password: e.target.value })}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-9 w-9 p-0"
-                    onClick={() => setEditPasswordVisible(!editPasswordVisible)}
-                  >
-                    {editPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
+      {/* Add Credential Dialog */}
+      {showAddCredentialDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+          style={{ left: sidebarWidth }}
+          onClick={() => { setShowAddCredentialDialog(false); setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" }); setNewCredentialPasswordVisible(false); setNewCredentialConfirmVisible(false) }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Brand header */}
+            <div className="app-brand-header px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <KeyRound className="h-5 w-5 text-white" />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Confirmar Senha</label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type={editPasswordVisible ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="flex-1"
-                    placeholder="Digite a senha novamente"
-                  />
+                <div className="flex-1">
+                  <h2 className="text-white font-bold text-base">Adicionar senha ao cofre</h2>
+                  <p className="text-white/70 text-xs mt-0.5">Armazene credenciais com segurança</p>
                 </div>
-                {confirmPassword && confirmPassword !== editingCredential.password && (
-                  <p className="text-xs text-red-600">As senhas não coincidem</p>
-                )}
+                <button onClick={() => { setShowAddCredentialDialog(false); setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" }); setNewCredentialPasswordVisible(false); setNewCredentialConfirmVisible(false) }} className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                  <X className="h-4 w-4 text-white" />
+                </button>
               </div>
             </div>
-          )}
-          <DialogFooter className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1 bg-transparent"
-              onClick={() => {
-                setShowEditCredentialDialog(false)
-                setEditPasswordVisible(false) // Reset visibility
-                setConfirmPassword("") // Reset confirmation
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleSaveCredential}
-              disabled={confirmPassword !== editingCredential?.password}
-            >
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            {/* Form */}
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Título *</label>
+                  <Input placeholder="Ex: Admin WordPress" value={newCredentialForm.title} onChange={(e) => setNewCredentialForm(f => ({ ...f, title: e.target.value }))} className="h-9 text-sm border-slate-300" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Categoria</label>
+                  <Select value={newCredentialForm.category} onValueChange={(v) => setNewCredentialForm(f => ({ ...f, category: v }))}>
+                    <SelectTrigger className="h-9 text-sm border-slate-300"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["Website", "Infraestrutura", "Marketing", "Analytics", "Social", "Email", "Outros"].map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">URL</label>
+                <Input placeholder="https://exemplo.com" value={newCredentialForm.url} onChange={(e) => setNewCredentialForm(f => ({ ...f, url: e.target.value }))} className="h-9 text-sm border-slate-300" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Usuário / E-mail *</label>
+                <Input placeholder="usuario@exemplo.com" value={newCredentialForm.username} onChange={(e) => setNewCredentialForm(f => ({ ...f, username: e.target.value }))} className="h-9 text-sm border-slate-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Senha *</label>
+                  <div className="relative">
+                    <Input type={newCredentialPasswordVisible ? "text" : "password"} placeholder="••••••••" value={newCredentialForm.password} onChange={(e) => setNewCredentialForm(f => ({ ...f, password: e.target.value }))} className="h-9 text-sm border-slate-300 pr-9" />
+                    <button type="button" onClick={() => setNewCredentialPasswordVisible(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {newCredentialPasswordVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Confirmar Senha *</label>
+                  <div className="relative">
+                    <Input type={newCredentialConfirmVisible ? "text" : "password"} placeholder="••••••••" value={newCredentialForm.confirmPassword} onChange={(e) => setNewCredentialForm(f => ({ ...f, confirmPassword: e.target.value }))} className={`h-9 text-sm pr-9 ${newCredentialForm.confirmPassword && newCredentialForm.confirmPassword !== newCredentialForm.password ? "border-red-400" : "border-slate-300"}`} />
+                    <button type="button" onClick={() => setNewCredentialConfirmVisible(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {newCredentialConfirmVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  {newCredentialForm.confirmPassword && newCredentialForm.confirmPassword !== newCredentialForm.password && (
+                    <p className="text-[10px] text-red-500 mt-0.5">Senhas não coincidem</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="flex gap-2 px-6 pb-5">
+              <Button variant="outline" className="flex-1 h-9" onClick={() => { setShowAddCredentialDialog(false); setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" }); setNewCredentialPasswordVisible(false); setNewCredentialConfirmVisible(false) }}>Cancelar</Button>
+              <Button
+                className="flex-1 h-9"
+                style={{ background: "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                disabled={!newCredentialForm.title || !newCredentialForm.username || !newCredentialForm.password || newCredentialForm.password !== newCredentialForm.confirmPassword}
+                onClick={() => {
+                  const newCred = { id: Date.now(), title: newCredentialForm.title, url: newCredentialForm.url, username: newCredentialForm.username, password: newCredentialForm.password, category: newCredentialForm.category, sharedWith: [] }
+                  setMockCredentials(prev => [...prev, newCred])
+                  setShowAddCredentialDialog(false)
+                  setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" })
+                  setNewCredentialPasswordVisible(false)
+                  setNewCredentialConfirmVisible(false)
+                  toast({ title: "Credencial adicionada", description: `"${newCred.title}" foi salva no cofre.` })
+                }}
+              >
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Salvar no cofre
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
-      <Dialog open={showDeleteCredentialDialog} onOpenChange={setShowDeleteCredentialDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir Credencial</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-4">
-            Tem certeza que deseja excluir esta credencial? Esta ação não pode ser desfeita.
-          </p>
-          <DialogFooter className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1 bg-transparent"
-              onClick={() => setShowDeleteCredentialDialog(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1 bg-red-600 hover:bg-red-700"
-              onClick={() => editingCredential && handleDeleteCredential(editingCredential.id)}
-            >
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Credential Dialog */}
+      {showEditCredentialDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+          style={{ left: sidebarWidth }}
+          onClick={() => { setShowEditCredentialDialog(false); setEditPasswordVisible(false); setConfirmPassword("") }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="app-brand-header px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Edit className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-white font-bold text-base">Editar credencial</h2>
+                  <p className="text-white/70 text-xs mt-0.5">{editingCredential?.title}</p>
+                </div>
+                <button onClick={() => { setShowEditCredentialDialog(false); setEditPasswordVisible(false); setConfirmPassword("") }} className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                  <X className="h-4 w-4 text-white" />
+                </button>
+              </div>
+            </div>
+            {editingCredential && (
+              <div className="px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Título *</label>
+                    <Input value={editingCredential.title} onChange={(e) => setEditingCredential({ ...editingCredential, title: e.target.value })} className="h-9 text-sm border-slate-300" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Categoria</label>
+                    <Select value={editingCredential.category} onValueChange={(v) => setEditingCredential({ ...editingCredential, category: v })}>
+                      <SelectTrigger className="h-9 text-sm border-slate-300"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["Website", "Infraestrutura", "Marketing", "Analytics", "Social", "Email", "Outros"].map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">URL</label>
+                  <Input value={editingCredential.url} onChange={(e) => setEditingCredential({ ...editingCredential, url: e.target.value })} className="h-9 text-sm border-slate-300" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Usuário / E-mail</label>
+                  <Input value={editingCredential.username} onChange={(e) => setEditingCredential({ ...editingCredential, username: e.target.value })} className="h-9 text-sm border-slate-300" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Nova Senha</label>
+                    <div className="relative">
+                      <Input type={editPasswordVisible ? "text" : "password"} value={editingCredential.password} onChange={(e) => setEditingCredential({ ...editingCredential, password: e.target.value })} className="h-9 text-sm border-slate-300 pr-9" />
+                      <button type="button" onClick={() => setEditPasswordVisible(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        {editPasswordVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Confirmar Senha</label>
+                    <div className="relative">
+                      <Input type={editPasswordVisible ? "text" : "password"} placeholder="Confirmar" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`h-9 text-sm pr-9 ${confirmPassword && confirmPassword !== editingCredential.password ? "border-red-400" : "border-slate-300"}`} />
+                    </div>
+                    {confirmPassword && confirmPassword !== editingCredential.password && (
+                      <p className="text-[10px] text-red-500">Senhas não coincidem</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 px-6 pb-5">
+              <Button variant="outline" className="flex-1 h-9" onClick={() => { setShowEditCredentialDialog(false); setEditPasswordVisible(false); setConfirmPassword("") }}>Cancelar</Button>
+              <Button className="flex-1 h-9" style={{ background: "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)" }} onClick={handleSaveCredential} disabled={!!confirmPassword && confirmPassword !== editingCredential?.password}>
+                <Save className="h-4 w-4 mr-2" />
+                Salvar alterações
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Credential Dialog */}
+      {showDeleteCredentialDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+          style={{ left: sidebarWidth }}
+          onClick={() => setShowDeleteCredentialDialog(false)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="app-brand-header px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-white font-bold text-base">Excluir credencial</h2>
+                  <p className="text-white/70 text-xs mt-0.5">{editingCredential?.title}</p>
+                </div>
+                <button onClick={() => setShowDeleteCredentialDialog(false)} className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                  <X className="h-4 w-4 text-white" />
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-600">Tem certeza que deseja excluir esta credencial? Esta ação não pode ser desfeita.</p>
+            </div>
+            <div className="flex gap-2 px-6 pb-5">
+              <Button variant="outline" className="flex-1 h-9" onClick={() => setShowDeleteCredentialDialog(false)}>Cancelar</Button>
+              <Button className="flex-1 h-9 bg-red-600 hover:bg-red-700" onClick={() => editingCredential && handleDeleteCredential(editingCredential.id)}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Credential Details Sheet - Used for sharing management */}
       <Sheet open={showShareCredential} onOpenChange={setShowShareCredential}>

@@ -101,7 +101,7 @@ export default function ComissionamentosPage() {
           <h1 className="text-3xl font-bold text-gray-900">Gestão de Comissionamentos</h1>
           <p className="text-gray-600 mt-1">Configure remuneração e comissões dos líderes por categoria.</p>
         </div>
-        <Button onClick={() => setIsEditingGlobal(true)} className="bg-blue-500 hover:bg-blue-600 text-white">
+        <Button onClick={() => setIsEditingGlobal(true)} className="btn-brand">
           <Settings className="h-4 w-4 mr-2" />
           Configurações Globais
         </Button>
@@ -205,7 +205,7 @@ export default function ComissionamentosPage() {
                     {category.status === "pending" ? (
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button size="sm" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white">
+                          <Button size="sm" className="flex-1 btn-brand">
                             <Plus className="h-4 w-4 mr-1" />
                             Atribuir Líder
                           </Button>
@@ -494,7 +494,7 @@ export default function ComissionamentosPage() {
               </div>
               <div className="flex gap-2">
                 <Button
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                  className="flex-1 btn-brand"
                   onClick={() => setIsEditingGlobal(false)}
                 >
                   <Save className="h-4 w-4 mr-2" />

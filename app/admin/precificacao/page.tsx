@@ -968,7 +968,7 @@ setIsOpen(false)
               </Button>
               <Button
                 onClick={handleSave}
-                className="px-5 h-9 text-sm bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                className="px-5 h-9 text-sm btn-brand shadow-lg"
               >
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                 {editingItem ? "Atualizar" : "Adicionar"}

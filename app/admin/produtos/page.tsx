@@ -1114,7 +1114,7 @@ export default function AdminProdutosPage() {
           <Button
             onClick={handleOpenProductSheet}
             size="sm"
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0"
+            className="btn-brand border-0"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Novo Produto
@@ -3134,7 +3134,7 @@ manual"
               Salvar Rascunho
             </Button>
             <Button onClick={handleScheduleLaunch}>Agendar Lançamento</Button>
-            <Button onClick={handleSaveProduct} className="bg-gradient-to-r from-blue-500 to-purple-600">
+            <Button onClick={handleSaveProduct} className="btn-brand">
               Salvar Produto
             </Button>
           </SheetFooter>

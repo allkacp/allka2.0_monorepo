@@ -914,7 +914,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 h-9 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10 transition-colors">Cancelar</button>
-                  <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 transition-colors">Usar esta foto</button>
+                  <button onClick={handleCropConfirm} className="flex-1 h-9 rounded-lg btn-brand text-sm font-semibold transition-colors">Usar esta foto</button>
                 </div>
               </div>
             </div>
@@ -1213,13 +1213,13 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                     </div>
                   </button>
                   {!isDadosEditMode ? (
-                    <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleDadosEditMode} size="sm" className="btn-brand">
                       <Edit2 className="h-4 w-4 mr-2" />
                       Editar
                     </Button>
                   ) : (
                     <div className="flex gap-2">
-                      <Button onClick={handleDadosSaveClick} size="sm" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                      <Button onClick={handleDadosSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                         {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                         {isSaving ? "Salvando..." : "Salvar"}
                       </Button>
@@ -1693,7 +1693,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                       <Button
                         onClick={() => { setSocialLinksBuffer([]); setShowSocialModal(true) }}
                         size="sm"
-                        className="gap-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white shadow-sm"
+                        className="gap-2 btn-brand border-0 shadow-sm"
                       >
                         <Plus className="h-3.5 w-3.5" />
                         Adicionar
@@ -2644,7 +2644,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                         <Button
                           onClick={handleCompanyWalletConfirm}
                           disabled={isApplyingCompanyWallet}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          className="flex-1 btn-brand"
                         >
                           {isApplyingCompanyWallet ? (
                             <>

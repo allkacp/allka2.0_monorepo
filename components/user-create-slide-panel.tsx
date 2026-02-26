@@ -490,7 +490,7 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
           {currentStep < 3 ? (
             <Button
               onClick={handleNextStep}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              className="btn-brand"
             >
               Próximo
               <ChevronRight className="h-4 w-4 ml-1" />

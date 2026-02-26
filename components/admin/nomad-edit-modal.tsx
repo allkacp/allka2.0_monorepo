@@ -182,7 +182,7 @@ export function NomadEditModal({ nomad, open, onOpenChange, onSave }: NomadEditM
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} className="bg-gradient-to-r from-blue-600 to-purple-600">
+            <Button onClick={handleSave} className="btn-brand">
               <Save className="h-4 w-4 mr-2" />
               Salvar Alterações
             </Button>

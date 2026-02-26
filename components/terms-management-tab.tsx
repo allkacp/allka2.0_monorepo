@@ -163,7 +163,7 @@ export function TermsManagementTab({ company }: TermsManagementTabProps) {
                   </button>
                   <button
                     onClick={() => handleSignTerm(term)}
-                    className="inline-flex items-center gap-1 h-7 px-2.5 text-[10px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-1 h-7 px-2.5 text-[10px] font-semibold btn-brand rounded-lg transition-colors"
                   >
                     <ShieldCheck className="h-3 w-3" />
                     Assinar
@@ -284,7 +284,7 @@ export function TermsManagementTab({ company }: TermsManagementTabProps) {
                 Fechar
               </Button>
               {selectedTerm.status === "pending" && (
-                <Button size="sm" className="text-xs h-8 bg-blue-600 hover:bg-blue-700" onClick={() => { setShowTermModal(false); handleSignTerm(selectedTerm) }}>
+                <Button size="sm" className="text-xs h-8 btn-brand" onClick={() => { setShowTermModal(false); handleSignTerm(selectedTerm) }}>
                   <ShieldCheck className="h-3.5 w-3.5 mr-1" />
                   Assinar
                 </Button>
@@ -315,7 +315,7 @@ export function TermsManagementTab({ company }: TermsManagementTabProps) {
               <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setShowSignConfirm(false)}>
                 Cancelar
               </Button>
-              <Button size="sm" className="text-xs h-8 bg-blue-600 hover:bg-blue-700" onClick={confirmSignTerm}>
+              <Button size="sm" className="text-xs h-8 btn-brand" onClick={confirmSignTerm}>
                 <ShieldCheck className="h-3.5 w-3.5 mr-1" />
                 Confirmar
               </Button>

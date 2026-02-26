@@ -582,8 +582,8 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
             paginatedTasks.map((tarefa, idx) => (
               <div
                 key={tarefa.id}
-                className={`flex items-center gap-4 px-5 py-3 group hover:brightness-95 transition-all ${
-                  idx % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                className={`flex items-center gap-4 px-5 py-3 group transition-all ${
+                  idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"
                 }`}
                 style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
               >
@@ -952,7 +952,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                       </div>
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
                         <button onClick={() => setVisibleFields(["projeto", "status", "prazo"])} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Recuperar campos padrão</button>
-                        <button onClick={() => setShowFieldPicker(false)} className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-blue-600 to-violet-600 text-white">Confirmar</button>
+                        <button onClick={() => setShowFieldPicker(false)} className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand">Confirmar</button>
                       </div>
                     </div>
                   )}
@@ -1084,7 +1084,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                       />
                       <button disabled={!filterNameInput.trim()}
                         onClick={() => { const newId = `filter-${Date.now()}`; setSavedFilters([...savedFilters, { id: newId, name: filterNameInput.trim(), filters: advancedFilters }]); setSelectedFilterId(newId); setUnsavedChanges(false); setShowSaveInput(false); setFilterNameInput("") }}
-                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm">OK</button>
+                        className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand disabled:opacity-40 transition-all">OK</button>
                       <button onClick={() => { setShowSaveInput(false); setFilterNameInput("") }}
                         className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors">
                         <X className="h-3 w-3" />
@@ -1103,7 +1103,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                     </div>
                   ) : (
                     <button onClick={() => { setFilterNameInput(`Filtro ${savedFilters.length + 1}`); setShowSaveInput(true) }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm">
+                      className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand transition-all">
                       Salvar filtro
                     </button>
                   )}
@@ -1113,7 +1113,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                     Cancelar
                   </button>
                   <button onClick={() => { setIsTaskFilterModalOpen(false); setShowFieldPicker(false); setCurrentPage(1) }}
-                    className="h-7 px-4 rounded-md text-[11px] font-semibold bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white transition-all shadow-sm shadow-blue-200">
+                    className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all">
                     Aplicar Filtros
                   </button>
                 </div>

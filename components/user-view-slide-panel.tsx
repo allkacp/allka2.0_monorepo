@@ -26,6 +26,8 @@ import { useSidebar } from "@/contexts/sidebar-context"
 import { User as UserType } from "@/types/user"
 import { useToast } from "@/hooks/use-toast"
 
+const USER_DADOS_ALL_ACCORDIONS = ["pessoais", "contato", "endereco", "adicionais"]
+
 interface UserViewSlidePanelProps {
   open: boolean
   onClose: () => void
@@ -1285,7 +1287,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         {/* Content with Tabs */}
         <Tabs defaultValue="visao-geral" className="flex-1 flex flex-col min-h-0">
           {/* Tab Navigation - Fixed */}
-          <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-200 bg-white px-6 py-3 overflow-x-auto">
+          <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-300 bg-slate-100 px-[50px] py-3 overflow-x-auto">
             <TabsList className="grid w-max grid-cols-6 gap-1 bg-transparent p-0 h-auto">
               {["visao-geral", "conta", "dados", "financeiro", "permissoes", "seguranca"].map(tab => (
                 <TabsTrigger
@@ -1306,7 +1308,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
           {/* Tab Content - Scrollable */}
           <ScrollArea className="flex-1 min-h-0 overflow-hidden">
-            <div className="p-6 space-y-6 bg-slate-200">
+            <div className="px-[50px] py-6 space-y-6 bg-slate-100">
               {/* Visão Geral */}
               <TabsContent value="visao-geral" className="space-y-4 mt-0">
                 {/* Partnership Card - não disponível neste módulo */}
@@ -1460,7 +1462,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                             if (normalized === "company") {
                               return <Badge className="bg-purple-600 hover:bg-purple-700 text-white">Company</Badge>
                             } else if (normalized === "nomad") {
-                              return <Badge className="bg-blue-600 hover:bg-blue-700 text-white">Nomad</Badge>
+                              return <Badge className="btn-brand text-white">Nomad</Badge>
                             } else if (normalized === "agency") {
                               return <Badge className="bg-orange-600 hover:bg-orange-700 text-white">Agency</Badge>
                             } else if (normalized) {
@@ -1481,17 +1483,17 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
               {/* Conta */}
               <TabsContent value="conta" className="space-y-4 mt-0">
                   {/* Header with Edit Button */}
-                <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
+                <div className="flex items-center justify-between sticky top-0 bg-slate-100 z-10 pb-4">
                   <h3 className="text-lg font-semibold text-slate-900">Gerenciar Conta</h3>
                   <div className="flex items-center gap-2">
                     {!isContaEditMode ? (
-                      <Button onClick={handleContaEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handleContaEditMode} size="sm" className="btn-brand">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Editar Perfil
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={handleContaSaveClick} size="sm" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={handleContaSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
@@ -1673,7 +1675,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                                         ? level === 'free'
                                           ? 'bg-slate-600 hover:bg-slate-700'
                                           : level === 'premium'
-                                          ? 'bg-blue-600 hover:bg-blue-700'
+                                          ? 'btn-brand'
                                           : 'bg-purple-600 hover:bg-purple-700'
                                         : ''
                                     }`}
@@ -1794,13 +1796,13 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                       </div>
                     </button>
                     {!isDadosEditMode ? (
-                      <Button onClick={handleDadosEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handleDadosEditMode} size="sm" className="btn-brand">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Editar
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={handleDadosSaveClick} size="sm" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={handleDadosSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
@@ -2083,13 +2085,13 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   <h3 className="text-lg font-semibold text-slate-900">Dados Financeiros</h3>
                   <div className="flex items-center gap-2">
                     {!isFinancialEditMode ? (
-                      <Button onClick={handleFinancialEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handleFinancialEditMode} size="sm" className="btn-brand">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Editar
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={handleFinancialSaveClick} size="sm" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={handleFinancialSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
@@ -2119,7 +2121,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                           <div className="flex items-center justify-between mb-4">
                             <label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">Cartões de Crédito/Débito</label>
                             {isFinancialEditMode && (
-                              <Button onClick={handleAddCard} size="sm" className="h-8 gap-1 bg-blue-600 hover:bg-blue-700">
+                              <Button onClick={handleAddCard} size="sm" className="h-8 gap-1 btn-brand">
                                 <Plus className="h-4 w-4" />
                                 Novo Cartão
                               </Button>
@@ -2303,7 +2305,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                             Ver Extrato
                           </Button>
                           {isFinancialEditMode && (
-                            <Button onClick={() => setShowAddBalanceModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2">
+                            <Button onClick={() => setShowAddBalanceModal(true)} className="btn-brand font-semibold gap-2">
                               <Plus className="h-4 w-4" />
                               Adicionar Saldo
                             </Button>
@@ -2426,13 +2428,13 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   <h3 className="text-lg font-semibold text-slate-900">Controle de Acesso</h3>
                   <div className="flex items-center gap-2">
                     {!isPermissionsEditMode ? (
-                      <Button onClick={handlePermissionsEditMode} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handlePermissionsEditMode} size="sm" className="btn-brand">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Editar
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={handlePermissionsSaveClick} size="sm" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={handlePermissionsSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
@@ -2734,7 +2736,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-slate-600 block uppercase">Ações de Senha</label>
                         <div className="grid grid-cols-1 gap-2">
-                          <Button onClick={handlePasswordReset} className="bg-blue-600 hover:bg-blue-700 justify-start gap-2">
+                          <Button onClick={handlePasswordReset} className="btn-brand justify-start gap-2">
                             <Key className="h-4 w-4" />
                             Redefinir Senha
                           </Button>
@@ -2776,7 +2778,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                         )}
                       </div>
 
-                      <Button onClick={handleToggle2FA} className={is2FAEnabled ? "bg-red-600 hover:bg-red-700 justify-start gap-2 w-full" : "bg-blue-600 hover:bg-blue-700 justify-start gap-2 w-full"}>
+                      <Button onClick={handleToggle2FA} className={is2FAEnabled ? "bg-red-600 hover:bg-red-700 justify-start gap-2 w-full" : "btn-brand justify-start gap-2 w-full"}>
                         <Smartphone className="h-4 w-4" />
                         {is2FAEnabled ? "Desativar 2FA" : "Ativar 2FA"}
                       </Button>
@@ -2906,7 +2908,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </AlertDialogHeader>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleContaSaveConfirm} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleContaSaveConfirm} disabled={isSaving} className="btn-brand">
                 {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isSaving ? "Salvando..." : "Confirmar"}
               </AlertDialogAction>
@@ -2925,7 +2927,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </AlertDialogHeader>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDadosSaveConfirm} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleDadosSaveConfirm} disabled={isSaving} className="btn-brand">
                 {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isSaving ? "Salvando..." : "Confirmar"}
               </AlertDialogAction>
@@ -2944,7 +2946,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </AlertDialogHeader>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleFinancialSaveConfirm} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleFinancialSaveConfirm} disabled={isSaving} className="btn-brand">
                 {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isSaving ? "Salvando..." : "Confirmar"}
               </AlertDialogAction>
@@ -2988,7 +2990,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3 justify-end">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleSaveCard} className="bg-blue-600 hover:bg-blue-700">
+              <AlertDialogAction onClick={handleSaveCard} className="btn-brand">
                 Adicionar Cartão
               </AlertDialogAction>
             </div>
@@ -3020,7 +3022,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmWalletAdjustment} disabled={isApplyingWallet} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleConfirmWalletAdjustment} disabled={isApplyingWallet} className="btn-brand">
                 {isApplyingWallet ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isApplyingWallet ? "Aplicando..." : "Confirmar"}
               </AlertDialogAction>
@@ -3049,7 +3051,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handlePermissionsSaveConfirm} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handlePermissionsSaveConfirm} disabled={isSaving} className="btn-brand">
                 {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isSaving ? "Salvando..." : "Confirmar"}
               </AlertDialogAction>
@@ -3068,7 +3070,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </AlertDialogHeader>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmSetDefaultCard} className="bg-blue-600 hover:bg-blue-700">
+              <AlertDialogAction onClick={handleConfirmSetDefaultCard} className="btn-brand">
                 Confirmar
               </AlertDialogAction>
             </div>
@@ -3113,7 +3115,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3 justify-end">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleAddBalance} className="bg-blue-600 hover:bg-blue-700">
+              <AlertDialogAction onClick={handleAddBalance} className="btn-brand">
                 Próximo
               </AlertDialogAction>
             </div>
@@ -3137,7 +3139,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3">
               <AlertDialogCancel>Voltar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmAddBalance} disabled={isApplyingWallet} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleConfirmAddBalance} disabled={isApplyingWallet} className="btn-brand">
                 {isApplyingWallet ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isApplyingWallet ? "Processando..." : "Confirmar"}
               </AlertDialogAction>
@@ -3166,7 +3168,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
             <div className="flex gap-3 justify-end">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleRequestUnblock} className="bg-emerald-600 hover:bg-emerald-700">
+              <AlertDialogAction onClick={handleRequestUnblock} className="btn-brand">
                 Enviar Solicitação
               </AlertDialogAction>
             </div>
@@ -3290,7 +3292,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
             <div className="flex gap-3 justify-end">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmPasswordReset} disabled={isSavingSecurityAction} className="bg-blue-600 hover:bg-blue-700">
+              <AlertDialogAction onClick={handleConfirmPasswordReset} disabled={isSavingSecurityAction} className="btn-brand">
                 {isSavingSecurityAction ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {isSavingSecurityAction ? "Processando..." : passwordResetMethod === "link" ? "Gerar Link" : "Confirmar"}
               </AlertDialogAction>
@@ -3331,7 +3333,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   </div>
                 </div>
 
-                <Button onClick={() => setShowTwoFAVerification(true)} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Button onClick={() => setShowTwoFAVerification(true)} className="w-full btn-brand">
                   Próximo: Verificar Código
                 </Button>
               </div>
@@ -3354,7 +3356,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   <Button onClick={() => setShowTwoFAVerification(false)} variant="outline" className="flex-1">
                     Voltar
                   </Button>
-                  <Button onClick={handleVerify2FACode} disabled={isSavingSecurityAction} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                  <Button onClick={handleVerify2FACode} disabled={isSavingSecurityAction} className="flex-1 btn-brand">
                     {isSavingSecurityAction ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     {isSavingSecurityAction ? "Verificando..." : "Ativar 2FA"}
                   </Button>
@@ -3444,3 +3446,4 @@ function DataSection({ title, children }: { title: string; children: React.React
     </div>
   )
 }
+

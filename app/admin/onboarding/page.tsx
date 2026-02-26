@@ -181,7 +181,7 @@ export default function OnboardingPage() {
           </div>
           <Dialog open={isCircuitDialogOpen} onOpenChange={setIsCircuitDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Button className="btn-brand">
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Circuito
               </Button>
@@ -217,7 +217,7 @@ export default function OnboardingPage() {
                   <Button variant="outline" onClick={() => setIsCircuitDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button className="bg-gradient-to-r from-blue-600 to-purple-600">Criar Circuito</Button>
+                  <Button className="btn-brand">Criar Circuito</Button>
                 </div>
               </div>
             </DialogContent>
@@ -385,7 +385,7 @@ export default function OnboardingPage() {
                                       <Button variant="outline" onClick={() => setIsElementDialogOpen(false)}>
                                         Cancelar
                                       </Button>
-                                      <Button className="bg-gradient-to-r from-blue-600 to-purple-600">
+                                      <Button className="btn-brand">
                                         Adicionar
                                       </Button>
                                     </div>

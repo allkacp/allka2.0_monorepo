@@ -3754,24 +3754,24 @@ export default function AdminDashboardPage() {
         return (
           <Card className="overflow-hidden">
             <CardHeader className="border-b bg-gradient-to-r from-success/10 to-chart-3/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-success/20 rounded-lg">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
                     <DollarSign className="h-5 w-5 text-success" />
                   </div>
-                  <div>
-                    <CardTitle className="text-lg">Ticket Médio</CardTitle>
-                    <p className="text-sm text-muted-foreground">Valor médio por cliente e projeto</p>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">Ticket Médio</CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">Valor médio por cliente e projeto</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Exportar
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <FileDown className="h-4 w-4" />
+                    <span className="hidden sm:inline">Exportar</span>
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Ver Detalhes
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <ExternalLink className="h-4 w-4" />
+                    <span className="hidden sm:inline">Detalhes</span>
                   </Button>
                 </div>
               </div>
@@ -3813,15 +3813,11 @@ export default function AdminDashboardPage() {
                         key={item.type}
                         className={`flex items-center justify-between p-3 rounded-lg border ${colorClasses[item.color as keyof typeof colorClasses]}`}
                       >
-                        <div className="flex-1 flex items-center gap-3 flex-1">
-                          <div className="min-w-[130px]">
-                            <p className="text-sm font-medium">{item.type}</p>
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-lg font-bold">{item.value}</p>
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.type}</p>
+                          <p className="text-base font-bold leading-tight">{item.value}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 ml-3 shrink-0">
                           {item.change > 0 ? (
                             <>
                               <TrendingUp className="h-4 w-4 text-success" />
@@ -4333,24 +4329,25 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-muted-foreground">Visão rápida da base de nômades</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
-                    Ver lista
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <span className="hidden min-[380px]:inline">Ver lista</span>
+                    <span className="min-[380px]:hidden text-xs">Lista</span>
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-1" />
-                    Exportar
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-4 w-4" />
+                    <span className="hidden min-[380px]:inline">Exportar</span>
                   </Button>
                 </div>
               </div>
 
               {/* Total em cima - Destaque grande */}
-              <div className="rounded-lg border-2 border-chart-2/30 bg-chart-2/5 p-6 text-center">
-                <p className="text-sm font-medium text-chart-2 mb-2">TOTAL DE NÔMADES</p>
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-5xl font-bold text-chart-2">316</span>
-                  <span className="flex items-center gap-1 text-lg text-success font-semibold">
-                    <TrendingUp className="h-5 w-5" />
+              <div className="rounded-lg border-2 border-chart-2/30 bg-chart-2/5 p-4 text-center">
+                <p className="text-xs font-medium text-chart-2 mb-1">TOTAL DE NÔMADES</p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-4xl font-bold text-chart-2">316</span>
+                  <span className="flex items-center gap-1 text-base text-success font-semibold">
+                    <TrendingUp className="h-4 w-4" />
                     +4%
                   </span>
                 </div>
@@ -4393,18 +4390,18 @@ export default function AdminDashboardPage() {
 
               {/* Métricas adicionais */}
               <div className="rounded-lg border bg-card p-4">
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Novos no período</p>
-                    <p className="text-2xl font-bold text-info">24</p>
+                    <p className="text-[10px] text-muted-foreground mb-1 leading-tight">Novos no período</p>
+                    <p className="text-xl font-bold text-info">24</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Churn</p>
-                    <p className="text-2xl font-bold text-destructive">8</p>
+                    <p className="text-[10px] text-muted-foreground mb-1 leading-tight">Churn</p>
+                    <p className="text-xl font-bold text-destructive">8</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Retenção 30d</p>
-                    <p className="text-2xl font-bold text-success">78%</p>
+                    <p className="text-[10px] text-muted-foreground mb-1 leading-tight">Retenção 30d</p>
+                    <p className="text-xl font-bold text-success">78%</p>
                   </div>
                 </div>
               </div>
@@ -4442,56 +4439,56 @@ export default function AdminDashboardPage() {
         return (
           <Card className="overflow-hidden">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-warning-muted rounded-lg">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-warning-muted rounded-lg shrink-0">
                     <Trophy className="h-5 w-5 text-warning" />
                   </div>
-                  <div>
-                    <CardTitle className="text-lg">Ranking de Nômades</CardTitle>
-                    <p className="text-sm text-muted-foreground">Os melhores nômades da plataforma</p>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">Ranking de Nômades</CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">Os melhores nômades da plataforma</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
-                    Ver todos
-                    <ArrowRightIcon className="h-3 w-3 ml-1" />
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <span className="hidden sm:inline">Ver todos</span>
+                    <ArrowRightIcon className="h-3 w-3" />
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-1" />
-                    Exportar
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline">Exportar</span>
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
                 {topPerformers.map((performer, index) => (
                   <div
                     key={performer.id}
-                    className="group flex items-center space-x-3 p-4 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
+                    className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
                   >
                     <div className="flex-shrink-0">
                       <div className="relative">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-warning to-warning flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:shadow-warning/50 transition-shadow duration-300">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-warning to-warning flex items-center justify-center text-white font-bold text-base shadow-lg group-hover:shadow-warning/50 transition-shadow duration-300">
                           {index + 1}
                         </div>
                         <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
                           <Award
-                            className={`h-5 w-5 ${index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : "text-chart-5"}`}
+                            className={`h-4 w-4 ${index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : "text-chart-5"}`}
                           />
                         </div>
                       </div>
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-semibold leading-none">{performer.name}</p>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex items-center space-x-1">
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <p className="text-sm font-semibold leading-none truncate">{performer.name}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-0.5">
                           <Star className="h-3 w-3 text-warning fill-warning" />
                           <span className="text-xs font-medium">{performer.rating}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">•</span>
-                        <span className="text-xs text-muted-foreground">{performer.projects} projetos</span>
+                        <span className="text-xs text-muted-foreground">{performer.projects} proj.</span>
                       </div>
                       <Badge className={`text-xs ${getBadgeColor(performer.badge)}`}>
                         {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
@@ -4529,27 +4526,27 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground" />}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-cyan-500" />
-                      {getWidgetTitle(widget.type)}
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <Building2 className="h-5 w-5 text-cyan-500 shrink-0" />
+                      <span className="truncate">{getWidgetTitle(widget.type)}</span>
                     </CardTitle>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     <Link to="/admin/agencias">
-                      <Button variant="outline" size="sm" className="text-xs bg-transparent">
-                        Ver todos
-                        <ArrowRightIcon className="h-3 w-3 ml-1" />
+                      <Button variant="outline" size="sm" className="text-xs bg-transparent gap-1">
+                        <span className="hidden sm:inline">Ver todos</span>
+                        <ArrowRightIcon className="h-3 w-3" />
                       </Button>
                     </Link>
-                    <Button variant="outline" size="sm" className="text-xs bg-transparent">
-                      <Download className="h-4 w-4 mr-1" />
-                      Exportar
+                    <Button variant="outline" size="sm" className="text-xs bg-transparent gap-1.5">
+                      <Download className="h-4 w-4" />
+                      <span className="hidden sm:inline">Exportar</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
                   {[
                     { id: 1, name: "Alpha Solutions", projects: 55, rating: 4.8, contribution: "R$ 150k" },
                     { id: 2, name: "Beta Innovations", projects: 48, rating: 4.7, contribution: "R$ 120k" },
@@ -4557,28 +4554,27 @@ export default function AdminDashboardPage() {
                   ].map((agency, index) => (
                     <div
                       key={agency.id}
-                      className="group flex items-center space-x-3 p-4 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
+                      className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
                     >
                       <div className="flex-shrink-0">
                         <div className="relative">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:shadow-cyan-500/50 transition-shadow duration-300">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow-lg group-hover:shadow-cyan-500/50 transition-shadow duration-300">
                             {index + 1}
                           </div>
                         </div>
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-semibold leading-none">{agency.name}</p>
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center space-x-1">
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <p className="text-sm font-semibold leading-none truncate">{agency.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-0.5">
                             <Star className="h-3 w-3 text-warning fill-warning" />
                             <span className="text-xs font-medium">{agency.rating}</span>
                           </div>
                           <span className="text-xs text-muted-foreground">•</span>
-                          <span className="text-xs text-muted-foreground">{agency.projects} projetos</span>
+                          <span className="text-xs text-muted-foreground">{agency.projects} proj.</span>
                         </div>
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Contribuição</span>
-                          <span className="font-medium">{agency.contribution}</span>
+                          <span className="text-muted-foreground truncate">{agency.contribution}</span>
                         </div>
                       </div>
                     </div>
@@ -4811,6 +4807,118 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
           </div>
+        )
+
+      case "tasks":
+        return (
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-chart-3/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-success/20 rounded-lg shrink-0">
+                  <CheckSquare className="h-5 w-5 text-success" />
+                </div>
+                <div className="min-w-0">
+                  <CardTitle className="text-base">Tarefas (Resumo)</CardTitle>
+                  <p className="text-xs text-muted-foreground truncate">Executadas, em execução e contratadas</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              {[
+                { label: "Concluídas", value: 1248, change: 12, color: "text-success" },
+                { label: "Em Execução", value: 87, change: 5, color: "text-info" },
+                { label: "Contratadas", value: 234, change: 8, color: "text-warning" },
+                { label: "Canceladas", value: 19, change: -3, color: "text-destructive" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm font-medium text-muted-foreground">{item.label}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-lg font-bold ${item.color}`}>{item.value.toLocaleString()}</span>
+                    <span className={`text-xs font-medium ${item.change >= 0 ? "text-success" : "text-destructive"}`}>
+                      {item.change >= 0 ? "+" : ""}{item.change}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">SLA — dentro do prazo</p>
+                  <span className="text-sm font-bold text-success">94,2%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+
+      case "nomadsIndicators":
+        return (
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2 border-b bg-gradient-to-r from-chart-4/10 to-chart-3/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-chart-4/20 rounded-lg shrink-0">
+                  <Users className="h-5 w-5 text-chart-4" />
+                </div>
+                <div className="min-w-0">
+                  <CardTitle className="text-base">Indicadores dos Nômades</CardTitle>
+                  <p className="text-xs text-muted-foreground truncate">KPIs de desempenho e qualidade</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              {[
+                { label: "Taxa de Entrega", value: "97,3%", icon: CheckSquare, color: "text-success" },
+                { label: "Avaliação Média", value: "4,7 ★", icon: Star, color: "text-warning" },
+                { label: "Tempo Médio / Tarefa", value: "2,4 dias", icon: Clock, color: "text-info" },
+                { label: "Nômades Certificados", value: "68%", icon: Award, color: "text-chart-4" },
+                { label: "Retenção 90 dias", value: "81%", icon: TrendingUp, color: "text-success" },
+              ].map((kpi) => (
+                <div key={kpi.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <kpi.icon className={`h-4 w-4 shrink-0 ${kpi.color}`} />
+                    <span className="text-sm font-medium text-muted-foreground truncate">{kpi.label}</span>
+                  </div>
+                  <span className={`text-base font-bold shrink-0 ml-2 ${kpi.color}`}>{kpi.value}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )
+
+      case "activeUsers":
+        return (
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-info/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-success/20 rounded-lg shrink-0">
+                  <UserCheck className="h-5 w-5 text-success" />
+                </div>
+                <div className="min-w-0">
+                  <CardTitle className="text-base">Usuários Ativos</CardTitle>
+                  <p className="text-xs text-muted-foreground truncate">Ativos por tipo de conta no período</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              {[
+                { type: "Empresas", count: 632, growth: "+15%", color: "text-info" },
+                { type: "Agências", count: 418, growth: "+22%", color: "text-success" },
+                { type: "Nômades", count: 1124, growth: "+8%", color: "text-chart-4" },
+                { type: "Admins", count: 28, growth: "+3%", color: "text-warning" },
+              ].map((item) => (
+                <div key={item.type} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm font-medium text-muted-foreground">{item.type}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-lg font-bold ${item.color}`}>{item.count.toLocaleString()}</span>
+                    <span className="text-xs font-medium text-success">{item.growth}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-2 border-t flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Total ativo hoje</p>
+                <p className="text-sm font-bold">2.202</p>
+              </div>
+            </CardContent>
+          </Card>
         )
 
       default:
@@ -5047,7 +5155,7 @@ export default function AdminDashboardPage() {
               setIsEditingHeaderName(false)
               setIsEditDashboardModalOpen(true)
             }}
-            className="h-8 px-3 gap-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-sm shadow-blue-200 dark:shadow-blue-900/40 border-0 text-white rounded-lg"
+            className="h-8 px-3 gap-1.5 text-xs font-medium btn-brand shadow-sm rounded-lg"
           >
             <Edit2 className="h-3.5 w-3.5" />
             Editar
@@ -5255,7 +5363,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Widgets Grid */}
-      <div id="dashboard-content" className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+      <div id="dashboard-content" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
         {widgets
           .filter((w) => w.visible)
           .sort((a, b) => a.order - b.order)
@@ -5264,9 +5372,9 @@ export default function AdminDashboardPage() {
               key={`wrap-${widget.id}`}
               className={cn(
                 // col-span based on widget config
-                widget.colSpan === 3 ? "sm:col-span-3" :
-                widget.colSpan === 2 ? "sm:col-span-2" :
-                "sm:col-span-1",
+                widget.colSpan === 3 ? "lg:col-span-3 md:col-span-2" :
+                widget.colSpan === 2 ? "lg:col-span-2 md:col-span-2" :
+                "col-span-1",
                 // propagate height through: grid cell → outer widget div → Card
                 "flex flex-col",
                 "[&>*]:flex-1 [&>*]:flex [&>*]:flex-col",
@@ -5748,7 +5856,7 @@ export default function AdminDashboardPage() {
                   </Button>
                   <Button
                     size="sm"
-                    className="h-8 px-5 text-sm bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 border-0 text-white shadow-sm gap-1.5"
+                    className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5"
                     onClick={() => setShowSaveConfirmDialog(true)}
                   >
                     <Save className="h-3.5 w-3.5" />

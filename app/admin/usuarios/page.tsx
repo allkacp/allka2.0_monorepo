@@ -842,7 +842,7 @@ export default function UsuariosPage() {
         />
         <Button
           onClick={() => setShowCreateUser(true)}
-          className="h-9 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+          className="h-9 btn-brand"
         >
           <Plus className="h-4 w-4 mr-1" />
           Adicionar Usuário
@@ -1572,7 +1572,7 @@ export default function UsuariosPage() {
                           setIsFilterModalOpen(false)
                         }}
                         size="sm"
-                        className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                        className="px-4 py-2 text-sm rounded-lg btn-brand"
                       >
                         Aplicar Filtros
                       </Button>

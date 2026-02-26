@@ -956,7 +956,7 @@ export default function AdminProjetosPage() {
         />
         <Button
           onClick={() => setShowProjectCreate(true)}
-          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg"
+          className="btn-brand shadow-lg"
         >
           <Plus className="h-4 w-4 mr-2" />
           Novo Projeto
@@ -1823,7 +1823,7 @@ export default function AdminProjetosPage() {
               >
                 Cancelar
               </Button>
-              <Button onClick={handleConfirmClone} className="bg-blue-600 hover:bg-blue-700">
+              <Button onClick={handleConfirmClone} className="btn-brand">
                 Clonar Projeto
               </Button>
             </DialogFooter>

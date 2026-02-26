@@ -565,7 +565,7 @@ export function NotificationPreferencesPanel({
                     Crie regras para automatizar a distribuição de notificações
                   </p>
                 </div>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                <Button size="sm" className="btn-brand">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Nova Regra
                 </Button>
@@ -628,7 +628,7 @@ export function NotificationPreferencesPanel({
                     Gerencie grupos para facilitar a distribuição de notificações
                   </p>
                 </div>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                <Button size="sm" className="btn-brand">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Novo Grupo
                 </Button>
@@ -674,7 +674,7 @@ export function NotificationPreferencesPanel({
           <p className="text-sm text-gray-600">
             {preferences.filter((p) => p.enabled).length} de {preferences.length} notificações ativas
           </p>
-          <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSave} disabled={saving} className="btn-brand">
             {saving ? "Salvando..." : "Salvar Preferências"}
           </Button>
         </div>
@@ -955,7 +955,7 @@ export function NotificationPreferencesPanel({
                       Crie regras para automatizar a distribuição de notificações
                     </p>
                   </div>
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  <Button size="sm" className="btn-brand">
                     <UserPlus className="h-4 w-4 mr-2" />
                     Nova Regra
                   </Button>
@@ -1018,7 +1018,7 @@ export function NotificationPreferencesPanel({
                       Gerencie grupos para facilitar a distribuição de notificações
                     </p>
                   </div>
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  <Button size="sm" className="btn-brand">
                     <UserPlus className="h-4 w-4 mr-2" />
                     Novo Grupo
                   </Button>
@@ -1069,7 +1069,7 @@ export function NotificationPreferencesPanel({
                 <Button variant="outline" onClick={onClose} disabled={saving}>
                   Cancelar
                 </Button>
-                <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                <Button onClick={handleSave} disabled={saving} className="btn-brand">
                   {saving ? "Salvando..." : "Salvar Preferências"}
                 </Button>
               </div>

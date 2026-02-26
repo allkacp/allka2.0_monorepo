@@ -758,7 +758,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
             <Button
               onClick={handleAddUserClick}
               size="sm"
-              className="h-9 gap-2 px-4 text-sm bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm"
+              className="h-9 gap-2 px-4 text-sm btn-brand border-0 shadow-sm"
             >
               <Plus className="h-4 w-4" />
               Adicionar usuário
@@ -1288,7 +1288,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                   </div>
                   <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
                     <button onClick={() => { setCropOpen(false); setRawImageSrc(null) }} className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors">Cancelar</button>
-                    <button onClick={handleCropConfirm} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all">Usar esta foto</button>
+                    <button onClick={handleCropConfirm} className="flex-1 py-2.5 rounded-xl btn-brand text-sm font-semibold shadow-md transition-all">Usar esta foto</button>
                   </div>
                 </div>
               )}
@@ -1494,7 +1494,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {editMode && (
                 <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
                   <Button variant="outline" onClick={handleCancelEdit} className="flex-1 h-10">Cancelar</Button>
-                  <Button onClick={handleSaveClick} className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0">
+                  <Button onClick={handleSaveClick} className="flex-1 h-10 btn-brand border-0">
                     Salvar alterações
                   </Button>
                 </div>
@@ -1504,7 +1504,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               {permissionsMode && hasPermissionChanges && (
                 <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
                   <Button variant="outline" onClick={handleCancelPermissions} className="flex-1 h-10">Cancelar</Button>
-                  <Button onClick={handleSavePermissionsClick} className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0">
+                  <Button onClick={handleSavePermissionsClick} className="flex-1 h-10 btn-brand border-0">
                     Salvar permissões
                   </Button>
                 </div>
@@ -1969,7 +1969,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
               <Button
                 onClick={handleConfirmAddUser}
                 disabled={!validateNewUser()}
-                className="flex-1 h-10 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white border-0 shadow-sm disabled:opacity-50"
+                className="flex-1 h-10 btn-brand border-0 shadow-sm disabled:opacity-50"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
                 Cadastrar usuário

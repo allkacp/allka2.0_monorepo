@@ -118,7 +118,7 @@ export function ConfirmationDialog({
             className={`flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm ${
               destructive
                 ? "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 shadow-red-200 dark:shadow-red-900/30"
-                : "bg-gradient-to-r from-blue-500 to-violet-600 hover:from-blue-600 hover:to-violet-700 shadow-blue-200 dark:shadow-blue-900/30"
+                : "btn-brand"
             }`}
             onClick={handleConfirm}
           >

@@ -1342,7 +1342,7 @@ export default function EmpresasPage() {
         </div>
         <Button
           onClick={() => setCreatePanelOpen(true)}
-          className="h-9 gap-2 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-md shadow-blue-200 dark:shadow-blue-900/40 text-white border-0"
+          className="h-9 gap-2 btn-brand shadow-md border-0"
         >
           <Plus className="h-4 w-4" />
           Nova Empresa
@@ -2027,7 +2027,7 @@ export default function EmpresasPage() {
                         >Recuperar campos padrão</button>
                         <button
                           onClick={() => setShowFieldPicker(false)}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-blue-600 to-violet-600 text-white"
+                          className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand"
                         >Confirmar</button>
                       </div>
                     </div>
@@ -2286,7 +2286,7 @@ export default function EmpresasPage() {
                   </button>
                   <button
                     onClick={() => { setIsFilterModalOpen(false); setShowFieldPicker(false) }}
-                    className="h-7 px-4 rounded-md text-[11px] font-semibold bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white transition-all shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                    className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
                   >
                     Aplicar Filtros
                   </button>

@@ -1057,7 +1057,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                                 ) : (
                                   <Button
                                     size="sm"
-                                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                                    className="w-full btn-brand"
                                     onClick={() => handleAddProductToProject(product)}
                                   >
                                     <Plus className="h-4 w-4 mr-2" />
@@ -1862,7 +1862,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                             </Button>
                             <Button
                               onClick={handleSubmit}
-                              className="h-9 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                              className="h-9 btn-brand"
                             >
                               Criar Projeto
                             </Button>
@@ -1870,7 +1870,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                         ) : (
                           <Button
                             onClick={handleNext}
-                            className="h-9 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                            className="h-9 btn-brand"
                           >
                             Próximo
                           </Button>
@@ -2074,7 +2074,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
               Cancelar
             </Button>
             <Button
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+              className="btn-brand"
               onClick={() => {
                 if (productToCustomize) {
                   handleAddToCart(productToCustomize)
