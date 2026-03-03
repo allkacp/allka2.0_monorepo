@@ -82,7 +82,7 @@ function SheetContent({
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right",
           // exit — always slide out to the RIGHT (opposite of entry)
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-right",
-          side === "right"  && "inset-y-0 right-0 h-full w-full border-l",
+          side === "right"  && "top-0 right-0 h-[calc(100vh-25px)] w-full border-l",
           side === "left"   && "inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
           side === "top"    && "inset-x-0 top-0 h-auto border-b",
           side === "bottom" && "inset-x-0 bottom-0 h-auto border-t",

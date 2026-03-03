@@ -30,14 +30,14 @@ export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose, 
 
       {/* Title + Subtitle */}
       <div className="flex-1 min-w-0">
-        {subtitle && (
-          <p className="text-white/60 text-xs font-medium leading-none mb-1 uppercase tracking-wide truncate">
-            {subtitle}
-          </p>
-        )}
         <h2 className="text-white text-lg font-bold leading-tight truncate">
           {title}
         </h2>
+        {subtitle && (
+          <p className="text-white/60 text-xs font-medium leading-none mt-0.5 uppercase tracking-wide truncate">
+            {subtitle}
+          </p>
+        )}
       </div>
 
       {/* Right custom actions */}

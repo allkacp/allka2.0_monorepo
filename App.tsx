@@ -10,6 +10,7 @@ import { AccountTypeProvider } from "@/contexts/account-type-context"
 import { SidebarProvider } from "@/contexts/sidebar-context"
 import { CompanyProvider } from "@/contexts/company-context"
 import { SettingsProvider } from "@/contexts/settings-context"
+import { PlatformUsersProvider } from "@/contexts/platform-users-context"
 import { SpecialtyProvider } from "@/lib/contexts/specialty-context"
 import { PricingProvider } from "@/lib/contexts/pricing-context"
 import { ProductProvider } from "@/lib/contexts/product-context"
@@ -92,6 +93,7 @@ class PageErrorBoundary extends React.Component<
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
+    <PlatformUsersProvider>
     <SettingsProvider>
       <AccountTypeProvider>
         <SidebarProvider>
@@ -134,6 +136,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarProvider>
       </AccountTypeProvider>
     </SettingsProvider>
+    </PlatformUsersProvider>
   )
 }
 

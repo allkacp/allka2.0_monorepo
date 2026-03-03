@@ -999,11 +999,11 @@ export default function EmpresasPage() {
       const q = searchQuery.toLowerCase()
       filtered = filtered.filter(
         (company) =>
-          company.name.toLowerCase().includes(q) ||
-          company.email.toLowerCase().includes(q) ||
-          company.document.includes(searchQuery) ||
+          company.name?.toLowerCase().includes(q) ||
+          company.email?.toLowerCase().includes(q) ||
+          company.document?.includes(searchQuery) ||
           (company.phone && company.phone.replace(/\D/g, "").includes(searchQuery.replace(/\D/g, ""))) ||
-          (company.location && company.location.toLowerCase().includes(q)),
+          company.location?.toLowerCase().includes(q),
       )
     }
 

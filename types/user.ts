@@ -35,15 +35,160 @@ export interface User {
   agency?: Agency
 }
 
+// Per-company category-based permissions (managed by company admin/responsible)
+export interface CompanyPermission {
+  id: string
+  name: string
+  enabled: boolean
+}
+
+export interface CompanyPermissions {
+  gestao: CompanyPermission[]
+  tasks: CompanyPermission[]
+  projects: CompanyPermission[]
+  users: CompanyPermission[]
+}
+
+export const DEFAULT_COMPANY_PERMISSIONS: CompanyPermissions = {
+  gestao: [
+    { id: "hire_services", name: "Contratar serviços", enabled: false },
+    { id: "insert_credit", name: "Inserir crédito", enabled: false },
+    { id: "approve_payments", name: "Aprovar pagamentos", enabled: false },
+  ],
+  tasks: [
+    { id: "create_tasks", name: "Criar tarefas", enabled: false },
+    { id: "approve_tasks", name: "Aprovar tarefas", enabled: false },
+    { id: "edit_tasks", name: "Editar tarefas", enabled: false },
+    { id: "delete_tasks", name: "Excluir tarefas", enabled: false },
+  ],
+  projects: [
+    { id: "create_projects", name: "Criar projetos", enabled: false },
+    { id: "edit_projects", name: "Editar projetos", enabled: false },
+    { id: "delete_projects", name: "Excluir projetos", enabled: false },
+  ],
+  users: [
+    { id: "create_users", name: "Criar usuários", enabled: false },
+    { id: "edit_users", name: "Editar usuários", enabled: false },
+    { id: "block_users", name: "Bloquear usuários", enabled: false },
+  ],
+}
+
+// Admin company permissions (all enabled by default)
+export const ADMIN_COMPANY_PERMISSIONS: CompanyPermissions = {
+  gestao: [
+    { id: "hire_services", name: "Contratar serviços", enabled: true },
+    { id: "insert_credit", name: "Inserir crédito", enabled: true },
+    { id: "approve_payments", name: "Aprovar pagamentos", enabled: true },
+  ],
+  tasks: [
+    { id: "create_tasks", name: "Criar tarefas", enabled: true },
+    { id: "approve_tasks", name: "Aprovar tarefas", enabled: true },
+    { id: "edit_tasks", name: "Editar tarefas", enabled: true },
+    { id: "delete_tasks", name: "Excluir tarefas", enabled: true },
+  ],
+  projects: [
+    { id: "create_projects", name: "Criar projetos", enabled: true },
+    { id: "edit_projects", name: "Editar projetos", enabled: true },
+    { id: "delete_projects", name: "Excluir projetos", enabled: true },
+  ],
+  users: [
+    { id: "create_users", name: "Criar usuários", enabled: true },
+    { id: "edit_users", name: "Editar usuários", enabled: true },
+    { id: "block_users", name: "Bloquear usuários", enabled: true },
+  ],
+}
+
+// Granular permissions a user can hold on a specific project
+export type ProjectPermission =
+  | "view"
+  | "edit"
+  | "create_tasks"
+  | "delete_tasks"
+  | "approve_deliveries"
+  | "manage_finances"
+  | "manage_team"
+  | "admin"
+
+export const ALL_PROJECT_PERMISSIONS: { id: ProjectPermission; label: string; description: string }[] = [
+  { id: "view",               label: "Visualizar",         description: "Ver o projeto e suas tarefas" },
+  { id: "edit",               label: "Editar",             description: "Editar dados e configurações do projeto" },
+  { id: "create_tasks",       label: "Criar Tarefas",      description: "Criar novas tarefas no projeto" },
+  { id: "delete_tasks",       label: "Excluir Tarefas",    description: "Remover tarefas do projeto" },
+  { id: "approve_deliveries", label: "Aprovar Entregas",   description: "Validar e aprovar entregas" },
+  { id: "manage_finances",    label: "Gerenciar Finanças", description: "Ver e editar dados financeiros do projeto" },
+  { id: "manage_team",        label: "Gerenciar Equipe",   description: "Adicionar/remover membros do projeto" },
+  { id: "admin",              label: "Administrador",      description: "Acesso total ao projeto" },
+]
+
+// A user's membership in a specific project (within a company context)
+export interface ProjectMembership {
+  project_id: number
+  project_name: string
+  permissions: ProjectPermission[]
+}
+
 export interface CompanyAssociation {
   id: number
   user_id: number
   company_id: number
-  company: Company
+  company_name: string
   role: UserRole
+  /** Platform-level flat permissions (managed by platform admin only) */
   permissions: Permission[]
+  /** Company-level category permissions (managed by company admin/responsible) */
+  company_permissions: CompanyPermissions
+  /** Per-project permissions within this company */
+  project_memberships: ProjectMembership[]
   is_active: boolean
   joined_at: string
+}
+
+/** Lightweight version used in context/UI when full Company object isn't needed */
+export interface CompanyLink {
+  company_id: number
+  company_name: string
+  role: UserRole
+  company_permissions: CompanyPermissions
+  project_memberships: ProjectMembership[]
+  is_active: boolean
+  joined_at: string
+}
+
+/** Mock project list per company for UI dropdowns — IDs match admin/empresas companies */
+export const MOCK_COMPANY_PROJECTS: Record<number, { id: number; name: string; status: string }[]> = {
+  // Coca-Cola Brasil (id: 1)
+  1: [
+    { id: 101, name: "Campanha Verão 2026",          status: "active" },
+    { id: 102, name: "Rebranding Embalagens",        status: "active" },
+    { id: 103, name: "Ativação Ponto de Venda",      status: "paused" },
+  ],
+  // Starbucks Coffee (id: 2)
+  2: [
+    { id: 201, name: "Campanha Sazonal Inverno",     status: "active" },
+    { id: 202, name: "Lançamento Nova Linha Fria",   status: "active" },
+  ],
+  // Fundação Wikimedia (id: 3)
+  3: [
+    { id: 301, name: "Campanha de Arrecadação 2026", status: "active" },
+    { id: 302, name: "Vídeo Institucional",          status: "completed" },
+  ],
+  // Agência Criativa Hub (id: 4)
+  4: [
+    { id: 401, name: "Identidade Visual Cliente A",  status: "active" },
+    { id: 402, name: "Social Media Management",      status: "active" },
+  ],
+  // Spotify Brasil (id: 8)
+  8: [
+    { id: 801, name: "Campanha Wrapped 2026",        status: "active" },
+    { id: 802, name: "Parcerias com Artistas",       status: "active" },
+    { id: 803, name: "Podcast Originals BR",         status: "paused" },
+  ],
+  // Meta Business (id: 10)
+  10: [
+    { id: 1001, name: "Ads Creative Studio Q1",     status: "active" },
+    { id: 1002, name: "Reels Strategy 2026",        status: "active" },
+    { id: 1003, name: "Marketplace Growth",         status: "active" },
+  ],
 }
 
 export interface AgencyAssociation {

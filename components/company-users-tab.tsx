@@ -19,8 +19,12 @@ import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
+import { usePlatformUsers } from "@/contexts/platform-users-context"
+import type { Permission as PlatformPermission } from "@/types/user"
+import { ALL_PROJECT_PERMISSIONS, MOCK_COMPANY_PROJECTS } from "@/types/user"
 
 interface UserListItem {
   id: number
@@ -41,6 +45,10 @@ interface UserListItem {
   averageOnlineHours?: number
   averageOfflineDays?: number
   permissions?: UserPermissions
+  /** ID of the corresponding platform User record */
+  platformUserId?: number
+  /** Platform-level permissions (flat list, managed by platform admin) */
+  platform_permissions?: string[]
 }
 
 interface Permission {
@@ -57,6 +65,8 @@ interface CompanyUsersTabProps {
   companyId: number
   companyName: string
   users?: UserListItem[]
+  /** Called when a new user is created so the admin/usuarios page stays in sync */
+  onUserCreated?: (user: any) => void
 }
 
 const DEFAULT_USERS: UserListItem[] = [
@@ -200,9 +210,46 @@ const USER_COLS: { key: UserColKey; label: string; required?: boolean }[] = [
 ]
 const USER_COL_DEFAULTS: Record<UserColKey, number> = { usuario: 210, email: 210, status: 115, perfil: 190, acoes: 72 }
 
-export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersTabProps) {
+export function CompanyUsersTab({ companyId, companyName, users, onUserCreated }: CompanyUsersTabProps) {
   const { sidebarWidth } = useSidebar()
-  const [userList, setUserList] = useState<UserListItem[]>(users || DEFAULT_USERS)
+  const { users: contextUsers, addUser, getUserById, upsertProjectMembership, removeProjectMembership } = usePlatformUsers()
+
+  // Derive UserListItem list from platform-users context for this company
+  const companyContextUsers = useMemo<UserListItem[]>(() => {
+    const matched = contextUsers.filter(u =>
+      u.company_associations?.some(a => a.company_id === companyId)
+    )
+    if (matched.length === 0) return []
+    return matched.map(u => {
+      const assoc = u.company_associations!.find(a => a.company_id === companyId)!
+      return {
+        id: u.id,
+        platformUserId: u.id,
+        name: u.name,
+        email: u.email,
+        avatar: u.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+        status: (u.online_status === "online" ? "online" : "offline") as "online" | "offline",
+        profile: assoc.role === "company_admin" ? "Administrador" : "Usuário",
+        lastAccess: u.last_login ? new Date(u.last_login).toLocaleString("pt-BR") : "Nunca",
+        createdAt: new Date(u.created_at).toLocaleDateString("pt-BR"),
+        isBlocked: !u.is_active,
+        phone: u.phone,
+        permissions: assoc.company_permissions as any,
+        platform_permissions: u.permissions,
+      } as UserListItem
+    })
+  }, [contextUsers, companyId])
+
+  const [userList, setUserList] = useState<UserListItem[]>(() =>
+    users ?? (companyContextUsers.length > 0 ? companyContextUsers : DEFAULT_USERS)
+  )
+
+  // Sync when context users change (e.g. after creation)
+  useEffect(() => {
+    if (!users && companyContextUsers.length > 0) {
+      setUserList(companyContextUsers)
+    }
+  }, [companyContextUsers, users])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -220,6 +267,7 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
     pendingAction: null as (() => void) | null,
   })
   const [showAddUserModal, setShowAddUserModal] = useState(false)
+  const [showUserCreatePanel, setShowUserCreatePanel] = useState(false)
   const [newUserData, setNewUserData] = useState({
     name: "",
     email: "",
@@ -589,76 +637,59 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
   }
 
   const handleAddUserClick = () => {
-    setShowAddUserModal(true)
-    setNewUserData({
-      name: "",
-      email: "",
-      cpf: "",
-      phone: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      profile: "User",
-      status: "active",
-    })
+    setShowUserCreatePanel(true)
   }
 
-  const handleNewUserFieldChange = (field: string, value: string) => {
-    setNewUserData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const validateNewUser = (): boolean => {
-    return (
-      newUserData.name.trim() !== "" &&
-      newUserData.email.trim() !== "" &&
-      newUserData.email.includes("@") &&
-      newUserData.cpf.trim() !== "" &&
-      newUserData.phone.trim() !== ""
-    )
-  }
-
-  const handleConfirmAddUser = () => {
-    if (!validateNewUser()) return
-    setConfirmAddUser(true)
-  }
-
-  const handleCreateUser = () => {
-    const newUser: UserListItem = {
+  /** Called by UserCreateSlidePanel when the platform user is created */
+  const handlePlatformUserCreated = (platformUser: any) => {
+    // 1. Register in platform-level context so admin/usuarios page sees it
+    addUser(platformUser)
+    // 2. Also notify parent if provided
+    onUserCreated?.(platformUser)
+    // 3. Create a local UserListItem entry linked to the platform user
+    const newListItem: UserListItem = {
       id: Math.max(...userList.map((u) => u.id), 0) + 1,
-      name: newUserData.name,
-      email: newUserData.email,
-      avatar: avatarPreview || newUserData.name.substring(0, 2).toUpperCase(),
+      name: platformUser.name,
+      email: platformUser.email,
+      avatar: platformUser.name.substring(0, 2).toUpperCase(),
       status: "online",
-      profile: newUserData.profile,
+      profile: platformUser.role === "company_admin" ? "Administrador" : "Usuário",
       lastAccess: "Agora",
       createdAt: new Date().toLocaleDateString("pt-BR"),
       isBlocked: false,
-      cpf: newUserData.cpf,
-      phone: newUserData.phone,
-      address: newUserData.address,
-      city: newUserData.city,
-      state: newUserData.state,
-      zipCode: newUserData.zipCode,
+      cpf: platformUser.cpf || "",
+      phone: platformUser.phone || "",
+      address: platformUser.street || "",
+      city: platformUser.city || "",
+      state: platformUser.state || "",
+      zipCode: platformUser.cep || "",
+      platformUserId: platformUser.id,
+      platform_permissions: platformUser.permissions || [],
+      permissions: {
+        gestao: [
+          { id: "hire_services", name: "Contratar serviços", enabled: false },
+          { id: "insert_credit", name: "Inserir crédito", enabled: false },
+          { id: "approve_payments", name: "Aprovar pagamentos", enabled: false },
+        ],
+        tasks: [
+          { id: "create_tasks", name: "Criar tarefas", enabled: false },
+          { id: "approve_tasks", name: "Aprovar tarefas", enabled: false },
+          { id: "edit_tasks", name: "Editar tarefas", enabled: false },
+          { id: "delete_tasks", name: "Excluir tarefas", enabled: false },
+        ],
+        projects: [
+          { id: "create_projects", name: "Criar projetos", enabled: false },
+          { id: "edit_projects", name: "Editar projetos", enabled: false },
+          { id: "delete_projects", name: "Excluir projetos", enabled: false },
+        ],
+        users: [
+          { id: "create_users", name: "Criar usuários", enabled: false },
+          { id: "edit_users", name: "Editar usuários", enabled: false },
+          { id: "block_users", name: "Bloquear usuários", enabled: false },
+        ],
+      },
     }
-    setUserList((prev) => [newUser, ...prev])
-    setShowAddUserModal(false)
-    setConfirmAddUser(false)
-    setAvatarPreview(null)
-    setOriginalRawSrc(null)
-    setShowAvatarMenu(false)
-    setNewUserData({
-      name: "",
-      email: "",
-      cpf: "",
-      phone: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      profile: "User",
-      status: "active",
-    })
+    setUserList((prev) => [newListItem, ...prev])
   }
 
   const onlineCount = userList.filter((u) => u.status === "online").length
@@ -1463,12 +1494,14 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                 ) : (
                   /* Permissions Mode */
                   <div className="px-6 py-5 space-y-4">
+                    {/* === BLOCK A: Company permissions (editable by company admin) === */}
                     <div className="flex items-center gap-2 mb-1">
                       <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
                         <Shield className="h-3 w-3 text-blue-600" />
                       </div>
-                      <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Permissões</span>
+                      <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Permissões na Empresa</span>
                     </div>
+                    <p className="text-[11px] text-slate-500 -mt-2">Gerenciadas pelo administrador da empresa.</p>
                     {permissionsData && Object.entries(permissionsData).map(([categoryKey, categoryData]) => (
                       <div key={categoryKey} className="border border-slate-100 rounded-xl overflow-hidden">
                         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
@@ -1486,6 +1519,143 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
                         </div>
                       </div>
                     ))}
+
+                    {/* === BLOCK B: Platform permissions (read-only — managed by platform admin) === */}
+                    <div className="mt-6 pt-4 border-t border-slate-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-5 w-5 rounded-md bg-slate-200 flex items-center justify-center">
+                          <Lock className="h-3 w-3 text-slate-500" />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Permissões na Plataforma</span>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 mb-3">
+                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                          <Lock className="h-3 w-3 text-slate-400 shrink-0" />
+                          Gerenciadas exclusivamente pelo administrador da plataforma.
+                        </p>
+                      </div>
+                      {selectedUser?.platform_permissions && selectedUser.platform_permissions.length > 0 ? (
+                        <div className="border border-slate-100 rounded-xl overflow-hidden opacity-70">
+                          <div className="divide-y divide-slate-100">
+                            {selectedUser.platform_permissions.map((perm) => (
+                              <div key={perm} className="flex items-center justify-between px-4 py-2.5 bg-white">
+                                <span className="text-xs text-slate-600">{perm.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  <CheckCircle className="h-2.5 w-2.5" /> Ativo
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 text-center py-3">Nenhuma permissão de plataforma atribuída.</p>
+                      )}
+                    </div>
+
+                    {/* === BLOCK C: Project permissions (per-project, managed by company admin) === */}
+                    {(() => {
+                      const platformUser = selectedUser?.platformUserId ? getUserById(selectedUser.platformUserId) : null
+                      const assoc = platformUser?.company_associations?.find((a) => a.company_id === companyId)
+                      const memberships = assoc?.project_memberships || []
+                      const availableProjects = (MOCK_COMPANY_PROJECTS[companyId] || []).filter(
+                        (p) => !memberships.some((m) => m.project_id === p.id)
+                      )
+                      return (
+                        <div className="mt-6 pt-4 border-t border-slate-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
+                                <Cog className="h-3 w-3 text-violet-600" />
+                              </div>
+                              <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">Permissões por Projeto</span>
+                            </div>
+                            {availableProjects.length > 0 && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-violet-600 hover:text-violet-700 hover:bg-violet-50">
+                                    <Plus className="h-3 w-3" /> Vincular projeto
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-2" align="end">
+                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 mb-1">Projetos disponíveis</p>
+                                  {availableProjects.map((proj) => (
+                                    <button
+                                      key={proj.id}
+                                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm text-slate-700 flex items-center justify-between group"
+                                      onClick={() => {
+                                        if (selectedUser?.platformUserId) {
+                                          upsertProjectMembership(selectedUser.platformUserId, companyId, {
+                                            project_id: proj.id,
+                                            project_name: proj.name,
+                                            permissions: ["view"],
+                                          })
+                                        }
+                                      }}
+                                    >
+                                      <span>{proj.name}</span>
+                                      <Plus className="h-3.5 w-3.5 text-violet-500 opacity-0 group-hover:opacity-100" />
+                                    </button>
+                                  ))}
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 -mt-1 mb-3">Defina o que este usuário pode fazer em cada projeto.</p>
+                          {memberships.length === 0 ? (
+                            <div className="flex flex-col items-center py-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                              <Cog className="h-7 w-7 text-slate-300 mb-2" />
+                              <p className="text-xs text-slate-400">Nenhum projeto vinculado ainda.</p>
+                              {availableProjects.length > 0 && (
+                                <p className="text-[11px] text-violet-400 mt-1">Clique em "Vincular projeto" para adicionar.</p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {memberships.map((membership) => (
+                                <div key={membership.project_id} className="border border-slate-200 rounded-xl overflow-hidden">
+                                  <div className="px-4 py-2.5 bg-violet-50/60 border-b border-slate-200 flex items-center justify-between">
+                                    <p className="text-xs font-bold text-slate-700">{membership.project_name}</p>
+                                    <button
+                                      className="text-slate-400 hover:text-red-500 transition-colors"
+                                      onClick={() => {
+                                        if (selectedUser?.platformUserId) {
+                                          removeProjectMembership(selectedUser.platformUserId, companyId, membership.project_id)
+                                        }
+                                      }}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="divide-y divide-slate-100">
+                                    {ALL_PROJECT_PERMISSIONS.map((perm) => (
+                                      <div key={perm.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                                        <div>
+                                          <p className="text-xs font-medium text-slate-700">{perm.label}</p>
+                                          <p className="text-[10px] text-slate-400">{perm.description}</p>
+                                        </div>
+                                        <Switch
+                                          checked={membership.permissions.includes(perm.id)}
+                                          onCheckedChange={(checked) => {
+                                            if (!selectedUser?.platformUserId) return
+                                            const newPerms = checked
+                                              ? [...membership.permissions.filter((p) => p !== perm.id), perm.id]
+                                              : membership.permissions.filter((p) => p !== perm.id)
+                                            upsertProjectMembership(selectedUser.platformUserId, companyId, {
+                                              ...membership,
+                                              permissions: newPerms,
+                                            })
+                                          }}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
@@ -1591,405 +1761,15 @@ export function CompanyUsersTab({ companyId, companyName, users }: CompanyUsersT
         destructive={false}
       />
 
-      {/* Add User Sheet — slide from right */}
-      <Sheet open={showAddUserModal} onOpenChange={(o) => { if (!o && !confirmAddUser) { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) } }}>
-        <SheetContent
-          side="right"
-          className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
-          style={{ width: 480 }}
-          onPointerDownOutside={(e) => { if (showAvatarMenu || cropOpen) e.preventDefault() }}
-          onInteractOutside={(e) => { if (showAvatarMenu || cropOpen) e.preventDefault() }}
-        >
-          <div className="relative h-full flex flex-col bg-white">
-
-            {/* hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-
-            {/* Gradient Header */}
-            <header className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden" style={{ height: 100 }}>
-              {/* Clickable avatar wrapper — relative so menu can be positioned below */}
-              <div className="relative flex-shrink-0">
-                <button
-                  onClick={handleAvatarClick}
-                  className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center shadow-lg group overflow-hidden hover:border-white/60 transition-all"
-                >
-                  {avatarPreview ? (
-                    <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <UserPlus className="h-8 w-8 text-white/80" />
-                  )}
-                  {/* Camera hover overlay */}
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                    <Camera className="h-5 w-5 text-white" />
-                    <span className="text-[9px] text-white/90 font-medium mt-0.5">{avatarPreview ? "Editar" : "Foto"}</span>
-                  </div>
-                </button>
-
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">Novo cadastro</p>
-                <h2 className="text-lg font-bold text-white leading-tight truncate">
-                  {newUserData.name.trim() ? newUserData.name : "Novo Usuário"}
-                </h2>
-                <p className="text-xs text-white/60 truncate mt-0.5">{companyName}</p>
-              </div>
-            </header>
-
-            {/* Avatar context menu — inside Sheet DOM but outside overflow-hidden header */}
-            {showAvatarMenu && avatarPreview && (
-              <>
-                <div className="absolute inset-0 z-40" onClick={() => setShowAvatarMenu(false)} />
-                <div className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]" style={{ top: 108, left: 24 }}>
-                  <button
-                    onClick={() => { setShowAvatarMenu(false); setTimeout(() => fileInputRef.current?.click(), 10) }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Camera className="h-3.5 w-3.5 text-gray-400" />
-                    Nova foto
-                  </button>
-                  {originalRawSrc && (
-                    <button
-                      onClick={() => {
-                        setShowAvatarMenu(false)
-                        setRawImageSrc(originalRawSrc)
-                        setCropZoom(1)
-                        setCropOffset({ x: 0, y: 0 })
-                        setCropOpen(true)
-                      }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                    >
-                      <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                      Reposicionar
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { setShowAvatarMenu(false); setAvatarPreview(null); setOriginalRawSrc(null) }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remover foto
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Crop overlay — shown inside the sheet */}
-            {cropOpen && rawImageSrc && cropContext === 'add' && (
-              <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
-
-                {/* Header */}
-                <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
-                  <p className="text-white text-sm font-semibold">Ajustar foto de perfil</p>
-                  <p className="text-white/50 text-xs mt-0.5">Arraste para reposicionar · Use o zoom para ajustar</p>
-                </div>
-
-                {/* Drag area — full image visible as context */}
-                <div
-                  className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
-                  onMouseDown={handleCropMouseDown}
-                  onMouseMove={handleCropMouseMove}
-                  onMouseUp={handleCropMouseUp}
-                  onMouseLeave={handleCropMouseUp}
-                >
-                  {/* Full image — dimmed as context */}
-                  <img
-                    src={rawImageSrc}
-                    alt=""
-                    draggable={false}
-                    className="absolute pointer-events-none select-none opacity-25"
-                    style={{
-                      maxWidth: "none",
-                      transform: `scale(${cropZoom})`,
-                      transformOrigin: "center",
-                      left: `calc(50% + ${cropOffset.x}px)`,
-                      top: `calc(50% + ${cropOffset.y}px)`,
-                      translate: "-50% -50%",
-                    }}
-                  />
-
-                  {/* Dark vignette with circle hole */}
-                  <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{ background: `radial-gradient(circle ${CROP_SIZE / 2}px at 50% 50%, transparent ${CROP_SIZE / 2}px, rgba(0,0,0,0.72) ${CROP_SIZE / 2}px)` }}
-                  />
-
-                  {/* Bright image clipped to circle */}
-                  <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{ clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)` }}
-                  >
-                    <img
-                      ref={cropImgRef}
-                      src={rawImageSrc}
-                      alt="crop preview"
-                      draggable={false}
-                      className="absolute select-none"
-                      style={{
-                        maxWidth: "none",
-                        transform: `scale(${cropZoom})`,
-                        transformOrigin: "center",
-                        left: `calc(50% + ${cropOffset.x}px)`,
-                        top: `calc(50% + ${cropOffset.y}px)`,
-                        translate: "-50% -50%",
-                      }}
-                    />
-                    {/* Rule-of-thirds grid inside circle */}
-                    <div className="absolute inset-0 pointer-events-none" style={{
-                      backgroundImage: "linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)",
-                      backgroundSize: "33.3% 33.3%",
-                    }} />
-                  </div>
-
-                  {/* Circle border */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div
-                      className="rounded-full border-2 border-white/70 shadow-2xl"
-                      style={{ width: CROP_SIZE, height: CROP_SIZE }}
-                    />
-                  </div>
-                </div>
-
-                {/* Zoom slider */}
-                <div className="flex-shrink-0 px-8 py-4 flex items-center gap-3">
-                  <span className="text-white/40 text-xs w-8 text-right">{Math.round(cropZoom * 100)}%</span>
-                  <input
-                    type="range" min="0.1" max="3" step="0.02"
-                    value={cropZoom}
-                    onChange={(e) => setCropZoom(Number(e.target.value))}
-                    className="flex-1 accent-white cursor-pointer"
-                  />
-                  <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
-                  <button
-                    onClick={() => setCropOffset({ x: 0, y: 0 })}
-                    title="Centralizar"
-                    className="flex-shrink-0 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
-                  >
-                    <Crosshair className="h-3.5 w-3.5 text-white/70" />
-                  </button>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
-                  <button
-                    onClick={() => { setCropOpen(false); setRawImageSrc(null) }}
-                    className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleCropConfirm}
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white text-sm font-semibold shadow-md transition-all"
-                  >
-                    Usar esta foto
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="px-6 py-5 space-y-6">
-
-                {/* Section: Identificação */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
-                      <User className="h-3 w-3 text-blue-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identificação</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">Nome completo <span className="text-red-500">*</span></label>
-                      <Input
-                        value={newUserData.name}
-                        onChange={(e) => handleNewUserFieldChange("name", e.target.value)}
-                        placeholder="Ex: João Silva"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">
-                          <span className="flex items-center gap-1"><CreditCard className="h-3 w-3" /> CPF <span className="text-red-500">*</span></span>
-                        </label>
-                        <Input
-                          value={newUserData.cpf}
-                          onChange={(e) => handleNewUserFieldChange("cpf", e.target.value)}
-                          placeholder="123.456.789-00"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">
-                          <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone <span className="text-red-500">*</span></span>
-                        </label>
-                        <Input
-                          value={newUserData.phone}
-                          onChange={(e) => handleNewUserFieldChange("phone", e.target.value)}
-                          placeholder="(11) 98765-4321"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">
-                        <span className="flex items-center gap-1"><AtSign className="h-3 w-3" /> E-mail <span className="text-red-500">*</span></span>
-                      </label>
-                      <Input
-                        value={newUserData.email}
-                        onChange={(e) => handleNewUserFieldChange("email", e.target.value)}
-                        placeholder="joao@empresa.com"
-                        type="email"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-slate-100" />
-
-                {/* Section: Endereço */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
-                      <MapPin className="h-3 w-3 text-violet-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Endereço</span>
-                    <span className="text-[10px] text-slate-400">(opcional)</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 mb-1.5 block">Logradouro</label>
-                      <Input
-                        value={newUserData.address}
-                        onChange={(e) => handleNewUserFieldChange("address", e.target.value)}
-                        placeholder="Rua, Avenida, Nº..."
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <div className="grid grid-cols-5 gap-3">
-                      <div className="col-span-2">
-                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">Cidade</label>
-                        <Input
-                          value={newUserData.city}
-                          onChange={(e) => handleNewUserFieldChange("city", e.target.value)}
-                          placeholder="São Paulo"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">UF</label>
-                        <Input
-                          value={newUserData.state}
-                          onChange={(e) => handleNewUserFieldChange("state", e.target.value)}
-                          placeholder="SP"
-                          maxLength={2}
-                          className="h-9 text-sm uppercase"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-xs font-medium text-slate-600 mb-1.5 block">CEP</label>
-                        <Input
-                          value={newUserData.zipCode}
-                          onChange={(e) => handleNewUserFieldChange("zipCode", e.target.value)}
-                          placeholder="01234-567"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-slate-100" />
-
-                {/* Section: Acesso */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-5 w-5 rounded-md bg-emerald-100 flex items-center justify-center">
-                      <Shield className="h-3 w-3 text-emerald-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perfil de Acesso</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: "Administrador", label: "Administrador", desc: "Acesso total", color: "violet" },
-                      { value: "Gerente", label: "Gerente", desc: "Gestão geral", color: "blue" },
-                      { value: "Operador", label: "Operador", desc: "Operações", color: "sky" },
-                      { value: "Visualizador", label: "Visualizador", desc: "Somente leitura", color: "slate" },
-                      { value: "Financeiro", label: "Financeiro", desc: "Dados financeiros", color: "emerald" },
-                      { value: "Suporte", label: "Suporte", desc: "Atendimento", color: "amber" },
-                    ].map(({ value, label, desc, color }) => {
-                      const active = newUserData.profile === value
-                      const colors: Record<string, string> = {
-                        violet: active ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50/50",
-                        blue:   active ? "border-blue-500 bg-blue-50 text-blue-700"     : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/50",
-                        sky:    active ? "border-sky-500 bg-sky-50 text-sky-700"         : "border-slate-200 hover:border-sky-300 hover:bg-sky-50/50",
-                        slate:  active ? "border-slate-500 bg-slate-100 text-slate-700" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
-                        emerald:active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50",
-                        amber:  active ? "border-amber-500 bg-amber-50 text-amber-700"  : "border-slate-200 hover:border-amber-300 hover:bg-amber-50/50",
-                      }
-                      return (
-                        <button
-                          key={value}
-                          onClick={() => handleNewUserFieldChange("profile", value)}
-                          className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all text-left ${
-                            colors[color]
-                          } ${active ? "" : "text-slate-600"}`}
-                        >
-                          <span className="text-xs font-semibold leading-tight">{label}</span>
-                          <span className={`text-[10px] mt-0.5 ${ active ? "opacity-80" : "text-slate-400" }`}>{desc}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-400"><span className="text-red-500">*</span> Campos obrigatórios</p>
-              </div>
-            </div>
-
-            {/* Sticky footer */}
-            <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => { setShowAddUserModal(false); setAvatarPreview(null); setOriginalRawSrc(null); setShowAvatarMenu(false); setCropOpen(false); setRawImageSrc(null) }}
-                className="flex-1 h-10"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleConfirmAddUser}
-                disabled={!validateNewUser()}
-                className="flex-1 h-10 btn-brand border-0 shadow-sm disabled:opacity-50"
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Cadastrar usuário
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Confirm Add User Dialog */}
-      <ConfirmationDialog
-        open={confirmAddUser}
-        onClose={() => setConfirmAddUser(false)}
-        onConfirm={handleCreateUser}
-        title="Confirmar Cadastro"
-        message={`Tem certeza que deseja cadastrar o usuário "${newUserData.name}"?`}
-        confirmText="Cadastrar"
-        cancelText="Cancelar"
-        destructive={false}
+      {/* User Create Panel — opens full-width slide panel for platform user creation */}
+      <UserCreateSlidePanel
+        open={showUserCreatePanel}
+        onClose={() => setShowUserCreatePanel(false)}
+        onUserCreated={handlePlatformUserCreated}
+        companyId={companyId}
+        companyName={companyName}
       />
     </>
   )
 }
+

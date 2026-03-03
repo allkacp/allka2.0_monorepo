@@ -16,6 +16,7 @@ import {
   X,
   Users,
   TrendingUp,
+  TrendingDown,
   Clock,
   BarChart3,
   Trash2,
@@ -29,11 +30,15 @@ import {
   Check,
   Copy,
   Plus,
+  Cog,
+  Activity,
+  Info,
 } from "lucide-react"
 import type { User } from "@/types/user"
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel"
-import PageHeader from "@/components/page-header"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +54,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import { createPortal } from "react-dom"
+import { usePlatformUsers } from "@/contexts/platform-users-context"
 
 const mockUsers: User[] = [
   {
@@ -390,6 +398,7 @@ const mockUsers: User[] = [
 ]
 
 export default function UsuariosPage() {
+  const { users: platformUsers, addUser: addPlatformUser } = usePlatformUsers()
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -464,10 +473,10 @@ export default function UsuariosPage() {
   const [paginatedUsers, setPaginatedUsers] = useState<User[]>([])
 
   useEffect(() => {
-    setUsers(mockUsers)
-    setFilteredUsers(mockUsers)
+    setUsers(platformUsers)
+    setFilteredUsers(platformUsers)
     setCurrentPage(1)
-  }, [])
+  }, [platformUsers])
 
   useEffect(() => {
     const filtered = users.filter((user) => {
@@ -830,169 +839,146 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <PageHeader
-          title={
-            <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-              Gestão de Usuários
-            </span>
-          }
-          description="Gerencie todos os usuários da plataforma"
-        />
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+            Usuários
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Gerencie todos os usuários da plataforma
+          </p>
+        </div>
         <Button
           onClick={() => setShowCreateUser(true)}
-          className="h-9 btn-brand"
+          className="h-9 gap-2 btn-brand shadow-md border-0"
         >
-          <Plus className="h-4 w-4 mr-1" />
-          Adicionar Usuário
+          <Plus className="h-4 w-4" />
+          Novo Usuário
         </Button>
       </div>
 
-      <Accordion type="single" collapsible className="mb-0">
-        <AccordionItem value="stats" className="border-none">
-          <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-3 py-2 transition-colors">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="font-semibold text-blue-900 dark:text-blue-300">Estatísticas e Métricas</span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-3">
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Users className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-900">Total de Usuários</span>
-                </div>
-                <p className="text-2xl font-bold text-blue-700">{users.length}</p>
-              </Card>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Total de Usuários</p>
+            <div className="bg-white/20 rounded-md p-1"><Users className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{users.length}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-600 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Usuários Ativos</p>
+            <div className="bg-white/20 rounded-md p-1"><Activity className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{users.filter((u) => u.is_active).length}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Administradores</p>
+            <div className="bg-white/20 rounded-md p-1"><Shield className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{users.filter((u) => u.is_admin).length}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-orange-500 to-rose-600 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Ativos 90 dias</p>
+            <div className="bg-white/20 rounded-md p-1"><Clock className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">
+            {
+              users.filter((u) => {
+                const lastAccess = new Date(u.last_login || Date.now())
+                const ninetyDaysAgo = new Date()
+                ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+                return lastAccess >= ninetyDaysAgo
+              }).length
+            }
+          </p>
+        </div>
+      </div>
 
-              <Card className="p-3 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="text-xs font-medium text-green-900">Usuários Ativos</span>
-                </div>
-                <p className="text-2xl font-bold text-green-700">
-                  {users.filter((u) => u.is_active).length}
-                </p>
-              </Card>
+      {/* Main Table Card */}
+      <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+        {/* Card Top Bar */}
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
+          {/* Search */}
+          <div className="flex-1 relative min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Nome, e-mail, telefone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
+            />
+          </div>
 
-              <Card className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Shield className="h-4 w-4 text-purple-600" />
-                  <span className="text-xs font-medium text-purple-900">Administradores</span>
-                </div>
-                <p className="text-2xl font-bold text-purple-700">
-                  {users.filter((u) => u.is_admin).length}
-                </p>
-              </Card>
+          {/* Items per page + result count */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(1) }}
+              variant="top"
+            />
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              {filteredUsers.length !== users.length
+                ? <>de <span className="font-semibold text-blue-500">{filteredUsers.length}</span> de {users.length}</>
+                : <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{users.length}</span> usuário{users.length !== 1 ? "s" : ""}</>
+              }
+            </span>
+          </div>
 
-              <Card className="p-3 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="h-4 w-4 text-orange-600" />
-                  <span className="text-xs font-medium text-orange-900">Ativos 90 dias</span>
-                </div>
-                <p className="text-2xl font-bold text-orange-700">
-                  {
-                    users.filter((u) => {
-                      const lastAccess = new Date(u.last_login || Date.now())
-                      const ninetyDaysAgo = new Date()
-                      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-                      return lastAccess >= ninetyDaysAgo
-                    }).length
-                  }
-                </p>
-              </Card>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+          {/* Filter Button */}
+          <Button
+            onClick={() => setIsFilterModalOpen(true)}
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filtros
+          </Button>
 
-      <Card className="border border-slate-200/60 dark:border-slate-700/60 shadow-sm hover:shadow-md transition-shadow">
-        <CardContent className="pt-4 pb-4 px-4">
-          <div className="space-y-4">
-            {/* Compact Controls Bar - Single Line */}
-            <div className="flex items-center justify-between gap-3 h-10">
-              {/* Left: Search */}
-              <div className="flex-1 min-w-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Input
-                    placeholder="Buscar por nome ou email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-10 text-sm rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                  />
-                </div>
-              </div>
-
-              {/* Center-Left: Items per page */}
-              <ItemsPerPageSelect 
-                value={pageSize.toString()} 
-                onValueChange={(value) => {
-                  setPageSize(Number(value))
-                  setCurrentPage(1)
-                }}
-                variant="top"
-              />
-
-              {/* Center: Filter Button */}
-              <Button
-                onClick={() => setIsFilterModalOpen(true)}
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 px-3 text-xs text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-              >
-                <Filter className="h-4 w-4" />
-                Filtros
-              </Button>
-
-              {/* Right: Modern Pagination */}
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="h-9 w-8 p-0"
+          {/* Pagination */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            {getPageNumbers().map((page, index) =>
+              page === "..." ? (
+                <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+              ) : (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPage(Number(page))}
+                  className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                    page === currentPage
+                      ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                  }`}
                 >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
+                  {page}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
 
-                <div className="flex items-center gap-0.5">
-                  {getPageNumbers().map((page, index) => (
-                    <div key={index}>
-                      {page === "..." ? (
-                        <span className="text-xs text-slate-600 dark:text-slate-400 px-1.5">...</span>
-                      ) : (
-                        <Button
-                          onClick={() => setCurrentPage(Number(page))}
-                          variant={page === currentPage ? "default" : "outline"}
-                          size="sm"
-                          className={`h-9 w-8 p-0 text-xs font-semibold ${
-                            page === currentPage
-                              ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 dark:border-blue-600"
-                              : "text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                          }`}
-                        >
-                          {page}
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                  className="h-9 w-8 p-0"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
+        <CardContent className="p-0">
+          <div>
 
             {/* Filter Modal - Centered popup with two columns */}
             {isFilterModalOpen && (
@@ -1583,19 +1569,19 @@ export default function UsuariosPage() {
             )}
 
             {/* Users Table */}
-            <div className="overflow-x-auto rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+            <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/20">
-                    <th className="text-left px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Usuário</th>
-                    <th className="text-left px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Contato</th>
-                    <th className="text-left px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Tipo / Função</th>
-                    <th className="text-left px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Status</th>
-                    <th className="text-left px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Último Acesso</th>
-                    <th className="text-right px-4 py-2 font-semibold text-slate-700 dark:text-slate-300">Ações</th>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Usuário</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Contato</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Tipo / Função</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Status</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Último Acesso</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ position: "sticky", right: 0, zIndex: 2, borderLeft: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {paginatedUsers.map((user) => {
                     const accountBadge = getAccountTypeBadge(user.account_type, user.role)
                     const canDelete = user.id !== currentUserId && !(user.is_admin && user.role === "admin")
@@ -1603,9 +1589,9 @@ export default function UsuariosPage() {
                     return (
                       <tr
                         key={user.id}
-                        className="border-b border-slate-200/40 dark:border-slate-700/40 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
+                        className={`group transition-colors cursor-pointer ${paginatedUsers.indexOf(user) % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"} dark:hover:bg-slate-700/50`}
                       >
-                        <td className="px-4 py-2">
+                        <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <div className="flex items-center gap-2.5">
                             <div className="relative">
                               <Avatar className="h-7 w-7">
@@ -1654,7 +1640,7 @@ export default function UsuariosPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <div className="flex items-center gap-1">
                             <TooltipProvider>
                               <Tooltip>
@@ -1663,9 +1649,9 @@ export default function UsuariosPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handlePhoneCall(user.phone)}
-                                    className="h-7 w-7 p-0 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 rounded"
+                                    className="h-5 w-5 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded"
                                   >
-                                    <Phone className="h-4 w-4" />
+                                    <Phone className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs">Ligar</TooltipContent>
@@ -1678,9 +1664,9 @@ export default function UsuariosPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleWhatsApp(user.phone)}
-                                    className="h-7 w-7 p-0 hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-300 rounded"
+                                    className="h-5 w-5 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30 rounded"
                                   >
-                                    <MessageCircle className="h-4 w-4" />
+                                    <MessageCircle className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs">WhatsApp</TooltipContent>
@@ -1688,24 +1674,24 @@ export default function UsuariosPage() {
                             </TooltipProvider>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <div className="space-y-0.5">
                             <Badge className={`text-xs px-2 py-0.5 ${accountBadge.color}`}>{accountBadge.label}</Badge>
                             <p className="text-xs text-slate-600 dark:text-slate-400">{getRoleLabel(user.role)}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
-                          <Badge
-                            className={
+                        <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                               user.is_active
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-xs px-2 py-0.5"
-                                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs px-2 py-0.5"
-                            }
+                                ? "bg-emerald-500 text-white"
+                                : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                            }`}
                           >
                             {user.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
+                          </span>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <div>
                             <p className="text-xs font-medium text-slate-900 dark:text-slate-100">{user.last_login ? new Date(user.last_login).toLocaleDateString("pt-BR") : "Nunca"}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -1713,8 +1699,17 @@ export default function UsuariosPage() {
                             </p>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center justify-end gap-1">
+                        <td
+                          className="px-5 py-3.5"
+                          style={{
+                            position: "sticky",
+                            right: 0,
+                            zIndex: 1,
+                            background: paginatedUsers.indexOf(user) % 2 === 0 ? "#ffffff" : "#f1f4f8",
+                            borderLeft: "1px solid rgba(148,163,184,0.25)",
+                          }}
+                        >
+                          <div className="flex items-center justify-end gap-0">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1722,9 +1717,9 @@ export default function UsuariosPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleUserAction(user, "view")}
-                                    className="h-7 w-7 p-0 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 rounded"
+                                    className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
                                   >
-                                    <Eye className="h-4 w-4" />
+                                    <Eye className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs">Ver Detalhes</TooltipContent>
@@ -1737,13 +1732,13 @@ export default function UsuariosPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleUserAction(user, "block")}
-                                    className={`h-7 w-7 p-0 rounded ${
+                                    className={`h-5 w-5 p-0 rounded ${
                                       user.is_active
-                                        ? "hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30 dark:hover:text-red-300"
-                                        : "hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-300"
+                                        ? "text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/30"
+                                        : "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
                                     }`}
                                   >
-                                    {user.is_active ? <UserX className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+                                    {user.is_active ? <UserX className="h-2.5 w-2.5" /> : <Shield className="h-2.5 w-2.5" />}
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs">
@@ -1759,13 +1754,13 @@ export default function UsuariosPage() {
                                     size="sm"
                                     onClick={() => handleUserAction(user, "delete")}
                                     disabled={!canDelete}
-                                    className={`h-7 w-7 p-0 rounded ${
+                                    className={`h-5 w-5 p-0 rounded ${
                                       canDelete
-                                        ? "hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30 dark:hover:text-red-300"
+                                        ? "text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
                                         : "opacity-40 cursor-not-allowed"
                                     }`}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs">
@@ -1782,68 +1777,62 @@ export default function UsuariosPage() {
               </table>
             </div>
 
+            {/* Empty State */}
             {paginatedUsers.length === 0 && (
-              <div className="text-center py-6 text-slate-500">
-                <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs">Nenhum usuário encontrado</p>
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                  <Users className="h-7 w-7 opacity-40" />
+                </div>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum usuário encontrado</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Tente ajustar os filtros ou busca</p>
               </div>
             )}
 
-            {/* Pagination Bottom - Modern Numeric */}
+            {/* Bottom Pagination */}
             {filteredUsers.length > 0 && (
-              <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-700/60 pt-3 pb-2">
-                <ItemsPerPageSelect 
-                  value={pageSize.toString()} 
-                  onValueChange={(value) => {
-                    setPageSize(Number(value))
-                    setCurrentPage(1)
-                  }}
-                  variant="bottom"
-                />
-
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(1) }}
+                    variant="bottom"
+                  />
+                  <span className="text-xs text-slate-400">
+                    de {filteredUsers.length} usuário{filteredUsers.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="h-7 w-7 p-0"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
-                  </Button>
-
-                  <div className="flex items-center gap-1">
-                    {getPageNumbers().map((page, index) => (
-                      <div key={index}>
-                        {page === "..." ? (
-                          <span className="text-xs text-slate-600 dark:text-slate-400 px-2">...</span>
-                        ) : (
-                          <Button
-                            onClick={() => setCurrentPage(Number(page))}
-                            variant={page === currentPage ? "default" : "outline"}
-                            size="sm"
-                            className={`h-7 w-7 p-0 text-xs font-medium ${
-                              page === currentPage
-                                ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 dark:border-blue-600"
-                                : "text-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {page}
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  </button>
+                  {getPageNumbers().map((page, index) =>
+                    page === "..." ? (
+                      <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+                    ) : (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentPage(Number(page))}
+                        className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                          page === currentPage
+                            ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  )}
+                  <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="h-7 w-7 p-0"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
@@ -1867,57 +1856,69 @@ export default function UsuariosPage() {
         onClose={() => setShowCreateUser(false)}
         onUserCreated={(newUser) => {
           console.log("[v0] Novo usuário criado:", newUser)
-          setUsers([...users, newUser])
-          setFilteredUsers([...filteredUsers, newUser])
+          // Add to shared platform users context (syncs back to this page via useEffect)
+          addPlatformUser(newUser)
           setShowCreateUser(false)
         }}
       />
 
-      {isDeleteAlertOpen && selectedUser && (
-        <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar Mudança de Status</AlertDialogTitle>
-              <AlertDialogDescription>
-                Você tem certeza de que deseja mudar o status do usuário {selectedUser.name}?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => handleStatusConfirmation("Desconhecido", "indefinite")}>
-                Confirmar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      <ConfirmationDialog
+        open={isDeleteAlertOpen && !!selectedUser}
+        onClose={() => setIsDeleteAlertOpen(false)}
+        onConfirm={() => handleStatusConfirmation("Desconhecido", "indefinite")}
+        title={selectedUser?.is_active ? "Bloquear Usuário" : "Desbloquear Usuário"}
+        message={
+          selectedUser?.is_active
+            ? `Tem certeza que deseja bloquear o usuário "${selectedUser?.name}"? Ele não poderá acessar a plataforma enquanto estiver bloqueado.`
+            : `Tem certeza que deseja desbloquear o usuário "${selectedUser?.name}"? Ele voltará a ter acesso à plataforma.`
+        }
+        confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
+        cancelText="Cancelar"
+        destructive={selectedUser?.is_active}
+      />
 
-      {isDeleteUserAlertOpen && selectedUser && (
-        <AlertDialog open={isDeleteUserAlertOpen} onOpenChange={setIsDeleteUserAlertOpen}>
-          <AlertDialogContent className="max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-                <Trash2 className="h-5 w-5" />
-                Excluir Usuário
-              </AlertDialogTitle>
-            </AlertDialogHeader>
-            <div className="space-y-4">
-              <div className="flex items-start gap-2 bg-red-50/50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 rounded-lg p-3">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-red-700 dark:text-red-300">
+      {isDeleteUserAlertOpen && selectedUser && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+          onClick={() => { if (!isDeleteLoading) setIsDeleteUserAlertOpen(false) }}
+        >
+          <div
+            className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Top accent bar */}
+            <div className="h-1 w-full bg-gradient-to-r from-red-500 to-rose-600" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between px-6 pt-5 pb-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <button
+                onClick={() => { if (!isDeleteLoading) setIsDeleteUserAlertOpen(false) }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg p-1.5 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 pt-4 pb-4 space-y-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">Excluir Usuário</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   Tem certeza que deseja excluir este usuário? Esta ação é <strong>irreversível</strong>.
-                </div>
+                </p>
               </div>
 
-              <div className="bg-slate-50/50 dark:bg-slate-900/20 border border-slate-200/50 dark:border-slate-700/50 rounded-lg p-3">
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
                 <div className="text-sm font-semibold text-slate-900 dark:text-white">{selectedUser.name}</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">{selectedUser.email}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{selectedUser.email}</div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                  Motivo da Exclusão
-                  <span className="text-red-600">*</span>
+                  Motivo da Exclusão <span className="text-red-500">*</span>
                 </label>
                 <Textarea
                   placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
@@ -1927,44 +1928,43 @@ export default function UsuariosPage() {
                     if (deletionReasonError) setDeletionReasonError("")
                   }}
                   disabled={isDeleteLoading}
-                  className="text-xs resize-none focus-visible:ring-red-500"
-                  rows={4}
+                  className="text-sm resize-none focus-visible:ring-red-500"
+                  rows={3}
                 />
                 {deletionReasonError && (
-                  <div className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {deletionReasonError}
-                  </div>
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />{deletionReasonError}
+                  </p>
                 )}
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Caracteres: {deletionReason.length}/10 (mínimo)
-                </div>
+                <p className="text-xs text-slate-400">Caracteres: {deletionReason.length}/10 (mínimo)</p>
               </div>
             </div>
-            <AlertDialogFooter className="gap-2 pt-4">
-              <AlertDialogCancel disabled={isDeleteLoading} className="h-8">
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 pb-5">
+              <Button
+                variant="outline"
+                className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setIsDeleteUserAlertOpen(false)}
+                disabled={isDeleteLoading}
+              >
                 Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
+              </Button>
+              <Button
+                className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleDeleteUser}
                 disabled={isDeleteLoading || !deletionReason.trim()}
-                className="bg-red-600 hover:bg-red-700 h-8 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isDeleteLoading ? (
-                  <>
-                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                    Excluindo...
-                  </>
+                  <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Excluindo...</>
                 ) : (
-                  <>
-                    <Trash2 className="h-3 w-3 mr-1.5" />
-                    Excluir Definitivamente
-                  </>
+                  <><Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir Definitivamente</>
                 )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

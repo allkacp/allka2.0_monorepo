@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import React, { useState, useEffect, useRef } from "react"
-import { Camera, ChevronLeft, ChevronRight, Check } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight, Check, Shield, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,17 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { useToast } from "@/hooks/use-toast"
+import { DEFAULT_COMPANY_PERMISSIONS } from "@/types/user"
+import type { CompanyPermissions } from "@/types/user"
 
 interface UserCreateSlidePanelProps {
   open: boolean
   onClose: () => void
   onUserCreated?: (user: any) => void
+  /** When set, the panel was opened from within a company and will pre-fill company context */
+  companyId?: number
+  companyName?: string
 }
 
-export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreateSlidePanelProps) {
+export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, companyName }: UserCreateSlidePanelProps) {
   const [isClosing, setIsClosing] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -28,14 +34,25 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
   const { sidebarWidth } = useSidebar()
   const { toast } = useToast()
 
+  // Company-level permissions — only used when creating from within a company
+  const [companyPermissions, setCompanyPermissions] = useState<CompanyPermissions>(
+    JSON.parse(JSON.stringify(DEFAULT_COMPANY_PERMISSIONS))
+  )
+  const toggleCompanyPermission = (category: keyof CompanyPermissions, permId: string) => {
+    setCompanyPermissions(prev => ({
+      ...prev,
+      [category]: prev[category].map(p => p.id === permId ? { ...p, enabled: !p.enabled } : p),
+    }))
+  }
+
   // Estado do novo usuário
   const [newUser, setNewUser] = useState({
     // Etapa 1 - Conta
     name: "",
     email: "",
     username: "",
-    account_type: "empresas",
-    role: "company_user",
+    account_type: companyId ? "empresas" : "empresas",
+    role: companyId ? "company_user" : "company_user",
     is_active: true,
     plan: "free",
     // Etapa 2 - Dados
@@ -167,15 +184,31 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
     console.log("[v0] Criando novo usuário:", newUser)
     
     // Criar novo usuário com estrutura completa
-    const createdUser = {
-      id: Math.floor(Math.random() * 10000) + 100, // ID temporário
+    const newId = Math.floor(Math.random() * 10000) + 100
+    const createdUser: any = {
+      id: newId,
       ...newUser,
-      account_sub_type: "in-house",
-      company_id: 1,
+      account_sub_type: companyId ? "in-house" : "in-house",
+      company_id: companyId ?? null,
       online_status: "offline",
       last_login: new Date().toISOString(),
       created_at: new Date().toISOString().split('T')[0],
       updated_at: new Date().toISOString().split('T')[0],
+    }
+    // Auto-link to the company they were created from
+    if (companyId) {
+      createdUser.company_associations = [{
+        id: Date.now(),
+        user_id: newId,
+        company_id: companyId,
+        company_name: companyName || `Empresa ${companyId}`,
+        role: "company_user",
+        permissions: ["view_projects"],
+        company_permissions: companyPermissions,
+        project_memberships: [],
+        is_active: true,
+        joined_at: new Date().toISOString().split('T')[0],
+      }]
     }
 
     // Chamar callback para adicionar à lista
@@ -290,6 +323,12 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de Usuário *</Label>
+                  {companyId ? (
+                    <div className="flex items-center gap-2 h-9 rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                      <span>Empresas</span>
+                      <span className="ml-auto text-xs text-slate-400">Vinculado à empresa</span>
+                    </div>
+                  ) : (
                   <Select value={newUser.account_type} onValueChange={(value) => setNewUser({ ...newUser, account_type: value })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -301,6 +340,7 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                  )}
                   {errors.account_type && <p className="text-xs text-red-500">{errors.account_type}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -449,28 +489,73 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated }: UserCreat
             {/* ETAPA 3: PERMISSÕES */}
             {currentStep === 3 && (
               <div className="space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-400">Selecione as permissões para este usuário</p>
-                {Object.entries(permissionsByCategory).map(([category, permissions]) => (
-                  <Card key={category} className="p-4">
-                    <h3 className="font-semibold text-sm mb-3">{category}</h3>
-                    <div className="space-y-2">
-                      {permissions.map((perm) => (
-                        <div key={perm.id} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={perm.id}
-                            checked={newUser.permissions.includes(perm.id)}
-                            onChange={() => togglePermission(perm.id)}
-                            className="rounded"
-                          />
-                          <label htmlFor={perm.id} className="text-sm cursor-pointer">
-                            {perm.label}
-                          </label>
-                        </div>
-                      ))}
+                {companyId ? (
+                  /* Created from within a company → show company-level permissions only */
+                  <>
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-1">
+                      <p className="text-sm font-semibold text-blue-700 flex items-center gap-1.5">
+                        <Shield className="h-3.5 w-3.5" />
+                        Permissões na empresa{companyName ? ` "${companyName}"` : ""}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Configure o que este usuário poderá fazer dentro da empresa. As permissões da plataforma (painel admin, financeiro, etc.) são gerenciadas separadamente pelo admin da plataforma.
+                      </p>
                     </div>
-                  </Card>
-                ))}
+
+                    {(Object.entries(companyPermissions) as [keyof CompanyPermissions, typeof companyPermissions[keyof CompanyPermissions]][]).map(([category, perms]) => (
+                      <Card key={category} className="p-4">
+                        <h3 className="font-semibold text-sm mb-3">
+                          {category === "gestao" ? "Gestão" : category === "tasks" ? "Tarefas" : category === "projects" ? "Projetos" : "Usuários"}
+                        </h3>
+                        <div className="space-y-3">
+                          {perms.map((perm) => (
+                            <div key={perm.id} className="flex items-center justify-between">
+                              <Label htmlFor={`cp-${perm.id}`} className="text-sm cursor-pointer">{perm.name}</Label>
+                              <Switch
+                                id={`cp-${perm.id}`}
+                                checked={perm.enabled}
+                                onCheckedChange={() => toggleCompanyPermission(category, perm.id)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ))}
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-2">
+                      <Lock className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-slate-500">
+                        As permissões de plataforma deste usuário poderão ser ajustadas pelo administrador da plataforma em <strong>Admin → Usuários</strong>.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  /* Created from platform admin → show platform permissions */
+                  <>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Selecione as permissões para este usuário</p>
+                    {Object.entries(permissionsByCategory).map(([category, permissions]) => (
+                      <Card key={category} className="p-4">
+                        <h3 className="font-semibold text-sm mb-3">{category}</h3>
+                        <div className="space-y-2">
+                          {permissions.map((perm) => (
+                            <div key={perm.id} className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={perm.id}
+                                checked={newUser.permissions.includes(perm.id)}
+                                onChange={() => togglePermission(perm.id)}
+                                className="rounded"
+                              />
+                              <label htmlFor={perm.id} className="text-sm cursor-pointer">
+                                {perm.label}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

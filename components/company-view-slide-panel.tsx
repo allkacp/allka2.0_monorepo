@@ -15,6 +15,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { useToast } from "@/hooks/use-toast"
+import { usePlatformUsers } from "@/contexts/platform-users-context"
 import { CompanyUsersTab } from "@/components/company-users-tab"
 import { TermsManagementTab } from "@/components/terms-management-tab"
 import { ProjectsManagementTab } from "@/components/projects-management-tab"
@@ -95,6 +96,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
   const { sidebarWidth } = useSidebar()
   const { toast } = useToast()
+  const { users: contextUsers } = usePlatformUsers()
   const [activeTab, setActiveTab] = useState("visao-geral")
   const [showMigrateModal, setShowMigrateModal] = useState(false)
   const [migrationStep, setMigrationStep] = useState<"confirm" | "leader">("confirm")
@@ -681,39 +683,40 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     { nome: "Operações", uso: 650 },
   ]
 
-  const allUserPool = [
-    { name: "Ana Silva",       avatar: "AS" },
-    { name: "Carlos Santos",   avatar: "CS" },
-    { name: "Marina Costa",    avatar: "MC" },
-    { name: "Paulo Oliveira",  avatar: "PO" },
-    { name: "Rita Alves",      avatar: "RA" },
-    { name: "Lucas Ferreira",  avatar: "LF" },
-    { name: "Juliana Rocha",   avatar: "JR" },
-    { name: "Bruno Mendes",    avatar: "BM" },
-    { name: "Fernanda Lima",   avatar: "FL" },
-    { name: "Diego Carvalho",  avatar: "DC" },
-    { name: "Tatiane Borges",  avatar: "TB" },
-    { name: "Rafael Souza",    avatar: "RS" },
-    { name: "Camila Nunes",    avatar: "CN" },
-    { name: "Vinícius Prado",  avatar: "VP" },
-    { name: "Aline Castelo",   avatar: "AC" },
-    { name: "Thiago Moreira",  avatar: "TM" },
-    { name: "Patrícia Dias",   avatar: "PD" },
-    { name: "Rodrigo Leal",    avatar: "RL" },
-    { name: "Isabela Teixeira",avatar: "IT" },
-    { name: "Felipe Araújo",   avatar: "FA" },
-  ]
-  const accessTimes = [
-    "Há 10 minutos", "Há 25 minutos", "Há 1 hora", "Há 2 horas", "Há 3 horas",
-    "Há 5 horas", "Há 7 horas", "Há 9 horas", "Ontem", "Ontem  tarde",
-    "2 dias atrás", "3 dias atrás", "4 dias atrás", "5 dias atrás", "1 semana atrás",
-  ]
-  const seed = company.id * 7
-  const recentUsers = Array.from({ length: 5 }, (_, i) => {
-    const userIdx = (seed + i * 3) % allUserPool.length
-    const timeIdx = (seed + i * 5) % accessTimes.length
-    return { id: i + 1, ...allUserPool[userIdx], time: accessTimes[timeIdx] }
-  })
+  // Real users linked to this company (via company_associations or company_id)
+  const companyUsers = contextUsers.filter(u =>
+    u.company_associations?.some(a => a.company_id === company.id) ||
+    u.company_id === company.id
+  )
+
+  // Sort by last_login descending and take up to 5 for the recents card
+  const getRelativeTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1)   return "Agora mesmo"
+    if (mins < 60)  return `Há ${mins} minuto${mins !== 1 ? "s" : ""}`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24)   return `Há ${hrs} hora${hrs !== 1 ? "s" : ""}`
+    const days = Math.floor(hrs / 24)
+    if (days === 1) return "Ontem"
+    if (days < 7)   return `${days} dias atrás`
+    const wks = Math.floor(days / 7)
+    return `${wks} semana${wks !== 1 ? "s" : ""} atrás`
+  }
+
+  const recentUsers = companyUsers
+    .filter(u => u.last_login)
+    .sort((a, b) => new Date(b.last_login!).getTime() - new Date(a.last_login!).getTime())
+    .slice(0, 5)
+    .map(u => ({
+      id: u.id,
+      name: u.name,
+      avatar: u.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+      time: getRelativeTime(u.last_login!),
+      isOnline: u.online_status === "online",
+    }))
+
+  const onlineCount = companyUsers.filter(u => u.online_status === "online").length
 
   return (
     <>
@@ -1109,10 +1112,14 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                       {recentUsers.length > 0 ? (
                         recentUsers.map((user) => (
                           <div key={user.id} className="flex items-center gap-2 pb-1.5 border-b border-slate-100 last:border-0 last:pb-0">
-                            <Avatar className="h-6 w-6 flex-shrink-0">
-                              <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar}`} />
-                              <AvatarFallback className="text-[10px]">{user.avatar}</AvatarFallback>
-                            </Avatar>
+                            <div className="relative flex-shrink-0">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-[10px] bg-blue-100 text-blue-700">{user.avatar}</AvatarFallback>
+                              </Avatar>
+                              {user.isOnline && (
+                                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 border border-white" />
+                              )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium text-slate-900 truncate">{user.name}</p>
                               <p className="text-[10px] text-slate-500">{user.time}</p>
@@ -1120,7 +1127,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-slate-500">Nenhum acesso recente</p>
+                        <p className="text-xs text-slate-500 py-2 text-center">Nenhum usuário cadastrado</p>
                       )}
                     </div>
                   </div>
@@ -1129,8 +1136,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col items-center justify-center">
                     <h3 className="text-xs font-semibold text-slate-700 mb-2 w-full">Online agora</h3>
                     <div className="flex flex-col items-center justify-center flex-1">
-                      <div className="text-4xl font-bold text-blue-600">{company.users_online}</div>
-                      <p className="text-[10px] text-slate-500 mt-1">usuários ativos</p>
+                      <div className="text-4xl font-bold text-blue-600">{onlineCount}</div>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        de {companyUsers.length} usuário{companyUsers.length !== 1 ? "s" : ""}
+                      </p>
                     </div>
                   </div>
                 </div>

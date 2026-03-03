@@ -10,23 +10,26 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 
 import React from "react"
 
-import { X, Mail, Phone, Building2, Shield, UserIcon, Lock, CheckCircle2, AlertCircle, TrendingUp, Activity, Clock, Zap, Search, Edit2, Save, XCircle, Loader2, Download, Copy, Eye, EyeOff, Send, Key, ChevronDown, CreditCard, Plus, Trash2, Wallet, FileText, Check, DollarSign, BarChart3, Settings, Smartphone, Globe, Monitor, Tablet, Star, Upload, ToggleRight, ToggleLeft, ChevronsUpDown } from "lucide-react"
+import { X, Mail, Phone, Building2, Shield, UserIcon, Lock, CheckCircle, CheckCircle2, PauseCircle, AlertCircle, TrendingUp, Activity, Clock, Zap, Search, Edit2, Save, XCircle, Loader2, Download, Copy, Eye, EyeOff, Send, Key, ChevronDown, CreditCard, Plus, Trash2, Wallet, FileText, Check, DollarSign, BarChart3, Settings, Smartphone, Globe, Monitor, Tablet, Star, Upload, ToggleRight, ToggleLeft, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Switch } from "@/components/ui/switch"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { UserViewHeader } from "@/components/user-view-header"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { useState, useEffect } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { User as UserType } from "@/types/user"
 import { useToast } from "@/hooks/use-toast"
+import { usePlatformUsers, MOCK_COMPANIES } from "@/contexts/platform-users-context"
+import { ALL_PROJECT_PERMISSIONS, MOCK_COMPANY_PROJECTS, DEFAULT_COMPANY_PERMISSIONS, ADMIN_COMPANY_PERMISSIONS } from "@/types/user"
 
-const USER_DADOS_ALL_ACCORDIONS = ["pessoais", "contato", "endereco", "adicionais"]
+const USER_DADOS_ALL_ACCORDIONS = ["dados-principais", "status-conta", "nivel-performance", "pessoais", "contato", "endereco", "adicionais"]
 
 interface UserViewSlidePanelProps {
   open: boolean
@@ -136,6 +139,7 @@ const templates = [
 ]
 
 export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelProps) {
+  const { getUserById, addCompanyLink, removeCompanyLink, updateCompanyLink, upsertProjectMembership, removeProjectMembership } = usePlatformUsers()
   const [isClosing, setIsClosing] = useState(false)
   const [onlineStatus, setOnlineStatus] = useState("online")
   const [isEditMode, setIsEditMode] = useState(false)
@@ -150,8 +154,10 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   const [resetPasswordUrl, setResetPasswordUrl] = useState<string | null>(null)
   const [isResettingPassword, setIsResettingPassword] = useState(false)
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false)
-  const [openAccordions, setOpenAccordions] = useState<string[]>(["dados-principais"])
+  const [openAccordions, setOpenAccordions] = useState<string[]>(["dados-principais", "estatisticas-user", "info-principais"])
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showCancelEditConfirm, setShowCancelEditConfirm] = useState(false)
+  const [pendingCancelCallback, setPendingCancelCallback] = useState<(() => void) | null>(null)
   const [persistedUserData, setPersistedUserData] = useState<Partial<UserType> | null>(null)
   const [isDadosEditMode, setIsDadosEditMode] = useState(false)
   const [dadosEditedData, setDadosEditedData] = useState<Partial<UserType>>({})
@@ -224,9 +230,87 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   // Header States
   const [showBalanceAllka, setShowBalanceAllka] = useState(true)
   const [showAvatarUpload, setShowAvatarUpload] = useState(false)
+
+  // Linked Entities (Permissions Tab) — derived from context
+  const contextUser = user?.id ? getUserById(user.id) : null
+  const companyAssociations = contextUser?.company_associations || []
+  const [showAddCompany, setShowAddCompany] = useState(false)
+  const [linkSearchQuery, setLinkSearchQuery] = useState("")
+  const [expandedAssocId, setExpandedAssocId] = useState<number | null>(null)
+  const [expandedProjectCompanyId, setExpandedProjectCompanyId] = useState<number | null>(null)
+
+  // KPI Card period selectors
+  const kpiPeriodOptions = [
+    { value: "7", label: "7d" },
+    { value: "30", label: "30d" },
+    { value: "90", label: "90d" },
+    { value: "180", label: "180d" },
+  ]
+  const [kpiPeriodCard1, setKpiPeriodCard1] = useState("30")
+  const [kpiPeriodCard2, setKpiPeriodCard2] = useState("30")
+  const [kpiPeriodCard3, setKpiPeriodCard3] = useState("7")
+
+  // --- NOMADE / default ---
+  const kpiNomadeCard1: Record<string, { value: string; change: string }> = {
+    "7":   { value: "289",   change: "+8%" },
+    "30":  { value: "1.247", change: "+12%" },
+    "90":  { value: "3.812", change: "+15%" },
+    "180": { value: "7.430", change: "+9%" },
+  }
+  const kpiNomadeCard2: Record<string, { score: number; stars: number; avaliacoes: number; change: string }> = {
+    "7":   { score: 4.7, stars: 5, avaliacoes: 28,  change: "+0.3" },
+    "30":  { score: 4.5, stars: 4, avaliacoes: 125, change: "+0.2" },
+    "90":  { score: 4.3, stars: 4, avaliacoes: 380, change: "+0.1" },
+    "180": { score: 4.1, stars: 4, avaliacoes: 720, change: "-0.1" },
+  }
+  const kpiNomadeCard3: Record<string, { value: string; nivel: string }> = {
+    "7":   { value: "87%", nivel: "Alta" },
+    "30":  { value: "79%", nivel: "Média" },
+    "90":  { value: "74%", nivel: "Média" },
+    "180": { value: "68%", nivel: "Regular" },
+  }
+
+  // --- AGENCY ---
+  const kpiAgencyCard1: Record<string, { value: string; change: string }> = {
+    "7":   { value: "148",   change: "+6%" },
+    "30":  { value: "620",   change: "+18%" },
+    "90":  { value: "1.950", change: "+11%" },
+    "180": { value: "3.840", change: "+7%" },
+  }
+  const kpiAgencyCard2: Record<string, { score: number; stars: number; avaliacoes: number; change: string }> = {
+    "7":   { score: 4.8, stars: 5, avaliacoes: 14,  change: "+0.4" },
+    "30":  { score: 4.6, stars: 5, avaliacoes: 63,  change: "+0.3" },
+    "90":  { score: 4.4, stars: 4, avaliacoes: 190, change: "+0.1" },
+    "180": { score: 4.2, stars: 4, avaliacoes: 360, change: "-0.0" },
+  }
+  const kpiAgencyCard3: Record<string, { value: string; nivel: string }> = {
+    "7":   { value: "91%", nivel: "Alta" },
+    "30":  { value: "84%", nivel: "Alta" },
+    "90":  { value: "76%", nivel: "Média" },
+    "180": { value: "71%", nivel: "Média" },
+  }
+
+  // --- COMPANY ---
+  const kpiCompanyCard1: Record<string, { value: string; change: string }> = {
+    "7":   { value: "12",  change: "+2" },
+    "30":  { value: "47",  change: "+8" },
+    "90":  { value: "138", change: "+21" },
+    "180": { value: "274", change: "+35" },
+  }
+  const kpiCompanyCard2: Record<string, { value: string; change: string }> = {
+    "7":   { value: "R$ 38.200",  change: "+4%" },
+    "30":  { value: "R$ 182.400", change: "+14%" },
+    "90":  { value: "R$ 541.000", change: "+9%" },
+    "180": { value: "R$ 1,04M",   change: "+6%" },
+  }
+  const kpiCompanyCard3: Record<string, { value: string; nivel: string }> = {
+    "7":   { value: "93%", nivel: "Alta" },
+    "30":  { value: "88%", nivel: "Alta" },
+    "90":  { value: "80%", nivel: "Alta" },
+    "180": { value: "75%", nivel: "Média" },
+  }
   const [userLevel, setUserLevel] = useState(3) // 1-5 stars
   const [levelProgress, setLevelProgress] = useState(65) // percentage to next level
-  const [userAccountStatus, setUserAccountStatus] = useState<"ativo" | "inativo" | "pausado" | "suspenso">("ativo")
   const [userPlan, setUserPlan] = useState<"free" | "premium" | "vip">("premium")
   
   const { sidebarWidth } = useSidebar()
@@ -240,6 +324,9 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   // Normalizar tipo de conta corretamente, sem fallback silencioso
   const rawAccountType = displayUser?.account_type || displayUser?.tipo
   const userAccountType = rawAccountType ? rawAccountType.toString().toLowerCase() : undefined
+
+  // Derivar status do usuário a partir dos dados persistidos (atualiza ao salvar)
+  const userAccountStatus = ((contaEditedData as any).status ?? (displayUser as any).status ?? "ativo") as "ativo" | "inativo" | "pausado" | "suspenso"
 
   // Initialize cards on component mount
   useEffect(() => {
@@ -544,29 +631,11 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         ...dadosEditedData,
         id: displayUser.id
       }
-
-      const response = await fetch(`/api/admin/users/${displayUser.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      })
-
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        setPersistedUserData(prev => ({
-          ...prev,
-          ...data.data
-        }))
-        toast({ title: "Sucesso!", description: "Dados atualizados com sucesso" })
-        setIsDadosEditMode(false)
-        setDadosEditedData({})
-      } else {
-        toast({ title: "Erro", description: data.message || "Falha ao salvar dados", variant: "destructive" })
-      }
-    } catch (error) {
-      console.error('[v0] Error saving dados:', error)
-      toast({ title: "Erro", description: "Falha ao salvar dados", variant: "destructive" })
+      await new Promise(r => setTimeout(r, 800))
+      setPersistedUserData(prev => ({ ...prev, ...dadosEditedData }))
+      toast({ title: "Sucesso!", description: "Dados atualizados com sucesso" })
+      setIsDadosEditMode(false)
+      setDadosEditedData({})
     } finally {
       setShowDadosConfirmDialog(false)
       setIsSaving(false)
@@ -600,34 +669,11 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   const handleFinancialSaveConfirm = async () => {
     setIsSaving(true)
     try {
-      const updatePayload = {
-        ...displayUser,
-        ...financialEditedData,
-        id: displayUser.id
-      }
-
-      const response = await fetch(`/api/admin/users/${displayUser.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      })
-
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        setPersistedUserData(prev => ({
-          ...prev,
-          ...data.data
-        }))
-        toast({ title: "Sucesso!", description: "Dados financeiros atualizados com sucesso" })
-        setIsFinancialEditMode(false)
-        setFinancialEditedData({})
-      } else {
-        toast({ title: "Erro", description: data.message || "Falha ao salvar dados", variant: "destructive" })
-      }
-    } catch (error) {
-      console.error('[v0] Error saving financial data:', error)
-      toast({ title: "Erro", description: "Falha ao salvar dados financeiros", variant: "destructive" })
+      await new Promise(r => setTimeout(r, 800))
+      setPersistedUserData(prev => ({ ...prev, ...financialEditedData }))
+      toast({ title: "Sucesso!", description: "Dados financeiros atualizados com sucesso" })
+      setIsFinancialEditMode(false)
+      setFinancialEditedData({})
     } finally {
       setShowFinancialConfirmDialog(false)
       setIsSaving(false)
@@ -715,16 +761,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       if (creditType === "blocked") {
         setBlockedBalance(prev => prev + amount)
       } else {
-        const updatePayload = { ...displayUser, wallet_balance: newBalance, id: displayUser.id }
-        const response = await fetch(`/api/admin/users/${displayUser.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatePayload)
-        })
-        const data = await response.json()
-        if (data.success) {
-          setPersistedUserData(prev => ({ ...prev, wallet_balance: newBalance }))
-        }
+        setPersistedUserData(prev => ({ ...prev, wallet_balance: newBalance }))
       }
 
       setWalletStatements([newStatement, ...walletStatements])
@@ -968,31 +1005,10 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         return
       }
 
-      const updatePayload = {
-        ...displayUser,
-        wallet_balance: newBalance,
-        id: displayUser.id
-      }
-
-      const response = await fetch(`/api/admin/users/${displayUser.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      })
-
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        setPersistedUserData(prev => ({
-          ...prev,
-          wallet_balance: newBalance
-        }))
-        toast({ title: "Sucesso!", description: `Saldo atualizado para R$ ${newBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` })
-        setWalletAdjustValue("")
-        setShowWalletConfirmDialog(false)
-      } else {
-        toast({ title: "Erro", description: "Falha ao atualizar saldo", variant: "destructive" })
-      }
+      setPersistedUserData(prev => ({ ...prev, wallet_balance: newBalance }))
+      toast({ title: "Sucesso!", description: `Saldo atualizado para R$ ${newBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` })
+      setWalletAdjustValue("")
+      setShowWalletConfirmDialog(false)
     } catch (error) {
       console.error('[v0] Error applying wallet adjustment:', error)
       toast({ title: "Erro", description: "Falha ao aplicar ajuste", variant: "destructive" })
@@ -1033,36 +1049,13 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   const handlePermissionsSaveConfirm = async () => {
     setIsSaving(true)
     try {
-      const updatePayload = {
-        ...displayUser,
-        role: permissionsEditedData.role || displayUser.role,
-        permissions: permissionsEditedData.permissions || displayUser.permissions,
-        id: displayUser.id
-      }
-
-      const response = await fetch(`/api/admin/users/${displayUser.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      })
-
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        setPersistedUserData(prev => ({
-          ...prev,
-          role: updatePayload.role,
-          permissions: updatePayload.permissions
-        }))
-        toast({ title: "Sucesso!", description: "Permissões atualizadas com sucesso" })
-        setIsPermissionsEditMode(false)
-        setPermissionsEditedData({})
-      } else {
-        toast({ title: "Erro", description: data.message || "Falha ao salvar permissões", variant: "destructive" })
-      }
-    } catch (error) {
-      console.error('[v0] Error saving permissions:', error)
-      toast({ title: "Erro", description: "Falha ao salvar permissões", variant: "destructive" })
+      const updatedRole = permissionsEditedData.role || displayUser.role
+      const updatedPermissions = permissionsEditedData.permissions || displayUser.permissions
+      await new Promise(r => setTimeout(r, 800))
+      setPersistedUserData(prev => ({ ...prev, role: updatedRole, permissions: updatedPermissions }))
+      toast({ title: "Sucesso!", description: "Permissões atualizadas com sucesso" })
+      setIsPermissionsEditMode(false)
+      setPermissionsEditedData({})
     } finally {
       setShowPermissionsConfirmDialog(false)
       setIsSaving(false)
@@ -1085,8 +1078,8 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
 
   const handleContaSaveConfirm = async () => {
     // Validar dados obrigatórios se forem alterados
-    const nameToSave = contaEditedData.name ?? displayUser.name
-    const emailToSave = contaEditedData.email ?? displayUser.email
+    const nameToSave = contaEditedData.name ?? dadosEditedData.name ?? displayUser.name
+    const emailToSave = contaEditedData.email ?? dadosEditedData.email ?? displayUser.email
     
     if (!nameToSave || !emailToSave) {
       toast({ title: "Erro", description: "Nome e email são obrigatórios", variant: "destructive" })
@@ -1095,43 +1088,36 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
     }
 
     setIsSaving(true)
-    try {
-      // Preparar payload com todos os campos
-      const updatePayload = {
-        ...displayUser,
-        ...contaEditedData,
-        name: nameToSave,
-        email: emailToSave,
-        id: displayUser.id // Garantir que o ID está no payload
-      }
 
-      const response = await fetch(`/api/admin/users/${displayUser.id}`, {
+    // Mesclar dados de conta + dados pessoais no mesmo payload
+    const updatePayload = {
+      ...displayUser,
+      ...dadosEditedData,
+      ...contaEditedData,
+      name: nameToSave,
+      email: emailToSave,
+      id: displayUser.id
+    }
+
+    // Atualiza estado local imediatamente (optimistic update)
+    setPersistedUserData(prev => ({ ...prev, ...updatePayload }))
+    toast({ title: "Sucesso!", description: "Dados atualizados com sucesso" })
+    setIsContaEditMode(false)
+    setContaEditedData({})
+    setIsDadosEditMode(false)
+    setDadosEditedData({})
+    setShowConfirmDialog(false)
+    setIsSaving(false)
+
+    // Sincroniza com a API em background
+    try {
+      await fetch(`/api/admin/users/${displayUser.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload)
       })
-
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        // Atualizar persistedUserData com os dados retornados da API
-        setPersistedUserData(prev => ({
-          ...prev,
-          ...data.data
-        }))
-        
-        toast({ title: "Sucesso!", description: "Dados da conta atualizados com sucesso" })
-        setIsContaEditMode(false)
-        setContaEditedData({})
-      } else {
-        toast({ title: "Erro", description: data.message || "Falha ao salvar dados", variant: "destructive" })
-      }
     } catch (error) {
-      console.error('[v0] Error saving account data:', error)
-      toast({ title: "Erro", description: "Falha ao salvar dados da conta", variant: "destructive" })
-    } finally {
-      setShowConfirmDialog(false)
-      setIsSaving(false)
+      console.warn('[v0] API sync failed (local state already updated):', error)
     }
   }
 
@@ -1148,45 +1134,18 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   // Password Reset Handlers
   const handleResetPassword = async () => {
     setIsResettingPassword(true)
-    try {
-      const response = await fetch(`/api/admin/users/${fakeUser.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset-password' })
-      })
-      const data = await response.json()
-      if (data.success) {
-        setResetPasswordToken(data.token)
-        setResetPasswordUrl(data.resetUrl)
-        toast({ title: "Sucesso!", description: "Token de recuperação gerado. Copie o link abaixo para enviar ao usuário." })
-      } else {
-        toast({ title: "Erro", description: data.message, variant: "destructive" })
-      }
-    } catch (error) {
-      console.error('[v0] Error resetting password:', error)
-      toast({ title: "Erro", description: "Falha ao gerar token de recuperação", variant: "destructive" })
-    }
+    await new Promise(r => setTimeout(r, 800))
+    const token = `tk_${Date.now()}`
+    setResetPasswordToken(token)
+    setResetPasswordUrl(`https://allka.com/auth/reset-password?token=${token}&user=${fakeUser.id}`)
+    toast({ title: "Sucesso!", description: "Token de recuperação gerado. Copie o link abaixo para enviar ao usuário." })
     setIsResettingPassword(false)
   }
 
   const handleSendResetEmail = async () => {
     setIsSendingResetEmail(true)
-    try {
-      const response = await fetch(`/api/admin/users/${fakeUser.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send-reset-email' })
-      })
-      const data = await response.json()
-      if (data.success) {
-        toast({ title: "Sucesso!", description: "Email de recuperação enviado para " + fakeUser.email })
-      } else {
-        toast({ title: "Erro", description: data.message, variant: "destructive" })
-      }
-    } catch (error) {
-      console.error('[v0] Error sending reset email:', error)
-      toast({ title: "Erro", description: "Falha ao enviar email", variant: "destructive" })
-    }
+    await new Promise(r => setTimeout(r, 800))
+    toast({ title: "Sucesso!", description: "Email de recuperação enviado para " + fakeUser.email })
     setIsSendingResetEmail(false)
   }
 
@@ -1208,12 +1167,12 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
   }
 
   const getCurrentStatus = (): "ativo" | "inativo" | "pausado" | "suspenso" => {
-    // Se há status editado, usa ele. Caso contrário, usa o padrão "ativo"
-    return (contaEditedData.status as any) ?? "ativo"
+    // Prioridade: editado > persistido > padrão
+    return (contaEditedData.status as any) ?? (displayUser.status as any) ?? "ativo"
   }
 
   const getCurrentLevel = (): "free" | "premium" | "vip" => {
-    return (contaEditedData.account_type as any) ?? (fakeUser.account_type as any) ?? "premium"
+    return (contaEditedData.account_type as any) ?? (displayUser.account_type as any) ?? "premium"
   }
 
   const handleAccountStatusUpdate = (newStatus: "ativo" | "inativo" | "pausado" | "suspenso") => {
@@ -1254,7 +1213,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
     <>
       <div
         className={cn(
-          "fixed top-0 z-40 h-[calc(100vh-32px)]",
+          "fixed top-0 z-40 h-[calc(100vh-25px)]",
           "bg-background overflow-hidden flex flex-col",
           "transition-all duration-300 ease-in-out",
           isClosing ? "slide-out-to-right opacity-0" : "slide-in-from-right opacity-100",
@@ -1287,18 +1246,16 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         {/* Content with Tabs */}
         <Tabs defaultValue="visao-geral" className="flex-1 flex flex-col min-h-0">
           {/* Tab Navigation - Fixed */}
-          <div className="sticky top-0 z-40 flex-shrink-0 border-b border-slate-300 bg-slate-100 px-[50px] py-3 overflow-x-auto">
-            <TabsList className="grid w-max grid-cols-6 gap-1 bg-transparent p-0 h-auto">
-              {["visao-geral", "conta", "dados", "financeiro", "permissoes", "seguranca"].map(tab => (
+          <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+            <TabsList className="grid w-max grid-cols-4 gap-1 bg-transparent p-0 h-auto">
+              {["visao-geral", "conta", "permissoes", "seguranca"].map(tab => (
                 <TabsTrigger
                   key={tab}
                   value={tab}
-                  className="px-3 py-2 text-xs font-medium rounded-md border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
                 >
                   {tab === "visao-geral" && "Visão Geral"}
-                  {tab === "conta" && "Conta"}
-                  {tab === "dados" && "Dados"}
-                  {tab === "financeiro" && "Financeiro"}
+                  {tab === "conta" && "Conta & Dados"}
                   {tab === "permissoes" && "Permissões"}
                   {tab === "seguranca" && "Segurança"}
                 </TabsTrigger>
@@ -1307,122 +1264,173 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
           </div>
 
           {/* Tab Content - Scrollable */}
-          <ScrollArea className="flex-1 min-h-0 overflow-hidden">
-            <div className="px-[50px] py-6 space-y-6 bg-slate-100">
-              {/* Visão Geral */}
-              <TabsContent value="visao-geral" className="space-y-4 mt-0">
-                {/* Partnership Card - não disponível neste módulo */}
+              <TabsContent value="visao-geral" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-6 space-y-4 mt-0">
 
-                {/* Key Metrics Grid */}
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Total Tarefas */}
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Total de Tarefas Executadas</span>
-                        <div className="text-3xl font-bold text-slate-900 mt-2">1,247</div>
-                        <div className="text-xs text-slate-600 mt-1">+12% em relação ao mês anterior</div>
-                      </div>
-                      <div className="p-3 bg-white rounded-lg border border-blue-200">
-                        <TrendingUp className="h-6 w-6 text-blue-600" />
-                      </div>
+                {/* Expandir toggle */}
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={() => {
+                      const keys = ["estatisticas-user", "info-principais"]
+                      const allOpen = keys.every(k => openAccordions.includes(k))
+                      setOpenAccordions(allOpen ? openAccordions.filter(a => !keys.includes(a)) : [...openAccordions, ...keys.filter(k => !openAccordions.includes(k))])
+                    }}
+                    className="flex items-center gap-2 group"
+                  >
+                    <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                      {["estatisticas-user","info-principais"].every(k => openAccordions.includes(k)) ? "Fechar" : "Expandir"}
+                    </span>
+                    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      ["estatisticas-user","info-principais"].every(k => openAccordions.includes(k)) ? "bg-blue-500" : "bg-slate-300"
+                    }`}>
+                      <div className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                        ["estatisticas-user","info-principais"].every(k => openAccordions.includes(k)) ? "translate-x-4" : "translate-x-0.5"
+                      }`} />
                     </div>
-                  </div>
+                  </button>
+                </div>
 
-                  {/* Nota Geral e Avaliação em Estrelas */}
-                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border border-amber-200">
-                    <div className="flex items-start justify-between mb-3">
-                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nota Geral na Plataforma</span>
-                      <div className="p-2 bg-white rounded-lg border border-amber-200">
-                        <Activity className="h-5 w-5 text-amber-600" />
-                      </div>
+                {/* KPI Cards Row - 3 colunas compactas */}
+                {(() => {
+                  const isCompany = userAccountType === "company"
+                  const isAgency  = userAccountType === "agency"
+                  const c1Data = isCompany ? kpiCompanyCard1[kpiPeriodCard1] : isAgency ? kpiAgencyCard1[kpiPeriodCard1] : kpiNomadeCard1[kpiPeriodCard1]
+                  const c2DataNota = !isCompany ? (isAgency ? kpiAgencyCard2[kpiPeriodCard2] : kpiNomadeCard2[kpiPeriodCard2]) : null
+                  const c2CompData = isCompany ? kpiCompanyCard2[kpiPeriodCard2] : null
+                  const c3Data = isCompany ? kpiCompanyCard3[kpiPeriodCard3] : isAgency ? kpiAgencyCard3[kpiPeriodCard3] : kpiNomadeCard3[kpiPeriodCard3]
+
+                  const PeriodBtns = ({ active, setActive, activeColor }: { active: string; setActive: (v: string) => void; activeColor: string }) => (
+                    <div className="flex gap-1 flex-wrap mb-1">
+                      {kpiPeriodOptions.map(opt => (
+                        <button key={opt.value} onClick={() => setActive(opt.value)}
+                          className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors ${
+                            active === opt.value ? activeColor : "bg-white/70 text-slate-500 hover:bg-white hover:text-slate-700 border border-slate-200"
+                          }`}>
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
-                    
-                    {/* Star Rating System */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <div className="text-2xl font-bold text-slate-900">4.5</div>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <div key={star} className="relative">
-                              {star <= Math.floor(4.5) ? (
-                                <span className="text-lg">★</span>
-                              ) : star === Math.ceil(4.5) && 4.5 % 1 !== 0 ? (
-                                <div className="relative inline-block">
-                                  <span className="text-lg text-slate-300">★</span>
-                                  <div className="absolute top-0 left-0 overflow-hidden" style={{ width: '50%' }}>
-                                    <span className="text-lg text-amber-400">★</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-lg text-slate-300">★</span>
-                              )}
+                  )
+
+                  return (
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Card 1 */}
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg px-3 py-2.5 border border-blue-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">
+                            {isCompany ? "Projetos ativos" : isAgency ? "Tarefas distribuídas" : "Tarefas executadas"}
+                          </span>
+                          <div className="p-1 bg-white rounded-md border border-blue-200 flex-shrink-0">
+                            <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 mb-1.5">{c1Data.value}</div>
+                        <PeriodBtns active={kpiPeriodCard1} setActive={setKpiPeriodCard1} activeColor="bg-blue-600 text-white" />
+                        <div className="text-[11px] text-slate-500">{c1Data.change} vs. últimos {kpiPeriodCard1} dias</div>
+                      </div>
+
+                      {/* Card 2 */}
+                      {isCompany ? (
+                        <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-lg px-3 py-2.5 border border-violet-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">Receita gerada</span>
+                            <div className="p-1 bg-white rounded-md border border-violet-200 flex-shrink-0">
+                              <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
                             </div>
-                          ))}
+                          </div>
+                          <div className="text-2xl font-bold text-slate-900 mb-1.5">{c2CompData!.value}</div>
+                          <PeriodBtns active={kpiPeriodCard2} setActive={setKpiPeriodCard2} activeColor="bg-violet-600 text-white" />
+                          <div className="text-[11px] text-slate-500">{c2CompData!.change} vs. últimos {kpiPeriodCard2} dias</div>
                         </div>
-                        <span className="text-xs text-slate-600 ml-2">(125 avaliações)</span>
+                      ) : (
+                        <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg px-3 py-2.5 border border-amber-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">Nota na plataforma</span>
+                            <div className="p-1 bg-white rounded-md border border-amber-200 flex-shrink-0">
+                              <Activity className="h-3.5 w-3.5 text-amber-600" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className="text-2xl font-bold text-slate-900">{c2DataNota!.score}</span>
+                            <div className="flex gap-0.5">
+                              {[1,2,3,4,5].map(s => (
+                                <span key={s} className={`text-sm ${s <= c2DataNota!.stars ? "text-amber-400" : "text-slate-300"}`}>★</span>
+                              ))}
+                            </div>
+                          </div>
+                          <PeriodBtns active={kpiPeriodCard2} setActive={setKpiPeriodCard2} activeColor="bg-amber-500 text-white" />
+                          <div className="text-[11px] text-slate-500">{c2DataNota!.avaliacoes} avaliações · {c2DataNota!.change} últimos {kpiPeriodCard2}d</div>
+                        </div>
+                      )}
+
+                      {/* Card 3 - Taxa de Atividade */}
+                      <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg px-3 py-2.5 border border-emerald-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">Taxa de atividade</span>
+                          <div className="p-1 bg-white rounded-md border border-emerald-200 flex-shrink-0">
+                            <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 mb-1.5">{c3Data.value}</div>
+                        <PeriodBtns active={kpiPeriodCard3} setActive={setKpiPeriodCard3} activeColor="bg-emerald-600 text-white" />
+                        <div className="text-[11px] text-slate-500">Últimos {kpiPeriodCard3} dias · {c3Data.nivel}</div>
                       </div>
+                    </div>
+                  )
+                })()}
 
-                      {/* Progress Bar to Next Star */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-600">Progresso até 5 estrelas</span>
-                          <span className="text-xs font-semibold text-slate-700">90%</span>
-                        </div>
-                        <div className="w-full bg-slate-200 rounded-full h-2">
-                          <div className="bg-gradient-to-r from-amber-400 to-amber-500 h-2 rounded-full transition-all" style={{ width: '90%' }} />
+                {/* Estatísticas - Accordion compacto */}
+                <Accordion type="multiple" value={openAccordions} onValueChange={setOpenAccordions} className="space-y-3">
+                  <AccordionItem value="estatisticas-user" className="border border-slate-200 rounded-lg">
+                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-slate-600" />
+                        <span className="font-semibold text-slate-900">Estatísticas de Uso</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="border-t border-slate-100 pb-0">
+                      <div className="px-3 py-3 rounded-b-lg">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="p-2 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200/50 rounded-lg">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <Clock className="h-3 w-3 text-emerald-600" />
+                              <span className="text-[10px] font-medium text-emerald-900">Último login</span>
+                            </div>
+                            <p className="text-sm font-bold text-emerald-700">Hoje</p>
+                            <p className="text-[10px] text-emerald-600">14:30 (2h atrás)</p>
+                          </div>
+                          <div className="p-2 bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200/50 rounded-lg">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <Activity className="h-3 w-3 text-purple-600" />
+                              <span className="text-[10px] font-medium text-purple-900">Média sessão</span>
+                            </div>
+                            <p className="text-sm font-bold text-purple-700">18 min</p>
+                            <p className="text-[10px] text-purple-600">Tempo médio</p>
+                          </div>
+                          <div className="p-2 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 rounded-lg">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <TrendingUp className="h-3 w-3 text-blue-600" />
+                              <span className="text-[10px] font-medium text-blue-900">Progresso nota</span>
+                            </div>
+                            <p className="text-sm font-bold text-blue-700">90%</p>
+                            <div className="w-full bg-blue-200 rounded-full h-1 mt-1">
+                              <div className="bg-blue-500 h-1 rounded-full" style={{ width: "90%" }} />
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
 
-                      {/* Trend Indicator */}
-                      <div className="flex items-center gap-2 pt-2">
-                        <div className="flex items-center gap-1 text-xs">
-                          <TrendingUp className="h-4 w-4 text-emerald-600" />
-                          <span className="text-emerald-700 font-semibold">Subindo</span>
-                        </div>
-                        <span className="text-xs text-slate-600">+0.2 estrelas este mês</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Activity Metrics */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white rounded-lg p-3 border border-slate-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-slate-600 font-medium">Último Login</span>
-                      <Clock className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900">Hoje</div>
-                    <div className="text-xs text-slate-500">14:30 (2h atrás)</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-slate-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-slate-600 font-medium">Média Sessão</span>
-                      <Activity className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900">18 min</div>
-                    <div className="text-xs text-slate-500">Tempo médio</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-slate-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-slate-600 font-medium">Taxa Atividade</span>
-                      <Zap className="h-4 w-4 text-amber-600" />
-                    </div>
-                    <Badge className="bg-emerald-100 text-emerald-700 text-xs">Alta</Badge>
-                    <div className="text-xs text-slate-500 mt-1">87% (7 dias)</div>
-                  </div>
-                </div>
-
-                {/* Charts */}
+                {/* Charts - lado a lado compacto */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white rounded-lg p-3 border border-slate-200">
                     <h4 className="text-xs font-semibold text-slate-700 mb-2">Acessos (30 dias)</h4>
-                    <ResponsiveContainer width="100%" height={150}>
+                    <ResponsiveContainer width="100%" height={130}>
                       <LineChart data={accessChartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+                        <YAxis tick={{ fontSize: 9 }} />
                         <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "none", borderRadius: "4px", color: "#fff", fontSize: "11px" }} />
                         <Line type="monotone" dataKey="acessos" stroke="#2563eb" strokeWidth={2} dot={{ fill: "#2563eb", r: 2 }} />
                       </LineChart>
@@ -1430,11 +1438,11 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-slate-200">
                     <h4 className="text-xs font-semibold text-slate-700 mb-2">Módulos Mais Usados</h4>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <BarChart data={moduleUsageData} layout="vertical">
+                    <ResponsiveContainer width="100%" height={130}>
+                      <BarChart data={moduleUsageData} layout="vertical" margin={{ top: 0, right: 20, left: 55, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} />
-                        <YAxis dataKey="nome" type="category" tick={{ fontSize: 9 }} width={60} />
+                        <XAxis type="number" tick={{ fontSize: 9 }} />
+                        <YAxis dataKey="nome" type="category" tick={{ fontSize: 9 }} width={50} />
                         <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "none", borderRadius: "4px", color: "#fff", fontSize: "11px" }} />
                         <Bar dataKey="uso" fill="#3b82f6" radius={2} />
                       </BarChart>
@@ -1442,336 +1450,53 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   </div>
                 </div>
 
-                {/* Account Info - Accordion */}
-                <Accordion type="multiple" defaultValue={["info-principais"]} className="space-y-3">
-                  <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                {/* Informações Principais - Accordion compacto */}
+                <Accordion type="multiple" value={openAccordions} onValueChange={setOpenAccordions} className="space-y-3">
+                  <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg">
+                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
                       <div className="flex items-center gap-2">
-                        <UserIcon className="h-5 w-5 text-blue-600" />
+                        <UserIcon className="h-4 w-4 text-blue-600" />
                         <span className="font-semibold text-slate-900">Informações Principais</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-slate-600">ID:</span><code className="bg-slate-100 px-2 py-1 rounded text-xs">{displayUser.id}</code></div>
+                    <AccordionContent className="px-3 py-2 border-t border-slate-100 pb-3">
+                      <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-600">Tipo:</span>
+                          <span className="text-xs text-slate-500">ID</span>
+                          <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700">{displayUser.id}</code>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-500">Tipo</span>
                           {(() => {
                             const normalized = userAccountType ? String(userAccountType).toLowerCase().trim() : null
-                            
-                            if (normalized === "company") {
-                              return <Badge className="bg-purple-600 hover:bg-purple-700 text-white">Company</Badge>
-                            } else if (normalized === "nomad") {
-                              return <Badge className="btn-brand text-white">Nomad</Badge>
-                            } else if (normalized === "agency") {
-                              return <Badge className="bg-orange-600 hover:bg-orange-700 text-white">Agency</Badge>
-                            } else if (normalized) {
-                              return <Badge className="bg-slate-600">{userAccountType}</Badge>
-                            } else {
-                              return <Badge className="bg-blue-600">{getCurrentLevel().charAt(0).toUpperCase() + getCurrentLevel().slice(1)}</Badge>
-                            }
+                            if (normalized === "company") return <Badge className="bg-purple-600 hover:bg-purple-700 text-white text-[10px] px-1.5 py-0">Company</Badge>
+                            if (normalized === "nomad") return <Badge className="btn-brand text-white text-[10px] px-1.5 py-0">Nomad</Badge>
+                            if (normalized === "agency") return <Badge className="bg-orange-600 hover:bg-orange-700 text-white text-[10px] px-1.5 py-0">Agency</Badge>
+                            if (normalized) return <Badge className="bg-slate-600 text-[10px] px-1.5 py-0">{userAccountType}</Badge>
+                            return <Badge className="bg-blue-600 text-[10px] px-1.5 py-0">{getCurrentLevel().charAt(0).toUpperCase() + getCurrentLevel().slice(1)}</Badge>
                           })()}
                         </div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600">Função:</span><Badge variant="outline">Admin</Badge></div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600">Status:</span><CheckCircle2 className="h-4 w-4 text-emerald-600" /></div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-500">Função</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">Admin</Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-500">Status</span>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
               </TabsContent>
 
-              {/* Conta */}
-              <TabsContent value="conta" className="space-y-4 mt-0">
-                  {/* Header with Edit Button */}
-                <div className="flex items-center justify-between sticky top-0 bg-slate-100 z-10 pb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Gerenciar Conta</h3>
+              {/* Conta + Dados Unificado */}
+              <TabsContent value="conta" className="flex-1 flex flex-col overflow-hidden bg-slate-200 mt-0">
+                {/* Header */}
+                <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-900">Conta &amp; Dados</h3>
                   <div className="flex items-center gap-2">
-                    {!isContaEditMode ? (
-                      <Button onClick={handleContaEditMode} size="sm" className="btn-brand">
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Editar Perfil
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Button onClick={handleContaSaveClick} size="sm" disabled={isSaving} className="btn-brand">
-                          {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                          {isSaving ? "Salvando..." : "Salvar"}
-                        </Button>
-                        <Button onClick={handleContaCancelEdit} size="sm" variant="outline">
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Cancelar
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Accordions */}
-                <Accordion type="multiple" value={openAccordions} onValueChange={setOpenAccordions} className="space-y-3">
-                  {/* 1. DADOS PRINCIPAIS DA CONTA */}
-                  <AccordionItem value="dados-principais" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-slate-900">Dados Principais da Conta</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Nome Completo */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Nome Completo</label>
-                          {isContaEditMode ? (
-                            <Input value={getContaDisplayValue("name") as string} onChange={(e) => handleContaFieldChange("name", e.target.value)} className="border-slate-300" placeholder="Digite o nome completo" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getContaDisplayValue("name")}</div>
-                          )}
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Email</label>
-                          {isContaEditMode ? (
-                            <Input type="email" value={getContaDisplayValue("email") as string} onChange={(e) => handleContaFieldChange("email", e.target.value)} className="border-slate-300" placeholder="Digite o email" />
-                          ) : (
-                            <div className="font-medium text-slate-900 truncate">{getContaDisplayValue("email")}</div>
-                          )}
-                        </div>
-
-                        {/* Username / Login */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Username / Login</label>
-                          <div className="font-medium text-slate-900 truncate">{displayUser.email?.split("@")[0] || "username"}</div>
-                        </div>
-
-                        {/* ID Interno */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">ID Interno</label>
-                          <code className="bg-slate-100 px-3 py-2 rounded text-sm font-mono font-bold text-slate-900">{displayUser.id}</code>
-                        </div>
-
-                        {/* Data Criação */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Data de Criação</label>
-                          <div className="font-medium text-slate-900">10 jan 2024</div>
-                        </div>
-
-                        {/* Último Login */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Último Login</label>
-                          <div className="font-medium text-slate-900">Hoje às 14:30</div>
-                        </div>
-
-                        {/* Tipo de Usuário */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Tipo de Usuário</label>
-                          {isContaEditMode ? (
-                            <select value={getContaDisplayValue("role") as string || "admin"} onChange={(e) => handleContaFieldChange("role", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium">
-                              <option value="admin">Admin</option>
-                              <option value="nômade">Nômade</option>
-                              <option value="líder">Líder</option>
-                              <option value="usuário">Usuário</option>
-                            </select>
-                          ) : (
-                            <Badge className="bg-blue-100 text-blue-700 border border-blue-300 capitalize">{getContaDisplayValue("role")}</Badge>
-                          )}
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* 2. STATUS DA CONTA */}
-                  <AccordionItem value="status-conta" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-5 w-5 text-amber-600" />
-                        <span className="font-semibold text-slate-900">Status da Conta</span>
-                        <Badge className={`ml-auto ${getStatusBadgeColor(getCurrentStatus())} border`}>{getCurrentStatus().charAt(0).toUpperCase() + getCurrentStatus().slice(1)}</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-4">
-                        {/* Status Selection - Only in Edit Mode */}
-                        {isContaEditMode ? (
-                          <>
-                            <div>
-                              <label className="text-sm font-semibold text-slate-900 block mb-3">Alterar Status da Conta</label>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {(['ativo', 'inativo', 'pausado', 'suspenso'] as const).map(status => (
-                                  <Button
-                                    key={status}
-                                    onClick={() => handleStatusChange(status)}
-                                    variant={getCurrentStatus() === status ? "default" : "outline"}
-                                    className={`text-xs font-medium capitalize ${
-                                      getCurrentStatus() === status
-                                        ? status === 'ativo'
-                                          ? 'bg-emerald-600 hover:bg-emerald-700'
-                                          : status === 'inativo'
-                                          ? 'bg-slate-600 hover:bg-slate-700'
-                                          : status === 'pausado'
-                                          ? 'bg-amber-600 hover:bg-amber-700'
-                                          : 'bg-red-600 hover:bg-red-700'
-                                        : ''
-                                    }`}
-                                  >
-                                    {status}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Status Info */}
-                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                              <p className="text-xs text-slate-600">
-                                {getCurrentStatus() === 'ativo' && "A conta está ativa e o usuário pode acessar todos os recursos normalmente."}
-                                {getCurrentStatus() === 'inativo' && "A conta está inativa. O usuário não pode fazer login."}
-                                {getCurrentStatus() === 'pausado' && "A conta está pausada temporariamente. O usuário pode reativar depois."}
-                                {getCurrentStatus() === 'suspenso' && "A conta está suspensa por violação de políticas."}
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                            <p className="text-xs text-slate-600 mb-3">Status Atual:</p>
-                            <Badge className={`${getStatusBadgeColor(getCurrentStatus())} border text-sm py-2`}>
-                              {getCurrentStatus().charAt(0).toUpperCase() + getCurrentStatus().slice(1)}
-                            </Badge>
-                            <p className="text-xs text-slate-600 mt-3">
-                              {getCurrentStatus() === 'ativo' && "A conta está ativa e o usuário pode acessar todos os recursos normalmente."}
-                              {getCurrentStatus() === 'inativo' && "A conta está inativa. O usuário não pode fazer login."}
-                              {getCurrentStatus() === 'pausado' && "A conta está pausada temporariamente. O usuário pode reativar depois."}
-                              {getCurrentStatus() === 'suspenso' && "A conta está suspensa por violação de políticas."}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* 3. NÍVEL E PLANO */}
-                  <AccordionItem value="nivel-performance" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-purple-600" />
-                        <span className="font-semibold text-slate-900">Nível e Plano da Conta</span>
-                        <Badge className={`ml-auto ${getAccountLevelBadgeColor(getCurrentLevel())} border capitalize`}>{getCurrentLevel()}</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-4">
-                        {/* Level Selection - Only in Edit Mode */}
-                        {isContaEditMode ? (
-                          <>
-                            <div>
-                              <label className="text-sm font-semibold text-slate-900 block mb-3">Alterar Nível da Conta</label>
-                              <div className="grid grid-cols-3 gap-2">
-                                {(['free', 'premium', 'vip'] as const).map(level => (
-                                  <Button
-                                    key={level}
-                                    onClick={() => handleLevelChange(level)}
-                                    variant={getCurrentLevel() === level ? "default" : "outline"}
-                                    className={`text-xs font-medium capitalize ${
-                                      getCurrentLevel() === level
-                                        ? level === 'free'
-                                          ? 'bg-slate-600 hover:bg-slate-700'
-                                          : level === 'premium'
-                                          ? 'btn-brand'
-                                          : 'bg-purple-600 hover:bg-purple-700'
-                                        : ''
-                                    }`}
-                                  >
-                                    {level}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Performance Metrics */}
-                            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200 p-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Level */}
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-600 block mb-1">Nível Atual</label>
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-3xl font-bold text-purple-700">7</div>
-                                    <div className="text-xs text-slate-600">de 10</div>
-                                  </div>
-                                </div>
-
-                                {/* Rating */}
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-600 block mb-1">Classificação</label>
-                                  <div className="flex items-center gap-1">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                      <span key={star} className="text-lg">{star <= 4 ? "★" : "☆"}</span>
-                                    ))}
-                                    <span className="text-xs text-slate-600 ml-2">4.0/5.0</span>
-                                  </div>
-                                </div>
-
-                                {/* Progress */}
-                                <div className="md:col-span-2">
-                                  <label className="text-xs font-semibold text-slate-600 block mb-2">Progresso até Nível 8</label>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-xs text-slate-600">75%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-300 rounded-full h-2.5">
-                                      <div className="bg-gradient-to-r from-purple-400 to-purple-600 h-2.5 rounded-full" style={{ width: '75%' }} />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Trend */}
-                                <div className="md:col-span-2 flex items-center gap-2 bg-white bg-opacity-60 rounded px-3 py-2">
-                                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                                  <div className="text-xs">
-                                    <span className="font-semibold text-emerald-700">Em Ascensão</span>
-                                    <span className="text-slate-600 ml-2">+2 níveis este trimestre</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200 p-4">
-                            <div className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-semibold text-slate-600 mb-1">Plano Atual</p>
-                                  <Badge className={`${getAccountLevelBadgeColor(getCurrentLevel())} border capitalize text-sm py-2`}>
-                                    {getCurrentLevel()}
-                                  </Badge>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xs font-semibold text-slate-600 mb-1">Nível</p>
-                                  <div className="text-3xl font-bold text-purple-700">7</div>
-                                </div>
-                              </div>
-
-                              <div className="border-t border-purple-200 pt-3">
-                                <label className="text-xs font-semibold text-slate-600 block mb-2">Progresso</label>
-                                <div className="w-full bg-slate-300 rounded-full h-2.5">
-                                  <div className="bg-gradient-to-r from-purple-400 to-purple-600 h-2.5 rounded-full" style={{ width: '75%' }} />
-                                </div>
-                                <p className="text-xs text-slate-600 mt-2">75% até o próximo nível</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </TabsContent>
-
-              {/* Dados Unificados */}
-              {/* Dados */}
-              <TabsContent value="dados" className="space-y-4 mt-0">
-                {/* Header with Edit Button */}
-                <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Dados do Usuário</h3>
-                  <div className="flex items-center gap-2">
+                    {/* Expandir toggle */}
                     <button
                       onClick={() => {
                         const allOpen = USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
@@ -1784,29 +1509,26 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                         {USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
                       </span>
                       <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
-                        USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
-                          ? "bg-blue-600"
-                          : "bg-slate-300"
+                        USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"
                       }`}>
                         <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                          USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a))
-                            ? "translate-x-4"
-                            : "translate-x-0.5"
+                          USER_DADOS_ALL_ACCORDIONS.every(a => dadosOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"
                         }`} />
                       </div>
                     </button>
-                    {!isDadosEditMode ? (
-                      <Button onClick={handleDadosEditMode} size="sm" className="btn-brand">
+                    {/* Edit/Save/Cancel */}
+                    {!isContaEditMode && !isDadosEditMode ? (
+                      <Button onClick={() => { handleContaEditMode(); handleDadosEditMode(); }} size="sm" className="btn-brand">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Editar
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={handleDadosSaveClick} size="sm" disabled={isSaving} className="btn-brand">
+                        <Button onClick={handleContaSaveClick} size="sm" disabled={isSaving} className="btn-brand">
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
-                        <Button onClick={handleDadosCancelEdit} size="sm" variant="outline">
+                        <Button onClick={() => { setPendingCancelCallback(() => () => { handleContaCancelEdit(); setIsDadosEditMode(false); setDadosEditedData({}); }); setShowCancelEditConfirm(true); }} size="sm" variant="outline">
                           <XCircle className="h-4 w-4 mr-2" />
                           Cancelar
                         </Button>
@@ -1816,287 +1538,304 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                 </div>
 
                 {/* Accordions */}
+                <div className="flex-1 overflow-y-auto px-[50px] pb-6">
                 <Accordion type="multiple" value={dadosOpenAccordions} onValueChange={setDadosOpenAccordions} className="space-y-3">
-                  {/* DADOS PESSOAIS */}
-                  <AccordionItem value="pessoais" className="border border-slate-200 rounded-lg overflow-hidden">
+                  {/* 1. DADOS DA CONTA */}
+                  <AccordionItem value="dados-principais" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                     <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
-                        <UserIcon className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-slate-900">Dados Pessoais</span>
+                        <UserIcon className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs font-semibold text-slate-700">Dados da Conta</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                         {/* Nome Completo */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Nome Completo</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("name") as string} onChange={(e) => handleDadosFieldChange("name", e.target.value)} className="border-slate-300" placeholder="Digite o nome completo" />
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome Completo</p>
+                          {isContaEditMode ? (
+                            <Input value={getContaDisplayValue("name") as string} onChange={(e) => handleContaFieldChange("name", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Nome completo" />
                           ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("name")}</div>
+                            <p className="text-sm font-semibold text-slate-800">{getContaDisplayValue("name")}</p>
                           )}
                         </div>
 
-                        {/* Nome Social */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Nome Social</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("social_name") as string || ""} onChange={(e) => handleDadosFieldChange("social_name", e.target.value)} className="border-slate-300" placeholder="Se aplicável" />
+                        {/* Email */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Email</p>
+                          {isContaEditMode ? (
+                            <Input type="email" value={getContaDisplayValue("email") as string} onChange={(e) => handleContaFieldChange("email", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="email@exemplo.com" />
                           ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("social_name") || "—"}</div>
+                            <p className="text-sm font-semibold text-slate-800 truncate">{getContaDisplayValue("email")}</p>
                           )}
                         </div>
 
-                        {/* Data Nascimento */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Data de Nascimento</label>
-                          {isDadosEditMode ? (
-                            <Input type="date" value={getDadosDisplayValue("birth_date") as string || ""} onChange={(e) => handleDadosFieldChange("birth_date", e.target.value)} className="border-slate-300" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("birth_date") || "15 mai 1990"}</div>
-                          )}
+                        {/* Username / Login */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Username / Login</p>
+                          <p className="text-sm font-semibold text-slate-800 truncate">{displayUser.email?.split("@")[0] || "username"}</p>
                         </div>
 
-                        {/* Sexo / Gênero */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Sexo / Gênero</label>
+                        {/* ID Interno */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">ID Interno</p>
+                          <p className="text-sm font-semibold text-slate-800 font-mono">{displayUser.id}</p>
+                        </div>
+
+                        {/* Data Criação */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Data de Criação</p>
+                          <p className="text-sm font-semibold text-slate-800">10 jan 2024</p>
+                        </div>
+
+                        {/* Último Login */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Último Login</p>
+                          <p className="text-sm font-semibold text-slate-800">Hoje às 14:30</p>
+                        </div>
+
+                        {/* Tipo de Usuário */}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 md:col-span-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Tipo de Usuário</p>
+                          {isContaEditMode ? (
+                            <select value={getContaDisplayValue("role") as string || "admin"} onChange={(e) => handleContaFieldChange("role", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm font-medium bg-white">
+                              <option value="admin">Admin</option>
+                              <option value="nômade">Nômade</option>
+                              <option value="líder">Líder</option>
+                              <option value="usuário">Usuário</option>
+                            </select>
+                          ) : (
+                            <Badge className="bg-blue-100 text-blue-700 border border-blue-300 capitalize text-xs">{getContaDisplayValue("role")}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 2. STATUS DA CONTA */}
+                  <AccordionItem value="status-conta" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-amber-600" />
+                        <span className="text-xs font-semibold text-slate-700">Status da Conta</span>
+                        <Badge className={`ml-auto ${getStatusBadgeColor(getCurrentStatus())} border text-[10px]`}>{getCurrentStatus().charAt(0).toUpperCase() + getCurrentStatus().slice(1)}</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Status da Conta</p>
+                        {isContaEditMode ? (
+                          <div className="flex flex-wrap gap-2">
+                            {([
+                              { value: 'ativo',    label: 'Ativo',    active: 'bg-emerald-500 text-white border-emerald-500', inactive: 'bg-white text-slate-600 border-slate-300 hover:border-emerald-400 hover:text-emerald-600' },
+                              { value: 'inativo',  label: 'Inativo',  active: 'bg-slate-500 text-white border-slate-500',   inactive: 'bg-white text-slate-600 border-slate-300 hover:border-slate-400' },
+                              { value: 'pausado',  label: 'Pausado',  active: 'bg-amber-500 text-white border-amber-500',   inactive: 'bg-white text-slate-600 border-slate-300 hover:border-amber-400 hover:text-amber-600' },
+                              { value: 'suspenso', label: 'Suspenso', active: 'bg-red-500 text-white border-red-500',       inactive: 'bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-600' },
+                            ] as const).map(s => (
+                              <button
+                                key={s.value}
+                                onClick={() => handleStatusChange(s.value)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all ${getCurrentStatus() === s.value ? s.active : s.inactive}`}
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            getCurrentStatus() === 'ativo'    ? 'bg-emerald-500 text-white' :
+                            getCurrentStatus() === 'inativo'  ? 'bg-slate-300 text-slate-700' :
+                            getCurrentStatus() === 'pausado'  ? 'bg-amber-100 text-amber-700' :
+                                                                'bg-red-100 text-red-700'
+                          }`}>
+                            {getCurrentStatus() === 'ativo'    && <CheckCircle className="h-3.5 w-3.5" />}
+                            {getCurrentStatus() === 'inativo'  && <PauseCircle className="h-3.5 w-3.5" />}
+                            {getCurrentStatus() === 'pausado'  && <Clock className="h-3.5 w-3.5" />}
+                            {getCurrentStatus() === 'suspenso' && <XCircle className="h-3.5 w-3.5" />}
+                            {getCurrentStatus().charAt(0).toUpperCase() + getCurrentStatus().slice(1)}
+                          </span>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 3. DADOS PESSOAIS */}
+                  <AccordionItem value="pessoais" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs font-semibold text-slate-700">Dados Pessoais</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome Completo</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("name") as string} onChange={(e) => handleDadosFieldChange("name", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("name")}</p>}
+                        </div>
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome Social</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("social_name") as string || ""} onChange={(e) => handleDadosFieldChange("social_name", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Se aplicável" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("social_name") || "—"}</p>}
+                        </div>
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Data de Nascimento</p>
+                          {isDadosEditMode ? <Input type="date" value={getDadosDisplayValue("birth_date") as string || ""} onChange={(e) => handleDadosFieldChange("birth_date", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("birth_date") || "15 mai 1990"}</p>}
+                        </div>
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Sexo / Gênero</p>
                           {isDadosEditMode ? (
-                            <select value={getDadosDisplayValue("gender") as string || ""} onChange={(e) => handleDadosFieldChange("gender", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium">
+                            <select value={getDadosDisplayValue("gender") as string || ""} onChange={(e) => handleDadosFieldChange("gender", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-0.5 text-sm font-medium bg-white">
                               <option value="">Selecione</option>
                               <option value="M">Masculino</option>
                               <option value="F">Feminino</option>
                               <option value="O">Outro</option>
                               <option value="N">Prefiro não informar</option>
                             </select>
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("gender") || "—"}</div>
-                          )}
+                          ) : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("gender") || "—"}</p>}
                         </div>
-
-                        {/* CPF */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">CPF / Documento</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("cpf") as string || ""} onChange={(e) => handleDadosFieldChange("cpf", e.target.value)} className="border-slate-300 font-mono" placeholder="000.000.000-00" />
-                          ) : (
-                            <code className="bg-slate-100 px-3 py-2 rounded text-sm font-mono font-bold text-slate-900">{getDadosDisplayValue("cpf") || "—"}</code>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">CPF / Documento</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("cpf") as string || ""} onChange={(e) => handleDadosFieldChange("cpf", e.target.value)} className="border-slate-300 bg-white h-7 text-sm font-mono" placeholder="000.000.000-00" /> : <p className="text-sm font-semibold text-slate-800 font-mono">{getDadosDisplayValue("cpf") || "—"}</p>}
                         </div>
-
-                        {/* RG */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">RG (se aplicável)</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("rg") as string || ""} onChange={(e) => handleDadosFieldChange("rg", e.target.value)} className="border-slate-300 font-mono" placeholder="RG" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("rg") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">RG</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("rg") as string || ""} onChange={(e) => handleDadosFieldChange("rg", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="RG" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("rg") || "—"}</p>}
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* CONTATO */}
-                  <AccordionItem value="contato" className="border border-slate-200 rounded-lg overflow-hidden">
+                  {/* 5. CONTATO */}
+                  <AccordionItem value="contato" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                     <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
-                        <Mail className="h-5 w-5 text-amber-600" />
-                        <span className="font-semibold text-slate-900">Contato</span>
+                        <Mail className="h-4 w-4 text-amber-600" />
+                        <span className="text-xs font-semibold text-slate-700">Contato</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Email */}
-                        <div className="md:col-span-2">
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Email</label>
-                          {isDadosEditMode ? (
-                            <Input type="email" value={getDadosDisplayValue("email") as string} onChange={(e) => handleDadosFieldChange("email", e.target.value)} className="border-slate-300" placeholder="email@example.com" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("email")}</div>
-                          )}
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 md:col-span-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Email</p>
+                          {isDadosEditMode ? <Input type="email" value={getDadosDisplayValue("email") as string} onChange={(e) => handleDadosFieldChange("email", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("email")}</p>}
                         </div>
-
-                        {/* Telefone Principal */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Telefone Principal</label>
-                          {isDadosEditMode ? (
-                            <Input type="tel" value={getDadosDisplayValue("phone") as string || ""} onChange={(e) => handleDadosFieldChange("phone", e.target.value)} className="border-slate-300" placeholder="(00) 00000-0000" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("phone") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Telefone Principal</p>
+                          {isDadosEditMode ? <Input type="tel" value={getDadosDisplayValue("phone") as string || ""} onChange={(e) => handleDadosFieldChange("phone", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="(00) 00000-0000" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("phone") || "—"}</p>}
                         </div>
-
-                        {/* Telefone Secundário */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Telefone Secundário</label>
-                          {isDadosEditMode ? (
-                            <Input type="tel" value={getDadosDisplayValue("phone_secondary") as string || ""} onChange={(e) => handleDadosFieldChange("phone_secondary", e.target.value)} className="border-slate-300" placeholder="(00) 00000-0000" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("phone_secondary") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">WhatsApp</p>
+                          {isDadosEditMode ? <Input type="tel" value={getDadosDisplayValue("whatsapp") as string || ""} onChange={(e) => handleDadosFieldChange("whatsapp", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="(00) 00000-0000" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("whatsapp") || "—"}</p>}
                         </div>
-
-                        {/* WhatsApp */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">WhatsApp</label>
-                          {isDadosEditMode ? (
-                            <Input type="tel" value={getDadosDisplayValue("whatsapp") as string || ""} onChange={(e) => handleDadosFieldChange("whatsapp", e.target.value)} className="border-slate-300" placeholder="(00) 00000-0000" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("whatsapp") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Telefone Secundário</p>
+                          {isDadosEditMode ? <Input type="tel" value={getDadosDisplayValue("phone_secondary") as string || ""} onChange={(e) => handleDadosFieldChange("phone_secondary", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="(00) 00000-0000" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("phone_secondary") || "—"}</p>}
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* ENDEREÇO */}
-                  <AccordionItem value="endereco" className="border border-slate-200 rounded-lg overflow-hidden">
+                  {/* 6. ENDEREÇO */}
+                  <AccordionItem value="endereco" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                     <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-5 w-5 text-green-600" />
-                        <span className="font-semibold text-slate-900">Endereço</span>
+                        <Building2 className="h-4 w-4 text-green-600" />
+                        <span className="text-xs font-semibold text-slate-700">Endereço</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* CEP */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">CEP</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("zip_code") as string || ""} onChange={(e) => handleDadosFieldChange("zip_code", e.target.value)} className="border-slate-300 font-mono" placeholder="00000-000" />
-                          ) : (
-                            <code className="bg-slate-100 px-3 py-2 rounded text-sm font-mono font-bold text-slate-900">{getDadosDisplayValue("zip_code") || "—"}</code>
-                          )}
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">CEP</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("zip_code") as string || ""} onChange={(e) => handleDadosFieldChange("zip_code", e.target.value)} className="border-slate-300 bg-white h-7 text-sm font-mono" placeholder="00000-000" /> : <p className="text-sm font-semibold text-slate-800 font-mono">{getDadosDisplayValue("zip_code") || "—"}</p>}
                         </div>
-
-                        {/* Rua */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Rua</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("street") as string || ""} onChange={(e) => handleDadosFieldChange("street", e.target.value)} className="border-slate-300" placeholder="Nome da rua" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("street") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Rua</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("street") as string || ""} onChange={(e) => handleDadosFieldChange("street", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Nome da rua" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("street") || "—"}</p>}
                         </div>
-
-                        {/* Número */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Número</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("number") as string || ""} onChange={(e) => handleDadosFieldChange("number", e.target.value)} className="border-slate-300" placeholder="123" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("number") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Número</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("number") as string || ""} onChange={(e) => handleDadosFieldChange("number", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="123" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("number") || "—"}</p>}
                         </div>
-
-                        {/* Complemento */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Complemento</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("complement") as string || ""} onChange={(e) => handleDadosFieldChange("complement", e.target.value)} className="border-slate-300" placeholder="Apto 123, Bloco A" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("complement") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Complemento</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("complement") as string || ""} onChange={(e) => handleDadosFieldChange("complement", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Apto, Bloco..." /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("complement") || "—"}</p>}
                         </div>
-
-                        {/* Bairro */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Bairro</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("neighborhood") as string || ""} onChange={(e) => handleDadosFieldChange("neighborhood", e.target.value)} className="border-slate-300" placeholder="Nome do bairro" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("neighborhood") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Bairro</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("neighborhood") as string || ""} onChange={(e) => handleDadosFieldChange("neighborhood", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Nome do bairro" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("neighborhood") || "—"}</p>}
                         </div>
-
-                        {/* Cidade */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Cidade</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300" placeholder="São Paulo" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("city") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Cidade</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("city") as string || ""} onChange={(e) => handleDadosFieldChange("city", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="São Paulo" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("city") || "—"}</p>}
                         </div>
-
-                        {/* Estado */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Estado</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("state") as string || ""} onChange={(e) => handleDadosFieldChange("state", e.target.value.toUpperCase())} className="border-slate-300" placeholder="SP" maxLength={2} />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("state") || "—"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Estado</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("state") as string || ""} onChange={(e) => handleDadosFieldChange("state", e.target.value.toUpperCase())} className="border-slate-300 bg-white h-7 text-sm" placeholder="SP" maxLength={2} /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("state") || "—"}</p>}
                         </div>
-
-                        {/* País */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">País</label>
-                          {isDadosEditMode ? (
-                            <Input value={getDadosDisplayValue("country") as string || "Brasil"} onChange={(e) => handleDadosFieldChange("country", e.target.value)} className="border-slate-300" placeholder="Brasil" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getDadosDisplayValue("country") || "Brasil"}</div>
-                          )}
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">País</p>
+                          {isDadosEditMode ? <Input value={getDadosDisplayValue("country") as string || "Brasil"} onChange={(e) => handleDadosFieldChange("country", e.target.value)} className="border-slate-300 bg-white h-7 text-sm" placeholder="Brasil" /> : <p className="text-sm font-semibold text-slate-800">{getDadosDisplayValue("country") || "Brasil"}</p>}
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* INFORMAÇÕES ADICIONAIS */}
-                  <AccordionItem value="adicionais" className="border border-slate-200 rounded-lg overflow-hidden">
+                  {/* 7. INFORMAÇÕES ADICIONAIS */}
+                  <AccordionItem value="adicionais" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                     <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                       <div className="flex items-center gap-2">
-                        <AlertCircle className="h-5 w-5 text-purple-600" />
-                        <span className="font-semibold text-slate-900">Informações Adicionais</span>
+                        <AlertCircle className="h-4 w-4 text-purple-600" />
+                        <span className="text-xs font-semibold text-slate-700">Informações Adicionais</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-4">
-                        {/* Observações Administrativas */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Observações Administrativas</label>
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="space-y-1.5">
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Observações Administrativas</p>
                           {isDadosEditMode ? (
-                            <textarea value={getDadosDisplayValue("admin_notes") as string || ""} onChange={(e) => handleDadosFieldChange("admin_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas visíveis para admin" />
+                            <textarea value={getDadosDisplayValue("admin_notes") as string || ""} onChange={(e) => handleDadosFieldChange("admin_notes", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white" placeholder="Notas visíveis para admin" />
                           ) : (
-                            <div className="font-medium text-slate-900 whitespace-pre-wrap">{getDadosDisplayValue("admin_notes") || "—"}</div>
+                            <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">{getDadosDisplayValue("admin_notes") || "—"}</p>
                           )}
                         </div>
-
-                        {/* Notas Internas */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Notas Internas (Visíveis apenas para admin)</label>
+                        <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Notas Internas</p>
                           {isDadosEditMode ? (
-                            <textarea value={getDadosDisplayValue("internal_notes") as string || ""} onChange={(e) => handleDadosFieldChange("internal_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas internas do sistema" />
+                            <textarea value={getDadosDisplayValue("internal_notes") as string || ""} onChange={(e) => handleDadosFieldChange("internal_notes", e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white" placeholder="Notas internas do sistema" />
                           ) : (
-                            <div className="font-medium text-slate-900 whitespace-pre-wrap">{getDadosDisplayValue("internal_notes") || "—"}</div>
+                            <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">{getDadosDisplayValue("internal_notes") || "—"}</p>
                           )}
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
+                </div>
               </TabsContent>
 
-              {/* Financeiro */}
-              {/* Financeiro */}
-              <TabsContent value="financeiro" className="space-y-4 mt-0">
-                {/* Header with Edit Button */}
-                <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Dados Financeiros</h3>
+              {/* Permissões */}
+              <TabsContent value="permissoes" className="flex-1 flex flex-col overflow-hidden bg-slate-100 mt-0">
+                {/* Header */}
+                <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-5 pb-3 bg-slate-100">
                   <div className="flex items-center gap-2">
-                    {!isFinancialEditMode ? (
-                      <Button onClick={handleFinancialEditMode} size="sm" className="btn-brand">
-                        <Edit2 className="h-4 w-4 mr-2" />
+                    <Shield className="h-4 w-4 text-slate-600" />
+                    <h3 className="text-sm font-semibold text-slate-900">Controle de Acesso</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isPermissionsEditMode ? (
+                      <Button onClick={handlePermissionsEditMode} size="sm" variant="outline" className="h-7 px-3 text-xs gap-1.5 bg-white">
+                        <Edit2 className="h-3 w-3" />
                         Editar
                       </Button>
                     ) : (
-                      <div className="flex gap-2">
-                        <Button onClick={handleFinancialSaveClick} size="sm" disabled={isSaving} className="btn-brand">
-                          {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                      <div className="flex gap-1.5">
+                        <Button onClick={handlePermissionsSaveClick} size="sm" disabled={isSaving} className="btn-brand h-7 px-3 text-xs gap-1.5">
+                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                           {isSaving ? "Salvando..." : "Salvar"}
                         </Button>
-                        <Button onClick={handleFinancialCancelEdit} size="sm" variant="outline">
-                          <XCircle className="h-4 w-4 mr-2" />
+                        <Button onClick={() => { setPendingCancelCallback(() => handlePermissionsCancelEdit); setShowCancelEditConfirm(true); }} size="sm" variant="outline" className="h-7 px-3 text-xs gap-1.5 bg-white">
+                          <XCircle className="h-3 w-3" />
                           Cancelar
                         </Button>
                       </div>
@@ -2104,609 +1843,395 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   </div>
                 </div>
 
-                {/* Accordions */}
-                <Accordion type="multiple" value={financialOpenAccordions} onValueChange={setFinancialOpenAccordions} className="space-y-3">
-                  {/* MÉTODOS DE PAGAMENTO */}
-                  <AccordionItem value="pagamentos" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-slate-900">Métodos de Pagamento</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-6">
-                        {/* CARTÕES DE CRÉDITO */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">Cartões de Crédito/Débito</label>
-                            {isFinancialEditMode && (
-                              <Button onClick={handleAddCard} size="sm" className="h-8 gap-1 btn-brand">
-                                <Plus className="h-4 w-4" />
-                                Novo Cartão
-                              </Button>
-                            )}
-                          </div>
-                          {cards.length === 0 ? (
-                            <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                              <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                              <p className="text-sm text-slate-600">Nenhum cartão cadastrado</p>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {cards.map(card => (
-                                <div key={card.id} className={`relative h-56 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group ${card.isDefault ? "ring-2 ring-blue-500" : ""}`} style={{
-                                  background: card.isDefault ? "linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)" : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
-                                }}>
-                                  {/* Card Background Pattern */}
-                                  <div className="absolute inset-0 opacity-10">
-                                    <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full blur-3xl" />
+                <div className="flex-1 overflow-y-auto px-[50px] pb-6 space-y-3">
+
+                  {/* PERFIS DE PERMISSÃO */}
+                  {(() => {
+                    const systemProfiles = [
+                      { id: "super-admin", name: "Super Admin", desc: "Acesso total ao sistema", color: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-500" },
+                      { id: "gerente-ops", name: "Gerente de Operações", desc: "Gestão de projetos e nômades", color: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+                      { id: "analista-fin", name: "Analista Financeiro", desc: "Acesso a relatórios financeiros", color: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+                      { id: "suporte", name: "Suporte N1", desc: "Atendimento e tickets básicos", color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
+                      { id: "leitura", name: "Somente Leitura", desc: "Visualização sem alterações", color: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+                    ]
+                    const currentProfile = permissionsEditedData.role || "gerente-ops"
+                    return (
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+                          <Shield className="h-3.5 w-3.5 text-blue-600" />
+                          <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Perfil de Permissão</span>
+                          <span className="ml-auto text-xs text-slate-400">Definidos em Permissões</span>
+                        </div>
+                        <div className="p-3 grid grid-cols-1 gap-1.5">
+                          {systemProfiles.map(profile => {
+                            const isSelected = currentProfile === profile.id
+                            return (
+                              <div
+                                key={profile.id}
+                                onClick={() => isPermissionsEditMode && handlePermissionsFieldChange("role", profile.id)}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isSelected ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
+                              >
+                                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${profile.dot}`} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-slate-900 leading-tight">{profile.name}</div>
+                                  <div className="text-xs text-slate-500 truncate">{profile.desc}</div>
+                                </div>
+                                {isSelected && (
+                                  <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">Ativo</Badge>
+                                )}
+                                {isPermissionsEditMode && !isSelected && (
+                                  <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
+                                )}
+                                {isPermissionsEditMode && isSelected && (
+                                  <div className="h-4 w-4 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                    <Check className="h-2.5 w-2.5 text-white" />
                                   </div>
-                                  
-                                  <div className="relative h-full p-6 flex flex-col justify-between text-white">
-                                    {/* Top Row */}
-                                    <div className="flex justify-between items-start">
-                                      <div>
-                                        <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">BANCO</div>
-                                        <div className="text-lg font-bold">{card.brand}</div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* VÍNCULOS */}
+                  {(() => {
+                    const available = MOCK_COMPANIES.filter(
+                      (c) =>
+                        !companyAssociations.some((a) => a.company_id === c.id) &&
+                        (linkSearchQuery === "" ||
+                          c.name.toLowerCase().includes(linkSearchQuery.toLowerCase()) ||
+                          c.document.toLowerCase().includes(linkSearchQuery.toLowerCase()))
+                    )
+                    return (
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+                          <Building2 className="h-3.5 w-3.5 text-indigo-600" />
+                          <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Vínculos</span>
+                          <Badge className="ml-1 text-[10px] px-1.5 bg-slate-100 text-slate-600 border-0">{companyAssociations.length}</Badge>
+                          {isPermissionsEditMode && (
+                            <button
+                              onClick={() => { setShowAddCompany(v => !v); setLinkSearchQuery("") }}
+                              className={`ml-auto flex items-center gap-1 text-xs font-medium transition-colors ${showAddCompany ? "text-slate-500 hover:text-slate-700" : "text-blue-600 hover:text-blue-700"}`}
+                            >
+                              {showAddCompany ? <><XCircle className="h-3 w-3" /> Fechar</> : <><Plus className="h-3 w-3" /> Vincular</>}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Search Panel */}
+                        {showAddCompany && isPermissionsEditMode && (
+                          <div className="border-b border-slate-100">
+                            <div className="px-3 py-2 bg-slate-50">
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <input
+                                  type="text"
+                                  value={linkSearchQuery}
+                                  onChange={e => setLinkSearchQuery(e.target.value)}
+                                  placeholder="Buscar empresa pelo nome ou CNPJ..."
+                                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                                />
+                              </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
+                              {available.length === 0 && (
+                                <div className="px-4 py-4 text-center text-xs text-slate-400">
+                                  {linkSearchQuery ? `Nenhum resultado para "${linkSearchQuery}"` : "Todas as empresas já estão vinculadas"}
+                                </div>
+                              )}
+                              {available.map(item => {
+                                const initials = item.name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
+                                return (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => {
+                                      if (!user?.id) return
+                                      addCompanyLink(user.id, {
+                                        id: Date.now(),
+                                        user_id: user.id,
+                                        company_id: item.id,
+                                        company_name: item.name,
+                                        role: "company_user",
+                                        permissions: ["view_projects"],
+                                        company_permissions: { ...DEFAULT_COMPANY_PERMISSIONS },
+                                        project_memberships: [],
+                                        is_active: true,
+                                        joined_at: new Date().toISOString().split("T")[0],
+                                      })
+                                      setLinkSearchQuery("")
+                                      setShowAddCompany(false)
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left"
+                                  >
+                                    <span className="h-7 w-7 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0">{initials}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium text-slate-900 leading-tight truncate">{item.name}</div>
+                                      <div className="text-xs text-slate-500 truncate">{item.document}</div>
+                                    </div>
+                                    <Plus className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Linked List */}
+                        <div className="divide-y divide-slate-100">
+                          {companyAssociations.length === 0 && (
+                            <div className="px-4 py-4 text-center text-xs text-slate-400">Nenhum vínculo ativo</div>
+                          )}
+                          {companyAssociations.map(assoc => {
+                            const initials = assoc.company_name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
+                            const isExpanded = expandedAssocId === assoc.id
+                            const projExpanded = expandedProjectCompanyId === assoc.company_id
+                            const compPerms = assoc.company_permissions || DEFAULT_COMPANY_PERMISSIONS
+                            const memberships = assoc.project_memberships || []
+                            const availableProjects = (MOCK_COMPANY_PROJECTS[assoc.company_id] || []).filter(
+                              p => !memberships.some(m => m.project_id === p.id)
+                            )
+                            return (
+                              <div key={assoc.id}>
+                                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                                  <span className="h-7 w-7 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0">{initials}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-slate-900 leading-tight truncate">{assoc.company_name}</div>
+                                    <div className="text-xs text-slate-500">{assoc.role === "company_admin" ? "Admin" : "Colaborador"} · desde {assoc.joined_at}</div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => setExpandedAssocId(isExpanded ? null : assoc.id)}
+                                      className={`h-6 px-2 rounded-md hover:bg-blue-100 flex items-center justify-center transition-colors text-[10px] font-medium gap-1 ${isExpanded ? "bg-blue-100 text-blue-700" : "text-slate-400 hover:text-blue-600"}`}
+                                    >
+                                      <Shield className="h-3 w-3" /> Perms
+                                    </button>
+                                    {isPermissionsEditMode && (
+                                      <button
+                                        onClick={() => user?.id && removeCompanyLink(user.id, assoc.company_id)}
+                                        className="h-6 w-6 rounded-md hover:bg-red-100 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isExpanded && (
+                                  <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 space-y-3">
+                                    {/* Company-level permissions */}
+                                    <div>
+                                      <div className="flex items-center gap-1.5 mb-2">
+                                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Permissões na Empresa</p>
+                                        {!isPermissionsEditMode && (
+                                          <span className="text-[9px] text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full">somente leitura</span>
+                                        )}
                                       </div>
-                                      {card.isDefault && (
-                                        <div className="bg-white bg-opacity-20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">
-                                          Padrão
+                                      <div className="space-y-2">
+                                        {(Object.entries(compPerms) as [string, {id: string; name: string; enabled: boolean}[]][]).map(([category, perms]) => (
+                                          <div key={category}>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-1">
+                                              {category === "gestao" ? "Gestão" : category === "tasks" ? "Tarefas" : category === "projects" ? "Projetos" : "Usuários"}
+                                            </p>
+                                            <div className="space-y-1.5">
+                                              {perms.map((perm) => (
+                                                <div key={perm.id} className="flex items-center justify-between">
+                                                  <span className="text-xs text-slate-600">{perm.name}</span>
+                                                  <Switch
+                                                    checked={perm.enabled}
+                                                    disabled={!isPermissionsEditMode}
+                                                    onCheckedChange={(checked) => {
+                                                      if (!isPermissionsEditMode || !user?.id) return
+                                                      const updated = {
+                                                        ...compPerms,
+                                                        [category]: compPerms[category as keyof typeof compPerms].map((p: any) =>
+                                                          p.id === perm.id ? { ...p, enabled: checked } : p
+                                                        ),
+                                                      }
+                                                      updateCompanyLink(user.id, assoc.company_id, { company_permissions: updated })
+                                                    }}
+                                                  />
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Project memberships */}
+                                    <div className="pt-2 border-t border-slate-200">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">Projetos</p>
+                                        {isPermissionsEditMode && availableProjects.length > 0 && (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <button className="flex items-center gap-1 text-[10px] font-medium text-violet-600 hover:text-violet-700">
+                                                <Plus className="h-3 w-3" /> Adicionar
+                                              </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-56 p-2" align="end">
+                                              {availableProjects.map(proj => (
+                                                <button
+                                                  key={proj.id}
+                                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-xs text-slate-700"
+                                                  onClick={() => {
+                                                    if (!user?.id) return
+                                                    upsertProjectMembership(user.id, assoc.company_id, {
+                                                      project_id: proj.id,
+                                                      project_name: proj.name,
+                                                      permissions: ["view"],
+                                                    })
+                                                  }}
+                                                >
+                                                  {proj.name}
+                                                </button>
+                                              ))}
+                                            </PopoverContent>
+                                          </Popover>
+                                        )}
+                                      </div>
+                                      {memberships.length === 0 ? (
+                                        <p className="text-[11px] text-slate-400 text-center py-2">Nenhum projeto vinculado.</p>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {memberships.map(m => (
+                                            <div key={m.project_id} className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                                              <div className="flex items-center justify-between px-3 py-1.5 bg-violet-50/60 border-b border-slate-200">
+                                                <span className="text-xs font-semibold text-slate-700">{m.project_name}</span>
+                                                {isPermissionsEditMode && (
+                                                  <button
+                                                    className="text-slate-400 hover:text-red-500"
+                                                    onClick={() => user?.id && removeProjectMembership(user.id, assoc.company_id, m.project_id)}
+                                                  >
+                                                    <X className="h-3 w-3" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                              <div className="flex flex-wrap gap-1 px-3 py-2">
+                                                {ALL_PROJECT_PERMISSIONS.map(perm => {
+                                                  const active = m.permissions.includes(perm.id)
+                                                  return (
+                                                    <button
+                                                      key={perm.id}
+                                                      disabled={!isPermissionsEditMode}
+                                                      onClick={() => {
+                                                        if (!isPermissionsEditMode || !user?.id) return
+                                                        const newPerms = active
+                                                          ? m.permissions.filter(p => p !== perm.id)
+                                                          : [...m.permissions, perm.id]
+                                                        upsertProjectMembership(user.id, assoc.company_id, { ...m, permissions: newPerms })
+                                                      }}
+                                                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors ${active ? "bg-violet-100 text-violet-700 border-violet-200" : "bg-slate-50 text-slate-400 border-slate-200"} ${isPermissionsEditMode ? "cursor-pointer hover:border-violet-200 hover:text-violet-600" : "cursor-default"}`}
+                                                    >
+                                                      {perm.label}
+                                                    </button>
+                                                  )
+                                                })}
+                                              </div>
+                                            </div>
+                                          ))}
                                         </div>
                                       )}
                                     </div>
-
-                                    {/* Middle - Card Number */}
-                                    <div>
-                                      <div className="text-xs font-semibold opacity-75 uppercase tracking-widest mb-2">Número</div>
-                                      <div className="text-2xl font-mono font-bold tracking-widest">•••• •••• •••• {card.lastDigits}</div>
-                                    </div>
-
-                                    {/* Bottom Row */}
-                                    <div className="flex justify-between items-end">
-                                      <div>
-                                        <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">Titular</div>
-                                        <div className="text-sm font-bold">{card.holder}</div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-xs font-semibold opacity-75 uppercase tracking-widest">Validade</div>
-                                        <div className="text-sm font-bold">{card.expiry}</div>
-                                      </div>
-                                    </div>
                                   </div>
-
-                                  {/* Actions Overlay */}
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-end justify-center pb-4 opacity-0 group-hover:opacity-100">
-                                    <div className="flex gap-2">
-                                      {!card.isDefault && (
-                                        <Button onClick={() => handleSetDefaultCard(card.id)} size="sm" className="bg-white text-slate-900 hover:bg-blue-100 font-semibold h-9 px-4">
-                                          Definir Padrão
-                                        </Button>
-                                      )}
-                                      {isFinancialEditMode && (
-                                        <>
-                                          <Button onClick={() => handleDeleteCard(card.id)} size="sm" variant="outline" className="bg-white text-slate-900 hover:bg-red-100 h-9 px-3">
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* PIX */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">PIX</label>
-                            {isFinancialEditMode && (
-                              <Button size="sm" variant="outline" className="h-8 gap-1 bg-transparent">
-                                <Plus className="h-4 w-4" />
-                                Adicionar
-                              </Button>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            {isFinancialEditMode ? (
-                              <div className="space-y-2">
-                                <Input placeholder="Chave PIX (CPF, CNPJ, email, telefone ou chave aleatória)" value={getFinancialDisplayValue("pix_key") as string || ""} onChange={(e) => handleFinancialFieldChange("pix_key", e.target.value)} className="border-slate-300" />
+                                )}
                               </div>
-                            ) : (
-                              <div className="bg-slate-50 p-3 rounded border border-slate-200 text-sm text-slate-700">
-                                {getFinancialDisplayValue("pix_key") || "Nenhuma chave PIX cadastrada"}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* CONTAS BANCÁRIAS */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">Contas Bancárias</label>
-                            {isFinancialEditMode && (
-                              <Button size="sm" variant="outline" className="h-8 gap-1 bg-transparent">
-                                <Plus className="h-4 w-4" />
-                                Adicionar
-                              </Button>
-                            )}
-                          </div>
-                          <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200">
-                            {isFinancialEditMode ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                <Input placeholder="Banco" value={getFinancialDisplayValue("bank_name") as string || ""} onChange={(e) => handleFinancialFieldChange("bank_name", e.target.value)} className="border-slate-300" />
-                                <Input placeholder="Agência" value={getFinancialDisplayValue("agency_number") as string || ""} onChange={(e) => handleFinancialFieldChange("agency_number", e.target.value)} className="border-slate-300" />
-                                <Input placeholder="Conta" value={getFinancialDisplayValue("account_number") as string || ""} onChange={(e) => handleFinancialFieldChange("account_number", e.target.value)} className="border-slate-300" />
-                                <select value={getFinancialDisplayValue("account_type") as string || ""} onChange={(e) => handleFinancialFieldChange("account_type", e.target.value)} className="border border-slate-300 rounded px-3 py-2 text-sm">
-                                  <option value="">Tipo</option>
-                                  <option value="corrente">Corrente</option>
-                                  <option value="poupanca">Poupança</option>
-                                </select>
-                              </div>
-                            ) : (
-                              <div className="text-sm space-y-1">
-                                <div><span className="text-slate-600">Banco:</span> <span className="font-medium">{getFinancialDisplayValue("bank_name") || "—"}</span></div>
-                                <div><span className="text-slate-600">Agência:</span> <code className="bg-white px-2 py-1 rounded text-xs font-mono font-bold">{getFinancialDisplayValue("agency_number") || "—"}</code></div>
-                                <div><span className="text-slate-600">Conta:</span> <code className="bg-white px-2 py-1 rounded text-xs font-mono font-bold">{getFinancialDisplayValue("account_number") || "—"}</code></div>
-                              </div>
-                            )}
-                          </div>
+                            )
+                          })}
                         </div>
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                    )
+                  })()}
 
-                  {/* CARTEIRA DIGITAL / ALLKOIN */}
-                  <AccordionItem value="carteira" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Wallet className="h-5 w-5 text-amber-600" />
-                        <span className="font-semibold text-slate-900">Carteira Digital / Allkoin</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-4">
-                        {/* Saldo Disponível e Bloqueado */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-6 rounded-xl border border-amber-300 shadow-lg text-white">
-                            <label className="text-xs font-semibold uppercase tracking-wide block mb-2 opacity-90">Saldo Disponível</label>
-                            <div className="text-3xl font-bold mb-1">R$ {(displayUser.wallet_balance as number || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                            <p className="text-xs opacity-75">Pronto para usar</p>
+                  {/* PERMISSÕES INDIVIDUAIS */}
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+                      <Lock className="h-3.5 w-3.5 text-slate-600" />
+                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Permissões Individuais</span>
+                      <Badge className="ml-1 text-[10px] px-1.5 bg-emerald-100 text-emerald-700 border-0">
+                        {isPermissionsEditMode ? (permissionsEditedData.permissions || []).length : (displayUser.permissions as string[] || []).length} ativas
+                      </Badge>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {[
+                        { group: "Administração", icon: <Lock className="h-3 w-3 text-red-500" />, perms: [
+                          { id: "manage_users", label: "Gerenciar usuários" },
+                          { id: "manage_permissions", label: "Gerenciar permissões" },
+                          { id: "view_sensitive", label: "Dados sensíveis" },
+                          { id: "reset_password", label: "Resetar senhas" },
+                          { id: "access_admin_panel", label: "Painel administrativo" },
+                        ]},
+                        { group: "Financeiro", icon: <DollarSign className="h-3 w-3 text-amber-500" />, perms: [
+                          { id: "view_financial", label: "Visualizar financeiro" },
+                          { id: "edit_financial", label: "Editar financeiro" },
+                          { id: "adjust_balance", label: "Ajustar saldo" },
+                          { id: "manage_cards", label: "Gerenciar cartões" },
+                          { id: "manage_accounts", label: "Contas bancárias" },
+                        ]},
+                        { group: "Operacional", icon: <Zap className="h-3 w-3 text-yellow-500" />, perms: [
+                          { id: "create_tasks", label: "Criar tarefas" },
+                          { id: "edit_tasks", label: "Editar tarefas" },
+                          { id: "delete_tasks", label: "Excluir tarefas" },
+                          { id: "assign_tasks", label: "Atribuir tarefas" },
+                          { id: "approve_tasks", label: "Aprovar tarefas" },
+                        ]},
+                        { group: "Relatórios", icon: <BarChart3 className="h-3 w-3 text-green-500" />, perms: [
+                          { id: "view_reports", label: "Visualizar relatórios" },
+                          { id: "export_reports", label: "Exportar relatórios" },
+                          { id: "view_metrics", label: "Métricas avançadas" },
+                        ]},
+                        { group: "Sistema", icon: <Settings className="h-3 w-3 text-purple-500" />, perms: [
+                          { id: "access_settings", label: "Configurações" },
+                          { id: "manage_integrations", label: "Integrações" },
+                          { id: "view_logs", label: "Logs do sistema" },
+                        ]},
+                      ].map(group => (
+                        <div key={group.group} className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            {group.icon}
+                            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{group.group}</span>
                           </div>
-                          <div className="bg-gradient-to-br from-yellow-500 via-amber-500 to-orange-500 p-6 rounded-xl border border-yellow-300 shadow-lg text-white">
-                            <label className="text-xs font-semibold uppercase tracking-wide block mb-2 opacity-90">Saldo Bloqueado</label>
-                            <div className="text-3xl font-bold mb-1">R$ {blockedBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                            <p className="text-xs opacity-75">Aguardando aprovação</p>
-                          </div>
-                        </div>
-
-                        {/* Status */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Status da Carteira</label>
-                          {isFinancialEditMode ? (
-                            <select value={getFinancialDisplayValue("wallet_status") as string || "ativa"} onChange={(e) => handleFinancialFieldChange("wallet_status", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm">
-                              <option value="ativa">Ativa</option>
-                              <option value="bloqueada">Bloqueada</option>
-                            </select>
-                          ) : (
-                            <Badge className={getFinancialDisplayValue("wallet_status") === "ativa" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}>
-                              {getFinancialDisplayValue("wallet_status") === "ativa" ? "Ativa" : "Bloqueada"}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Ações */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button onClick={() => setShowStatementModal(true)} className="bg-slate-700 hover:bg-slate-800 text-white font-semibold gap-2">
-                            <FileText className="h-4 w-4" />
-                            Ver Extrato
-                          </Button>
-                          {isFinancialEditMode && (
-                            <Button onClick={() => setShowAddBalanceModal(true)} className="btn-brand font-semibold gap-2">
-                              <Plus className="h-4 w-4" />
-                              Adicionar Saldo
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Solicitar Desbloqueio (usuário) */}
-                        {blockedBalance > 0 && !isFinancialEditMode && (
-                          <Button onClick={() => setShowUnblockRequestModal(true)} variant="outline" className="w-full font-semibold text-amber-600 border-amber-300">
-                            Solicitar Desbloqueio de Saldo
-                          </Button>
-                        )}
-
-                        {/* Últimas Movimentações */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Últimas Movimentações</label>
-                          <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200 max-h-48 overflow-y-auto">
-                            {walletStatements.slice(0, 5).map(stmt => (
-                              <div key={stmt.id} className="flex justify-between items-center text-xs border-b border-slate-200 pb-2 last:border-0">
-                                <div>
-                                  <div className="font-semibold text-slate-900">{stmt.reason}</div>
-                                  <div className="text-slate-500 text-xs">{new Date(stmt.date).toLocaleString('pt-BR')}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className={`font-bold ${stmt.type === "credit" ? "text-emerald-600" : stmt.type === "debit" ? "text-red-600" : "text-yellow-600"}`}>
-                                    {stmt.type === "credit" ? "+" : stmt.type === "debit" ? "-" : "🔒"} R$ {stmt.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                  </div>
-                                  <div className="text-slate-500 text-xs">Saldo: R$ {stmt.balanceAfter.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                </div>
-                              </div>
-                            ))}
-                            {walletStatements.length === 0 && (
-                              <div className="text-center py-4 text-slate-500 text-xs">Nenhuma movimentação</div>
-                            )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.perms.map(perm => {
+                              const currentPerms = isPermissionsEditMode
+                                ? (permissionsEditedData.permissions || [])
+                                : (displayUser.permissions as string[] || [])
+                              const isActive = currentPerms.includes(perm.id)
+                              return (
+                                <button
+                                  key={perm.id}
+                                  onClick={() => isPermissionsEditMode && handlePermissionToggle(perm.id)}
+                                  disabled={!isPermissionsEditMode}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200"} ${isPermissionsEditMode && isActive ? "hover:bg-red-50 hover:text-red-600 hover:border-red-200" : ""} ${isPermissionsEditMode && !isActive ? "hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200" : ""}`}
+                                >
+                                  {isActive ? <Check className="h-2.5 w-2.5" /> : <span className="h-2.5 w-2.5 rounded-full border border-current" />}
+                                  {perm.label}
+                                </button>
+                              )
+                            })}
                           </div>
                         </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* DADOS FINANCEIROS GERAIS */}
-                  <AccordionItem value="financeiro" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-purple-600" />
-                        <span className="font-semibold text-slate-900">Dados Financeiros Gerais</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* CPF / CNPJ */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">CPF / CNPJ</label>
-                          {isFinancialEditMode ? (
-                            <Input value={getFinancialDisplayValue("financial_document") as string || ""} onChange={(e) => handleFinancialFieldChange("financial_document", e.target.value)} className="border-slate-300 font-mono" placeholder="00000000000000" />
-                          ) : (
-                            <code className="bg-slate-100 px-3 py-2 rounded text-sm font-mono font-bold text-slate-900">{getFinancialDisplayValue("financial_document") || "—"}</code>
-                          )}
-                        </div>
-
-                        {/* Nome do Titular */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Nome do Titular</label>
-                          {isFinancialEditMode ? (
-                            <Input value={getFinancialDisplayValue("financial_holder") as string || ""} onChange={(e) => handleFinancialFieldChange("financial_holder", e.target.value)} className="border-slate-300" placeholder="Nome do titular" />
-                          ) : (
-                            <div className="font-medium text-slate-900">{getFinancialDisplayValue("financial_holder") || "—"}</div>
-                          )}
-                        </div>
-
-                        {/* Tipo de Pessoa */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Tipo de Pessoa</label>
-                          {isFinancialEditMode ? (
-                            <select value={getFinancialDisplayValue("person_type") as string || ""} onChange={(e) => handleFinancialFieldChange("person_type", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm">
-                              <option value="">Selecione</option>
-                              <option value="fisica">Física</option>
-                              <option value="juridica">Jurídica</option>
-                            </select>
-                          ) : (
-                            <div className="font-medium text-slate-900">{getFinancialDisplayValue("person_type") === "fisica" ? "Pessoa Física" : getFinancialDisplayValue("person_type") === "juridica" ? "Pessoa Jurídica" : "—"}</div>
-                          )}
-                        </div>
-
-                        {/* Regime Tributário */}
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Regime Tributário</label>
-                          {isFinancialEditMode ? (
-                            <select value={getFinancialDisplayValue("tax_regime") as string || ""} onChange={(e) => handleFinancialFieldChange("tax_regime", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm">
-                              <option value="">Selecione</option>
-                              <option value="simples">Simples Nacional</option>
-                              <option value="presumido">Lucro Presumido</option>
-                              <option value="real">Lucro Real</option>
-                            </select>
-                          ) : (
-                            <div className="font-medium text-slate-900">{getFinancialDisplayValue("tax_regime") || "—"}</div>
-                          )}
-                        </div>
-
-                        {/* Observações Financeiras */}
-                        <div className="md:col-span-2">
-                          <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase tracking-wide">Observações Financeiras Administrativas</label>
-                          {isFinancialEditMode ? (
-                            <textarea value={getFinancialDisplayValue("financial_notes") as string || ""} onChange={(e) => handleFinancialFieldChange("financial_notes", e.target.value)} className="w-full border border-slate-300 rounded px-3 py-2 text-sm font-medium min-h-20" placeholder="Notas financeiras" />
-                          ) : (
-                            <div className="font-medium text-slate-900 whitespace-pre-wrap bg-slate-50 p-3 rounded border border-slate-200 min-h-20">{getFinancialDisplayValue("financial_notes") || "—"}</div>
-                          )}
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </TabsContent>
-
-              {/* Permissões */}
-              {/* Permissões */}
-              <TabsContent value="permissoes" className="space-y-4 mt-0">
-                {/* Header with Edit Button */}
-                <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Controle de Acesso</h3>
-                  <div className="flex items-center gap-2">
-                    {!isPermissionsEditMode ? (
-                      <Button onClick={handlePermissionsEditMode} size="sm" className="btn-brand">
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Editar
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Button onClick={handlePermissionsSaveClick} size="sm" disabled={isSaving} className="btn-brand">
-                          {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                          {isSaving ? "Salvando..." : "Salvar"}
-                        </Button>
-                        <Button onClick={handlePermissionsCancelEdit} size="sm" variant="outline">
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Cancelar
-                        </Button>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
+
                 </div>
-
-                {/* Accordions */}
-                <Accordion type="multiple" value={permissionsOpenAccordions} onValueChange={setPermissionsOpenAccordions} className="space-y-3">
-                  {/* PERFIL DE ACESSO */}
-                  <AccordionItem value="role" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-slate-900">Perfil de Acesso</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-3 uppercase tracking-wide">Selecionar Perfil</label>
-                          <div className="grid grid-cols-1 gap-2">
-                            {[
-                              { value: "admin", label: "Admin", desc: "Acesso completo ao sistema" },
-                              { value: "gestor", label: "Gestor", desc: "Gerenciar usuários e tarefas" },
-                              { value: "lider", label: "Líder", desc: "Supervisionar equipe" },
-                              { value: "nomade", label: "Nômade", desc: "Acesso básico e flexível" },
-                              { value: "financeiro", label: "Financeiro", desc: "Gerenciar dados financeiros" },
-                              { value: "suporte", label: "Suporte", desc: "Atender e resolver tickets" }
-                            ].map(role => (
-                              <div
-                                key={role.value}
-                                onClick={() => !isPermissionsEditMode && handlePermissionsFieldChange("role", role.value)}
-                                className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${permissionsEditedData.role === role.value ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"}`}
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <div className="font-semibold text-slate-900">{role.label}</div>
-                                    <div className="text-xs text-slate-600">{role.desc}</div>
-                                  </div>
-                                  {isPermissionsEditMode && (
-                                    <div className={`h-5 w-5 rounded border-2 flex items-center justify-center ${permissionsEditedData.role === role.value ? "border-blue-500 bg-blue-500" : "border-slate-300"}`}>
-                                      {permissionsEditedData.role === role.value && <Check className="h-3 w-3 text-white" />}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* ADMINISTRAÇÃO */}
-                  <AccordionItem value="admin" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Lock className="h-5 w-5 text-red-600" />
-                        <span className="font-semibold text-slate-900">Administração</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        {[
-                          { id: "manage_users", label: "Gerenciar usuários", desc: "Criar, editar, deletar usuários" },
-                          { id: "manage_permissions", label: "Gerenciar permissões", desc: "Alterar roles e acessos" },
-                          { id: "view_sensitive", label: "Visualizar dados sensíveis", desc: "Ver informações confidenciais" },
-                          { id: "reset_password", label: "Resetar senhas", desc: "Redefinir senha de usuários" },
-                          { id: "access_admin_panel", label: "Acessar painel administrativo", desc: "Usar dashboard admin completo" }
-                        ].map(perm => (
-                          <div key={perm.id} className="flex items-start justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                            <div>
-                              <div className="font-medium text-slate-900">{perm.label}</div>
-                              <div className="text-xs text-slate-600">{perm.desc}</div>
-                            </div>
-                            {isPermissionsEditMode ? (
-                              <button onClick={() => handlePermissionToggle(perm.id)} className="flex-shrink-0">
-                                {(permissionsEditedData.permissions || []).includes(perm.id) ? (
-                                  <ToggleRight className="h-6 w-6 text-blue-600" />
-                                ) : (
-                                  <ToggleLeft className="h-6 w-6 text-slate-400" />
-                                )}
-                              </button>
-                            ) : (
-                              <Badge className={(displayUser.permissions as string[] || []).includes(perm.id) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}>
-                                {(displayUser.permissions as string[] || []).includes(perm.id) ? "Ativo" : "Inativo"}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* FINANCEIRO */}
-                  <AccordionItem value="financial" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-amber-600" />
-                        <span className="font-semibold text-slate-900">Financeiro</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        {[
-                          { id: "view_financial", label: "Visualizar dados financeiros", desc: "Acessar relatórios e históricos" },
-                          { id: "edit_financial", label: "Editar dados financeiros", desc: "Atualizar informações financeiras" },
-                          { id: "adjust_balance", label: "Ajustar saldo (Allkoin)", desc: "Adicionar ou subtrair do wallet" },
-                          { id: "manage_cards", label: "Gerenciar cartões", desc: "Adicionar, editar ou remover cartões" },
-                          { id: "manage_accounts", label: "Gerenciar contas bancárias", desc: "Configurar dados bancários" }
-                        ].map(perm => (
-                          <div key={perm.id} className="flex items-start justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                            <div>
-                              <div className="font-medium text-slate-900">{perm.label}</div>
-                              <div className="text-xs text-slate-600">{perm.desc}</div>
-                            </div>
-                            {isPermissionsEditMode ? (
-                              <button onClick={() => handlePermissionToggle(perm.id)} className="flex-shrink-0">
-                                {(permissionsEditedData.permissions || []).includes(perm.id) ? (
-                                  <ToggleRight className="h-6 w-6 text-blue-600" />
-                                ) : (
-                                  <ToggleLeft className="h-6 w-6 text-slate-400" />
-                                )}
-                              </button>
-                            ) : (
-                              <Badge className={(displayUser.permissions as string[] || []).includes(perm.id) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}>
-                                {(displayUser.permissions as string[] || []).includes(perm.id) ? "Ativo" : "Inativo"}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* OPERACIONAL */}
-                  <AccordionItem value="operational" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-yellow-600" />
-                        <span className="font-semibold text-slate-900">Operacional</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        {[
-                          { id: "create_tasks", label: "Criar tarefas", desc: "Criar novas tarefas e projetos" },
-                          { id: "edit_tasks", label: "Editar tarefas", desc: "Modificar tarefas existentes" },
-                          { id: "delete_tasks", label: "Excluir tarefas", desc: "Remover tarefas do sistema" },
-                          { id: "assign_tasks", label: "Atribuir tarefas", desc: "Designar tarefas a usuários" },
-                          { id: "approve_tasks", label: "Aprovar tarefas", desc: "Validar e aprovar conclusões" }
-                        ].map(perm => (
-                          <div key={perm.id} className="flex items-start justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                            <div>
-                              <div className="font-medium text-slate-900">{perm.label}</div>
-                              <div className="text-xs text-slate-600">{perm.desc}</div>
-                            </div>
-                            {isPermissionsEditMode ? (
-                              <button onClick={() => handlePermissionToggle(perm.id)} className="flex-shrink-0">
-                                {(permissionsEditedData.permissions || []).includes(perm.id) ? (
-                                  <ToggleRight className="h-6 w-6 text-blue-600" />
-                                ) : (
-                                  <ToggleLeft className="h-6 w-6 text-slate-400" />
-                                )}
-                              </button>
-                            ) : (
-                              <Badge className={(displayUser.permissions as string[] || []).includes(perm.id) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}>
-                                {(displayUser.permissions as string[] || []).includes(perm.id) ? "Ativo" : "Inativo"}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* RELATÓRIOS */}
-                  <AccordionItem value="reports" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5 text-green-600" />
-                        <span className="font-semibold text-slate-900">Relatórios</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        {[
-                          { id: "view_reports", label: "Visualizar relatórios", desc: "Acessar todos os relatórios" },
-                          { id: "export_reports", label: "Exportar relatórios", desc: "Gerar e baixar relatórios em PDF/Excel" },
-                          { id: "view_metrics", label: "Visualizar métricas avançadas", desc: "Ver análises e KPIs detalhados" }
-                        ].map(perm => (
-                          <div key={perm.id} className="flex items-start justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                            <div>
-                              <div className="font-medium text-slate-900">{perm.label}</div>
-                              <div className="text-xs text-slate-600">{perm.desc}</div>
-                            </div>
-                            {isPermissionsEditMode ? (
-                              <button onClick={() => handlePermissionToggle(perm.id)} className="flex-shrink-0">
-                                {(permissionsEditedData.permissions || []).includes(perm.id) ? (
-                                  <ToggleRight className="h-6 w-6 text-blue-600" />
-                                ) : (
-                                  <ToggleLeft className="h-6 w-6 text-slate-400" />
-                                )}
-                              </button>
-                            ) : (
-                              <Badge className={(displayUser.permissions as string[] || []).includes(perm.id) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}>
-                                {(displayUser.permissions as string[] || []).includes(perm.id) ? "Ativo" : "Inativo"}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* SISTEMA */}
-                  <AccordionItem value="system" className="border border-slate-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Settings className="h-5 w-5 text-purple-600" />
-                        <span className="font-semibold text-slate-900">Sistema</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 py-4 border-t border-slate-100">
-                      <div className="space-y-3">
-                        {[
-                          { id: "access_settings", label: "Acessar configurações", desc: "Modificar preferências do sistema" },
-                          { id: "manage_integrations", label: "Gerenciar integrações", desc: "Conectar APIs e serviços externos" },
-                          { id: "view_logs", label: "Visualizar logs", desc: "Acessar histórico de atividades do sistema" }
-                        ].map(perm => (
-                          <div key={perm.id} className="flex items-start justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                            <div>
-                              <div className="font-medium text-slate-900">{perm.label}</div>
-                              <div className="text-xs text-slate-600">{perm.desc}</div>
-                            </div>
-                            {isPermissionsEditMode ? (
-                              <button onClick={() => handlePermissionToggle(perm.id)} className="flex-shrink-0">
-                                {(permissionsEditedData.permissions || []).includes(perm.id) ? (
-                                  <ToggleRight className="h-6 w-6 text-blue-600" />
-                                ) : (
-                                  <ToggleLeft className="h-6 w-6 text-slate-400" />
-                                )}
-                              </button>
-                            ) : (
-                              <Badge className={(displayUser.permissions as string[] || []).includes(perm.id) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}>
-                                {(displayUser.permissions as string[] || []).includes(perm.id) ? "Ativo" : "Inativo"}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
               </TabsContent>
 
               {/* Segurança */}
-              <TabsContent value="seguranca" className="space-y-4 mt-0">
+              <TabsContent value="seguranca" className="flex-1 flex flex-col overflow-hidden bg-slate-200 mt-0">
                 {/* Security Header */}
-                <div className="flex items-center justify-between sticky top-0 bg-white z-10 pb-4">
+                <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-slate-900">Segurança da Conta</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Segurança da Conta</h3>
                     <Badge className="bg-emerald-100 text-emerald-700 font-semibold">Segura</Badge>
                   </div>
                 </div>
 
+                <div className="flex-1 overflow-y-auto px-[50px] pb-6">
                 <Accordion type="multiple" value={securityOpenAccordions} onValueChange={setSecurityOpenAccordions} className="space-y-3">
                   {/* 1. AUTENTICAÇÃO E SENHA */}
                   <AccordionItem value="auth" className="border border-slate-200 rounded-lg overflow-hidden">
@@ -2892,10 +2417,30 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
+                </div>
               </TabsContent>
-            </div>
-          </ScrollArea>
         </Tabs>
+
+        {/* Cancel Edit Confirmation Dialog */}
+        <AlertDialog open={showCancelEditConfirm} onOpenChange={setShowCancelEditConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Descartar alterações?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você tem alterações não salvas. Se continuar, todos os ajustes feitos serão perdidos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-3">
+              <AlertDialogCancel onClick={() => setShowCancelEditConfirm(false)}>Continuar editando</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => { pendingCancelCallback?.(); setShowCancelEditConfirm(false); setPendingCancelCallback(null); }}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Descartar alterações
+              </AlertDialogAction>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Confirmation Dialog for Conta Tab */}
         <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -2935,24 +2480,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Confirmation Dialog for Financeiro Tab */}
-        <AlertDialog open={showFinancialConfirmDialog} onOpenChange={setShowFinancialConfirmDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar alterações financeiras</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja salvar as alterações financeiras deste usuário? Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex gap-3">
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleFinancialSaveConfirm} disabled={isSaving} className="btn-brand">
-                {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                {isSaving ? "Salvando..." : "Confirmar"}
-              </AlertDialogAction>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
+
 
         {/* Modal for Adding Card */}
         <AlertDialog open={showCardModal} onOpenChange={setShowCardModal}>

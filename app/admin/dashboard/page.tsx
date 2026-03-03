@@ -2112,18 +2112,18 @@ export default function AdminDashboardPage() {
           )}
           <div className="px-3.5 pt-2.5 pb-2.5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
               <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
-                <Icon className="h-3.5 w-3.5 text-white" />
+                <Icon className="h-5 w-5 text-white" />
               </div>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-2">{metric.value}</p>
+            <p className="text-2xl font-bold text-white leading-none mb-2">{metric.value}</p>
             <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                {metric.trend === "up" ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-white/20 text-white">
+                {metric.trend === "up" ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
                 {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}%
               </div>
-              <span className="text-[9px] text-white/60">vs. anterior</span>
+              <span className="text-[11px] text-white/60">vs. anterior</span>
             </div>
           </div>
         </div>
@@ -2160,20 +2160,20 @@ export default function AdminDashboardPage() {
         )}
         <div className="px-3.5 pt-2.5 pb-2.5">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
+            <p className="text-xs font-semibold text-white/70 uppercase tracking-wider truncate">{metricName}</p>
             <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
-              <Icon className="h-3.5 w-3.5 text-white" />
+              <Icon className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-xl font-bold text-white leading-none mb-2">
+          <p className="text-2xl font-bold text-white leading-none mb-2">
             {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
           </p>
           <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metric.trend === "up" ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-white/20 text-white">
+              {metric.trend === "up" ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
               {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
             </div>
-            <span className="text-[9px] text-white/60">{metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}</span>
+            <span className="text-[11px] text-white/60">{metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}</span>
           </div>
         </div>
       </div>

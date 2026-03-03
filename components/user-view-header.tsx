@@ -134,9 +134,22 @@ export function UserViewHeader({
     }
   }
 
+  const accountTypePtLabel: Record<string, string> = {
+    company: "Empresa",
+    nomad: "Nômade",
+    agency: "Agência",
+  }
+
+  // Formata o role do usuário para exibição (ex: "company_admin" → "Company Admin")
+  const formatRole = (role?: string) => {
+    if (!role) return undefined
+    return role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  }
+
   return (
     <ModalBrandHeader
       title={user.name}
+      subtitle={formatRole(user.role as string)}
       left={
         <div className="flex-shrink-0 relative">
           <div className="relative">
