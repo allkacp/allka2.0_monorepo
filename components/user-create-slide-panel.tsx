@@ -395,48 +395,47 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
                     </Select>
                   </div>
                 </div>
-              </div>
 
-              {/* LGPD & Privacidade */}
-              <div className="pt-2 border-t border-slate-100">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-4 w-4 text-blue-600" />
-                  <h3 className="font-semibold text-sm text-slate-800">LGPD &amp; Privacidade</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label>Base legal do tratamento</Label>
-                    <Select value={legalBasis} onValueChange={setLegalBasis}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="consent">Consentimento (Art. 7º, I)</SelectItem>
-                        <SelectItem value="contract">Execução de contrato (Art. 7º, V)</SelectItem>
-                        <SelectItem value="legitimate_interest">Legítimo interesse (Art. 7º, IX)</SelectItem>
-                        <SelectItem value="legal_obligation">Obrigação legal (Art. 7º, II)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                {/* LGPD & Privacidade */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-semibold text-sm text-slate-800">LGPD &amp; Privacidade</h3>
                   </div>
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
-                    <Checkbox
-                      id="lgpd-consent"
-                      checked={lgpdConsent}
-                      onCheckedChange={(checked) => setLgpdConsent(!!checked)}
-                      className="mt-0.5"
-                    />
-                    <label htmlFor="lgpd-consent" className="text-xs text-slate-700 leading-relaxed cursor-pointer">
-                      Li e aceito a{" "}
-                      <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Política de Privacidade</a>{" "}
-                      e os{" "}
-                      <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Termos de Uso</a>,{" "}
-                      e autorizo o tratamento dos meus dados pessoais conforme descrito. *
-                    </label>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label>Base legal do tratamento</Label>
+                      <Select value={legalBasis} onValueChange={setLegalBasis}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="consent">Consentimento (Art. 7º, I)</SelectItem>
+                          <SelectItem value="contract">Execução de contrato (Art. 7º, V)</SelectItem>
+                          <SelectItem value="legitimate_interest">Legítimo interesse (Art. 7º, IX)</SelectItem>
+                          <SelectItem value="legal_obligation">Obrigação legal (Art. 7º, II)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                      <Checkbox
+                        id="lgpd-consent"
+                        checked={lgpdConsent}
+                        onCheckedChange={(checked) => setLgpdConsent(!!checked)}
+                        className="mt-0.5"
+                      />
+                      <label htmlFor="lgpd-consent" className="text-xs text-slate-700 leading-relaxed cursor-pointer">
+                        Li e aceito a{" "}
+                        <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Política de Privacidade</a>{" "}
+                        e os{" "}
+                        <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Termos de Uso</a>,{" "}
+                        e autorizo o tratamento dos meus dados pessoais conforme descrito. *
+                      </label>
+                    </div>
+                    {errors.lgpd_consent && <p className="text-xs text-red-500">{errors.lgpd_consent}</p>}
                   </div>
-                  {errors.lgpd_consent && <p className="text-xs text-red-500">{errors.lgpd_consent}</p>}
                 </div>
               </div>
-            </div>
             )}
             {currentStep === 2 && (
               <div className="space-y-4">
