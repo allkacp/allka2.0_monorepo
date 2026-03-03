@@ -1,5 +1,6 @@
 import React, { Suspense } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
+import { CookieConsentBanner } from "@/components/cookie-consent-banner"
 
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -142,7 +143,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <Routes>
       {/* Rota inicial → Admin Dashboard */}
       <Route
         path="/*"
@@ -193,6 +195,8 @@ export default function App() {
           </AppLayout>
         }
       />
-    </Routes>
+      </Routes>
+      <CookieConsentBanner />
+    </>
   )
 }

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { useToast } from "@/hooks/use-toast"
@@ -44,6 +45,10 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
       [category]: prev[category].map(p => p.id === permId ? { ...p, enabled: !p.enabled } : p),
     }))
   }
+
+  // LGPD consent state
+  const [lgpdConsent, setLgpdConsent] = useState(false)
+  const [legalBasis, setLegalBasis] = useState("consent")
 
   // Estado do novo usuário
   const [newUser, setNewUser] = useState({
@@ -147,6 +152,8 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
       })
       setAvatarPreview(null)
       setErrors({})
+      setLgpdConsent(false)
+      setLegalBasis("consent")
     }, 500)
   }
 
@@ -156,6 +163,7 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
     if (!newUser.email.trim()) newErrors.email = "Email é obrigatório"
     if (!newUser.username.trim()) newErrors.username = "Username é obrigatório"
     if (!newUser.account_type) newErrors.account_type = "Tipo de usuário é obrigatório"
+    if (!lgpdConsent) newErrors.lgpd_consent = "Aceite da Política de Privacidade é obrigatório"
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -194,6 +202,18 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
       last_login: new Date().toISOString(),
       created_at: new Date().toISOString().split('T')[0],
       updated_at: new Date().toISOString().split('T')[0],
+      lgpd: {
+        consent_given: lgpdConsent,
+        consent_date: new Date().toISOString().split('T')[0],
+        consent_version: "1.1",
+        legal_basis: legalBasis,
+        data_retention_until: new Date(Date.now() + 3 * 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        communication_opt_in: false,
+        data_export_requested: false,
+        deletion_requested: false,
+        data_processing_purposes: ["Gestão de conta"],
+        consent_history: [{ date: new Date().toISOString().split('T')[0], version: "1.1", action: "Consentimento dado no cadastro" }],
+      },
     }
     // Auto-link to the company they were created from
     if (companyId) {
@@ -376,9 +396,48 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* ETAPA 2: DADOS */}
+              {/* LGPD & Privacidade */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-semibold text-sm text-slate-800">LGPD &amp; Privacidade</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Base legal do tratamento</Label>
+                    <Select value={legalBasis} onValueChange={setLegalBasis}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="consent">Consentimento (Art. 7º, I)</SelectItem>
+                        <SelectItem value="contract">Execução de contrato (Art. 7º, V)</SelectItem>
+                        <SelectItem value="legitimate_interest">Legítimo interesse (Art. 7º, IX)</SelectItem>
+                        <SelectItem value="legal_obligation">Obrigação legal (Art. 7º, II)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <Checkbox
+                      id="lgpd-consent"
+                      checked={lgpdConsent}
+                      onCheckedChange={(checked) => setLgpdConsent(!!checked)}
+                      className="mt-0.5"
+                    />
+                    <label htmlFor="lgpd-consent" className="text-xs text-slate-700 leading-relaxed cursor-pointer">
+                      Li e aceito a{" "}
+                      <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Política de Privacidade</a>{" "}
+                      e os{" "}
+                      <a href="#" className="text-blue-600 underline underline-offset-2" onClick={e => e.preventDefault()}>Termos de Uso</a>,{" "}
+                      e autorizo o tratamento dos meus dados pessoais conforme descrito. *
+                    </label>
+                  </div>
+                  {errors.lgpd_consent && <p className="text-xs text-red-500">{errors.lgpd_consent}</p>}
+                </div>
+              </div>
+            </div>
+            )}
             {currentStep === 2 && (
               <div className="space-y-4">
                 <div>

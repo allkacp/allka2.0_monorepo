@@ -139,7 +139,7 @@ const templates = [
 ]
 
 export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelProps) {
-  const { getUserById, addCompanyLink, removeCompanyLink, updateCompanyLink, upsertProjectMembership, removeProjectMembership } = usePlatformUsers()
+  const { getUserById, addCompanyLink, removeCompanyLink, updateCompanyLink, upsertProjectMembership, removeProjectMembership, updateUser } = usePlatformUsers()
   const [isClosing, setIsClosing] = useState(false)
   const [onlineStatus, setOnlineStatus] = useState("online")
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1247,8 +1247,8 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         <Tabs defaultValue="visao-geral" className="flex-1 flex flex-col min-h-0">
           {/* Tab Navigation - Fixed */}
           <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
-            <TabsList className="grid w-max grid-cols-4 gap-1 bg-transparent p-0 h-auto">
-              {["visao-geral", "conta", "permissoes", "seguranca"].map(tab => (
+            <TabsList className="grid w-max grid-cols-5 gap-1 bg-transparent p-0 h-auto">
+              {["visao-geral", "conta", "permissoes", "seguranca", "lgpd"].map(tab => (
                 <TabsTrigger
                   key={tab}
                   value={tab}
@@ -1258,6 +1258,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
                   {tab === "conta" && "Conta & Dados"}
                   {tab === "permissoes" && "Permissões"}
                   {tab === "seguranca" && "Segurança"}
+                  {tab === "lgpd" && "LGPD & Privacidade"}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -2959,8 +2960,197 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
             </div>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* ── LGPD & Privacidade Tab Content ── */}
+        <LgpdTabContent user={user} onUpdate={(updates) => { if (user?.id) updateUser(user.id, updates); setPersistedUserData(prev => ({ ...(prev ?? {}), ...updates })) }} />
+
       </div>
     </>
+  )
+}
+
+function LgpdTabContent({ user, onUpdate }: { user: any; onUpdate: (u: any) => void }) {
+  const { toast } = useToast()
+  const [isSaving, setIsSaving] = useState(false)
+  const [legalBasis, setLegalBasis] = useState(user?.lgpd?.legal_basis ?? "consent")
+  const [commOptIn, setCommOptIn] = useState(user?.lgpd?.communication_opt_in ?? false)
+  const [lgpdData, setLgpdData] = useState(user?.lgpd)
+
+  const purposes = lgpdData?.data_processing_purposes ?? []
+  const history  = lgpdData?.consent_history ?? []
+
+  const legalBasisLabels: Record<string, string> = {
+    consent: "Consentimento (Art. 7º, I)",
+    contract: "Execução de contrato (Art. 7º, V)",
+    legitimate_interest: "Legítimo interesse (Art. 7º, IX)",
+    legal_obligation: "Obrigação legal (Art. 7º, II)",
+  }
+
+  const handleSaveConsent = async () => {
+    setIsSaving(true)
+    await new Promise(r => setTimeout(r, 800))
+    const newLgpd = { ...(lgpdData ?? {}), legal_basis: legalBasis, communication_opt_in: commOptIn }
+    onUpdate({ lgpd: newLgpd })
+    setLgpdData(newLgpd)
+    setIsSaving(false)
+    toast({ title: "Consentimento atualizado", description: "Dados LGPD salvos com sucesso." })
+  }
+
+  const handleRequestDeletion = async () => {
+    setIsSaving(true)
+    await new Promise(r => setTimeout(r, 800))
+    const newLgpd = { ...(lgpdData ?? {}), deletion_requested: true, deletion_requested_at: new Date().toISOString().split("T")[0] }
+    onUpdate({ lgpd: newLgpd })
+    setLgpdData(newLgpd)
+    setIsSaving(false)
+    toast({ title: "Solicitação enviada", description: "Solicitação de exclusão registrada.", variant: "destructive" })
+  }
+
+  const handleExportData = () => {
+    const exportPayload = {
+      user_id: user?.id,
+      name: user?.name,
+      email: user?.email,
+      exported_at: new Date().toISOString(),
+      lgpd: lgpdData,
+    }
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href     = url
+    a.download = `lgpd-export-${user?.id}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast({ title: "Exportação iniciada", description: "Arquivo JSON gerado com os dados pessoais do usuário." })
+  }
+
+  return (
+    <TabsContent value="lgpd" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px] mt-0">
+      <div className="space-y-4">
+
+        {/* Status card */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Shield className="h-4 w-4 text-blue-600" />
+            <h3 className="font-semibold text-sm text-slate-800">Consentimento &amp; Base Legal</h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500">Status:</span>
+            {lgpdData?.consent_given
+              ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">✓ Consentimento dado</span>
+              : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">⚠ Sem consentimento</span>
+            }
+            {lgpdData?.deletion_requested && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">⛔ Exclusão solicitada</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div><span className="text-slate-500">Data do consentimento:</span> <span className="font-medium">{lgpdData?.consent_date || "—"}</span></div>
+            <div><span className="text-slate-500">Versão:</span> <span className="font-medium">{lgpdData?.consent_version || "—"}</span></div>
+            <div><span className="text-slate-500">Retenção até:</span> <span className="font-medium">{lgpdData?.data_retention_until || "—"}</span></div>
+            <div><span className="text-slate-500">Exportação solicitada:</span> <span className="font-medium">{lgpdData?.data_export_requested ? (lgpdData.data_export_requested_at ?? "Sim") : "Não"}</span></div>
+          </div>
+          <div className="pt-1 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Base legal do tratamento</label>
+              <select
+                className="w-full h-8 rounded-md border border-slate-200 bg-white text-xs px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={legalBasis}
+                onChange={e => setLegalBasis(e.target.value)}
+              >
+                <option value="consent">Consentimento (Art. 7º, I)</option>
+                <option value="contract">Execução de contrato (Art. 7º, V)</option>
+                <option value="legitimate_interest">Legítimo interesse (Art. 7º, IX)</option>
+                <option value="legal_obligation">Obrigação legal (Art. 7º, II)</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-slate-700">Aceita comunicações da plataforma</label>
+              <Switch checked={commOptIn} onCheckedChange={setCommOptIn} />
+            </div>
+          </div>
+          <div className="flex justify-end pt-1">
+            <Button size="sm" className="text-xs h-8" onClick={handleSaveConsent} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+              Salvar consentimento
+            </Button>
+          </div>
+        </div>
+
+        {/* Finalidades */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <h3 className="font-semibold text-sm text-slate-800 mb-3">Finalidades de Tratamento</h3>
+          {purposes.length === 0
+            ? <p className="text-xs text-slate-400 italic">Nenhuma finalidade registrada.</p>
+            : <ul className="space-y-1.5">
+                {purposes.map((p: string, i: number) => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-slate-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                    {p}
+                  </li>
+                ))}
+              </ul>
+          }
+        </div>
+
+        {/* Histórico de consentimento */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <h3 className="font-semibold text-sm text-slate-800 mb-3">Histórico de Consentimento</h3>
+          {history.length === 0
+            ? <p className="text-xs text-slate-400 italic">Nenhum registro encontrado.</p>
+            : <div className="space-y-2">
+                {history.map((h: any, i: number) => (
+                  <div key={i} className="flex items-start gap-3 text-xs">
+                    <div className="flex-shrink-0 w-1.5 h-1.5 mt-1.5 rounded-full bg-blue-400" />
+                    <div>
+                      <span className="font-medium text-slate-700">{h.action}</span>
+                      <span className="text-slate-400 ml-2">{h.date} · v{h.version}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+
+        {/* Solicitações */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-3">
+          <h3 className="font-semibold text-sm text-slate-800">Direitos do Titular (LGPD Art. 18)</h3>
+          <p className="text-xs text-slate-500">O usuário pode exercer seus direitos de portabilidade e exclusão a qualquer momento.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={handleExportData}>
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Exportar dados (portabilidade)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 border-red-200 text-red-600 hover:bg-red-50"
+              onClick={handleRequestDeletion}
+              disabled={lgpdData?.deletion_requested || isSaving}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              {lgpdData?.deletion_requested ? "Exclusão já solicitada" : "Solicitar exclusão de dados"}
+            </Button>
+          </div>
+          {lgpdData?.deletion_requested_at && (
+            <p className="text-xs text-red-500">Solicitação registrada em: {lgpdData.deletion_requested_at}</p>
+          )}
+        </div>
+
+        {/* Política de Privacidade */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <h3 className="font-semibold text-sm text-slate-800 mb-2">Política de Privacidade</h3>
+          <a
+            href="#"
+            className="text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700"
+            onClick={e => e.preventDefault()}
+          >
+            Ler Política de Privacidade Allka v1.1
+          </a>
+          <p className="text-xs text-slate-400 mt-1">Última atualização: 01/01/2024 · Base legal: LGPD Lei 13.709/2018</p>
+        </div>
+      </div>
+    </TabsContent>
   )
 }
 

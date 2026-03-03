@@ -1678,6 +1678,12 @@ export default function UsuariosPage() {
                           <div className="space-y-0.5">
                             <Badge className={`text-xs px-2 py-0.5 ${accountBadge.color}`}>{accountBadge.label}</Badge>
                             <p className="text-xs text-slate-600 dark:text-slate-400">{getRoleLabel(user.role)}</p>
+                            {!user.lgpd?.consent_given && (
+                              <Badge className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 border-0">Sem consentimento LGPD</Badge>
+                            )}
+                            {user.lgpd?.deletion_requested && (
+                              <Badge className="text-xs px-2 py-0.5 bg-red-100 text-red-700 border-0">Exclusão solicitada</Badge>
+                            )}
                           </div>
                         </td>
                         <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>

@@ -79,6 +79,7 @@ type Company = {
   admin_notes?: string
   internal_notes?: string
   social_links?: { id: string; platform: string; url: string }[]
+  lgpd?: { dpo_name?: string; dpo_email?: string; dpo_phone?: string; privacy_policy_accepted: boolean; policy_accepted_at?: string; policy_version?: string; data_processing_purposes?: string[]; security_incidents?: { date: string; description: string; resolved: boolean }[] }
 }
 
 const mockCompanies: Company[] = [
@@ -127,6 +128,7 @@ const mockCompanies: Company[] = [
       { id: "sl1", platform: "Instagram", url: "https://instagram.com/cocacolabrasil" },
       { id: "sl2", platform: "LinkedIn", url: "https://linkedin.com/company/coca-cola-brasil" },
     ],
+    lgpd: { dpo_name: "Ana Figueiredo", dpo_email: "dpo@cocacola.com.br", dpo_phone: "+55 11 3000-0001", privacy_policy_accepted: true, policy_accepted_at: "2023-01-10", policy_version: "2.1", data_processing_purposes: ["Gestão de projetos", "Comunicação interna", "Analytics"], security_incidents: [] },
   },
   {
     id: 2,
@@ -1574,6 +1576,14 @@ export default function EmpresasPage() {
                       <div>
                         <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">{company.name}</p>
                         <p className="text-xs text-slate-400 dark:text-slate-500">{company.location}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {!company.lgpd?.dpo_name && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium">Sem DPO</span>
+                          )}
+                          {company.lgpd && !company.lgpd.privacy_policy_accepted && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">Política pendente</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>

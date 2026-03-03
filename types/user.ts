@@ -1,3 +1,29 @@
+export interface UserLGPD {
+  consent_given: boolean
+  consent_date: string
+  consent_version: string
+  legal_basis: "consent" | "contract" | "legitimate_interest" | "legal_obligation"
+  data_retention_until: string
+  communication_opt_in: boolean
+  data_export_requested: boolean
+  data_export_requested_at?: string
+  deletion_requested: boolean
+  deletion_requested_at?: string
+  data_processing_purposes: string[]
+  consent_history: { date: string; version: string; action: string }[]
+}
+
+export interface CompanyLGPD {
+  dpo_name: string
+  dpo_email: string
+  dpo_phone?: string
+  privacy_policy_accepted: boolean
+  policy_accepted_at: string
+  policy_version: string
+  data_processing_purposes: string[]
+  security_incidents: { date: string; description: string; resolved: boolean }[]
+}
+
 export interface User {
   id: number
   email: string
@@ -33,6 +59,7 @@ export interface User {
   active_agency_id?: number
   company?: Company
   agency?: Agency
+  lgpd?: UserLGPD
 }
 
 // Per-company category-based permissions (managed by company admin/responsible)

@@ -11,16 +11,16 @@ import { DEFAULT_COMPANY_PERMISSIONS, ADMIN_COMPANY_PERMISSIONS, MOCK_COMPANY_PR
 
 // Searchable companies for linking users — mirrors mockCompanies in app/admin/empresas/page.tsx
 export const MOCK_COMPANIES = [
-  { id: 1,  name: "Coca-Cola Brasil",       document: "12.345.678/0001-90" },
-  { id: 2,  name: "Starbucks Coffee",        document: "98.765.432/0001-10" },
-  { id: 3,  name: "Fundação Wikimedia",      document: "23.456.789/0001-01" },
-  { id: 4,  name: "Agência Criativa Hub",    document: "34.567.890/0001-22" },
-  { id: 5,  name: "Nomade Freelancer Co",    document: "45.678.901/0001-33" },
-  { id: 6,  name: "Notion Workspace",        document: "56.789.012/0001-44" },
-  { id: 7,  name: "Studio Mídias Sociais",   document: "67.890.123/0001-55" },
-  { id: 8,  name: "Spotify Brasil",          document: "78.901.234/0001-66" },
-  { id: 9,  name: "FreelanceFlow",           document: "89.012.345/0001-77" },
-  { id: 10, name: "Meta Business",           document: "90.123.456/0001-88" },
+  { id: 1,  name: "Coca-Cola Brasil",       document: "12.345.678/0001-90", lgpd: { dpo_name: "Ana Figueiredo", dpo_email: "dpo@cocacola.com.br", dpo_phone: "+55 11 3000-0001", privacy_policy_accepted: true, policy_accepted_at: "2023-01-10", policy_version: "2.1", data_processing_purposes: ["Gestão de projetos", "Comunicação interna", "Analytics de plataforma"], security_incidents: [] } },
+  { id: 2,  name: "Starbucks Coffee",        document: "98.765.432/0001-10", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 3,  name: "Fundação Wikimedia",      document: "23.456.789/0001-01", lgpd: { dpo_name: "Ricardo Almeida", dpo_email: "dpo@wikimedia.org", privacy_policy_accepted: true, policy_accepted_at: "2023-03-15", policy_version: "1.0", data_processing_purposes: ["Gestão de projetos", "Tarefas colaborativas"], security_incidents: [{ date: "2023-11-20", description: "Acesso não autorizado a logs de atividade", resolved: true }] } },
+  { id: 4,  name: "Agência Criativa Hub",    document: "34.567.890/0001-22", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 5,  name: "Nomade Freelancer Co",    document: "45.678.901/0001-33", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 6,  name: "Notion Workspace",        document: "56.789.012/0001-44", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 7,  name: "Studio Mídias Sociais",   document: "67.890.123/0001-55", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 8,  name: "Spotify Brasil",          document: "78.901.234/0001-66", lgpd: { dpo_name: "Carla Mendes", dpo_email: "dpo@spotify.com.br", dpo_phone: "+55 11 3200-8800", privacy_policy_accepted: true, policy_accepted_at: "2023-02-01", policy_version: "3.0", data_processing_purposes: ["Gestão de projetos", "Analytics", "Comunicação com fornecedores"], security_incidents: [] } },
+  { id: 9,  name: "FreelanceFlow",           document: "89.012.345/0001-77", lgpd: { dpo_name: "", dpo_email: "", privacy_policy_accepted: false, policy_accepted_at: "", policy_version: "", data_processing_purposes: [], security_incidents: [] } },
+  { id: 10, name: "Meta Business",           document: "90.123.456/0001-88", lgpd: { dpo_name: "Bruno Carvalho", dpo_email: "dpo@meta.com.br", privacy_policy_accepted: true, policy_accepted_at: "2023-01-20", policy_version: "2.0", data_processing_purposes: ["Gestão de campanhas", "Analytics avançado", "CRM"], security_incidents: [] } },
   { id: 11, name: "Pixel & Cia Design",      document: "01.234.567/0001-99" },
   { id: 12, name: "Nômade Criativo 360",     document: "11.222.333/0001-44" },
   { id: 13, name: "Google Brasil",           document: "22.333.444/0001-55" },
@@ -96,6 +96,7 @@ const initialMockUsers: User[] = [
         { project_id: 102, project_name: "Rebranding 2024", permissions: ["view", "edit", "approve_deliveries"] },
       ]),
     ],
+    lgpd: { consent_given: true, consent_date: "2023-06-15", consent_version: "1.0", legal_basis: "consent", data_retention_until: "2026-06-15", communication_opt_in: true, data_export_requested: false, deletion_requested: false, data_processing_purposes: ["Gestão de conta", "Comunicações da plataforma", "Analytics"], consent_history: [{ date: "2023-06-15", version: "1.0", action: "Consentimento dado no cadastro" }] },
   },
   {
     id: 2,
@@ -112,6 +113,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-15",
     online_status: "offline",
     last_login: "2024-01-21T09:15:00",
+    lgpd: { consent_given: false, consent_date: "", consent_version: "", legal_basis: "consent", data_retention_until: "", communication_opt_in: false, data_export_requested: false, deletion_requested: false, data_processing_purposes: [], consent_history: [] },
   },
   {
     id: 3,
@@ -129,6 +131,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-10",
     online_status: "offline",
     last_login: "2024-01-10T16:45:00",
+    lgpd: { consent_given: false, consent_date: "", consent_version: "", legal_basis: "consent", data_retention_until: "", communication_opt_in: false, data_export_requested: false, deletion_requested: false, data_processing_purposes: [], consent_history: [] },
   },
   {
     id: 4,
@@ -146,6 +149,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-18",
     online_status: "busy",
     last_login: "2024-01-22T11:20:00",
+    lgpd: { consent_given: true, consent_date: "2023-09-05", consent_version: "1.0", legal_basis: "contract", data_retention_until: "2026-09-05", communication_opt_in: true, data_export_requested: false, deletion_requested: false, data_processing_purposes: ["Gestão de conta", "Projetos"], consent_history: [{ date: "2023-09-05", version: "1.0", action: "Consentimento dado no cadastro" }] },
     company_associations: [
       makeUserAssoc(2, "Starbucks Coffee", 4, [
         { project_id: 201, project_name: "Produto Lançamento", permissions: ["view", "create_tasks"] },
@@ -167,6 +171,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-22",
     online_status: "away",
     last_login: "2024-01-22T08:00:00",
+    lgpd: { consent_given: true, consent_date: "2023-10-12", consent_version: "1.0", legal_basis: "consent", data_retention_until: "2026-10-12", communication_opt_in: false, data_export_requested: false, deletion_requested: true, deletion_requested_at: "2024-01-20", data_processing_purposes: ["Gestão de conta"], consent_history: [{ date: "2023-10-12", version: "1.0", action: "Consentimento dado no cadastro" }, { date: "2024-01-20", version: "1.0", action: "Solicitação de exclusão de dados" }] },
   },
   {
     id: 6,
@@ -184,6 +189,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-21",
     online_status: "online",
     last_login: "2024-01-22T13:45:00",
+    lgpd: { consent_given: true, consent_date: "2023-11-03", consent_version: "1.1", legal_basis: "consent", data_retention_until: "2026-11-03", communication_opt_in: true, data_export_requested: false, deletion_requested: false, data_processing_purposes: ["Gestão de conta", "Comunicações", "Analytics"], consent_history: [{ date: "2023-11-03", version: "1.0", action: "Consentimento dado no cadastro" }, { date: "2024-01-01", version: "1.1", action: "Aceite dos termos atualizados" }] },
     company_associations: [
       makeUserAssoc(1, "Coca-Cola Brasil", 6, [
         { project_id: 101, project_name: "Campanha Verão", permissions: ["view", "edit"] },
@@ -206,6 +212,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-15",
     online_status: "offline",
     last_login: "2024-01-19T10:30:00",
+    lgpd: { consent_given: false, consent_date: "", consent_version: "", legal_basis: "consent", data_retention_until: "", communication_opt_in: false, data_export_requested: false, deletion_requested: false, data_processing_purposes: [], consent_history: [] },
   },
   {
     id: 8,
@@ -223,6 +230,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-22",
     online_status: "online",
     last_login: "2024-01-22T15:20:00",
+    lgpd: { consent_given: true, consent_date: "2024-01-05", consent_version: "1.1", legal_basis: "contract", data_retention_until: "2027-01-05", communication_opt_in: true, data_export_requested: false, deletion_requested: false, data_processing_purposes: ["Gestão de conta", "Projetos", "Comunicações"], consent_history: [{ date: "2024-01-05", version: "1.1", action: "Consentimento dado no cadastro" }] },
   },
   {
     id: 9,
@@ -240,6 +248,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-22",
     online_status: "busy",
     last_login: "2024-01-22T12:00:00",
+    lgpd: { consent_given: true, consent_date: "2024-01-08", consent_version: "1.0", legal_basis: "consent", data_retention_until: "2027-01-08", communication_opt_in: false, data_export_requested: false, deletion_requested: true, deletion_requested_at: "2024-01-21", data_processing_purposes: ["Gestão de conta"], consent_history: [{ date: "2024-01-08", version: "1.0", action: "Consentimento dado no cadastro" }, { date: "2024-01-21", version: "1.0", action: "Solicitação de exclusão de dados" }] },
     company_associations: [
       makeUserAssoc(3, "Fundação Wikimedia", 9, [
         { project_id: 301, project_name: "Identidade Visual", permissions: ["view"] },
@@ -262,6 +271,7 @@ const initialMockUsers: User[] = [
     updated_at: "2024-01-22",
     online_status: "online",
     last_login: "2024-01-22T16:30:00",
+    lgpd: { consent_given: true, consent_date: "2024-01-10", consent_version: "1.1", legal_basis: "legitimate_interest", data_retention_until: "2027-01-10", communication_opt_in: true, data_export_requested: true, data_export_requested_at: "2024-01-18", deletion_requested: false, data_processing_purposes: ["Gestão de conta", "Analytics", "Comunicações", "Relatórios internos"], consent_history: [{ date: "2024-01-10", version: "1.1", action: "Consentimento dado no cadastro" }, { date: "2024-01-18", version: "1.1", action: "Solicitação de exportação de dados" }] },
     company_associations: [
       makeAdminAssoc(1, "Coca-Cola Brasil", 10, [
         { project_id: 101, project_name: "Campanha Verão", permissions: ["admin"] },

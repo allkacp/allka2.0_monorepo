@@ -928,7 +928,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             {/* Content with Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
-              <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
+              <TabsList className="grid w-max grid-cols-10 gap-1 bg-transparent p-0 h-auto">
                 <TabsTrigger
                   value="visao-geral"
                   className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
@@ -982,6 +982,12 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
                   className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
                 >
                   Log
+                </TabsTrigger>
+                <TabsTrigger
+                  value="lgpd"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                >
+                  LGPD
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -2946,6 +2952,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             <TabsContent value="log" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
               <CompanyLogsTab company={company} />
             </TabsContent>
+            <CompanyLgpdTab company={company} />
             </Tabs>
           </div>
           </div>
@@ -3158,3 +3165,221 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     </>
   )
 }
+
+function CompanyLgpdTab({ company }: { company: any }) {
+  const { toast } = useToast()
+  const [isSaving, setIsSaving] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [showIncidentForm, setShowIncidentForm] = useState(false)
+
+  const defaultLgpd = {
+    dpo_name: "",
+    dpo_email: "",
+    dpo_phone: "",
+    privacy_policy_accepted: false,
+    policy_accepted_at: "",
+    policy_version: "1.0",
+    data_processing_purposes: [] as string[],
+    security_incidents: [] as { date: string; description: string; resolved: boolean }[],
+  }
+
+  const [lgpd, setLgpd] = useState(company?.lgpd ?? defaultLgpd)
+  const [newIncident, setNewIncident] = useState({ date: "", description: "", resolved: false })
+
+  const purposeOptions = [
+    "Gestão de projetos",
+    "Comunicação interna",
+    "Analytics de plataforma",
+    "Comunicação com fornecedores",
+    "CRM e relacionamento",
+    "Relatórios internos",
+    "Cobrança e pagamentos",
+  ]
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    await new Promise(r => setTimeout(r, 800))
+    setIsSaving(false)
+    setIsEditing(false)
+    toast({ title: "Dados LGPD salvos", description: "Informações de privacidade atualizadas com sucesso." })
+  }
+
+  const handleAddIncident = async () => {
+    if (!newIncident.date || !newIncident.description) return
+    setIsSaving(true)
+    await new Promise(r => setTimeout(r, 600))
+    const updated = { ...lgpd, security_incidents: [...(lgpd.security_incidents ?? []), newIncident] }
+    setLgpd(updated)
+    setNewIncident({ date: "", description: "", resolved: false })
+    setShowIncidentForm(false)
+    setIsSaving(false)
+    toast({ title: "Incidente registrado", description: "O incidente de segurança foi documentado." })
+  }
+
+  const togglePurpose = (p: string) => {
+    const current: string[] = lgpd.data_processing_purposes ?? []
+    const updated = current.includes(p) ? current.filter(x => x !== p) : [...current, p]
+    setLgpd({ ...lgpd, data_processing_purposes: updated })
+  }
+
+  return (
+    <TabsContent value="lgpd" className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]">
+      <div className="space-y-4">
+
+        {/* DPO Card */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-blue-600" />
+              <h3 className="font-semibold text-sm text-slate-800">Encarregado de Dados (DPO)</h3>
+              {!lgpd.dpo_name && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Não configurado</span>}
+            </div>
+            {!isEditing
+              ? <Button variant="outline" size="sm" className="text-xs h-7 gap-1.5" onClick={() => setIsEditing(true)}>
+                  <Edit2 className="h-3 w-3" />Editar
+                </Button>
+              : <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                  <Button size="sm" className="text-xs h-7 gap-1.5" onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3 w-3" />}Salvar
+                  </Button>
+                </div>
+            }
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500 font-medium">Nome do DPO</label>
+              {isEditing
+                ? <Input className="h-8 text-sm" value={lgpd.dpo_name} onChange={e => setLgpd({ ...lgpd, dpo_name: e.target.value })} placeholder="Ex: Maria Fernanda" />
+                : <p className="text-sm text-slate-800">{lgpd.dpo_name || "—"}</p>
+              }
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500 font-medium">E-mail do DPO</label>
+              {isEditing
+                ? <Input className="h-8 text-sm" value={lgpd.dpo_email} onChange={e => setLgpd({ ...lgpd, dpo_email: e.target.value })} placeholder="dpo@empresa.com" />
+                : <p className="text-sm text-slate-800">{lgpd.dpo_email || "—"}</p>
+              }
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500 font-medium">Telefone do DPO</label>
+              {isEditing
+                ? <Input className="h-8 text-sm" value={lgpd.dpo_phone ?? ""} onChange={e => setLgpd({ ...lgpd, dpo_phone: e.target.value })} placeholder="+55 11 99999-8888" />
+                : <p className="text-sm text-slate-800">{lgpd.dpo_phone || "—"}</p>
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* Política de Privacidade Card */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-600" />
+            <h3 className="font-semibold text-sm text-slate-800">Política de Privacidade</h3>
+            {!lgpd.privacy_policy_accepted && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Pendente</span>}
+            {lgpd.privacy_policy_accepted && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">✓ Aceita</span>}
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-xs">
+            <div><span className="text-slate-500">Aceita em:</span> <span className="font-medium">{lgpd.policy_accepted_at || "—"}</span></div>
+            <div><span className="text-slate-500">Versão:</span> <span className="font-medium">{lgpd.policy_version || "—"}</span></div>
+          </div>
+          {isEditing && (
+            <div className="flex items-center gap-3 pt-1">
+              <input
+                type="checkbox"
+                id="policy-accepted"
+                checked={lgpd.privacy_policy_accepted}
+                onChange={e => setLgpd({ ...lgpd, privacy_policy_accepted: e.target.checked, policy_accepted_at: e.target.checked ? new Date().toISOString().split("T")[0] : lgpd.policy_accepted_at })}
+                className="w-4 h-4 accent-blue-600"
+              />
+              <label htmlFor="policy-accepted" className="text-xs text-slate-700">Confirmar aceite da Política de Privacidade</label>
+            </div>
+          )}
+          <a href="#" className="text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700" onClick={e => e.preventDefault()}>
+            Ler Política de Privacidade Allka v1.1
+          </a>
+        </div>
+
+        {/* Finalidades */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-3">
+          <h3 className="font-semibold text-sm text-slate-800">Finalidades de Tratamento</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {purposeOptions.map(p => {
+              const selected = (lgpd.data_processing_purposes ?? []).includes(p)
+              return (
+                <button
+                  key={p}
+                  onClick={() => isEditing && togglePurpose(p)}
+                  className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border text-left transition-colors ${
+                    selected
+                      ? "bg-blue-50 border-blue-200 text-blue-700"
+                      : "bg-slate-50 border-slate-200 text-slate-500"
+                  } ${isEditing ? "cursor-pointer hover:border-blue-300" : "cursor-default"}`}
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${selected ? "bg-blue-500" : "bg-slate-300"}`} />
+                  {p}
+                </button>
+              )
+            })}
+          </div>
+          {!isEditing && (lgpd.data_processing_purposes ?? []).length === 0 && (
+            <p className="text-xs text-slate-400 italic">Nenhuma finalidade selecionada. Clique em Editar para configurar.</p>
+          )}
+        </div>
+
+        {/* Incidentes de segurança */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm text-slate-800">Incidentes de Segurança</h3>
+            <Button variant="outline" size="sm" className="text-xs h-7 gap-1.5" onClick={() => setShowIncidentForm(v => !v)}>
+              <Plus className="h-3 w-3" />Registrar incidente
+            </Button>
+          </div>
+
+          {showIncidentForm && (
+            <div className="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">Data</label>
+                  <Input type="date" className="h-7 text-xs" value={newIncident.date} onChange={e => setNewIncident({ ...newIncident, date: e.target.value })} />
+                </div>
+                <div className="flex items-end gap-2">
+                  <input type="checkbox" id="inc-resolved" checked={newIncident.resolved} onChange={e => setNewIncident({ ...newIncident, resolved: e.target.checked })} className="w-4 h-4 accent-blue-600 mb-1" />
+                  <label htmlFor="inc-resolved" className="text-xs text-slate-700 mb-1">Resolvido</label>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">Descrição</label>
+                <Input className="h-7 text-xs" placeholder="Descreva o incidente..." value={newIncident.description} onChange={e => setNewIncident({ ...newIncident, description: e.target.value })} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setShowIncidentForm(false)}>Cancelar</Button>
+                <Button size="sm" className="text-xs h-7" onClick={handleAddIncident} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Salvar incidente
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {(lgpd.security_incidents ?? []).length === 0
+            ? <p className="text-xs text-slate-400 italic">Nenhum incidente registrado.</p>
+            : <div className="space-y-2">
+                {(lgpd.security_incidents ?? []).map((inc: any, i: number) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <span className={`flex-shrink-0 w-2 h-2 rounded-full mt-1.5 ${inc.resolved ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-800">{inc.description}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{inc.date} · {inc.resolved ? "Resolvido" : "Em aberto"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+      </div>
+    </TabsContent>
+  )
+}
+

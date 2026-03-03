@@ -167,6 +167,82 @@ npm run build      # Build de produção
 npm run preview    # Preview do build
 ```
 
+---
+
+## LGPD & Privacidade (Lei 13.709/2018)
+
+A plataforma implementa adequação completa à LGPD com os seguintes componentes:
+
+### Cookie Consent Banner
+- Componente: `components/cookie-consent-banner.tsx`
+- Chave no `localStorage`: `allka_cookie_consent`
+- 4 categorias: Necessários (bloqueado), Analíticos, Funcionais, Marketing
+- Ações: Aceitar todos / Rejeitar não essenciais / Personalizar
+- Aparece na primeira visita; desaparece após qualquer escolha
+
+### Tipos LGPD (`types/user.ts`)
+```ts
+interface UserLGPD {
+  consent_given: boolean
+  consent_date: string
+  consent_version: string
+  legal_basis: "consent" | "contract" | "legitimate_interest" | "legal_obligation"
+  data_retention_until: string
+  communication_opt_in: boolean
+  data_export_requested: boolean
+  deletion_requested: boolean
+  data_processing_purposes: string[]
+  consent_history: { date: string; version: string; action: string }[]
+}
+
+interface CompanyLGPD {
+  dpo_name: string
+  dpo_email: string
+  dpo_phone?: string
+  privacy_policy_accepted: boolean
+  policy_accepted_at: string
+  policy_version: string
+  data_processing_purposes: string[]
+  security_incidents: { date: string; description: string; resolved: boolean }[]
+}
+```
+
+### Aba LGPD — Usuário (`user-view-slide-panel.tsx`)
+5ª aba "LGPD & Privacidade" no painel de detalhes do usuário:
+- Status de consentimento com badge visual
+- Base legal do tratamento (editável)
+- Toggle de opt-in de comunicações
+- Finalidades de tratamento
+- Histórico de consentimento (timeline)
+- Exportar dados (portabilidade — Art. 18, V) → gera JSON para download
+- Solicitar exclusão de dados (Art. 18, VI)
+
+### Fluxo de Cadastro — Consentimento (`user-create-slide-panel.tsx`)
+Etapa 1 inclui:
+- Select de base legal do tratamento (4 opções LGPD)
+- Checkbox obrigatório: aceite da Política de Privacidade e Termos de Uso
+- Validação: não avança para etapa 2 sem o aceite
+
+### Aba LGPD — Empresa (`company-view-slide-panel.tsx`)
+10ª aba "LGPD" no painel de detalhes da empresa:
+- Configuração do DPO (nome, e-mail, telefone)
+- Aceite de Política de Privacidade com versão e data
+- Seleção de finalidades de tratamento de dados
+- Registro e listagem de incidentes de segurança
+
+### Badges visuais
+- **`/admin/usuarios`**: coluna de tipo exibe "Sem consentimento LGPD" (laranja) e "Exclusão solicitada" (vermelho) para usuários com dados LGPD problemáticos
+- **`/admin/empresas`**: coluna empresa exibe "Sem DPO" (laranja) e "Política pendente" (âmbar) para empresas sem configuração LGPD
+
+### Mock Data
+Usuários 2, 3, 7: `consent_given: false` → badge laranja  
+Usuários 5, 9: `deletion_requested: true` → badge vermelho  
+Usuários 1, 4, 6, 8, 10: consentimento completo com histórico  
+Empresas 1, 3, 8, 10: DPO + política configurados  
+Empresas 2, 4, 5, 6, 7, 9: sem configuração LGPD (badges aparecem na listagem)
+
+
+
 ## Stack
 
 - **React 19** + TypeScript 5.9
