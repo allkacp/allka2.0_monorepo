@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Download, Save, XCircle, Eye, EyeOff, Star, Upload, Camera } from "lucide-react"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
+import { QuickContactActions } from "@/components/quick-contact-actions"
 
 interface UserViewHeaderProps {
   user: UserType
@@ -194,6 +195,19 @@ export function UserViewHeader({
               </Badge>
             )}
           </div>
+
+          {/* Quick Contact Actions */}
+          <QuickContactActions
+            user={{
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              phone: user.phone,
+              account_type: user.account_type,
+              online_status: user.online_status,
+            }}
+            variant="dark"
+          />
 
           {/* Wallet Balance Card */}
           <div className="flex items-center gap-2 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 px-4 py-2 rounded-lg border border-blue-700/50">

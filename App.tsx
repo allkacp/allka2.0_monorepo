@@ -1,6 +1,7 @@
-import React, { Suspense } from "react"
+import React, { Suspense, useState } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
 import { CookieConsentBanner } from "@/components/cookie-consent-banner"
+import { TermAcceptanceGate, type PendingTerm } from "@/components/term-acceptance-gate"
 
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -15,6 +16,8 @@ import { PlatformUsersProvider } from "@/contexts/platform-users-context"
 import { SpecialtyProvider } from "@/lib/contexts/specialty-context"
 import { PricingProvider } from "@/lib/contexts/pricing-context"
 import { ProductProvider } from "@/lib/contexts/product-context"
+import { ChatProvider } from "@/contexts/chat-context"
+import { ChatWidget } from "@/components/chat-widget"
 
 // ─── Admin Pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = React.lazy(() => import("@/app/admin/dashboard/page"))
@@ -92,8 +95,67 @@ class PageErrorBoundary extends React.Component<
   }
 }
 
+// ─── Mock: termos pendentes para demonstração do fluxo de aceite ─────────────
+// Em produção, esta lista viria da API ao autenticar o usuário.
+// Armazenamos o estado no localStorage para não bloquear todo acesso no dev.
+const DEMO_STORAGE_KEY = "allka_terms_demo_accepted_v1"
+
+const MOCK_PENDING_TERMS: PendingTerm[] = [
+  {
+    id: "term-demo-1",
+    name: "Termo de Uso da Plataforma (Empresa)",
+    version: "2.1",
+    type: "terms_of_service",
+    is_mandatory: true,
+    acceptance_level: "empresa",
+    content:
+      "Ao utilizar esta plataforma como representante de uma empresa, você concorda com os presentes Termos de Uso.\n\n" +
+      "1. DA ACEITAÇÃO\n" +
+      "O presente instrumento regula as condições de uso da Plataforma Allka para pessoas jurídicas (\"Empresa\"). " +
+      "Ao se cadastrar e realizar o primeiro acesso, o usuário administrador (\"User Master\") declara ter lido, compreendido e aceito integralmente este Termo em nome da Empresa.\n\n" +
+      "2. DAS OBRIGAÇÕES DA EMPRESA\n" +
+      "A Empresa compromete-se a: (a) utilizar a plataforma de forma lícita e ética; (b) manter seus dados cadastrais atualizados; " +
+      "(c) responder pelos atos de seus usuários vinculados; (d) não compartilhar credenciais de acesso.\n\n" +
+      "3. DA RESPONSABILIDADE\n" +
+      "A Allka não se responsabiliza por danos decorrentes do uso indevido da plataforma pela Empresa ou seus usuários.\n\n" +
+      "4. DA VIGÊNCIA\n" +
+      "Este Termo entra em vigor na data do aceite e permanece válido enquanto durar a relação contratual entre a Empresa e a Allka.",
+  },
+  {
+    id: "term-demo-2",
+    name: "Política de Privacidade",
+    version: "1.5",
+    type: "privacy_policy",
+    is_mandatory: true,
+    acceptance_level: "usuario",
+    content:
+      "Esta Política de Privacidade descreve como coletamos, usamos e protegemos seus dados pessoais na Plataforma Allka, " +
+      "em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).\n\n" +
+      "1. DADOS COLETADOS\n" +
+      "Coletamos dados de identificação (nome, CPF/CNPJ), contato (e-mail, telefone), navegação (IP, cookies, logs de acesso) " +
+      "e dados fornecidos voluntariamente durante o uso da plataforma.\n\n" +
+      "2. FINALIDADE DO TRATAMENTO\n" +
+      "Os dados são utilizados para: prestação do serviço contratado; comunicações sobre a plataforma; " +
+      "cumprimento de obrigações legais; melhoria contínua dos nossos serviços.\n\n" +
+      "3. COMPARTILHAMENTO\n" +
+      "Não compartilhamos seus dados com terceiros, exceto quando necessário para a prestação do serviço ou por exigência legal.\n\n" +
+      "4. SEUS DIREITOS\n" +
+      "Você tem direito de acesso, correção, portabilidade e exclusão dos seus dados. Entre em contato pelo e-mail privacy@allka.com.br.",
+  },
+]
+
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(
+    () => localStorage.getItem(DEMO_STORAGE_KEY) === "true"
+  )
+
+  const handleAllAccepted = (ids: string[]) => {
+    console.log("[TermAcceptanceGate] Termos aceitos:", ids)
+    localStorage.setItem(DEMO_STORAGE_KEY, "true")
+    setTermsAccepted(true)
+  }
   return (
+    <ChatProvider>
     <PlatformUsersProvider>
     <SettingsProvider>
       <AccountTypeProvider>
@@ -130,6 +192,16 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
                 </MobileLayoutWrapper>
+                {/* Gate de aceite de termos — posição fixed, bloqueia toda a UI */}
+                {!termsAccepted && (
+                  <TermAcceptanceGate
+                    pendingTerms={MOCK_PENDING_TERMS}
+                    user={{ name: "Administrador Master", email: "admin@empresa.com", is_master: true }}
+                    onAllAccepted={handleAllAccepted}
+                  />
+                )}
+                {/* Chat widget flutuante */}
+                <ChatWidget />
               </ProductProvider>
               </PricingProvider>
             </SpecialtyProvider>
@@ -138,6 +210,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       </AccountTypeProvider>
     </SettingsProvider>
     </PlatformUsersProvider>
+    </ChatProvider>
   )
 }
 

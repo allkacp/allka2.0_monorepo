@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, FileText, Users, Calendar, Settings } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, FileText, Users, Calendar, Building2, User } from "lucide-react"
 import { TermManagementModal } from "@/components/admin/term-management-modal"
-import { TermConditionsModal } from "@/components/admin/term-conditions-modal"
 import { TermAcceptanceHistory } from "@/components/admin/term-acceptance-history"
 import type { Term } from "@/types/terms"
 
@@ -18,7 +17,6 @@ export default function TermsManagementPage() {
   const [selectedTerm, setSelectedTerm] = useState<Term | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [showConditionsModal, setShowConditionsModal] = useState(false)
   const [showAcceptanceHistory, setShowAcceptanceHistory] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -26,57 +24,63 @@ export default function TermsManagementPage() {
   const mockTerms: Term[] = [
     {
       id: "term-1",
-      name: "Termos de Serviço Gerais",
+      name: "Termo de Uso da Plataforma (Empresa)",
       version: "2.1",
-      content: "Conteúdo dos termos de serviço...",
+      content: "Ao utilizar esta plataforma como representante de uma empresa, você concorda com os presentes Termos de Uso...\n\n1. Da Aceitação\nO presente instrumento regula as condições de uso da Plataforma Allka para pessoas jurídicas...\n\n2. Das Obrigações\nA empresa usuária compromete-se a utilizar a plataforma de forma lícita e ética...",
       type: "terms_of_service",
       is_active: true,
+      is_mandatory: true,
+      acceptance_level: "empresa",
+      target_account_types: ["empresas"],
       created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-20T14:30:00Z",
+      updated_at: "2024-03-01T14:30:00Z",
       created_by: "admin-1",
-      conditions: [
-        {
-          id: "cond-1",
-          term_id: "term-1",
-          condition_type: "account_type",
-          condition_value: "agency",
-          is_required: true,
-          created_at: "2024-01-15T10:00:00Z",
-        },
-      ],
+      conditions: [],
     },
     {
       id: "term-2",
-      name: "Política de Privacidade",
+      name: "Termo de Uso do Usuário",
       version: "1.5",
-      content: "Conteúdo da política de privacidade...",
-      type: "privacy_policy",
+      content: "Estes Termos de Uso regulam o acesso individual à Plataforma Allka por qualquer usuário cadastrado...\n\n1. Identificação\nO usuário declara ser maior de 18 anos e ter capacidade civil plena...\n\n2. Uso Responsável\nO usuário é responsável pela guarda de suas credenciais de acesso...",
+      type: "terms_of_service",
       is_active: true,
+      is_mandatory: true,
+      acceptance_level: "usuario",
+      target_account_types: ["empresas", "agencias", "nomades"],
       created_at: "2024-01-10T09:00:00Z",
-      updated_at: "2024-01-18T16:45:00Z",
+      updated_at: "2024-02-18T16:45:00Z",
       created_by: "admin-1",
       conditions: [],
     },
     {
       id: "term-3",
-      name: "Termos para Nômades Partner",
-      version: "1.0",
-      content: "Termos específicos para nômades Partner...",
-      type: "custom",
+      name: "Política de Privacidade",
+      version: "1.2",
+      content: "Esta Política de Privacidade descreve como coletamos, usamos e protegemos seus dados pessoais na Plataforma Allka, em conformidade com a LGPD (Lei nº 13.709/2018)...\n\n1. Dados Coletados\nColetamos dados de identificação, contato e navegação...\n\n2. Finalidade\nOs dados são usados para prestação do serviço, melhoria da plataforma e comunicações...",
+      type: "privacy_policy",
       is_active: true,
+      is_mandatory: true,
+      acceptance_level: "usuario",
+      target_account_types: ["empresas", "agencias", "nomades"],
+      created_at: "2024-01-10T09:00:00Z",
+      updated_at: "2024-02-10T12:00:00Z",
+      created_by: "admin-1",
+      conditions: [],
+    },
+    {
+      id: "term-4",
+      name: "Acordo de Agência Parceira",
+      version: "1.0",
+      content: "Ao se cadastrar como Agência na Plataforma Allka, a agência concorda com as condições específicas deste acordo...\n\n1. Responsabilidades\nA agência é responsável pelos projetos gerenciados em seu nome...\n\n2. Comissionamento\nAs regras de comissionamento estão definidas na área financeira da plataforma...",
+      type: "service_agreement",
+      is_active: true,
+      is_mandatory: true,
+      acceptance_level: "empresa",
+      target_account_types: ["agencias"],
       created_at: "2024-01-25T11:00:00Z",
       updated_at: "2024-01-25T11:00:00Z",
       created_by: "admin-2",
-      conditions: [
-        {
-          id: "cond-2",
-          term_id: "term-3",
-          condition_type: "account_level",
-          condition_value: "partner",
-          is_required: true,
-          created_at: "2024-01-25T11:00:00Z",
-        },
-      ],
+      conditions: [],
     },
   ]
 
@@ -120,10 +124,13 @@ export default function TermsManagementPage() {
     const newTerm: Term = {
       id: `term-${Date.now()}`,
       name: termData.name || "",
-      version: "1.0",
+      version: termData.version || "1.0",
       content: termData.content || "",
       type: termData.type || "custom",
-      is_active: true,
+      is_active: termData.is_active ?? true,
+      is_mandatory: termData.is_mandatory ?? true,
+      acceptance_level: termData.acceptance_level || "usuario",
+      target_account_types: termData.target_account_types || ["empresas"],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: "current-admin",
@@ -189,12 +196,12 @@ export default function TermsManagementPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Com Condições</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Nível Empresa</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{terms.filter((t) => t.conditions.length > 0).length}</div>
-            <p className="text-xs text-muted-foreground">Termos condicionais</p>
+            <div className="text-2xl font-bold">{terms.filter((t) => t.acceptance_level === "empresa").length}</div>
+            <p className="text-xs text-muted-foreground">Termos p/ user master</p>
           </CardContent>
         </Card>
 
@@ -250,7 +257,8 @@ export default function TermsManagementPage() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Versão</TableHead>
-                <TableHead>Condições</TableHead>
+                <TableHead>Nível de Aceite</TableHead>
+                <TableHead>Tipos de Conta</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Atualizado</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -259,17 +267,35 @@ export default function TermsManagementPage() {
             <TableBody>
               {filteredTerms.map((term) => (
                 <TableRow key={term.id}>
-                  <TableCell className="font-medium">{term.name}</TableCell>
+                  <TableCell className="font-medium max-w-[200px]">
+                    <div>{term.name}</div>
+                    {term.is_mandatory && (
+                      <span className="text-xs text-orange-600 font-medium">Obrigatório</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge className={getTypeColor(term.type)}>{getTypeLabel(term.type)}</Badge>
                   </TableCell>
                   <TableCell>v{term.version}</TableCell>
                   <TableCell>
-                    {term.conditions.length > 0 ? (
-                      <Badge variant="outline">{term.conditions.length} condição(ões)</Badge>
+                    {term.acceptance_level === "empresa" ? (
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-700">Empresa</span>
+                      </div>
                     ) : (
-                      <span className="text-muted-foreground">Nenhuma</span>
+                      <div className="flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5 text-purple-600" />
+                        <span className="text-sm font-medium text-purple-700">Usuário</span>
+                      </div>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(term.target_account_types || []).map((t) => (
+                        <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
+                      ))}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={term.is_active ? "default" : "secondary"}>
@@ -297,11 +323,11 @@ export default function TermsManagementPage() {
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedTerm(term)
-                            setShowConditionsModal(true)
+                            setShowAcceptanceHistory(true)
                           }}
                         >
-                          <Settings className="mr-2 h-4 w-4" />
-                          Condições
+                          <Users className="mr-2 h-4 w-4" />
+                          Histórico de Aceites
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDeleteTerm(term.id)} className="text-red-600">
                           <Trash2 className="mr-2 h-4 w-4" />
@@ -332,8 +358,6 @@ export default function TermsManagementPage() {
         mode="edit"
         term={selectedTerm}
       />
-
-      <TermConditionsModal open={showConditionsModal} onOpenChange={setShowConditionsModal} term={selectedTerm} />
 
       <TermAcceptanceHistory open={showAcceptanceHistory} onOpenChange={setShowAcceptanceHistory} />
     </div>
