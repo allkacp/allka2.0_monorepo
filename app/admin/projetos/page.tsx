@@ -41,6 +41,9 @@ import {
   X,
   List,
   LayoutGrid,
+  LayoutDashboard,
+  Calendar,
+  Flag,
   Settings,
   BarChart3,
   Cog,
@@ -404,7 +407,7 @@ export default function AdminProjetosPage() {
   const [showWizard, setShowWizard] = useState(false)
   const [showProjectCreate, setShowProjectCreate] = useState(false)
   const [projectCreateData, setProjectCreateData] = useState<any>(null)
-  const [viewMode, setViewMode] = useState<"accordion" | "kanban">("accordion")
+  const [viewMode, setViewMode] = useState<"accordion" | "kanban" | "planner">("accordion")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
@@ -473,7 +476,7 @@ export default function AdminProjetosPage() {
     { id: "planning", label: "Planejamento", color: "bg-blue-500", count: 0 },
     { id: "in-progress", label: "Em Andamento", color: "bg-purple-500", count: 0 },
     { id: "completed", label: "Concluído", color: "bg-green-500", count: 0 },
-    { id: "cancelled", color: "bg-red-500", count: 0 },
+    { id: "cancelled", label: "Cancelado", color: "bg-red-500", count: 0 },
   ])
 
   const [projectsData, setProjectsData] = useState(initialProjects)
@@ -487,6 +490,46 @@ export default function AdminProjetosPage() {
   const [showDeleteColumnDialog, setShowDeleteColumnDialog] = useState(false)
   const [columnToDelete, setColumnToDelete] = useState<string | null>(null)
   const [targetColumnForItems, setTargetColumnForItems] = useState<string>("")
+
+  // ── Planejador state ─────────────────────────────────────────────────────
+  const [plannerColumns, setPlannerColumns] = useState([
+    { id: "backlog",  label: "Backlog",       color: "bg-slate-500" },
+    { id: "todo",     label: "A Fazer",        color: "bg-sky-500" },
+    { id: "doing",    label: "Em Andamento",   color: "bg-violet-500" },
+    { id: "review",   label: "Em Revisão",     color: "bg-amber-500" },
+    { id: "done",     label: "Concluído",      color: "bg-emerald-500" },
+  ])
+
+  type PlannerCardType = {
+    id: string; columnId: string; title: string; description: string
+    priority: "low" | "medium" | "high" | "urgent"
+    dueDate: string; projectId: number | null
+  }
+
+  const [plannerCards, setPlannerCards] = useState<PlannerCardType[]>([
+    { id: "pc-1", columnId: "todo",    title: "Briefing com cliente",         description: "Alinhar expectativas e escopo",    priority: "high",   dueDate: "2026-03-12", projectId: 1 },
+    { id: "pc-2", columnId: "todo",    title: "Montar proposta comercial",    description: "",                                 priority: "medium", dueDate: "2026-03-15", projectId: null },
+    { id: "pc-3", columnId: "doing",   title: "Criar identidade visual",      description: "Logotipo, paleta, tipografia",     priority: "high",   dueDate: "2026-03-20", projectId: 2 },
+    { id: "pc-4", columnId: "doing",   title: "Desenvolver landing page",     description: "",                                 priority: "urgent", dueDate: "2026-03-18", projectId: 3 },
+    { id: "pc-5", columnId: "review",  title: "Revisão de conteúdo SEO",      description: "Textos, metas, headings",          priority: "medium", dueDate: "2026-03-22", projectId: null },
+    { id: "pc-6", columnId: "done",    title: "Configurar Google Analytics",  description: "",                                 priority: "low",    dueDate: "2026-03-05", projectId: 4 },
+    { id: "pc-7", columnId: "backlog", title: "Pesquisa de concorrentes",     description: "Análise SWOT e benchmarking",      priority: "low",    dueDate: "",           projectId: null },
+  ])
+
+  const [plannerActiveId, setPlannerActiveId] = useState<string | null>(null)
+  const [plannerActiveType, setPlannerActiveType] = useState<"column" | "card" | null>(null)
+  const [showPlannerColumnDialog, setShowPlannerColumnDialog] = useState(false)
+  const [editingPlannerColumn, setEditingPlannerColumn] = useState<any>(null)
+  const [newPlannerColumnName, setNewPlannerColumnName] = useState("")
+  const [newPlannerColumnColor, setNewPlannerColumnColor] = useState("bg-blue-500")
+  const [showPlannerCardDialog, setShowPlannerCardDialog] = useState(false)
+  const [editingPlannerCard, setEditingPlannerCard] = useState<PlannerCardType | null>(null)
+  const [newCardColumnId, setNewCardColumnId] = useState<string>("")
+  const [newCardTitle, setNewCardTitle] = useState("")
+  const [newCardDesc, setNewCardDesc] = useState("")
+  const [newCardPriority, setNewCardPriority] = useState<"low" | "medium" | "high" | "urgent">("medium")
+  const [newCardDue, setNewCardDue] = useState("")
+  const [newCardProjectId, setNewCardProjectId] = useState<number | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -790,6 +833,120 @@ export default function AdminProjetosPage() {
     setShowDeleteColumnDialog(false)
     setColumnToDelete(null)
     setTargetColumnForItems("")
+  }
+
+  // ── Planejador handlers ──────────────────────────────────────────────────
+  const handlePlannerDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    setPlannerActiveId(active.id as string)
+    setPlannerActiveType(plannerColumns.find((c) => c.id === active.id) ? "column" : "card")
+  }
+
+  const handlePlannerDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over) { setPlannerActiveId(null); setPlannerActiveType(null); return }
+    if (plannerActiveType === "column") {
+      if (active.id !== over.id) {
+        setPlannerColumns((cols) => {
+          const oi = cols.findIndex((c) => c.id === active.id)
+          const ni = cols.findIndex((c) => c.id === over.id)
+          return arrayMove(cols, oi, ni)
+        })
+      }
+    } else {
+      const targetCol = plannerColumns.find((c) => c.id === over.id)
+      if (targetCol) {
+        setPlannerCards((cards) => cards.map((c) => c.id === active.id ? { ...c, columnId: targetCol.id } : c))
+      } else {
+        const overCard = plannerCards.find((c) => c.id === over.id)
+        if (overCard) {
+          setPlannerCards((cards) => {
+            const updated = cards.map((c) => c.id === active.id ? { ...c, columnId: overCard.columnId } : c)
+            const oi = updated.findIndex((c) => c.id === active.id)
+            const ni = updated.findIndex((c) => c.id === over.id)
+            return arrayMove(updated, oi, ni)
+          })
+        }
+      }
+    }
+    setPlannerActiveId(null)
+    setPlannerActiveType(null)
+  }
+
+  const handleAddPlannerColumn = () => {
+    setEditingPlannerColumn(null)
+    setNewPlannerColumnName("")
+    setNewPlannerColumnColor("bg-blue-500")
+    setShowPlannerColumnDialog(true)
+  }
+
+  const handleEditPlannerColumn = (col: any) => {
+    setEditingPlannerColumn(col)
+    setNewPlannerColumnName(col.label)
+    setNewPlannerColumnColor(col.color)
+    setShowPlannerColumnDialog(true)
+  }
+
+  const handleSavePlannerColumn = () => {
+    if (!newPlannerColumnName.trim()) return
+    if (editingPlannerColumn) {
+      setPlannerColumns((cols) => cols.map((c) => c.id === editingPlannerColumn.id ? { ...c, label: newPlannerColumnName, color: newPlannerColumnColor } : c))
+    } else {
+      setPlannerColumns((cols) => [...cols, { id: "pcol-" + Date.now(), label: newPlannerColumnName, color: newPlannerColumnColor }])
+    }
+    setShowPlannerColumnDialog(false)
+    setEditingPlannerColumn(null)
+    setNewPlannerColumnName("")
+    setNewPlannerColumnColor("bg-blue-500")
+  }
+
+  const handleDeletePlannerColumn = (colId: string) => {
+    if (!confirm("Excluir esta coluna e todos os seus cartões?")) return
+    setPlannerCards((cards) => cards.filter((c) => c.columnId !== colId))
+    setPlannerColumns((cols) => cols.filter((c) => c.id !== colId))
+  }
+
+  const handleAddPlannerCard = (columnId: string) => {
+    setEditingPlannerCard(null)
+    setNewCardColumnId(columnId)
+    setNewCardTitle("")
+    setNewCardDesc("")
+    setNewCardPriority("medium")
+    setNewCardDue("")
+    setNewCardProjectId(null)
+    setShowPlannerCardDialog(true)
+  }
+
+  const handleEditPlannerCard = (card: PlannerCardType) => {
+    setEditingPlannerCard(card)
+    setNewCardColumnId(card.columnId)
+    setNewCardTitle(card.title)
+    setNewCardDesc(card.description)
+    setNewCardPriority(card.priority)
+    setNewCardDue(card.dueDate)
+    setNewCardProjectId(card.projectId)
+    setShowPlannerCardDialog(true)
+  }
+
+  const handleSavePlannerCard = () => {
+    if (!newCardTitle.trim()) return
+    if (editingPlannerCard) {
+      setPlannerCards((cards) => cards.map((c) => c.id === editingPlannerCard.id
+        ? { ...c, columnId: newCardColumnId, title: newCardTitle, description: newCardDesc, priority: newCardPriority, dueDate: newCardDue, projectId: newCardProjectId }
+        : c
+      ))
+    } else {
+      setPlannerCards((cards) => [...cards, {
+        id: "pcard-" + Date.now(), columnId: newCardColumnId, title: newCardTitle,
+        description: newCardDesc, priority: newCardPriority, dueDate: newCardDue, projectId: newCardProjectId,
+      }])
+    }
+    setShowPlannerCardDialog(false)
+    setEditingPlannerCard(null)
+  }
+
+  const handleDeletePlannerCard = (cardId: string) => {
+    setPlannerCards((cards) => cards.filter((c) => c.id !== cardId))
   }
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
@@ -1417,10 +1574,33 @@ export default function AdminProjetosPage() {
                 <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
                 Kanban
               </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "planner" ? "default" : "ghost"}
+                onClick={() => setViewMode("planner")}
+                className={`h-8 rounded-md transition-all ${
+                  viewMode === "planner"
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                    : "hover:bg-background"
+                }`}
+              >
+                <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+                Planejador
+              </Button>
             </div>
             {viewMode === "kanban" && (
               <Button
                 onClick={handleAddColumn}
+                size="sm"
+                className="h-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Nova Coluna
+              </Button>
+            )}
+            {viewMode === "planner" && (
+              <Button
+                onClick={handleAddPlannerColumn}
                 size="sm"
                 className="h-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
               >
@@ -2449,6 +2629,154 @@ export default function AdminProjetosPage() {
                 </Dialog>
               </div>
             )}
+
+            {/* ── Planejador view ── */}
+            {viewMode === "planner" && (
+              <div className="py-2 pb-0">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handlePlannerDragStart}
+                  onDragEnd={handlePlannerDragEnd}
+                >
+                  <div className="flex gap-2 overflow-x-auto">
+                    <SortableContext
+                      items={plannerColumns.map((c) => c.id)}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      {plannerColumns.map((col) => (
+                        <PlannerColumn
+                          key={col.id}
+                          column={col}
+                          cards={plannerCards.filter((c) => c.columnId === col.id)}
+                          projects={mockProjects}
+                          onEdit={() => handleEditPlannerColumn(col)}
+                          onDelete={() => handleDeletePlannerColumn(col.id)}
+                          onAddCard={() => handleAddPlannerCard(col.id)}
+                          onEditCard={handleEditPlannerCard}
+                          onDeleteCard={handleDeletePlannerCard}
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+                  <DragOverlay>
+                    {plannerActiveId && plannerActiveType === "column" && (
+                      <div className="w-56 opacity-80">
+                        {plannerColumns.find((c) => c.id === plannerActiveId) && (
+                          <div className={`${plannerColumns.find((c) => c.id === plannerActiveId)?.color} text-white rounded-t-lg px-3 py-2`}>
+                            <h3 className="font-bold text-xs">{plannerColumns.find((c) => c.id === plannerActiveId)?.label}</h3>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {plannerActiveId && plannerActiveType === "card" && (
+                      <div className="w-56 opacity-80">
+                        <Card className="p-2 bg-white border-2 border-violet-500">
+                          <div className="text-xs font-semibold">{plannerCards.find((c) => c.id === plannerActiveId)?.title}</div>
+                        </Card>
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+
+                {/* Planner — column dialog */}
+                <Dialog open={showPlannerColumnDialog} onOpenChange={setShowPlannerColumnDialog}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>{editingPlannerColumn ? "Editar Coluna" : "Nova Coluna"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Nome da Coluna</Label>
+                        <Input value={newPlannerColumnName} onChange={(e) => setNewPlannerColumnName(e.target.value)} placeholder="Ex: Em Aprovação" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cor</Label>
+                        <div className="grid grid-cols-5 gap-2">
+                          {availableColors.map((c) => (
+                            <button key={c.value} onClick={() => setNewPlannerColumnColor(c.value)}
+                              className={`h-10 rounded-md ${c.value} ${newPlannerColumnColor === c.value ? "ring-2 ring-offset-2 ring-black" : ""}`}
+                              title={c.label} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowPlannerColumnDialog(false)}>Cancelar</Button>
+                      <Button onClick={handleSavePlannerColumn}>Salvar</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Planner — card dialog */}
+                <Dialog open={showPlannerCardDialog} onOpenChange={setShowPlannerCardDialog}>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>{editingPlannerCard ? "Editar Cartão" : "Novo Cartão"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        <Label>Título *</Label>
+                        <Input value={newCardTitle} onChange={(e) => setNewCardTitle(e.target.value)} placeholder="O que precisa ser feito?" autoFocus />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Descrição</Label>
+                        <textarea
+                          value={newCardDesc}
+                          onChange={(e) => setNewCardDesc(e.target.value)}
+                          placeholder="Detalhes adicionais..."
+                          rows={2}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Prioridade</Label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(["low","medium","high","urgent"] as const).map((p) => {
+                              const cfg = { low:{label:"Baixa",cls:"bg-slate-200 text-slate-700 border-slate-300"}, medium:{label:"Média",cls:"bg-blue-100 text-blue-700 border-blue-300"}, high:{label:"Alta",cls:"bg-amber-100 text-amber-700 border-amber-300"}, urgent:{label:"Urgente",cls:"bg-red-100 text-red-700 border-red-300"} }
+                              const active = { low:"bg-slate-500 text-white border-slate-500", medium:"bg-blue-500 text-white border-blue-500", high:"bg-amber-500 text-white border-amber-500", urgent:"bg-red-500 text-white border-red-500" }
+                              return (
+                                <button key={p} onClick={() => setNewCardPriority(p)}
+                                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${ newCardPriority === p ? active[p] : cfg[p].cls }`}>
+                                  {cfg[p].label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Data Limite</Label>
+                          <Input type="date" value={newCardDue} onChange={(e) => setNewCardDue(e.target.value)} className="h-8 text-xs" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Coluna</Label>
+                        <select value={newCardColumnId} onChange={(e) => setNewCardColumnId(e.target.value)}
+                          className="w-full h-9 px-2 text-sm border border-input rounded-md bg-background">
+                          {plannerColumns.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Vincular a Projeto <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                        <select value={newCardProjectId ?? ""} onChange={(e) => setNewCardProjectId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full h-9 px-2 text-sm border border-input rounded-md bg-background">
+                          <option value="">Nenhum</option>
+                          {mockProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      {editingPlannerCard && (
+                        <Button variant="destructive" className="mr-auto" onClick={() => { handleDeletePlannerCard(editingPlannerCard.id); setShowPlannerCardDialog(false) }}>Excluir</Button>
+                      )}
+                      <Button variant="outline" onClick={() => setShowPlannerCardDialog(false)}>Cancelar</Button>
+                      <Button onClick={handleSavePlannerCard}>Salvar</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
           </div>
         )}
 
@@ -2886,6 +3214,140 @@ function KanbanCard({
             <Edit className="h-2.5 w-2.5 text-purple-600" />
           </Button>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLANEJADOR components
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PRIORITY_CFG = {
+  low:    { label: "Baixa",   dot: "bg-slate-400",  pill: "bg-slate-100 text-slate-600",  border: "#94a3b8" },
+  medium: { label: "Média",   dot: "bg-blue-500",   pill: "bg-blue-100 text-blue-700",    border: "#3b82f6" },
+  high:   { label: "Alta",    dot: "bg-amber-500",  pill: "bg-amber-100 text-amber-700",  border: "#f59e0b" },
+  urgent: { label: "Urgente", dot: "bg-red-500",    pill: "bg-red-100 text-red-700",      border: "#ef4444" },
+}
+
+function PlannerColumn({
+  column, cards, projects, onEdit, onDelete, onAddCard, onEditCard, onDeleteCard,
+}: {
+  column: any; cards: any[]; projects: any[]
+  onEdit: () => void; onDelete: () => void; onAddCard: () => void
+  onEditCard: (card: any) => void; onDeleteCard: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id })
+  const { setNodeRef: setDropRef } = useDroppable({ id: column.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+
+  return (
+    <div ref={setNodeRef} style={style} className="w-56 flex-shrink-0">
+      {/* Column header */}
+      <div className={`${column.color} text-white rounded-t-lg px-3 py-2 flex items-center justify-between`}
+        {...attributes} {...listeners}
+      >
+        <div className="flex items-center gap-1.5 cursor-move min-w-0">
+          <h3 className="font-bold text-xs uppercase tracking-wide truncate">{column.label}</h3>
+          <span className="text-[10px] opacity-80 flex-shrink-0">({cards.length})</span>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); onEdit() }}
+            className="hover:bg-white/20 rounded p-0.5 transition-colors">
+            <Settings className="h-3 w-3" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }}
+            className="hover:bg-white/20 rounded p-0.5 transition-colors">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Cards drop zone */}
+      <div ref={setDropRef}
+        className="bg-slate-50 rounded-b-lg p-2 min-h-[300px] max-h-[calc(100vh-430px)] overflow-y-auto space-y-1.5">
+        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {cards.length === 0 ? (
+            <div className="text-center text-slate-400 text-xs py-6">Arraste cartões aqui</div>
+          ) : (
+            cards.map((card) => (
+              <PlannerCard key={card.id} card={card} projects={projects}
+                onEdit={() => onEditCard(card)}
+                onDelete={() => onDeleteCard(card.id)}
+              />
+            ))
+          )}
+        </SortableContext>
+
+        {/* Inline add button */}
+        <button onClick={onAddCard}
+          className="w-full mt-1 text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-200 flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors"
+        >
+          <Plus className="h-3 w-3" /> Adicionar cartão
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PlannerCard({
+  card, projects, onEdit, onDelete,
+}: {
+  card: any; projects: any[]; onEdit: () => void; onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id })
+  const cfg = PRIORITY_CFG[card.priority as keyof typeof PRIORITY_CFG] ?? PRIORITY_CFG.medium
+  const linkedProject = card.projectId ? projects.find((p) => p.id === card.projectId) : null
+
+  const today = new Date(); today.setHours(0,0,0,0)
+  const due = card.dueDate ? new Date(card.dueDate) : null
+  const isOverdue = due && due < today
+
+  const cardStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    borderLeftColor: cfg.border,
+  }
+
+  return (
+    <Card ref={setNodeRef} style={cardStyle} {...attributes} {...listeners}
+      className="p-2 bg-white hover:shadow-md transition-all cursor-move border-l-[3px] group"
+    >
+      {/* Priority + delete */}
+      <div className="flex items-start justify-between gap-1 mb-1">
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.pill}`}>{cfg.label}</span>
+        <button onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="opacity-0 group-hover:opacity-100 h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-all flex-shrink-0">
+          <X className="h-2.5 w-2.5" />
+        </button>
+      </div>
+
+      {/* Title */}
+      <h4 className="text-[11px] font-semibold text-slate-800 leading-tight mb-1.5 line-clamp-2 cursor-pointer hover:text-blue-600 transition-colors"
+        onClick={(e) => { e.stopPropagation(); onEdit() }}>
+        {card.title}
+      </h4>
+
+      {/* Description preview */}
+      {card.description && (
+        <p className="text-[10px] text-slate-400 mb-1.5 line-clamp-1">{card.description}</p>
+      )}
+
+      {/* Footer: due date + project link */}
+      <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-100">
+        {due ? (
+          <span className={`flex items-center gap-0.5 text-[10px] font-medium ${isOverdue ? "text-red-500" : "text-slate-500"}`}>
+            <Calendar className="h-2.5 w-2.5" />
+            {due.toLocaleDateString("pt-BR", { day:"2-digit", month:"short" })}
+          </span>
+        ) : <span />}
+        {linkedProject && (
+          <span className="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded truncate max-w-[90px]"
+            title={linkedProject.name}>
+            {linkedProject.name}
+          </span>
+        )}
       </div>
     </Card>
   )
