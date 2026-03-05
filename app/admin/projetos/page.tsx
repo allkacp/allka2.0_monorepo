@@ -420,6 +420,8 @@ export default function AdminProjetosPage() {
   // ── New state: table + filters ──────────────────────────────────────────
   const [viewPanelOpen, setViewPanelOpen] = useState(false)
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
+  const [showFieldPicker, setShowFieldPicker] = useState(false)
+  const [visibleFields, setVisibleFields] = useState<string[]>(["buscar","empresa","agencia","consultor","status","tipo","origem","pagamento","preco","tarefas"])
   const [colConfigOpen, setColConfigOpen] = useState(false)
   const [savedFilters, setSavedFilters] = useState<Array<{ id: string; name: string; filters: any }>>([])
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null)
@@ -519,6 +521,19 @@ export default function AdminProjetosPage() {
   const uniqueConsultants = useMemo(() => {
     return Array.from(new Set(mockProjects.map((p) => p.consultant))).sort()
   }, [])
+
+  const allFilterFields = [
+    { id: "buscar",    label: "Buscar por nome" },
+    { id: "empresa",   label: "Empresa / Cliente" },
+    { id: "agencia",   label: "Agência" },
+    { id: "consultor", label: "Responsável / Consultor" },
+    { id: "status",    label: "Status" },
+    { id: "tipo",      label: "Tipo" },
+    { id: "origem",    label: "Origem (Lead)" },
+    { id: "pagamento", label: "Pagamento" },
+    { id: "preco",     label: "Faixa de Valor (R$)" },
+    { id: "tarefas",   label: "Volume de Tarefas" },
+  ]
 
   // Filter projects based on all active filters
   const filteredProjects = useMemo(() => {
@@ -1894,11 +1909,82 @@ export default function AdminProjetosPage() {
                   </div>
 
                   {/* Right: filter fields */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  <div className="flex-1 min-h-0 flex flex-col relative">
+
+                    {/* Field-picker dropdown */}
+                    {showFieldPicker && (
+                      <div
+                        className="absolute top-10 left-3 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 w-[520px] animate-in fade-in zoom-in-95 duration-150"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Campos disponíveis</p>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setVisibleFields(allFilterFields.map(f => f.id))} className="text-[11px] text-blue-500 hover:text-blue-700 font-medium transition-colors">Selecionar todos</button>
+                            <button onClick={() => setVisibleFields([])} className="text-[11px] text-slate-400 hover:text-red-500 transition-colors">Limpar</button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                          {allFilterFields.map(field => {
+                            const checked = visibleFields.includes(field.id)
+                            return (
+                              <label key={field.id} className="flex items-center gap-2 py-1 cursor-pointer group">
+                                <div
+                                  onClick={() => setVisibleFields(checked ? visibleFields.filter(f => f !== field.id) : [...visibleFields, field.id])}
+                                  className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
+                                    checked ? "bg-blue-500 border-blue-500" : "border-slate-300 dark:border-slate-600 group-hover:border-blue-400"
+                                  }`}
+                                >
+                                  {checked && (
+                                    <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-[2]">
+                                      <path d="M1 4l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <span className="text-[12px] text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors select-none">{field.label}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                          <button
+                            onClick={() => setVisibleFields(allFilterFields.map(f => f.id))}
+                            className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                          >Recuperar campos padrão</button>
+                          <button
+                            onClick={() => setShowFieldPicker(false)}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand"
+                          >Confirmar</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* "Adicionar campo" link bar */}
+                    <div className="flex items-center gap-3 px-4 pt-2.5 pb-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+                      <button
+                        onClick={() => setShowFieldPicker(!showFieldPicker)}
+                        className={`text-[12px] font-medium transition-colors ${showFieldPicker ? "text-blue-600" : "text-blue-500 hover:text-blue-700"}`}
+                      >
+                        + Adicionar campo
+                      </button>
+                      {visibleFields.length > 0 && (
+                        <span className="text-[11px] text-slate-400">{visibleFields.length} campo{visibleFields.length !== 1 ? "s" : ""} ativo{visibleFields.length !== 1 ? "s" : ""}</span>
+                      )}
+                      {showFieldPicker && (
+                        <button onClick={() => setShowFieldPicker(false)} className="ml-auto text-slate-400 hover:text-slate-600 transition-colors">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter fields (scrollable) */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {/* Identificação */}
+                    {["buscar","empresa","agencia","consultor"].some(id => visibleFields.includes(id)) && (
                     <div>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Identificação</p>
                       <div className="grid grid-cols-2 gap-2">
+                        {visibleFields.includes("buscar") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Buscar</label>
                           <div className="relative">
@@ -1911,6 +1997,8 @@ export default function AdminProjetosPage() {
                             />
                           </div>
                         </div>
+                        )}
+                        {visibleFields.includes("empresa") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Empresa / Cliente</label>
                           <select
@@ -1922,6 +2010,8 @@ export default function AdminProjetosPage() {
                             {uniqueCompanies.map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        )}
+                        {visibleFields.includes("agencia") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Agência</label>
                           <select
@@ -1933,6 +2023,8 @@ export default function AdminProjetosPage() {
                             {uniqueAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
                           </select>
                         </div>
+                        )}
+                        {visibleFields.includes("consultor") && (
                         <div className="col-span-2">
                           <label className="text-xs text-slate-500 mb-1 block">Responsável / Consultor</label>
                           <select
@@ -1944,13 +2036,17 @@ export default function AdminProjetosPage() {
                             {uniqueConsultants.map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        )}
                       </div>
                     </div>
+                    )}
 
                     {/* Tipo e Status */}
+                    {["status","tipo"].some(id => visibleFields.includes(id)) && (
                     <div>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo · Status</p>
                       <div className="grid grid-cols-2 gap-2">
+                        {visibleFields.includes("status") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Status</label>
                           <div className="flex flex-wrap gap-1.5">
@@ -1978,6 +2074,8 @@ export default function AdminProjetosPage() {
                             ))}
                           </div>
                         </div>
+                        )}
+                        {visibleFields.includes("tipo") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
                           <div className="flex flex-wrap gap-1.5">
@@ -2000,13 +2098,17 @@ export default function AdminProjetosPage() {
                             ))}
                           </div>
                         </div>
+                        )}
                       </div>
                     </div>
 
+                    )}
                     {/* Lead e Pagamento */}
+                    {["origem","pagamento"].some(id => visibleFields.includes(id)) && (
                     <div>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Lead · Pagamento</p>
                       <div className="grid grid-cols-2 gap-2">
+                        {visibleFields.includes("origem") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Origem</label>
                           <div className="flex gap-1.5">
@@ -2029,6 +2131,8 @@ export default function AdminProjetosPage() {
                             ))}
                           </div>
                         </div>
+                        )}
+                        {visibleFields.includes("pagamento") && (
                         <div>
                           <label className="text-xs text-slate-500 mb-1 block">Pagamento</label>
                           <div className="flex gap-1.5">
@@ -2051,10 +2155,13 @@ export default function AdminProjetosPage() {
                             ))}
                           </div>
                         </div>
+                        )}
                       </div>
                     </div>
+                    )}
 
                     {/* Valores */}
+                    {visibleFields.includes("preco") && (
                     <div>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Faixa de Valor (R$)</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -2101,8 +2208,10 @@ export default function AdminProjetosPage() {
                         </div>
                       )}
                     </div>
+                    )}
 
                     {/* Volume de Tarefas */}
+                    {visibleFields.includes("tarefas") && (
                     <div>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Volume de Tarefas</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -2143,6 +2252,13 @@ export default function AdminProjetosPage() {
                         </div>
                       )}
                     </div>
+                    )}
+
+                    {visibleFields.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <p className="text-xs text-slate-400">Nenhum campo ativo.<br/>Clique em <span className="text-blue-500">+ Adicionar campo</span> para configurar.</p>
+                      </div>
+                    )}
 
                     {/* Results count */}
                     <div className="pt-2 border-t border-slate-100">
@@ -2150,6 +2266,7 @@ export default function AdminProjetosPage() {
                         <span className="font-semibold text-slate-900">{filteredProjects.length}</span> projeto{filteredProjects.length !== 1 ? "s" : ""} encontrado{filteredProjects.length !== 1 ? "s" : ""}
                       </p>
                     </div>
+                  </div>
                   </div>
                 </div>
 
