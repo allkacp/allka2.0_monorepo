@@ -1,15 +1,17 @@
 // @ts-nocheck
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useCallback, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import ProjectWizardSlidePanel from "@/components/project-wizard-slide-panel"
 import ProjectCreateSlidePanel from "@/components/project-create-slide-panel"
 import { AdvancedDateFilter } from "@/components/advanced-date-filter"
-import { ProjectTypeBreakdown } from "@/components/project-type-breakdown"
-import { PaginationControls } from "@/components/pagination-controls"
+import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { exportToCSV, exportToExcel, exportToPDF, type ProjectData } from "@/lib/export-utils"
 import type { DateRange } from "react-day-picker"
 import {
@@ -21,6 +23,7 @@ import {
   Copy,
   FileText,
   Edit,
+  Pencil,
   Ban,
   ExternalLink,
   Eye,
@@ -40,9 +43,17 @@ import {
   LayoutGrid,
   Settings,
   BarChart3,
+  Cog,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Hash,
+  Trash2,
+  Save,
 } from "lucide-react"
-import { PageHeader } from "@/components/page-header"
 import { ProjectManagementModal } from "@/components/project-management-modal"
+import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel"
+import { useSidebar } from "@/contexts/sidebar-context"
 import {
   DndContext,
   type DragEndEvent,
@@ -388,6 +399,51 @@ export default function AdminProjetosPage() {
   const [projectToCancel, setProjectToCancel] = useState<(typeof mockProjects)[0] | null>(null)
   const [cancelStep, setCancelStep] = useState<1 | 2 | 3>(1)
   const [cancelReason, setCancelReason] = useState("")
+
+  // ── New state: table + filters ──────────────────────────────────────────
+  const [viewPanelOpen, setViewPanelOpen] = useState(false)
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
+  const [colConfigOpen, setColConfigOpen] = useState(false)
+  const [savedFilters, setSavedFilters] = useState<Array<{ id: string; name: string; filters: any }>>([])
+  const [activeFilterId, setActiveFilterId] = useState<string | null>(null)
+  const [filterDragIdx, setFilterDragIdx] = useState<number | null>(null)
+  const [filterDragOverIdx, setFilterDragOverIdx] = useState<number | null>(null)
+  const [savedFilterName, setSavedFilterName] = useState("")
+  const [isSavingFilter, setIsSavingFilter] = useState(false)
+
+  // column visibility
+  const ALL_COLS = ["id", "name", "client", "agency", "type", "status", "progress", "budget", "team", "created"]
+  const COL_LABELS: Record<string, string> = {
+    id: "#",
+    name: "Projeto",
+    client: "Cliente",
+    agency: "Agência",
+    type: "Tipo",
+    status: "Status",
+    progress: "Progresso",
+    budget: "Orçamento",
+    team: "Equipe",
+    created: "Criação",
+  }
+  const [visibleCols, setVisibleCols] = useState<string[]>(ALL_COLS)
+
+  // column widths (resizable)
+  const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    id: 50, name: 240, client: 160, agency: 140, type: 130, status: 140, progress: 110, budget: 110, team: 70, created: 100,
+  }
+  const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_COL_WIDTHS)
+  const dragState = useRef<{ col: string; startX: number; startW: number } | null>(null)
+
+  // sidebar / header measurements for filter modal
+  const { sidebarWidth } = useSidebar()
+  const [headerHeight, setHeaderHeight] = useState(64)
+  const [footerHeight, setFooterHeight] = useState(0)
+  useEffect(() => {
+    const header = document.querySelector("header")
+    const footer = document.querySelector("footer")
+    if (header) setHeaderHeight(header.getBoundingClientRect().height)
+    if (footer) setFooterHeight(footer.getBoundingClientRect().height)
+  }, [])
 
   const { toast } = useToast()
 
@@ -794,8 +850,7 @@ export default function AdminProjetosPage() {
 
   const handleViewProject = (project: (typeof mockProjects)[0]) => {
     setSelectedProject(project)
-    setModalMode("view")
-    setModalOpen(true)
+    setViewPanelOpen(true)
   }
 
   const handleCloneProject = (project: (typeof mockProjects)[0]) => {
@@ -901,6 +956,51 @@ export default function AdminProjetosPage() {
     setShowProjectCreate(true)
   }
 
+  // column resize
+  const onResizeMouseDown = useCallback((col: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    dragState.current = { col, startX: e.clientX, startW: colWidths[col] ?? DEFAULT_COL_WIDTHS[col] }
+    const onMove = (ev: MouseEvent) => {
+      if (!dragState.current) return
+      const delta = ev.clientX - dragState.current.startX
+      setColWidths((prev) => ({ ...prev, [dragState.current!.col]: Math.max(60, dragState.current!.startW + delta) }))
+    }
+    const onUp = () => {
+      dragState.current = null
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }, [colWidths])
+
+  const getPageNumbers = () => {
+    const pages: (number | "...")[] = []
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1)
+      if (currentPage > 3) pages.push("...")
+      const start = Math.max(2, currentPage - 1)
+      const end = Math.min(totalPages - 1, currentPage + 1)
+      for (let i = start; i <= end; i++) pages.push(i)
+      if (currentPage < totalPages - 2) pages.push("...")
+      pages.push(totalPages)
+    }
+    return pages
+  }
+
+  const activeFilterCount = [
+    filterStatus !== "all",
+    filterType !== "all",
+    filterPaymentStatus !== "all",
+    filterCompany !== "all",
+    filterAgency !== "all",
+    filterValueRange !== "all",
+    filterFromLead !== "all",
+    !!dateRange?.from,
+  ].filter(Boolean).length
+
   const handleCreateWithAI = () => {
     setShowWizard(false)
 
@@ -946,14 +1046,12 @@ export default function AdminProjetosPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <PageHeader
-          title={
-            <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Gestão de Projetos
-            </span>
-          }
-          subtitle="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
-        />
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+            Gestão de Projetos
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">Centralize, acompanhe e otimize todos os seus projetos em um só lugar.</p>
+        </div>
         <Button
           onClick={() => setShowProjectCreate(true)}
           className="btn-brand shadow-lg"
@@ -1220,9 +1318,10 @@ export default function AdminProjetosPage() {
           </AccordionItem>
         </Accordion>
 
+
+        {/* ── View toggle ── */}
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-2">
-            {/* Botões Lista/Kanban com design moderno */}
             <div className="inline-flex rounded-lg bg-muted p-1">
               <Button
                 size="sm"
@@ -1251,8 +1350,6 @@ export default function AdminProjetosPage() {
                 Kanban
               </Button>
             </div>
-
-            {/* Botão Nova Coluna ao lado (visível apenas no modo Kanban) */}
             {viewMode === "kanban" && (
               <Button
                 onClick={handleAddColumn}
@@ -1266,345 +1363,684 @@ export default function AdminProjetosPage() {
           </div>
         </div>
 
-        {viewMode === "accordion" && (
-          <div className="mb-3 bg-white p-3 rounded-lg border">
-            <div className="flex flex-col gap-2">
-              {/* Primary Filters */}
-              <div className="flex flex-col md:flex-row gap-2">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
-                  <Input
-                    placeholder="Buscar por projeto, cliente ou agência..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 h-9 text-sm"
-                  />
-                </div>
-
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
-                >
-                  <option value="all">Todos os Status</option>
-                  <option value="draft">Rascunho</option>
-                  <option value="negotiation">Negociação</option>
-                  <option value="awaiting-payment">Aguardando Pagamento</option>
-                  <option value="planning">Planejamento</option>
-                  <option value="in-progress">Em Andamento</option>
-                  <option value="completed">Concluído</option>
-                  <option value="cancelled">Cancelado</option>
-                </select>
-
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
-                >
-                  <option value="all">Todos os Tipos</option>
-                  <option value="recurring">MRR (Recorrente)</option>
-                  <option value="one-time">Avulso</option>
-                </select>
-
-                <select
-                  value={filterFromLead}
-                  onChange={(e) => setFilterFromLead(e.target.value)}
-                  className="px-3 py-1.5 border-2 border-amber-300 rounded-md text-sm h-9 bg-white text-amber-700 font-medium"
-                >
-                  <option value="all">Todos os Projetos</option>
-                  <option value="lead">Derivados de Lead</option>
-                  <option value="non-lead">Outros Projetos</option>
-                </select>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className="h-9"
-                >
-                  <Filter className="w-3.5 h-3.5 mr-1.5" />
-                  {showAdvancedFilters ? "Menos Filtros" : "Mais Filtros"}
-                </Button>
+        {viewMode === "accordion" ? (
+          <>
+          <Card className="overflow-hidden">
+            {/* ── Toolbar ── */}
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 bg-white flex-wrap">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  placeholder="Buscar projeto, cliente..."
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
+                  className="pl-8 h-8 text-xs border-slate-200"
+                />
               </div>
 
-              {/* Advanced Filters */}
-              {showAdvancedFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t">
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Empresa</label>
-                    <select
-                      value={filterCompany}
-                      onChange={(e) => setFilterCompany(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
-                    >
-                      <option value="all">Todas as Empresas</option>
-                      {uniqueCompanies.map((company) => (
-                        <option key={company} value={company}>
-                          {company}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <ItemsPerPageSelect
+                value={itemsPerPage}
+                onChange={(v) => { setItemsPerPage(v); setCurrentPage(1) }}
+              />
 
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Agência</label>
-                    <select
-                      value={filterAgency}
-                      onChange={(e) => setFilterAgency(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
-                    >
-                      <option value="all">Todas as Agências</option>
-                      {uniqueAgencies.map((agency) => (
-                        <option key={agency} value={agency}>
-                          {agency}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {filteredProjects.length} projeto{filteredProjects.length !== 1 ? "s" : ""}
+              </span>
 
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Faixa de Valor</label>
-                    <select
-                      value={filterValueRange}
-                      onChange={(e) => setFilterValueRange(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
-                    >
-                      <option value="all">Todos os Valores</option>
-                      <option value="0-5000">Até R$ 5.000</option>
-                      <option value="5000-15000">R$ 5.000 - R$ 15.000</option>
-                      <option value="15000-50000">R$ 15.000 - R$ 50.000</option>
-                      <option value="50000+">Acima de R$ 50.000</option>
-                    </select>
-                  </div>
+              {/* Filter button */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsFilterModalOpen(true)}
+                className={`h-8 gap-1.5 text-xs ${activeFilterCount > 0 ? "border-blue-400 bg-blue-50 text-blue-700" : ""}`}
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Filtros
+                {activeFilterCount > 0 && (
+                  <span className="ml-1 bg-blue-600 text-white rounded-full text-[10px] h-4 w-4 flex items-center justify-center font-bold">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
 
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Pagamento</label>
-                    <select
-                      value={filterPaymentStatus}
-                      onChange={(e) => setFilterPaymentStatus(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-md text-sm h-9 bg-white"
+              {/* Column config */}
+              <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+                    <Cog className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-52 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-slate-700">Colunas visíveis</p>
+                    <button
+                      onClick={() => setVisibleCols(ALL_COLS)}
+                      className="text-[10px] text-blue-600 hover:underline"
                     >
-                      <option value="all">Todos</option>
-                      <option value="paid">Em Dia</option>
-                      <option value="overdue">Inadimplente</option>
-                    </select>
+                      Mostrar todas
+                    </button>
                   </div>
+                  <div className="space-y-1.5">
+                    {ALL_COLS.map((col) => (
+                      <label key={col} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={visibleCols.includes(col)}
+                          onCheckedChange={(checked) => {
+                            setVisibleCols((prev) =>
+                              checked ? [...prev, col] : prev.filter((c) => c !== col)
+                            )
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span className="text-xs text-slate-600">{COL_LABELS[col]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-                  <div className="md:col-span-2 lg:col-span-4 flex items-end gap-2">
-                    <Button variant="outline" size="sm" onClick={clearAllFilters} className="h-9 bg-transparent">
-                      <X className="w-3.5 h-3.5 mr-1.5" />
-                      Limpar Filtros
+              {/* Pagination (top) */}
+              <div className="ml-auto flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                {getPageNumbers().map((pg, i) =>
+                  pg === "..." ? (
+                    <span key={`dots-${i}`} className="text-xs text-slate-400 px-1">…</span>
+                  ) : (
+                    <Button
+                      key={pg}
+                      size="sm"
+                      variant={currentPage === pg ? "default" : "outline"}
+                      className={`h-8 w-8 p-0 text-xs ${currentPage === pg ? "btn-brand" : ""}`}
+                      onClick={() => setCurrentPage(pg as number)}
+                    >
+                      {pg}
                     </Button>
-                    <span className="text-xs text-gray-500 ml-2">
-                      {filteredProjects.length} de {mockProjects.length} projetos
-                    </span>
+                  )
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* ── Table ── */}
+            <div className="overflow-x-auto">
+              <table
+                className="w-full text-xs"
+                style={{ tableLayout: "fixed", minWidth: visibleCols.reduce((acc, col) => acc + (colWidths[col] ?? 120), 80) }}
+              >
+                <colgroup>
+                  {visibleCols.map((col) => (
+                    <col key={col} style={{ width: colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120 }} />
+                  ))}
+                  {/* actions col */}
+                  <col style={{ width: 100 }} />
+                </colgroup>
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {visibleCols.map((col) => (
+                      <th
+                        key={col}
+                        className="relative px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wider select-none whitespace-nowrap overflow-hidden"
+                      >
+                        <span className="block truncate pr-3">{COL_LABELS[col]}</span>
+                        <span
+                          className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center hover:bg-slate-200/60 group"
+                          onMouseDown={(e) => onResizeMouseDown(col, e)}
+                        >
+                          <span className="w-px h-4 bg-slate-300 group-hover:bg-slate-500" />
+                        </span>
+                      </th>
+                    ))}
+                    <th className="sticky right-0 bg-slate-50 px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wider z-10 border-l border-slate-200 w-[100px]">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedProjects.length === 0 ? (
+                    <tr>
+                      <td colSpan={visibleCols.length + 1} className="py-12 text-center text-slate-400">
+                        <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm font-medium">Nenhum projeto encontrado</p>
+                        {activeFilterCount > 0 && (
+                          <button onClick={clearAllFilters} className="mt-2 text-xs text-blue-600 hover:underline">
+                            Limpar filtros
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedProjects.map((project, rowIdx) => (
+                      <TooltipProvider key={project.id} delayDuration={300}>
+                        <tr
+                          className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors cursor-pointer ${rowIdx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                          onClick={() => handleViewProject(project)}
+                        >
+                          {visibleCols.includes("id") && (
+                            <td className="px-3 py-2.5 font-mono text-slate-400 overflow-hidden">
+                              <span className="block truncate">#{project.id}</span>
+                            </td>
+                          )}
+                          {visibleCols.includes("name") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate font-semibold text-slate-900">{project.name}</span>
+                            </td>
+                          )}
+                          {visibleCols.includes("client") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate text-blue-600 font-medium">{project.client}</span>
+                            </td>
+                          )}
+                          {visibleCols.includes("agency") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate text-slate-600">{project.agency}</span>
+                            </td>
+                          )}
+                          {visibleCols.includes("type") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate text-slate-500">{project.type}</span>
+                            </td>
+                          )}
+                          {visibleCols.includes("status") && (
+                            <td className="px-3 py-2.5">
+                              {getStatusBadge(project.status)}
+                            </td>
+                          )}
+                          {visibleCols.includes("progress") && (
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex-1 h-1.5 rounded-full bg-slate-200 min-w-[40px]">
+                                  <div
+                                    className="h-1.5 rounded-full bg-blue-500"
+                                    style={{ width: `${project.progress}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-600 flex-shrink-0">{project.progress}%</span>
+                              </div>
+                            </td>
+                          )}
+                          {visibleCols.includes("budget") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate font-semibold text-slate-900">
+                                R$ {project.budget.toLocaleString("pt-BR")}
+                              </span>
+                            </td>
+                          )}
+                          {visibleCols.includes("team") && (
+                            <td className="px-3 py-2.5 text-center text-slate-600">
+                              {project.team}
+                            </td>
+                          )}
+                          {visibleCols.includes("created") && (
+                            <td className="px-3 py-2.5 overflow-hidden">
+                              <span className="block truncate text-slate-500">{project.createdDate}</span>
+                            </td>
+                          )}
+
+                          {/* Actions — sticky */}
+                          <td
+                            className="sticky right-0 bg-inherit px-2 py-2.5 border-l border-slate-100 z-10 w-[100px]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-0.5">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                    onClick={() => handleViewProject(project)}
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">Visualizar</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
+                                    onClick={() => handleEditProject(project)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">Editar</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                                    onClick={() => handleStartCancelProject(project)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">Cancelar</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </td>
+                        </tr>
+                      </TooltipProvider>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Bottom bar ── */}
+            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50">
+              <ItemsPerPageSelect
+                value={itemsPerPage}
+                onChange={(v) => { setItemsPerPage(v); setCurrentPage(1) }}
+                variant="bottom"
+              />
+              <span className="text-xs text-slate-500">
+                {startIndex + 1}–{Math.min(endIndex, totalProjects)} de {totalProjects}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                {getPageNumbers().map((pg, i) =>
+                  pg === "..." ? (
+                    <span key={`dots2-${i}`} className="text-xs text-slate-400 px-1">…</span>
+                  ) : (
+                    <Button
+                      key={pg}
+                      size="sm"
+                      variant={currentPage === pg ? "default" : "outline"}
+                      className={`h-7 w-7 p-0 text-xs ${currentPage === pg ? "btn-brand" : ""}`}
+                      onClick={() => setCurrentPage(pg as number)}
+                    >
+                      {pg}
+                    </Button>
+                  )
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* ── Advanced Filters Modal ── */}
+          {isFilterModalOpen && (
+            <div
+              className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+              style={{ left: sidebarWidth, top: headerHeight, bottom: footerHeight, right: 0 }}
+              onClick={(e) => { if (e.target === e.currentTarget) setIsFilterModalOpen(false) }}
+            >
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                {/* Modal header */}
+                <div className="app-brand-header relative flex-shrink-0 px-5 min-h-[72px] flex items-center">
+                  <div className="flex-1">
+                    <h2 className="text-white font-bold text-base">Filtros Avançados</h2>
+                    <p className="text-blue-200 text-xs mt-0.5">Configure os filtros para refinar os resultados</p>
+                  </div>
+                  <button
+                    onClick={() => setIsFilterModalOpen(false)}
+                    className="absolute right-4 top-4 rounded-lg p-1.5 hover:bg-white/20 transition-colors"
+                  >
+                    <X className="h-5 w-5 text-white" />
+                  </button>
+                </div>
+
+                {/* Modal body */}
+                <div className="flex flex-1 min-h-0">
+                  {/* Left: Saved filters */}
+                  <div className="w-44 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
+                    <div className="px-3 py-2.5 border-b border-slate-100">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Filtros Salvos</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto py-1">
+                      {savedFilters.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 text-center py-4 px-2">Nenhum filtro salvo</p>
+                      ) : (
+                        savedFilters.map((sf, idx) => (
+                          <div
+                            key={sf.id}
+                            draggable
+                            onDragStart={() => setFilterDragIdx(idx)}
+                            onDragOver={(e) => { e.preventDefault(); setFilterDragOverIdx(idx) }}
+                            onDrop={() => {
+                              if (filterDragIdx === null || filterDragIdx === idx) return
+                              const arr = [...savedFilters]
+                              const [item] = arr.splice(filterDragIdx, 1)
+                              arr.splice(idx, 0, item)
+                              setSavedFilters(arr)
+                              setFilterDragIdx(null)
+                              setFilterDragOverIdx(null)
+                            }}
+                            onDragEnd={() => { setFilterDragIdx(null); setFilterDragOverIdx(null) }}
+                            className={`flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg mb-0.5 cursor-pointer text-xs transition-colors ${
+                              activeFilterId === sf.id
+                                ? "bg-blue-100 text-blue-700 font-semibold"
+                                : "hover:bg-slate-100 text-slate-600"
+                            } ${filterDragOverIdx === idx ? "ring-1 ring-blue-300" : ""}`}
+                            onClick={() => {
+                              setActiveFilterId(sf.id)
+                              // Apply saved filter
+                              const f = sf.filters
+                              if (f.status !== undefined) setFilterStatus(f.status)
+                              if (f.type !== undefined) setFilterType(f.type)
+                              if (f.company !== undefined) setFilterCompany(f.company)
+                              if (f.agency !== undefined) setFilterAgency(f.agency)
+                              if (f.valueRange !== undefined) setFilterValueRange(f.valueRange)
+                              if (f.paymentStatus !== undefined) setFilterPaymentStatus(f.paymentStatus)
+                              if (f.fromLead !== undefined) setFilterFromLead(f.fromLead)
+                            }}
+                          >
+                            <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0" />
+                            <span className="flex-1 truncate">{sf.name}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSavedFilters((prev) => prev.filter((s) => s.id !== sf.id)); if (activeFilterId === sf.id) setActiveFilterId(null) }}
+                              className="h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 flex-shrink-0"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {/* Save filter */}
+                    <div className="p-2 border-t border-slate-100">
+                      {isSavingFilter ? (
+                        <div className="space-y-1.5">
+                          <Input
+                            value={savedFilterName}
+                            onChange={(e) => setSavedFilterName(e.target.value)}
+                            placeholder="Nome do filtro"
+                            className="h-7 text-xs"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && savedFilterName.trim()) {
+                                const newFilter = {
+                                  id: Date.now().toString(),
+                                  name: savedFilterName,
+                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead },
+                                }
+                                setSavedFilters((prev) => [...prev, newFilter])
+                                setSavedFilterName("")
+                                setIsSavingFilter(false)
+                              }
+                            }}
+                          />
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              className="flex-1 h-6 text-[10px] btn-brand"
+                              onClick={() => {
+                                if (!savedFilterName.trim()) return
+                                const newFilter = {
+                                  id: Date.now().toString(),
+                                  name: savedFilterName,
+                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead },
+                                }
+                                setSavedFilters((prev) => [...prev, newFilter])
+                                setSavedFilterName("")
+                                setIsSavingFilter(false)
+                              }}
+                            >
+                              <Save className="h-2.5 w-2.5 mr-1" />
+                              Salvar
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => { setIsSavingFilter(false); setSavedFilterName("") }}>
+                              <X className="h-2.5 w-2.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full h-7 text-[10px] text-slate-500"
+                          onClick={() => setIsSavingFilter(true)}
+                        >
+                          + Salvar filtro atual
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: filter fields */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* Identificação */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Identificação</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Buscar</label>
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Projeto, cliente..."
+                              className="pl-8 h-8 text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Empresa / Cliente</label>
+                          <select
+                            value={filterCompany}
+                            onChange={(e) => setFilterCompany(e.target.value)}
+                            className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                          >
+                            <option value="all">Todos</option>
+                            {uniqueCompanies.map((c) => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Agência</label>
+                          <select
+                            value={filterAgency}
+                            onChange={(e) => setFilterAgency(e.target.value)}
+                            className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                          >
+                            <option value="all">Todas</option>
+                            {uniqueAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tipo e Status */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo · Status</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Status</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { value: "all", label: "Todos" },
+                              { value: "draft", label: "Rascunho" },
+                              { value: "negotiation", label: "Negociação" },
+                              { value: "awaiting-payment", label: "Ag. Pagto" },
+                              { value: "planning", label: "Planejamento" },
+                              { value: "in-progress", label: "Em Andamento" },
+                              { value: "completed", label: "Concluído" },
+                              { value: "cancelled", label: "Cancelado" },
+                            ].map(({ value, label }) => (
+                              <button
+                                key={value}
+                                onClick={() => setFilterStatus(value)}
+                                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                  filterStatus === value
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { value: "all", label: "Todos" },
+                              { value: "recurring", label: "MRR" },
+                              { value: "one-time", label: "Avulso" },
+                            ].map(({ value, label }) => (
+                              <button
+                                key={value}
+                                onClick={() => setFilterType(value)}
+                                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                  filterType === value
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lead e Pagamento */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Lead · Pagamento</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Origem</label>
+                          <div className="flex gap-1.5">
+                            {[
+                              { value: "all", label: "Todos" },
+                              { value: "lead", label: "De Lead" },
+                              { value: "non-lead", label: "Outros" },
+                            ].map(({ value, label }) => (
+                              <button
+                                key={value}
+                                onClick={() => setFilterFromLead(value)}
+                                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                  filterFromLead === value
+                                    ? "bg-amber-500 text-white border-amber-500"
+                                    : "bg-white text-slate-600 border-slate-200 hover:border-amber-300"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Pagamento</label>
+                          <div className="flex gap-1.5">
+                            {[
+                              { value: "all", label: "Todos" },
+                              { value: "paid", label: "Em dia" },
+                              { value: "overdue", label: "Inadimplente" },
+                            ].map(({ value, label }) => (
+                              <button
+                                key={value}
+                                onClick={() => setFilterPaymentStatus(value)}
+                                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                  filterPaymentStatus === value
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Valores */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Faixa de Valor</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { value: "all", label: "Todos" },
+                          { value: "0-5000", label: "Até R$ 5k" },
+                          { value: "5000-15000", label: "R$ 5k–15k" },
+                          { value: "15000-50000", label: "R$ 15k–50k" },
+                          { value: "50000+", label: "Acima R$ 50k" },
+                        ].map(({ value, label }) => (
+                          <button
+                            key={value}
+                            onClick={() => setFilterValueRange(value)}
+                            className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                              filterValueRange === value
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Results count */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <p className="text-xs text-slate-500">
+                        <span className="font-semibold text-slate-900">{filteredProjects.length}</span> projeto{filteredProjects.length !== 1 ? "s" : ""} encontrado{filteredProjects.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
 
-        {viewMode === "accordion" ? (
-          <div className="space-y-4">
-            <Accordion type="multiple" className="space-y-2">
-              {paginatedProjects.map((project) => (
-                <AccordionItem key={project.id} value={`project-${project.id}`} className="border rounded-lg bg-white">
-                <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                  <div className="flex items-center justify-between w-full pr-2">
-                    <div className="flex items-center gap-4 flex-1">
-                      <h3 className="text-sm font-semibold text-left">{project.name}</h3>
-                      {getStatusBadge(project.status)}
-                      <span className="text-xs text-gray-500">
-                        Cliente: <span className="font-medium text-blue-600">{project.client}</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mr-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => handleViewProject(project)}
-                        title="Visualizar Projeto"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Clonar Projeto" onClick={() => handleCloneProject(project)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50" title="Exportar Proposta" onClick={() => {
-                        console.log("Exportando proposta para:", project.name)
-                        // TODO: Implementar lógica de exportação de proposta
-                      }}>
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-purple-600 hover:text-purple-700 hover:bg-purple-50" title="Editar Projeto" onClick={() => handleEditProject(project)}>
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Exportar Proposta" onClick={() => {
-                        console.log("Exportando proposta para:", project.name)
-                        // TODO: Implementar lógica de exportação de proposta
-                      }}>
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => handleEditProject(project)}
-                        title="Editar Projeto"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
-                        title="Cancelar Projeto"
-                        onClick={() => handleStartCancelProject(project)}
-                      >
-                        <Ban className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-
-                <AccordionContent className="px-4 pb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 mb-3 text-xs pt-2">
-                    <div>
-                      <span className="text-gray-500">Checkout Agência</span>
-                      <div className="mt-0.5">
-                        <a href="#" className="text-blue-600 hover:underline flex items-center gap-1">
-                          Acessar Checkout Agência
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Checkout Cliente</span>
-                      <div className="mt-0.5">
-                        <a href="#" className="text-blue-600 hover:underline flex items-center gap-1">
-                          Acessar Checkout Cliente
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">CNPJ</span>
-                      <div className="mt-0.5 font-medium">{project.clientCNPJ}</div>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500">Agência</span>
-                      <div className="mt-0.5">
-                        <a href="#" className="text-blue-600 hover:underline font-medium">
-                          {project.agency}
-                        </a>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Consultor Responsável</span>
-                      <div className="mt-0.5 font-medium">{project.consultant}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">E-mail do Consultor</span>
-                      <div className="mt-0.5 font-medium">{project.consultantEmail}</div>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500">Data de Criação</span>
-                      <div className="mt-0.5 font-medium">{project.createdDate}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Sincronizado Bitrix</span>
-                      <div className="mt-0.5">
-                        <Badge
-                          variant={project.bitrixSync ? "default" : "destructive"}
-                          className="text-[10px] px-2 py-0.5"
-                        >
-                          {project.bitrixSync ? "SIM" : "NÃO"}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Portfólio</span>
-                      <div className="mt-0.5">
-                        <Badge
-                          variant={project.portfolioPermission ? "default" : "destructive"}
-                          className="text-[10px] px-2 py-0.5"
-                        >
-                          {project.portfolioPermission ? "SIM" : "NÃO"}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`grid gap-3 pt-3 border-t ${project.type === "MRR" ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-6"}`}
+                {/* Modal footer */}
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
                   >
-                    <div>
-                      <span className="text-[10px] text-gray-500 uppercase">Progresso</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className="bg-blue-500 h-1.5 rounded-full transition-all"
-                            style={{ width: `${project.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold">{project.progress}%</span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-500 uppercase">
-                        {project.type === "MRR" ? "Orçamento Mensal" : "Orçamento"}
-                      </span>
-                      <p className="text-sm font-bold mt-1">R$ {project.budget.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-500 uppercase">
-                        {project.type === "MRR" ? "Gasto do Mês" : "Gasto"}
-                      </span>
-                      <p className="text-sm font-bold text-orange-600 mt-1">R$ {project.spent.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-500 uppercase">Início</span>
-                      <p className="text-sm font-bold mt-1">{new Date(project.startDate).toLocaleDateString()}</p>
-                    </div>
-                    {project.type !== "MRR" && (
-                      <div>
-                        <span className="text-[10px] text-gray-500 uppercase">Prazo</span>
-                        <p className="text-sm font-bold mt-1">{new Date(project.deadline).toLocaleDateString()}</p>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-[10px] text-gray-500 uppercase">Equipe</span>
-                      <p className="text-sm font-bold mt-1">{project.team} membros</p>
-                    </div>
+                    Limpar filtros
+                  </button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setIsFilterModalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button size="sm" className="h-8 text-xs btn-brand" onClick={() => { setCurrentPage(1); setIsFilterModalOpen(false) }}>
+                      Aplicar Filtros
+                    </Button>
                   </div>
-
-                  <div className="mt-3 pt-3 border-t">
-                    <span className="text-[10px] text-gray-500 uppercase">Nômades Alocados</span>
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {project.nomades.map((nomade, index) => (
-                        <Badge key={index} variant="outline" className="text-[10px] px-2 py-0.5">
-                          {nomade}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-            </Accordion>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalProjects}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-              onItemsPerPageChange={handleItemsPerPageChange}
-            />
-          </div>
+                </div>
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <div className="flex-1 overflow-auto">
             {viewMode === "kanban" && (
@@ -1970,6 +2406,25 @@ export default function AdminProjetosPage() {
             )}
           </DialogContent>
         </Dialog>
+        {/* View slide-panel */}
+        <ProjectViewSlidePanel
+          open={viewPanelOpen}
+          project={selectedProject}
+          onClose={() => setViewPanelOpen(false)}
+          onEdit={() => {
+            setViewPanelOpen(false)
+            handleEditProject(selectedProject)
+          }}
+          onClone={() => {
+            setViewPanelOpen(false)
+            handleCloneProject(selectedProject)
+          }}
+          onExport={() => console.log("Export:", selectedProject?.name)}
+          onCancel={() => {
+            setViewPanelOpen(false)
+            handleStartCancelProject(selectedProject)
+          }}
+        />
         <ProjectManagementModal
           project={selectedProject}
           open={modalOpen}
@@ -1981,7 +2436,6 @@ export default function AdminProjetosPage() {
           onClone={() => handleCloneProject(selectedProject)}
           onExport={() => {
             console.log("Exportando proposta para:", selectedProject?.name)
-            // TODO: Implementar lógica de exportação de proposta
           }}
           onSave={handleSaveProjectChanges}
           onCancel={() => handleStartCancelProject(selectedProject)}
