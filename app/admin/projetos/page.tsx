@@ -101,6 +101,7 @@ const mockProjects = [
     overdue: false,
     value: 15000,
     fromLead: true,
+    tasks: 12,
   },
   {
     id: 2,
@@ -125,6 +126,7 @@ const mockProjects = [
     overdue: false,
     value: 25000,
     fromLead: false,
+    tasks: 18,
   },
   {
     id: 3,
@@ -149,6 +151,7 @@ const mockProjects = [
     overdue: false,
     value: 8000,
     fromLead: true,
+    tasks: 7,
   },
   {
     id: 4,
@@ -173,6 +176,7 @@ const mockProjects = [
     overdue: false,
     value: 32000,
     fromLead: true,
+    tasks: 25,
   },
   {
     id: 5,
@@ -197,6 +201,7 @@ const mockProjects = [
     overdue: false,
     value: 45000,
     fromLead: false,
+    tasks: 20,
   },
   {
     id: 6,
@@ -221,6 +226,7 @@ const mockProjects = [
     overdue: false,
     value: 62000,
     fromLead: true,
+    tasks: 38,
   },
   {
     id: 7,
@@ -245,6 +251,7 @@ const mockProjects = [
     overdue: true,
     value: 78000,
     fromLead: false,
+    tasks: 45,
   },
   {
     id: 8,
@@ -269,6 +276,7 @@ const mockProjects = [
     overdue: false,
     value: 18000,
     fromLead: true,
+    tasks: 10,
   },
   {
     id: 9,
@@ -293,6 +301,7 @@ const mockProjects = [
     overdue: false,
     value: 48000,
     fromLead: true,
+    tasks: 30,
   },
   {
     id: 10,
@@ -317,6 +326,7 @@ const mockProjects = [
     overdue: false,
     value: 35000,
     fromLead: false,
+    tasks: 22,
   },
   {
     id: 11,
@@ -341,6 +351,7 @@ const mockProjects = [
     overdue: false,
     value: 95000,
     fromLead: true,
+    tasks: 56,
   },
   {
     id: 12,
@@ -365,6 +376,7 @@ const mockProjects = [
     overdue: false,
     value: 28000,
     fromLead: true,
+    tasks: 16,
   },
 ]
 
@@ -380,6 +392,11 @@ export default function AdminProjetosPage() {
   const [filterValueRange, setFilterValueRange] = useState("all")
   const [filterDateRange, setFilterDateRange] = useState("all")
   const [filterFromLead, setFilterFromLead] = useState("all")
+  const [filterConsultant, setFilterConsultant] = useState("all")
+  const [filterPriceMin, setFilterPriceMin] = useState("")
+  const [filterPriceMax, setFilterPriceMax] = useState("")
+  const [filterTasksMin, setFilterTasksMin] = useState("")
+  const [filterTasksMax, setFilterTasksMax] = useState("")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [selectedProject, setSelectedProject] = useState<(typeof mockProjects)[0] | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -499,6 +516,10 @@ export default function AdminProjetosPage() {
     return Array.from(new Set(mockProjects.map((p) => p.agency))).sort()
   }, [])
 
+  const uniqueConsultants = useMemo(() => {
+    return Array.from(new Set(mockProjects.map((p) => p.consultant))).sort()
+  }, [])
+
   // Filter projects based on all active filters
   const filteredProjects = useMemo(() => {
     return projectsData.filter((project) => {
@@ -520,6 +541,20 @@ export default function AdminProjetosPage() {
         (filterValueRange === "15000-50000" && project.value > 15000 && project.value <= 50000) ||
         (filterValueRange === "50000+" && project.value > 50000)
 
+      const priceMin = filterPriceMin !== "" ? Number(filterPriceMin) : null
+      const priceMax = filterPriceMax !== "" ? Number(filterPriceMax) : null
+      const matchesPriceRange =
+        (priceMin === null || project.value >= priceMin) &&
+        (priceMax === null || project.value <= priceMax)
+
+      const tasksMin = filterTasksMin !== "" ? Number(filterTasksMin) : null
+      const tasksMax = filterTasksMax !== "" ? Number(filterTasksMax) : null
+      const matchesTasksRange =
+        (tasksMin === null || (project.tasks ?? 0) >= tasksMin) &&
+        (tasksMax === null || (project.tasks ?? 0) <= tasksMax)
+
+      const matchesConsultant = filterConsultant === "all" || project.consultant === filterConsultant
+
       const matchesPaymentStatus =
         filterPaymentStatus === "all" ||
         (filterPaymentStatus === "paid" && !project.overdue) ||
@@ -539,6 +574,9 @@ export default function AdminProjetosPage() {
         matchesCompany &&
         matchesAgency &&
         matchesValueRange &&
+        matchesPriceRange &&
+        matchesTasksRange &&
+        matchesConsultant &&
         matchesPaymentStatus &&
         matchesFromLead &&
         matchesDateRange
@@ -554,6 +592,11 @@ export default function AdminProjetosPage() {
     filterValueRange,
     filterPaymentStatus,
     filterFromLead,
+    filterConsultant,
+    filterPriceMin,
+    filterPriceMax,
+    filterTasksMin,
+    filterTasksMax,
     dateRange,
   ])
 
@@ -568,6 +611,11 @@ export default function AdminProjetosPage() {
     setFilterValueRange("all")
     setFilterDateRange("all")
     setFilterFromLead("all")
+    setFilterConsultant("all")
+    setFilterPriceMin("")
+    setFilterPriceMax("")
+    setFilterTasksMin("")
+    setFilterTasksMax("")
     setCurrentPage(1)
   }
 
@@ -998,6 +1046,11 @@ export default function AdminProjetosPage() {
     filterAgency !== "all",
     filterValueRange !== "all",
     filterFromLead !== "all",
+    filterConsultant !== "all",
+    filterPriceMin !== "",
+    filterPriceMax !== "",
+    filterTasksMin !== "",
+    filterTasksMax !== "",
     !!dateRange?.from,
   ].filter(Boolean).length
 
@@ -1761,6 +1814,11 @@ export default function AdminProjetosPage() {
                               if (f.valueRange !== undefined) setFilterValueRange(f.valueRange)
                               if (f.paymentStatus !== undefined) setFilterPaymentStatus(f.paymentStatus)
                               if (f.fromLead !== undefined) setFilterFromLead(f.fromLead)
+                              if (f.consultant !== undefined) setFilterConsultant(f.consultant)
+                              if (f.priceMin !== undefined) setFilterPriceMin(f.priceMin)
+                              if (f.priceMax !== undefined) setFilterPriceMax(f.priceMax)
+                              if (f.tasksMin !== undefined) setFilterTasksMin(f.tasksMin)
+                              if (f.tasksMax !== undefined) setFilterTasksMax(f.tasksMax)
                             }}
                           >
                             <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0" />
@@ -1790,7 +1848,7 @@ export default function AdminProjetosPage() {
                                 const newFilter = {
                                   id: Date.now().toString(),
                                   name: savedFilterName,
-                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead },
+                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead, consultant: filterConsultant, priceMin: filterPriceMin, priceMax: filterPriceMax, tasksMin: filterTasksMin, tasksMax: filterTasksMax },
                                 }
                                 setSavedFilters((prev) => [...prev, newFilter])
                                 setSavedFilterName("")
@@ -1807,7 +1865,7 @@ export default function AdminProjetosPage() {
                                 const newFilter = {
                                   id: Date.now().toString(),
                                   name: savedFilterName,
-                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead },
+                                  filters: { status: filterStatus, type: filterType, company: filterCompany, agency: filterAgency, valueRange: filterValueRange, paymentStatus: filterPaymentStatus, fromLead: filterFromLead, consultant: filterConsultant, priceMin: filterPriceMin, priceMax: filterPriceMax, tasksMin: filterTasksMin, tasksMax: filterTasksMax },
                                 }
                                 setSavedFilters((prev) => [...prev, newFilter])
                                 setSavedFilterName("")
@@ -1873,6 +1931,17 @@ export default function AdminProjetosPage() {
                           >
                             <option value="all">Todas</option>
                             {uniqueAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-xs text-slate-500 mb-1 block">Responsável / Consultor</label>
+                          <select
+                            value={filterConsultant}
+                            onChange={(e) => setFilterConsultant(e.target.value)}
+                            className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                          >
+                            <option value="all">Todos os responsáveis</option>
+                            {uniqueConsultants.map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                       </div>
@@ -1987,28 +2056,92 @@ export default function AdminProjetosPage() {
 
                     {/* Valores */}
                     <div>
-                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Faixa de Valor</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[
-                          { value: "all", label: "Todos" },
-                          { value: "0-5000", label: "Até R$ 5k" },
-                          { value: "5000-15000", label: "R$ 5k–15k" },
-                          { value: "15000-50000", label: "R$ 15k–50k" },
-                          { value: "50000+", label: "Acima R$ 50k" },
-                        ].map(({ value, label }) => (
-                          <button
-                            key={value}
-                            onClick={() => setFilterValueRange(value)}
-                            className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                              filterValueRange === value
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Faixa de Valor (R$)</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Valor mínimo</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={filterPriceMin}
+                              onChange={(e) => setFilterPriceMin(e.target.value)}
+                              placeholder="0"
+                              className="pl-7 h-8 text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Valor máximo</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={filterPriceMax}
+                              onChange={(e) => setFilterPriceMax(e.target.value)}
+                              placeholder="sem limite"
+                              className="pl-7 h-8 text-xs"
+                            />
+                          </div>
+                        </div>
                       </div>
+                      {(filterPriceMin !== "" || filterPriceMax !== "") && (
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <p className="text-[10px] text-slate-400">
+                            {filterPriceMin !== "" && filterPriceMax !== ""
+                              ? `R$ ${Number(filterPriceMin).toLocaleString("pt-BR")} – R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`
+                              : filterPriceMin !== ""
+                              ? `A partir de R$ ${Number(filterPriceMin).toLocaleString("pt-BR")}`
+                              : `Até R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`
+                            }
+                          </p>
+                          <button onClick={() => { setFilterPriceMin(""); setFilterPriceMax("") }} className="text-[10px] text-red-400 hover:underline">Limpar</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Volume de Tarefas */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Volume de Tarefas</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Mínimo de tarefas</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={filterTasksMin}
+                            onChange={(e) => setFilterTasksMin(e.target.value)}
+                            placeholder="0"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-1 block">Máximo de tarefas</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={filterTasksMax}
+                            onChange={(e) => setFilterTasksMax(e.target.value)}
+                            placeholder="sem limite"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                      {(filterTasksMin !== "" || filterTasksMax !== "") && (
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <p className="text-[10px] text-slate-400">
+                            {filterTasksMin !== "" && filterTasksMax !== ""
+                              ? `${filterTasksMin} – ${filterTasksMax} tarefas`
+                              : filterTasksMin !== ""
+                              ? `A partir de ${filterTasksMin} tarefas`
+                              : `Até ${filterTasksMax} tarefas`
+                            }
+                          </p>
+                          <button onClick={() => { setFilterTasksMin(""); setFilterTasksMax("") }} className="text-[10px] text-red-400 hover:underline">Limpar</button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Results count */}
