@@ -2,195 +2,22 @@
 import { useState, useMemo } from "react"
 import { ProjectManagementModal } from "@/components/project-management-modal"
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel"
-import { Eye, Copy, Search, Briefcase, X, Pencil, FolderKanban, Plus } from "lucide-react"
+import { Eye, Copy, Search, Briefcase, X, Pencil, FolderKanban, Plus, AlertTriangle, CheckCircle, Trash2 } from "lucide-react"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
-
-interface Project {
-  id: number
-  name: string
-  client: string
-  clientCNPJ: string
-  agency: string
-  consultant: string
-  consultantEmail: string
-  type: string
-  status: string
-  progress: number
-  budget: number
-  spent: number
-  createdDate: string
-  startDate: string
-  deadline: string
-  team: number
-  nomades: string[]
-  bitrixSync: boolean
-  portfolioPermission: boolean
-  overdue: boolean
-  value: number
-  fromLead: boolean
-  companyId?: number
-}
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { mockProjects as allPlatformProjects } from "@/lib/mock-projects"
 
 interface ProjectsManagementTabProps {
   company: {
-    id: string
+    id: string | number
     name: string
   }
 }
-
-// Mock de projetos - em produção viriam da API
-const mockAllProjects: Project[] = [
-  {
-    id: 1,
-    name: "Hospedagem Florescer Idosos",
-    client: "Florescer",
-    clientCNPJ: "12.345.678/0001-90",
-    agency: "Lamego Academy",
-    consultant: "Equipe Lamego",
-    consultantEmail: "contato@lamego.com.vc",
-    type: "Marketing Digital",
-    status: "awaiting-payment",
-    progress: 65,
-    budget: 15000,
-    spent: 9750,
-    createdDate: "19/02/2025",
-    startDate: "2024-01-15",
-    deadline: "2024-03-30",
-    team: 5,
-    nomades: ["Ana Santos", "Carlos Lima"],
-    bitrixSync: false,
-    portfolioPermission: false,
-    overdue: false,
-    value: 15000,
-    fromLead: true,
-    companyId: 1,
-  },
-  {
-    id: 2,
-    name: "Redesign Website Startup ABC",
-    client: "Startup ABC",
-    clientCNPJ: "98.765.432/0001-10",
-    agency: "Design Studio",
-    consultant: "Maria Designer",
-    consultantEmail: "maria@designstudio.com",
-    type: "Desenvolvimento Web",
-    status: "in-progress",
-    progress: 45,
-    budget: 25000,
-    spent: 11250,
-    createdDate: "15/01/2025",
-    startDate: "2024-02-01",
-    deadline: "2024-05-15",
-    team: 3,
-    nomades: ["Maria Silva", "João Dev"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 25000,
-    fromLead: false,
-    companyId: 1,
-  },
-  {
-    id: 3,
-    name: "Identidade Visual FoodCorp",
-    client: "FoodCorp",
-    clientCNPJ: "11.222.333/0001-44",
-    agency: "Creative Partners",
-    consultant: "Pedro Criativo",
-    consultantEmail: "pedro@creative.com",
-    type: "Design",
-    status: "completed",
-    progress: 100,
-    budget: 8000,
-    spent: 7800,
-    createdDate: "10/12/2024",
-    startDate: "2023-12-10",
-    deadline: "2024-01-20",
-    team: 2,
-    nomades: ["Ana Santos"],
-    bitrixSync: true,
-    portfolioPermission: false,
-    overdue: false,
-    value: 8000,
-    fromLead: true,
-    companyId: 1,
-  },
-  {
-    id: 4,
-    name: "Campanha Lançamento Produto XYZ",
-    client: "Tech Innovations",
-    clientCNPJ: "22.333.444/0001-55",
-    agency: "Marketing Pro",
-    consultant: "Lucas Marketing",
-    consultantEmail: "lucas@marketingpro.com",
-    type: "Marketing Digital",
-    status: "negotiation",
-    progress: 20,
-    budget: 32000,
-    spent: 6400,
-    createdDate: "05/02/2025",
-    startDate: "2024-03-01",
-    deadline: "2024-06-30",
-    team: 4,
-    nomades: ["Carlos Lima", "Ana Santos"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 32000,
-    fromLead: true,
-    companyId: 1,
-  },
-  {
-    id: 5,
-    name: "Desenvolvimento App Mobile E-commerce",
-    client: "E-Shop Brasil",
-    clientCNPJ: "55.666.777/0001-88",
-    agency: "Tech Solutions",
-    consultant: "Rafael Dev",
-    consultantEmail: "rafael@techsolutions.com",
-    type: "Desenvolvimento Mobile",
-    status: "planning",
-    progress: 10,
-    budget: 45000,
-    spent: 4500,
-    createdDate: "25/01/2025",
-    startDate: "2024-03-15",
-    deadline: "2024-10-30",
-    team: 6,
-    nomades: ["João Dev", "Maria Silva", "Carlos Dev"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 45000,
-    fromLead: true,
-    companyId: 1,
-  },
-  {
-    id: 6,
-    name: "Consultoria Estratégica Digital Cancelada",
-    client: "Old Corp",
-    clientCNPJ: "33.444.555/0001-66",
-    agency: "Consulting Plus",
-    consultant: "Joana Consultora",
-    consultantEmail: "joana@consulting.com",
-    type: "Consultoria",
-    status: "canceled",
-    progress: 30,
-    budget: 18000,
-    spent: 5400,
-    createdDate: "01/12/2024",
-    startDate: "2024-01-10",
-    deadline: "2024-04-10",
-    team: 2,
-    nomades: ["Ana Santos"],
-    bitrixSync: false,
-    portfolioPermission: false,
-    overdue: true,
-    value: 18000,
-    fromLead: false,
-    companyId: 1,
-  },
-]
 
 export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
@@ -200,6 +27,12 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"view" | "edit">("view")
 
+  // Clone dialog state
+  const [showCloneDialog, setShowCloneDialog] = useState(false)
+  const [projectToClone, setProjectToClone] = useState<Project | null>(null)
+  const [cloneProjectName, setCloneProjectName] = useState("")
+  const [cloneOptions, setCloneOptions] = useState({ team: true, products: true, vault: true, financial: false })
+
   // Create / Clone panel
   const [createPanelOpen, setCreatePanelOpen] = useState(false)
   const [clonePanelOpen, setClonePanelOpen] = useState(false)
@@ -207,10 +40,10 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const [quickStatusFilter, setQuickStatusFilter] = useState<string | null>(null)
 
   const companyProjects = useMemo(() => {
-    return mockAllProjects.filter(
-      (p) => p.client.toLowerCase() === company.name.toLowerCase() || p.companyId === parseInt(company.id)
+    return allPlatformProjects.filter(
+      (p) => p.companyId === parseInt(company.id)
     )
-  }, [company.id, company.name])
+  }, [company.id])
 
   const filteredProjects = useMemo(() => {
     return companyProjects.filter((p) => {
@@ -261,22 +94,42 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const handleViewProject = (project: Project) => { setSelectedProject(project); setModalMode("view"); setModalOpen(true) }
   const handleEditProject = (project: Project) => { setSelectedProject(project); setModalMode("edit"); setModalOpen(true) }
   const handleCloneProject = (project: Project) => {
-    setCloneInitialData({
-      nome: project.name + " (cópia)",
-      tipo: project.type,
-      agencia: project.agency,
-      cliente: project.client,
-      clienteCnpj: project.clientCNPJ || "",
-      consultor: project.consultant,
-      emailConsultor: project.consultantEmail,
-      dataInicio: project.startDate,
-      prazo: project.deadline,
-      orcamento: project.budget ? String(project.budget) : "",
-      permitePortfolio: project.portfolioPermission,
-      sincronizadoBitrix: project.bitrixSync,
+    setProjectToClone(project)
+    setCloneProjectName(`(copy) ${project.name}`)
+    setCloneOptions({ team: true, products: true, vault: true, financial: false })
+    setShowCloneDialog(true)
+  }
+
+  const handleConfirmCloneAndOpen = () => {
+    if (!projectToClone || !cloneProjectName.trim()) return
+
+    const cloneData: any = {
+      nome: cloneProjectName,
+      cliente: projectToClone.client,
+      clienteCnpj: projectToClone.clientCNPJ ?? "",
+      agencia: projectToClone.agency,
+      tipo: projectToClone.type,
+      dataInicio: projectToClone.startDate ?? "",
+      prazo: projectToClone.deadline ?? "",
       descricao: "",
-      status: project.status as any,
-    })
+      status: "draft",
+      permitePortfolio: projectToClone.portfolioPermission ?? false,
+      sincronizadoBitrix: projectToClone.bitrixSync ?? false,
+    }
+
+    if (cloneOptions.team) {
+      cloneData.consultor = projectToClone.consultant ?? ""
+      cloneData.emailConsultor = projectToClone.consultantEmail ?? ""
+    }
+
+    if (cloneOptions.financial) {
+      cloneData.orcamento = String(projectToClone.budget ?? "")
+    }
+
+    setShowCloneDialog(false)
+    setProjectToClone(null)
+    setCloneProjectName("")
+    setCloneInitialData(cloneData)
     setClonePanelOpen(true)
   }
   const handleSaveProjectChanges = (updatedProject: Project) => { setSelectedProject(updatedProject); setModalMode("view") }
@@ -403,17 +256,42 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                     <span className="text-xs text-slate-500">{project.deadline}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleViewProject(project)} title="Visualizar" className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleEditProject(project)} title="Editar" className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleCloneProject(project)} title="Clonar" className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <TooltipProvider delayDuration={300}>
+                      <div className="flex items-center justify-end gap-0">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button onClick={() => handleViewProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors">
+                              <Eye className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Visualizar</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button onClick={() => handleCloneProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 transition-colors">
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Duplicar</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button onClick={() => handleEditProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-violet-50 text-violet-500 hover:text-violet-700 transition-colors">
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Editar</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Cancelar</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
                   </td>
                 </tr>
               )
@@ -475,10 +353,133 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
     {cloneInitialData && (
       <ProjectCreateNewPanel
         open={clonePanelOpen}
-        onOpenChange={setClonePanelOpen}
+        onOpenChange={(v) => { setClonePanelOpen(v); if (!v) setCloneInitialData(null) }}
         initialData={cloneInitialData}
+        cloneMode
       />
     )}
+
+    {/* Clone dialog */}
+    <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
+      <DialogContent className="sm:max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="app-brand-header px-6 py-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-white/20 flex items-center justify-center">
+              <Copy className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">Duplicar Projeto</h2>
+              <p className="text-xs text-white/60 mt-0.5">Selecione o que deseja incluir na cópia</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+          <div>
+            <Label htmlFor="clone-name-tab" className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 block">
+              Nome do Novo Projeto
+            </Label>
+            <Input
+              id="clone-name-tab"
+              value={cloneProjectName}
+              onChange={(e) => setCloneProjectName(e.target.value)}
+              placeholder="Nome do projeto duplicado"
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">O que clonar</p>
+            <div className="space-y-2">
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 opacity-70">
+                <div className="mt-0.5 h-4 w-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
+                  <CheckCircle className="h-2.5 w-2.5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Dados do Projeto</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Cliente, agência, tipo, datas e descrição — sempre incluídos</p>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                <Checkbox
+                  checked={cloneOptions.team}
+                  onCheckedChange={(v) => setCloneOptions(o => ({ ...o, team: !!v }))}
+                  className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Equipe / Usuários</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Consultor responsável, nômades e membros da equipe</p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                <Checkbox
+                  checked={cloneOptions.products}
+                  onCheckedChange={(v) => setCloneOptions(o => ({ ...o, products: !!v }))}
+                  className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Produtos</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Lista de produtos disponíveis (dados de contratação serão resetados)</p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                <Checkbox
+                  checked={cloneOptions.vault}
+                  onCheckedChange={(v) => setCloneOptions(o => ({ ...o, vault: !!v }))}
+                  className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Arquivos e Senhas (Cofre)</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Credenciais e cartões de pagamento — pode remover antes de salvar</p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                <Checkbox
+                  checked={cloneOptions.financial}
+                  onCheckedChange={(v) => setCloneOptions(o => ({ ...o, financial: !!v }))}
+                  className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Orçamento</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Valor e orçamento do projeto (gastos serão zerados)</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-2.5 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-3">
+            <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-700 leading-relaxed">
+              O projeto será aberto para revisão antes de ser salvo. Você poderá editar e remover qualquer informação na tela de criação.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-6 py-4 bg-slate-50 border-t border-slate-100 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setShowCloneDialog(false); setProjectToClone(null); setCloneProjectName("") }}
+            className="h-8 px-4 text-xs"
+          >
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirmCloneAndOpen}
+            disabled={!cloneProjectName.trim()}
+            className="h-8 px-4 text-xs btn-brand"
+          >
+            <Copy className="h-3.5 w-3.5 mr-1.5" />
+            Abrir para Editar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

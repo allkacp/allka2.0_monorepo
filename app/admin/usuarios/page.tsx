@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { ExportButton } from "@/components/export-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,6 +34,8 @@ import {
   Cog,
   Activity,
   Info,
+  Download,
+  ImageDown,
 } from "lucide-react"
 import type { User } from "@/types/user"
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel"
@@ -57,6 +60,13 @@ import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { createPortal } from "react-dom"
 import { usePlatformUsers } from "@/contexts/platform-users-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useToast } from "@/components/ui/use-toast"
 
 const mockUsers: User[] = [
   {
@@ -399,6 +409,8 @@ const mockUsers: User[] = [
 
 export default function UsuariosPage() {
   const { users: platformUsers, addUser: addPlatformUser } = usePlatformUsers()
+  const { toast } = useToast()
+  const pageRef = useRef<HTMLDivElement>(null)
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -839,7 +851,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" ref={pageRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -850,13 +862,16 @@ export default function UsuariosPage() {
             Gerencie todos os usuários da plataforma
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreateUser(true)}
-          className="h-9 gap-2 btn-brand shadow-md border-0"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Usuário
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton pageRef={pageRef} filename="usuarios" />
+          <Button
+            onClick={() => setShowCreateUser(true)}
+            className="h-9 gap-2 btn-brand shadow-md border-0"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Usuário
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
-import { useState } from "react"
+import { useState, useRef } from "react"
+import { ExportButton } from "@/components/export-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -73,6 +74,7 @@ export default function PermissionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedProfile, setSelectedProfile] = useState<PermissionProfile | null>(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const pageRef = useRef<HTMLDivElement>(null)
 
   const ALL: Scope = "all"; const OWN: Scope = "own"; const NONE: Scope = "none"
   type P = Record<string, ModulePerm>
@@ -167,19 +169,22 @@ export default function PermissionsPage() {
   ]
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={pageRef}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Gestão de Permissões</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Configure perfis de acesso e permissões granulares</p>
         </div>
-        <Button
-          onClick={handleCreateProfile}
-          className="btn-brand h-9"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Perfil
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton pageRef={pageRef} filename="permissoes" />
+          <Button
+            onClick={handleCreateProfile}
+            className="btn-brand h-9"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Perfil
+          </Button>
+        </div>
       </div>
 
       <Accordion type="single" collapsible className="mb-1">

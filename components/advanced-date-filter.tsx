@@ -293,12 +293,11 @@ export function AdvancedDateFilter({
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="border-2 border-green-400 hover:bg-green-50 text-green-700 gap-1.5 font-semibold bg-transparent"
+                  className="h-8 gap-1.5 text-xs px-2.5 font-medium border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm text-slate-600"
                   disabled={isLoading || !localRange?.from}
                 >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">Exportar</span>
+                  <Download className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Exportar</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-48 p-2" side="bottom" align="end">
@@ -340,13 +339,12 @@ export function AdvancedDateFilter({
             {/* Reset Button */}
             <Button
               variant="outline"
-              size="sm"
               onClick={handleReset}
               disabled={isLoading || !localRange?.from}
-              className="border-2 border-red-400 hover:bg-red-50 text-red-700 gap-1.5 font-semibold bg-transparent"
+              className="h-8 gap-1.5 text-xs px-2.5 font-medium border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm text-slate-600"
             >
-              <RotateCw className="h-4 w-4" />
-              <span className="hidden sm:inline">Limpar</span>
+              <RotateCw className="h-3.5 w-3.5 text-slate-500" />
+              <span>Limpar</span>
             </Button>
           </div>
         </div>

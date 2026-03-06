@@ -1,1 +1,1 @@
-export default function Page() { return <div className='p-8 text-slate-400'>Coming soon: permissoes</div> }
+export { default } from "@/app/admin/permissions/page"

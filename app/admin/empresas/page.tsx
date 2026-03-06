@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog } from "lucide-react"
+import { ExportButton } from "@/components/export-button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -15,6 +16,13 @@ import { CompanyEditSlidePanel } from "@/components/company-edit-slide-panel"
 import { CompanyViewSlidePanel } from "@/components/company-view-slide-panel"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { useSidebar } from "@/contexts/sidebar-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useToast } from "@/components/ui/use-toast"
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900": "linear-gradient(to bottom right, #1e3a8a, #1e40af, #164e63)",
@@ -864,6 +872,8 @@ function CompanyAvatar({ company }: { company: Company }) {
 
 export default function EmpresasPage() {
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar()
+  const { toast } = useToast()
+  const pageRef = useRef<HTMLDivElement>(null)
   const appliedTheme = previewTheme || sidebarSettings
   const themeBg = appliedTheme.backgroundColor
   const getHeaderStyle = (): React.CSSProperties => {
@@ -1331,7 +1341,7 @@ export default function EmpresasPage() {
   // avatar helpers are module-scope (companyInitials / avatarColor / CompanyAvatar)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" ref={pageRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1342,13 +1352,16 @@ export default function EmpresasPage() {
             Gerencie todas as empresas cadastradas na plataforma
           </p>
         </div>
-        <Button
-          onClick={() => setCreatePanelOpen(true)}
-          className="h-9 gap-2 btn-brand shadow-md border-0"
-        >
-          <Plus className="h-4 w-4" />
-          Nova Empresa
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton pageRef={pageRef} filename="empresas" />
+          <Button
+            onClick={() => setCreatePanelOpen(true)}
+            className="h-9 gap-2 btn-brand shadow-md border-0"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Empresa
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

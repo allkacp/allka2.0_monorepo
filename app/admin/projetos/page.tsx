@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react"
+import { AreaChart, Area, ResponsiveContainer } from "recharts"
+import { ExportButton } from "@/components/export-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import ProjectWizardSlidePanel from "@/components/project-wizard-slide-panel"
-import ProjectCreateSlidePanel from "@/components/project-create-slide-panel"
+import { ProjectCreateNewPanel } from "@/components/project-create-new-panel"
 import { AdvancedDateFilter } from "@/components/advanced-date-filter"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { exportToCSV, exportToExcel, exportToPDF, type ProjectData } from "@/lib/export-utils"
@@ -53,6 +55,9 @@ import {
   Hash,
   Trash2,
   Save,
+  Download,
+  ImageDown,
+  CheckCircle,
 } from "lucide-react"
 import { ProjectManagementModal } from "@/components/project-management-modal"
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel"
@@ -79,309 +84,13 @@ import { CSS } from "@dnd-kit/utilities"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-
-const mockProjects = [
-  {
-    id: 1,
-    name: "Hospedagem Florescer Idosos",
-    client: "Florescer",
-    clientCNPJ: "12.345.678/0001-90",
-    agency: "Lamego Academy",
-    consultant: "Equipe Lamego",
-    consultantEmail: "contato@lamego.com.vc",
-    type: "Marketing Digital",
-    status: "awaiting-payment",
-    progress: 65,
-    budget: 15000,
-    spent: 9750,
-    createdDate: "19/02/2025",
-    startDate: "2024-01-15",
-    deadline: "2024-03-30",
-    team: 5,
-    nomades: ["Ana Santos", "Carlos Lima"],
-    bitrixSync: false,
-    portfolioPermission: false,
-    overdue: false,
-    value: 15000,
-    fromLead: true,
-    tasks: 12,
-  },
-  {
-    id: 2,
-    name: "Redesign Website Startup ABC",
-    client: "Startup ABC",
-    clientCNPJ: "98.765.432/0001-10",
-    agency: "Design Studio",
-    consultant: "Maria Designer",
-    consultantEmail: "maria@designstudio.com",
-    type: "Desenvolvimento Web",
-    status: "in-progress",
-    progress: 45,
-    budget: 25000,
-    spent: 11250,
-    createdDate: "15/01/2025",
-    startDate: "2024-02-01",
-    deadline: "2024-05-15",
-    team: 3,
-    nomades: ["Maria Silva", "João Dev"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 25000,
-    fromLead: false,
-    tasks: 18,
-  },
-  {
-    id: 3,
-    name: "Identidade Visual FoodCorp",
-    client: "FoodCorp",
-    clientCNPJ: "11.222.333/0001-44",
-    agency: "Creative Partners",
-    consultant: "Pedro Criativo",
-    consultantEmail: "pedro@creative.com",
-    type: "Design",
-    status: "completed",
-    progress: 100,
-    budget: 8000,
-    spent: 7800,
-    createdDate: "10/12/2024",
-    startDate: "2023-12-10",
-    deadline: "2024-01-20",
-    team: 2,
-    nomades: ["Ana Santos"],
-    bitrixSync: true,
-    portfolioPermission: false,
-    overdue: false,
-    value: 8000,
-    fromLead: true,
-    tasks: 7,
-  },
-  {
-    id: 4,
-    name: "Campanha Lançamento Produto XYZ",
-    client: "Tech Innovations",
-    clientCNPJ: "22.333.444/0001-55",
-    agency: "Marketing Pro",
-    consultant: "Lucas Marketing",
-    consultantEmail: "lucas@marketingpro.com",
-    type: "Marketing Digital",
-    status: "negotiation",
-    progress: 20,
-    budget: 32000,
-    spent: 6400,
-    createdDate: "05/02/2025",
-    startDate: "2024-03-01",
-    deadline: "2024-06-30",
-    team: 4,
-    nomades: ["Carlos Lima", "Ana Santos"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 32000,
-    fromLead: true,
-    tasks: 25,
-  },
-  {
-    id: 5,
-    name: "E-commerce Loja Virtual Fashion Style Boutique",
-    client: "Fashion Style",
-    clientCNPJ: "33.444.555/0001-66",
-    agency: "WebDev Solutions",
-    consultant: "Fernanda Tech",
-    consultantEmail: "fernanda@webdev.com",
-    type: "E-commerce",
-    status: "draft",
-    progress: 5,
-    budget: 45000,
-    spent: 2250,
-    createdDate: "01/02/2025",
-    startDate: "2024-04-01",
-    deadline: "2024-08-15",
-    team: 6,
-    nomades: ["João Dev", "Maria Silva", "Pedro Criativo"],
-    bitrixSync: false,
-    portfolioPermission: false,
-    overdue: false,
-    value: 45000,
-    fromLead: false,
-    tasks: 20,
-  },
-  {
-    id: 6,
-    name: "App Mobile Delivery Express",
-    client: "Delivery Express",
-    clientCNPJ: "44.555.666/0001-77",
-    agency: "Mobile Masters",
-    consultant: "Ricardo Apps",
-    consultantEmail: "ricardo@mobilemasters.com",
-    type: "Desenvolvimento Mobile",
-    status: "in-progress",
-    progress: 70,
-    budget: 62000,
-    spent: 43400,
-    createdDate: "20/12/2024",
-    startDate: "2023-11-15",
-    deadline: "2024-04-30",
-    team: 7,
-    nomades: ["Ana Santos", "João Dev", "Carlos Lima"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 62000,
-    fromLead: true,
-    tasks: 38,
-  },
-  {
-    id: 7,
-    name: "Sistema CRM Empresarial",
-    client: "Corporação Global",
-    clientCNPJ: "55.666.777/0001-88",
-    agency: "Enterprise Software",
-    consultant: "Beatriz Systems",
-    consultantEmail: "beatriz@enterprise.com",
-    type: "Desenvolvimento Web",
-    status: "awaiting-payment",
-    progress: 90,
-    budget: 78000,
-    spent: 70200,
-    createdDate: "15/11/2024",
-    startDate: "2023-10-01",
-    deadline: "2024-02-28",
-    team: 8,
-    nomades: ["Maria Silva", "Pedro Criativo", "João Dev"],
-    bitrixSync: true,
-    portfolioPermission: false,
-    overdue: true,
-    value: 78000,
-    fromLead: false,
-    tasks: 45,
-  },
-  {
-    id: 8,
-    name: "Consultoria SEO Avançada",
-    client: "Digital Ventures",
-    clientCNPJ: "66.777.888/0001-99",
-    agency: "SEO Masters",
-    consultant: "Gabriel SEO",
-    consultantEmail: "gabriel@seomasters.com",
-    type: "Consultoria",
-    status: "in-progress",
-    progress: 15,
-    budget: 18000,
-    spent: 2700,
-    createdDate: "10/02/2025",
-    startDate: "2024-03-15",
-    deadline: "2024-05-30",
-    team: 2,
-    nomades: ["Ana Santos"],
-    bitrixSync: false,
-    portfolioPermission: true,
-    overdue: false,
-    value: 18000,
-    fromLead: true,
-    tasks: 10,
-  },
-  {
-    id: 9,
-    name: "Plataforma de Cursos Online",
-    client: "EduTech Brasil",
-    clientCNPJ: "77.888.999/0001-01",
-    agency: "Learning Solutions",
-    consultant: "Amanda Educação",
-    consultantEmail: "amanda@learning.com",
-    type: "Desenvolvimento Web",
-    status: "in-progress",
-    progress: 55,
-    budget: 48000,
-    spent: 26400,
-    createdDate: "25/01/2025",
-    startDate: "2024-02-10",
-    deadline: "2024-06-20",
-    team: 5,
-    nomades: ["João Dev", "Maria Silva"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 48000,
-    fromLead: true,
-    tasks: 30,
-  },
-  {
-    id: 10,
-    name: "App Fitness Tracker Premium",
-    client: "Health & Wellness Co",
-    clientCNPJ: "88.999.000/0001-12",
-    agency: "Fitness Apps",
-    consultant: "Roberto Health",
-    consultantEmail: "roberto@fitnessapps.com",
-    type: "Desenvolvimento Mobile",
-    status: "in-progress",
-    progress: 38,
-    budget: 35000,
-    spent: 13300,
-    createdDate: "18/01/2025",
-    startDate: "2024-01-25",
-    deadline: "2024-05-05",
-    team: 4,
-    nomades: ["Carlos Lima", "Ana Santos"],
-    bitrixSync: true,
-    portfolioPermission: false,
-    overdue: false,
-    value: 35000,
-    fromLead: false,
-    tasks: 22,
-  },
-  {
-    id: 11,
-    name: "Sistema de Gestão Hospitalar",
-    client: "Hospital São Lucas",
-    clientCNPJ: "99.000.111/0001-23",
-    agency: "Healthcare Systems",
-    consultant: "Dra. Patricia Tech",
-    consultantEmail: "patricia@healthcare.com",
-    type: "Desenvolvimento Web",
-    status: "in-progress",
-    progress: 72,
-    budget: 95000,
-    spent: 68400,
-    createdDate: "05/12/2024",
-    startDate: "2023-11-01",
-    deadline: "2024-04-15",
-    team: 9,
-    nomades: ["João Dev", "Maria Silva", "Pedro Criativo"],
-    bitrixSync: true,
-    portfolioPermission: true,
-    overdue: false,
-    value: 95000,
-    fromLead: true,
-    tasks: 56,
-  },
-  {
-    id: 12,
-    name: "Portal de Notícias Regional",
-    client: "Jornal Cidade Nova",
-    clientCNPJ: "00.111.222/0001-34",
-    agency: "Media Digital",
-    consultant: "Juliana Jornalismo",
-    consultantEmail: "juliana@mediadigital.com",
-    type: "Desenvolvimento Web",
-    status: "in-progress",
-    progress: 50,
-    budget: 28000,
-    spent: 14000,
-    createdDate: "12/01/2025",
-    startDate: "2024-02-05",
-    deadline: "2024-05-25",
-    team: 3,
-    nomades: ["Ana Santos"],
-    bitrixSync: false,
-    portfolioPermission: true,
-    overdue: false,
-    value: 28000,
-    fromLead: true,
-    tasks: 16,
-  },
-]
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { mockProjects } from "@/lib/mock-projects"
 
 const initialProjects = mockProjects
 
@@ -410,11 +119,11 @@ export default function AdminProjetosPage() {
   const [viewMode, setViewMode] = useState<"accordion" | "kanban" | "planner">("accordion")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(20)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   const [showCloneDialog, setShowCloneDialog] = useState(false)
   const [projectToClone, setProjectToClone] = useState<(typeof mockProjects)[0] | null>(null)
   const [cloneProjectName, setCloneProjectName] = useState("")
-  const [cloneAndEdit, setCloneAndEdit] = useState(false)
+  const [cloneOptions, setCloneOptions] = useState({ team: true, products: true, vault: true, financial: false })
   const [showCancelWizard, setShowCancelWizard] = useState(false)
   const [projectToCancel, setProjectToCancel] = useState<(typeof mockProjects)[0] | null>(null)
   const [cancelStep, setCancelStep] = useState<1 | 2 | 3>(1)
@@ -439,7 +148,7 @@ export default function AdminProjetosPage() {
     id: "#",
     name: "Projeto",
     client: "Cliente",
-    agency: "Agência",
+    agency: "Empresa",
     type: "Tipo",
     status: "Status",
     progress: "Progresso",
@@ -468,6 +177,7 @@ export default function AdminProjetosPage() {
   }, [])
 
   const { toast } = useToast()
+  const pageRef = useRef<HTMLDivElement>(null)
 
   const [kanbanColumns, setKanbanColumns] = useState([
     { id: "draft", label: "Rascunho", color: "bg-gray-800", count: 0 },
@@ -568,7 +278,7 @@ export default function AdminProjetosPage() {
   const allFilterFields = [
     { id: "buscar",    label: "Buscar por nome" },
     { id: "empresa",   label: "Empresa / Cliente" },
-    { id: "agencia",   label: "Agência" },
+    { id: "agencia",   label: "Empresa" },
     { id: "consultor", label: "Responsável / Consultor" },
     { id: "status",    label: "Status" },
     { id: "tipo",      label: "Tipo" },
@@ -978,9 +688,14 @@ export default function AdminProjetosPage() {
     }
   }
 
-  // Calculate stats dynamically based on date range
+  // Calculate stats dynamically based on date range and lead filter
   const stats = useMemo(() => {
-    const statsFilteredProjects = mockProjects.filter((p) => isDateInRange(p.createdDate))
+    const statsFilteredProjects = mockProjects.filter((p) => {
+      if (!isDateInRange(p.createdDate)) return false
+      if (filterFromLead === "lead") return p.fromLead === true
+      if (filterFromLead === "non-lead") return p.fromLead !== true
+      return true
+    })
 
     const totalProjects = statsFilteredProjects.length
     const completedProjects = statsFilteredProjects.filter((p) => p.status === "completed").length
@@ -1059,8 +774,41 @@ export default function AdminProjetosPage() {
       awaitingPaymentGrowth: Number(awaitingPaymentGrowth),
       overdueProjects,
       overdueGrowth: Number(overdueGrowth),
+      sparklines: {
+        projects: [
+          Math.max(0, totalProjects - 4), Math.max(0, totalProjects - 3),
+          Math.max(0, totalProjects - 2), Math.max(0, totalProjects - 1),
+          totalProjects, Math.max(0, totalProjects - 1), totalProjects + 1,
+          totalProjects + 2, totalProjects,
+        ].map(v => ({ v })),
+        mrr: [
+          Math.round(mrr*0.45/1000), Math.round(mrr*0.55/1000),
+          Math.round(mrr*0.63/1000), Math.round(mrr*0.70/1000),
+          Math.round(mrr*0.78/1000), Math.round(mrr*0.85/1000),
+          Math.round(mrr*0.92/1000), Math.round(mrr*0.97/1000),
+          Math.round(mrr/1000),
+        ].map(v => ({ v })),
+        avulsos: [
+          Math.max(0, Math.round(avulsosAtivos*0.6)),
+          Math.max(0, Math.round(avulsosAtivos*0.7)),
+          Math.max(0, Math.round(avulsosAtivos*0.65)),
+          Math.max(0, Math.round(avulsosAtivos*0.85)),
+          Math.max(0, Math.round(avulsosAtivos)),
+          Math.max(0, Math.round(avulsosAtivos*0.9)),
+          Math.max(0, Math.round(avulsosAtivos)),
+        ].map(v => ({ v })),
+        churn: Array.from({ length: 9 }, (_, i) => ({ v: i === 8 ? churnProjects : Math.max(0, churnProjects - (8-i)) })),
+        revenue: [
+          Math.round(totalRevenue*0.4/1000), Math.round(totalRevenue*0.52/1000),
+          Math.round(totalRevenue*0.59/1000), Math.round(totalRevenue*0.67/1000),
+          Math.round(totalRevenue*0.76/1000), Math.round(totalRevenue*0.84/1000),
+          Math.round(totalRevenue*0.91/1000), Math.round(totalRevenue*0.96/1000),
+          Math.round(totalRevenue/1000),
+        ].map(v => ({ v })),
+        overdue: Array.from({ length: 9 }, (_, i) => ({ v: Math.max(0, overdueProjects + (i < 5 ? 5-i : 0)) })),
+      },
     }
-  }, [dateRange])
+  }, [dateRange, filterFromLead])
 
   const handleEditProject = (project: (typeof mockProjects)[0]) => {
     setSelectedProject(project)
@@ -1075,8 +823,8 @@ export default function AdminProjetosPage() {
 
   const handleCloneProject = (project: (typeof mockProjects)[0]) => {
     setProjectToClone(project)
-    setCloneProjectName(`${project.name} (Clone)`)
-    setCloneAndEdit(false)
+    setCloneProjectName(`(copy) ${project.name}`)
+    setCloneOptions({ team: true, products: true, vault: true, financial: false })
     setShowCloneDialog(true)
   }
 
@@ -1126,44 +874,38 @@ export default function AdminProjetosPage() {
     })
   }
 
-  const handleConfirmClone = () => {
-    if (!projectToClone || !cloneProjectName.trim()) {
-      alert("Por favor, insira um nome para o projeto clonado")
-      return
+  const handleConfirmCloneAndOpen = () => {
+    if (!projectToClone || !cloneProjectName.trim()) return
+
+    // Map mock project fields → FormData Portuguese field names
+    const cloneData: any = {
+      nome: cloneProjectName,
+      cliente: projectToClone.client,
+      clienteCnpj: projectToClone.clientCNPJ ?? "",
+      agencia: projectToClone.agency,
+      tipo: projectToClone.type,
+      dataInicio: projectToClone.startDate ?? "",
+      prazo: projectToClone.deadline ?? projectToClone.endDate ?? "",
+      descricao: projectToClone.description ?? "",
+      status: "draft",
+      permitePortfolio: projectToClone.portfolioPermission ?? false,
+      sincronizadoBitrix: projectToClone.bitrixSync ?? false,
     }
 
-    // Criar o novo projeto clonado
-    const clonedProject = {
-      ...projectToClone,
-      id: Math.max(...projectsData.map(p => p.id)) + 1,
-      name: cloneProjectName,
-      createdDate: new Date().toLocaleDateString("pt-BR"),
-      // Resetar dados de produtos contratados
-      products: projectToClone.products?.map((product: any) => ({
-        ...product,
-        contracted: false,
-        contractedDate: null,
-        contractedValue: 0,
-        contractedQuantity: 0,
-      })) || [],
-      // Resetar orçamento e gastos
-      budget: 0,
-      spent: 0,
-      progress: 0,
+    if (cloneOptions.team) {
+      cloneData.consultor = projectToClone.consultant ?? ""
+      cloneData.emailConsultor = projectToClone.consultantEmail ?? ""
     }
 
-    // Adicionar ao estado de projetos
-    setProjectsData([...projectsData, clonedProject])
+    if (cloneOptions.financial) {
+      cloneData.orcamento = String(projectToClone.budget ?? "")
+    }
+
     setShowCloneDialog(false)
     setProjectToClone(null)
     setCloneProjectName("")
-
-    // Se usuário quer editar logo, abrir para edição
-    if (cloneAndEdit) {
-      setSelectedProject(clonedProject)
-      setModalMode("edit")
-      setModalOpen(true)
-    }
+    setProjectCreateData(cloneData)
+    setShowProjectCreate(true)
   }
 
   const handleCreateProject = () => {
@@ -1256,34 +998,75 @@ export default function AdminProjetosPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "awaiting-payment":
-        return <Badge className="bg-cyan-500 text-white text-[10px] px-2 py-0.5">AGUARDANDO PAGAMENTO</Badge>
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white whitespace-nowrap"><Clock className="h-3.5 w-3.5 shrink-0" />Aguard. Pagamento</span>
       case "in-progress":
-        return <Badge className="bg-blue-500 text-white text-[10px] px-2 py-0.5">EM ANDAMENTO</Badge>
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white whitespace-nowrap"><Zap className="h-3.5 w-3.5 shrink-0" />Em Andamento</span>
       case "completed":
-        return <Badge className="bg-green-500 text-white text-[10px] px-2 py-0.5">CONCLUÍDO</Badge>
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500 text-white whitespace-nowrap"><CheckCircle className="h-3.5 w-3.5 shrink-0" />Concluído</span>
       case "planning":
-        return <Badge className="bg-orange-500 text-white text-[10px] px-2 py-0.5">PLANEJAMENTO</Badge>
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-500 text-white whitespace-nowrap"><Flag className="h-3.5 w-3.5 shrink-0" />Planejamento</span>
+      case "draft":
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white whitespace-nowrap"><FileText className="h-3.5 w-3.5 shrink-0" />Rascunho</span>
+      case "negotiation":
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-500 text-white whitespace-nowrap"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />Negociação</span>
+      case "cancelled":
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500 text-white whitespace-nowrap"><XCircle className="h-3.5 w-3.5 shrink-0" />Cancelado</span>
       default:
-        return <Badge className="bg-gray-500 text-white text-[10px] px-2 py-0.5">{status}</Badge>
+        return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white whitespace-nowrap">{status}</span>
     }
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5" ref={pageRef}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
             Gestão de Projetos
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Centralize, acompanhe e otimize todos os seus projetos em um só lugar.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Centralize, acompanhe e otimize todos os seus projetos em um só lugar.</p>
         </div>
-        <Button
-          onClick={() => setShowProjectCreate(true)}
-          className="btn-brand shadow-lg"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Projeto
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton pageRef={pageRef} filename="projetos" />
+          <Button
+            onClick={() => setShowProjectCreate(true)}
+            className="h-9 gap-2 btn-brand shadow-md border-0"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Projeto
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Total de Projetos</p>
+            <div className="bg-white/20 rounded-md p-1"><FolderOpen className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{stats.totalProjects}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-600 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Em Andamento</p>
+            <div className="bg-white/20 rounded-md p-1"><Zap className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{stats.activeProjects}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">Concluídos</p>
+            <div className="bg-white/20 rounded-md p-1"><TrendingUp className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">{stats.completedProjects}</p>
+        </div>
+        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-orange-500 to-rose-600 px-3 pt-2 pb-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-white/70 leading-tight">MRR</p>
+            <div className="bg-white/20 rounded-md p-1"><DollarSign className="h-4 w-4 text-white" /></div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none">R$ {(stats.mrr / 1000).toFixed(0)}k</p>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -1295,249 +1078,223 @@ export default function AdminProjetosPage() {
                 <span className="text-blue-900">Estatísticas e Métricas</span>
               </div>
             </AccordionTrigger>
-            <AccordionContent className="pt-2 px-4 pb-3">
-              <div className="mb-6">
+            <AccordionContent className="pt-2 px-4 pb-4">
+              {/* Period filter */}
+              <div className="mb-4">
                 <AdvancedDateFilter
                   dateRange={dateRange}
                   onDateChange={setDateRange}
                   leadFilter={filterFromLead}
                   onLeadFilterChange={setFilterFromLead}
                   onExport={handleExport}
-                  onReset={() => {
-                    setDateRange(undefined)
-                  }}
+                  onReset={() => { setDateRange(undefined) }}
                   isLoading={false}
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-1">
-                <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs opacity-90">Projetos Totais</p>
-                        <p className="text-2xl font-bold mt-0.5">{stats.totalProjects}</p>
-                      </div>
-                      <FolderOpen className="h-7 w-7 opacity-80" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/20">
-                      <div>
-                        <p className="text-[10px] opacity-75">Rascunho</p>
-                        <p className="text-sm font-semibold">{stats.draftProjects}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] opacity-75">Negociação</p>
-                        <p className="text-sm font-semibold">{stats.negotiationProjects}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] opacity-75">Concluídos</p>
-                        <p className="text-sm font-semibold">{stats.completedProjects}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] opacity-75">Ativos</p>
-                        <p className="text-sm font-semibold">{stats.activeProjects}</p>
+              {/* ── Row 1: 4 KPI cards ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                {/* Projetos Totais */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">Projetos Totais</p>
+                      <p className="text-[2rem] font-black text-white leading-none">{stats.totalProjects}</p>
+                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                        <span className="bg-white/20 rounded px-1.5 py-0.5">{stats.activeProjects} ativos</span>
+                        <span className="bg-white/20 rounded px-1.5 py-0.5">{stats.completedProjects} concl.</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><FolderOpen className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.projects} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs opacity-90">MRR</p>
-                        <p className="text-2xl font-bold mt-0.5">R$ {(stats.mrr / 1000).toFixed(0)}k</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <ArrowUpRight className="h-3 w-3" />
-                          <span className="text-xs font-semibold">+{stats.mrrGrowth}%</span>
-                        </div>
+                {/* MRR */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">MRR</p>
+                      <p className="text-[2rem] font-black text-white leading-none">R${(stats.mrr/1000).toFixed(0)}k</p>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <ArrowUpRight className="h-3 w-3 text-white/80" />
+                        <span className="text-xs font-bold text-white/80">+{stats.mrrGrowth}%</span>
                       </div>
-                      <Repeat className="h-7 w-7 opacity-80" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><Repeat className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.mrr} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs opacity-90">Avulsos Ativos</p>
-                        <p className="text-2xl font-bold mt-0.5">{stats.avulsosAtivos}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <ArrowDownRight className="h-3 w-3" />
-                          <span className="text-xs font-semibold">{stats.avulsosGrowth}%</span>
-                        </div>
+                {/* Avulsos Ativos */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-violet-500 to-purple-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">Avulsos Ativos</p>
+                      <p className="text-[2rem] font-black text-white leading-none">{stats.avulsosAtivos}</p>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <ArrowDownRight className="h-3 w-3 text-white/80" />
+                        <span className="text-xs font-bold text-white/80">{stats.avulsosGrowth}%</span>
                       </div>
-                      <Clock className="h-7 w-7 opacity-80" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><Clock className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.avulsos} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs opacity-90">Churn</p>
-                        <p className="text-2xl font-bold mt-0.5">{stats.churnProjects}</p>
-                        <div className="flex items-center gap-2 mt-1 text-xs">
-                          <span>{stats.churnRate}%</span>
-                          <span>•</span>
-                          <span>R$ {(stats.churnValue / 1000).toFixed(0)}k</span>
-                        </div>
+                {/* Churn */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-red-500 to-red-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">Churn</p>
+                      <p className="text-[2rem] font-black text-white leading-none">{stats.churnProjects}</p>
+                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                        <span>{stats.churnRate}%</span>
+                        <span>•</span>
+                        <span>R$ {(stats.churnValue/1000).toFixed(0)}k</span>
                       </div>
-                      <XCircle className="h-7 w-7 opacity-80" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><XCircle className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.churn} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <Card className="bg-gradient-to-br from-rose-500 to-rose-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs opacity-90">Inadimplência</p>
-                        <p className="text-2xl font-bold mt-0.5">{stats.overdueProjects}</p>
-                        <div className="flex items-center gap-2 mt-1 text-xs">
-                          <span>R$ {(stats.overdueValue / 1000).toFixed(0)}k</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-0.5">
-                            <ArrowDownRight className="h-3 w-3" />
-                            {Math.abs(stats.overdueGrowth)}%
-                          </span>
-                        </div>
+              {/* ── Row 2: 4 cards ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                {/* Inadimplência */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-rose-500 to-rose-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">Inadimplência</p>
+                      <p className="text-[2rem] font-black text-white leading-none">{stats.overdueProjects}</p>
+                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                        <span>R$ {(stats.overdueValue/1000).toFixed(0)}k</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-0.5"><ArrowDownRight className="h-3 w-3" />{Math.abs(stats.overdueGrowth)}%</span>
                       </div>
-                      <AlertTriangle className="h-7 w-7 opacity-80" />
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><AlertTriangle className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.overdue} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs opacity-90">Receitas</p>
-                        <p className="text-2xl font-bold mt-0.5">R$ {(stats.totalRevenue / 1000).toFixed(0)}k</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <ArrowUpRight className="h-3 w-3" />
-                          <span className="text-xs font-semibold">+{stats.revenueGrowth}%</span>
-                        </div>
-                      </div>
-                      <DollarSign className="h-7 w-7 opacity-80" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/20">
-                      <div>
-                        <p className="text-[10px] opacity-75">Inadimplência</p>
-                        <p className="text-sm font-semibold">R$ {(stats.overdueValue / 1000).toFixed(0)}k</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] opacity-75">Projeção 30d</p>
-                        <p className="text-sm font-semibold">R$ {(stats.projection30Days / 1000).toFixed(0)}k</p>
+                {/* Receitas */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">Receitas</p>
+                      <p className="text-[2rem] font-black text-white leading-none">R${(stats.totalRevenue/1000).toFixed(0)}k</p>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <ArrowUpRight className="h-3 w-3 text-white/80" />
+                        <span className="text-xs font-bold text-white/80">+{stats.revenueGrowth}%</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                      <div className="bg-white/20 rounded-lg p-1.5"><DollarSign className="h-4 w-4 text-white" /></div>
+                      <div className="w-16 h-8">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats.sparklines.revenue} margin={{top:1,right:0,left:0,bottom:1}}>
+                            <Area type="monotone" dataKey="v" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} fill="rgba(255,255,255,0.15)" dot={false} isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                <Card className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs opacity-90">Tipos de Projetos</p>
-                      </div>
-                      <Briefcase className="h-7 w-7 opacity-80" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          <span className="text-sm">Company</span>
+                {/* Tipos de Projetos */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 to-indigo-700 px-4 py-3.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">Tipos de Projetos</p>
+                    <div className="bg-white/20 rounded-lg p-1.5"><Briefcase className="h-4 w-4 text-white" /></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "Company", count: stats.companyProjects, growth: stats.companyGrowth, icon: Building2 },
+                      { label: "Agency", count: stats.agencyProjects, growth: stats.agencyGrowth, icon: Users },
+                      { label: "Squad", count: stats.squadProjects, growth: stats.squadGrowth, icon: Zap },
+                    ].map(({ label, count, growth, icon: Icon }) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Icon className="h-3 w-3 text-white/70" />
+                          <span className="text-xs font-medium text-white">{label}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">{stats.companyProjects}</span>
-                          <span className="text-xs flex items-center gap-0.5">
-                            <ArrowUpRight className="h-3 w-3" />
-                            {stats.companyGrowth}%
+                          <span className="text-sm font-bold text-white">{count}</span>
+                          <span className="text-[10px] text-white/70 flex items-center gap-0.5">
+                            <ArrowUpRight className="h-2.5 w-2.5" />{growth}%
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          <span className="text-sm">Agency</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">{stats.agencyProjects}</span>
-                          <span className="text-xs flex items-center gap-0.5">
-                            <ArrowUpRight className="h-3 w-3" />
-                            {stats.agencyGrowth}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4" />
-                          <span className="text-sm">Squad</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">{stats.squadProjects}</span>
-                          <span className="text-xs flex items-center gap-0.5">
-                            <ArrowUpRight className="h-3 w-3" />
-                            {stats.squadGrowth}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    ))}
+                  </div>
+                </div>
 
-                <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs opacity-90">Negócios em Potencial</p>
-                      </div>
-                      <TrendingUp className="h-7 w-7 opacity-80" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs">Rascunho</span>
+                {/* Negócios em Potencial */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 px-4 py-3.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">Negócios Potencial</p>
+                    <div className="bg-white/20 rounded-lg p-1.5"><TrendingUp className="h-4 w-4 text-white" /></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "Rascunho", value: stats.draftValue, growth: stats.draftGrowth },
+                      { label: "Negociação", value: stats.negotiationValue, growth: stats.negotiationGrowth },
+                      { label: "Ag. Pagamento", value: stats.awaitingPaymentValue, growth: stats.awaitingPaymentGrowth },
+                    ].map(({ label, value, growth }) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-white">{label}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">R$ {(stats.draftValue / 1000).toFixed(0)}k</span>
-                          <span className="text-[10px] flex items-center gap-0.5">
-                            <ArrowUpRight className="h-2.5 w-2.5" />
-                            {stats.draftGrowth}%
+                          <span className="text-sm font-bold text-white">R$ {(value/1000).toFixed(0)}k</span>
+                          <span className="text-[10px] text-white/70 flex items-center gap-0.5">
+                            <ArrowUpRight className="h-2.5 w-2.5" />{growth}%
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs">Negociação</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">
-                            R$ {(stats.negotiationValue / 1000).toFixed(0)}k
-                          </span>
-                          <span className="text-[10px] flex items-center gap-0.5">
-                            <ArrowUpRight className="h-2.5 w-2.5" />
-                            {stats.negotiationGrowth}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs">Ag. Pagamento</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">
-                            R$ {(stats.awaitingPaymentValue / 1000).toFixed(0)}k
-                          </span>
-                          <span className="text-[10px] flex items-center gap-0.5">
-                            <ArrowUpRight className="h-2.5 w-2.5" />
-                            {stats.awaitingPaymentGrowth}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    ))}
+                  </div>
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -1545,103 +1302,85 @@ export default function AdminProjetosPage() {
 
 
         {/* ── View toggle ── */}
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg bg-muted p-1">
-              <Button
-                size="sm"
-                variant={viewMode === "accordion" ? "default" : "ghost"}
-                onClick={() => setViewMode("accordion")}
-                className={`h-8 rounded-md transition-all ${
-                  viewMode === "accordion"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                    : "hover:bg-background"
-                }`}
-              >
-                <List className="h-3.5 w-3.5 mr-1.5" />
-                Lista
-              </Button>
-              <Button
-                size="sm"
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                onClick={() => setViewMode("kanban")}
-                className={`h-8 rounded-md transition-all ${
-                  viewMode === "kanban"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                    : "hover:bg-background"
-                }`}
-              >
-                <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
-                Kanban
-              </Button>
-              <Button
-                size="sm"
-                variant={viewMode === "planner" ? "default" : "ghost"}
-                onClick={() => setViewMode("planner")}
-                className={`h-8 rounded-md transition-all ${
-                  viewMode === "planner"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                    : "hover:bg-background"
-                }`}
-              >
-                <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
-                Planejador
-              </Button>
-            </div>
-            {viewMode === "kanban" && (
-              <Button
-                onClick={handleAddColumn}
-                size="sm"
-                className="h-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Nova Coluna
-              </Button>
-            )}
-            {viewMode === "planner" && (
-              <Button
-                onClick={handleAddPlannerColumn}
-                size="sm"
-                className="h-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Nova Coluna
-              </Button>
-            )}
-          </div>
-        </div>
-
         {viewMode === "accordion" ? (
           <>
-          <Card className="overflow-hidden">
+          <Card className="border border-slate-200/70 shadow-sm overflow-hidden">
             {/* ── Toolbar ── */}
-            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 bg-white flex-wrap">
+            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+              {/* View mode tabs */}
+              <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                <Button
+                  size="sm"
+                  variant={viewMode === "accordion" ? "default" : "ghost"}
+                  onClick={() => setViewMode("accordion")}
+                  className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                    viewMode === "accordion"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                      : "hover:bg-background"
+                  }`}
+                >
+                  <List className="h-3 w-3 mr-1" />
+                  Lista
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "kanban" ? "default" : "ghost"}
+                  onClick={() => setViewMode("kanban")}
+                  className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                    viewMode === "kanban"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                      : "hover:bg-background"
+                  }`}
+                >
+                  <LayoutGrid className="h-3 w-3 mr-1" />
+                  Kanban
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "planner" ? "default" : "ghost"}
+                  onClick={() => setViewMode("planner")}
+                  className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                    viewMode === "planner"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                      : "hover:bg-background"
+                  }`}
+                >
+                  <LayoutDashboard className="h-3 w-3 mr-1" />
+                  Planejador
+                </Button>
+              </div>
+
               {/* Search */}
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <div className="flex-1 relative min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   placeholder="Buscar projeto, cliente..."
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
-                  className="pl-8 h-8 text-xs border-slate-200"
+                  className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-blue-500 w-full"
                 />
               </div>
 
-              <ItemsPerPageSelect
-                value={itemsPerPage}
-                onChange={(v) => { setItemsPerPage(v); setCurrentPage(1) }}
-              />
-
-              <span className="text-xs text-slate-500 whitespace-nowrap">
-                {filteredProjects.length} projeto{filteredProjects.length !== 1 ? "s" : ""}
-              </span>
+              {/* Items per page + result count */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <ItemsPerPageSelect
+                  value={itemsPerPage.toString()}
+                  onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+                />
+                <span className="text-xs text-slate-400 whitespace-nowrap">
+                  {filteredProjects.length !== projectsData.length
+                    ? <>de <span className="font-semibold text-blue-500">{filteredProjects.length}</span> de {projectsData.length} projeto{projectsData.length !== 1 ? "s" : ""}</>
+                    : <>de <span className="font-semibold text-slate-600">{projectsData.length}</span> projeto{projectsData.length !== 1 ? "s" : ""}</>
+                  }
+                </span>
+              </div>
 
               {/* Filter button */}
               <Button
-                size="sm"
-                variant="outline"
                 onClick={() => setIsFilterModalOpen(true)}
-                className={`h-8 gap-1.5 text-xs ${activeFilterCount > 0 ? "border-blue-400 bg-blue-50 text-blue-700" : ""}`}
+                variant="outline"
+                size="sm"
+                className={`h-9 gap-2 px-3.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-100 flex-shrink-0 ${activeFilterCount > 0 ? "border-blue-400 bg-blue-50 text-blue-700" : ""}`}
               >
                 <Filter className="h-3.5 w-3.5" />
                 Filtros
@@ -1655,9 +1394,16 @@ export default function AdminProjetosPage() {
               {/* Column config */}
               <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+                  <button
+                    className={`flex items-center justify-center h-7 w-7 rounded-md border transition-colors flex-shrink-0 ${
+                      colConfigOpen
+                        ? "bg-blue-100 text-blue-600 border-blue-200"
+                        : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Configurar colunas"
+                  >
                     <Cog className="h-3.5 w-3.5" />
-                  </Button>
+                  </button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-52 p-3">
                   <div className="flex items-center justify-between mb-2">
@@ -1689,40 +1435,38 @@ export default function AdminProjetosPage() {
               </Popover>
 
               {/* Pagination (top) */}
-              <div className="ml-auto flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 w-8 p-0"
+              <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
+                </button>
                 {getPageNumbers().map((pg, i) =>
                   pg === "..." ? (
-                    <span key={`dots-${i}`} className="text-xs text-slate-400 px-1">…</span>
+                    <span key={`dots-${i}`} className="text-xs text-slate-300 px-0.5">·</span>
                   ) : (
-                    <Button
-                      key={pg}
-                      size="sm"
-                      variant={currentPage === pg ? "default" : "outline"}
-                      className={`h-8 w-8 p-0 text-xs ${currentPage === pg ? "btn-brand" : ""}`}
-                      onClick={() => setCurrentPage(pg as number)}
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(Number(pg))}
+                      className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                        pg === currentPage
+                          ? "bg-blue-500 text-white shadow-sm shadow-blue-200"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                      }`}
                     >
                       {pg}
-                    </Button>
+                    </button>
                   )
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 w-8 p-0"
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages || totalPages === 0}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
+                </button>
               </div>
             </div>
 
@@ -1740,22 +1484,27 @@ export default function AdminProjetosPage() {
                   <col style={{ width: 100 }} />
                 </colgroup>
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
+                  <tr className="border-b border-slate-200/60">
                     {visibleCols.map((col) => (
                       <th
                         key={col}
-                        className="relative px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wider select-none whitespace-nowrap overflow-hidden"
+                        className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative bg-white"
+                        style={{ paddingLeft: 20, paddingRight: 20, textAlign: "left", borderRight: "1px solid rgba(148,163,184,0.25)" }}
                       >
-                        <span className="block truncate pr-3">{COL_LABELS[col]}</span>
+                        {COL_LABELS[col]}
                         <span
-                          className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center hover:bg-slate-200/60 group"
+                          className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                          style={{ transform: "translateX(50%)" }}
                           onMouseDown={(e) => onResizeMouseDown(col, e)}
                         >
-                          <span className="w-px h-4 bg-slate-300 group-hover:bg-slate-500" />
+                          <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
                         </span>
                       </th>
                     ))}
-                    <th className="sticky right-0 bg-slate-50 px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wider z-10 border-l border-slate-200 w-[100px]">
+                    <th
+                      className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-white"
+                      style={{ paddingLeft: 20, paddingRight: 20, textAlign: "right", position: "sticky", right: 0, zIndex: 2, background: "white", borderLeft: "1px solid rgba(148,163,184,0.25)", width: 100 }}
+                    >
                       Ações
                     </th>
                   </tr>
@@ -1777,114 +1526,163 @@ export default function AdminProjetosPage() {
                     paginatedProjects.map((project, rowIdx) => (
                       <TooltipProvider key={project.id} delayDuration={300}>
                         <tr
-                          className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors cursor-pointer ${rowIdx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                          className={`group transition-colors cursor-pointer ${rowIdx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"}`}
                           onClick={() => handleViewProject(project)}
                         >
+                          {/* ID */}
                           {visibleCols.includes("id") && (
-                            <td className="px-3 py-2.5 font-mono text-slate-400 overflow-hidden">
-                              <span className="block truncate">#{project.id}</span>
-                            </td>
-                          )}
-                          {visibleCols.includes("name") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate font-semibold text-slate-900">{project.name}</span>
-                            </td>
-                          )}
-                          {visibleCols.includes("client") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate text-blue-600 font-medium">{project.client}</span>
-                            </td>
-                          )}
-                          {visibleCols.includes("agency") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate text-slate-600">{project.agency}</span>
-                            </td>
-                          )}
-                          {visibleCols.includes("type") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate text-slate-500">{project.type}</span>
-                            </td>
-                          )}
-                          {visibleCols.includes("status") && (
-                            <td className="px-3 py-2.5">
-                              {getStatusBadge(project.status)}
-                            </td>
-                          )}
-                          {visibleCols.includes("progress") && (
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex-1 h-1.5 rounded-full bg-slate-200 min-w-[40px]">
-                                  <div
-                                    className="h-1.5 rounded-full bg-blue-500"
-                                    style={{ width: `${project.progress}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-600 flex-shrink-0">{project.progress}%</span>
-                              </div>
-                            </td>
-                          )}
-                          {visibleCols.includes("budget") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate font-semibold text-slate-900">
-                                R$ {project.budget.toLocaleString("pt-BR")}
-                              </span>
-                            </td>
-                          )}
-                          {visibleCols.includes("team") && (
-                            <td className="px-3 py-2.5 text-center text-slate-600">
-                              {project.team}
-                            </td>
-                          )}
-                          {visibleCols.includes("created") && (
-                            <td className="px-3 py-2.5 overflow-hidden">
-                              <span className="block truncate text-slate-500">{project.createdDate}</span>
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <span className="font-mono text-xs text-slate-400">#{project.id}</span>
                             </td>
                           )}
 
-                          {/* Actions — sticky */}
+                          {/* Projeto */}
+                          {visibleCols.includes("name") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                                  style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+                                >
+                                  {project.name.trim().split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm text-slate-900 truncate">{project.name}</p>
+                                  <p className="text-xs text-slate-400 truncate">{project.consultant || project.agency}</p>
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Cliente */}
+                          {visibleCols.includes("client") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-1.5">
+                                <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="text-xs text-blue-600 font-medium truncate">{project.client}</span>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Empresa (agency/company/nomad) */}
+                          {visibleCols.includes("agency") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-1.5">
+                                <Briefcase className="h-3 w-3 text-slate-400 shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-xs text-slate-600 truncate">{project.agency}</span>
+                                  {project.companyType && (
+                                    <span className={`mt-0.5 inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${
+                                      project.companyType === "agency"
+                                        ? "bg-orange-100 text-orange-700"
+                                        : project.companyType === "nomad"
+                                        ? "bg-teal-100 text-teal-700"
+                                        : "bg-blue-100 text-blue-700"
+                                    }`}>
+                                      {project.companyType === "agency" ? "Agency" : project.companyType === "nomad" ? "Nomad" : "Company"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Tipo */}
+                          {visibleCols.includes("type") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-200 whitespace-nowrap">
+                                {project.type}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Status */}
+                          {visibleCols.includes("status") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              {getStatusBadge(project.status)}
+                            </td>
+                          )}
+
+                          {/* Progresso */}
+                          {visibleCols.includes("progress") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 rounded-full bg-slate-200 min-w-[40px]">
+                                  <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${project.progress}%` }} />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-500 shrink-0 w-7 text-right">{project.progress}%</span>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Orçamento */}
+                          {visibleCols.includes("budget") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-1.5">
+                                <DollarSign className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="text-xs font-semibold text-slate-900">R$ {project.budget.toLocaleString("pt-BR")}</span>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Equipe */}
+                          {visibleCols.includes("team") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-1.5">
+                                <Users className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="text-xs text-slate-600">{project.team}</span>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Criação */}
+                          {visibleCols.includes("created") && (
+                            <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="text-xs text-slate-500">{project.createdDate}</span>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Actions */}
                           <td
-                            className="sticky right-0 bg-inherit px-2 py-2.5 border-l border-slate-100 z-10 w-[100px]"
+                            className="px-5 py-3.5"
+                            style={{ position: "sticky", right: 0, zIndex: 1, background: rowIdx % 2 === 0 ? "#ffffff" : "#f1f4f8", borderLeft: "1px solid rgba(148,163,184,0.25)" }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center gap-0.5">
+                            <div className="flex items-center justify-end gap-0">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                                    onClick={() => handleViewProject(project)}
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
+                                  <Button variant="ghost" size="sm" onClick={() => handleViewProject(project)} className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50">
+                                    <Eye className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">Visualizar</TooltipContent>
+                                <TooltipContent className="text-xs">Visualizar</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
-                                    onClick={() => handleEditProject(project)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
+                                  <Button variant="ghost" size="sm" onClick={() => handleCloneProject(project)} className="h-5 w-5 p-0 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Copy className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">Editar</TooltipContent>
+                                <TooltipContent className="text-xs">Duplicar</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                                    onClick={() => handleStartCancelProject(project)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                  <Button variant="ghost" size="sm" onClick={() => handleEditProject(project)} className="h-5 w-5 p-0 rounded text-violet-500 hover:text-violet-700 hover:bg-violet-50">
+                                    <Pencil className="h-2.5 w-2.5" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">Cancelar</TooltipContent>
+                                <TooltipContent className="text-xs">Editar</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="sm" onClick={() => handleStartCancelProject(project)} className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50">
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">Cancelar</TooltipContent>
                               </Tooltip>
                             </div>
                           </td>
@@ -1897,49 +1695,49 @@ export default function AdminProjetosPage() {
             </div>
 
             {/* ── Bottom bar ── */}
-            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50">
-              <ItemsPerPageSelect
-                value={itemsPerPage}
-                onChange={(v) => { setItemsPerPage(v); setCurrentPage(1) }}
-                variant="bottom"
-              />
-              <span className="text-xs text-slate-500">
-                {startIndex + 1}–{Math.min(endIndex, totalProjects)} de {totalProjects}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 w-7 p-0"
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+              <div className="flex items-center gap-2">
+                <ItemsPerPageSelect
+                  value={itemsPerPage.toString()}
+                  onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+                  variant="bottom"
+                />
+                <span className="text-xs text-slate-400">
+                  de {filteredProjects.length} projeto{filteredProjects.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
+                </button>
                 {getPageNumbers().map((pg, i) =>
                   pg === "..." ? (
-                    <span key={`dots2-${i}`} className="text-xs text-slate-400 px-1">…</span>
+                    <span key={`dots2-${i}`} className="text-xs text-slate-300 px-0.5">·</span>
                   ) : (
-                    <Button
-                      key={pg}
-                      size="sm"
-                      variant={currentPage === pg ? "default" : "outline"}
-                      className={`h-7 w-7 p-0 text-xs ${currentPage === pg ? "btn-brand" : ""}`}
-                      onClick={() => setCurrentPage(pg as number)}
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(Number(pg))}
+                      className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                        pg === currentPage
+                          ? "bg-blue-500 text-white shadow-sm shadow-blue-200"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                      }`}
                     >
                       {pg}
-                    </Button>
+                    </button>
                   )
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 w-7 p-0"
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages || totalPages === 0}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
+                </button>
               </div>
             </div>
           </Card>
@@ -2472,7 +2270,75 @@ export default function AdminProjetosPage() {
           )}
           </>
         ) : (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto flex flex-col">
+            {/* Toolbar for kanban/planner views */}
+            <Card className="border border-slate-200/70 shadow-sm overflow-hidden mb-3 shrink-0">
+              <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-50/60">
+                {/* View mode tabs */}
+                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant={viewMode === "accordion" ? "default" : "ghost"}
+                    onClick={() => setViewMode("accordion")}
+                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                      viewMode === "accordion"
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        : "hover:bg-background"
+                    }`}
+                  >
+                    <List className="h-3 w-3 mr-1" />
+                    Lista
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={viewMode === "kanban" ? "default" : "ghost"}
+                    onClick={() => setViewMode("kanban")}
+                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                      viewMode === "kanban"
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        : "hover:bg-background"
+                    }`}
+                  >
+                    <LayoutGrid className="h-3 w-3 mr-1" />
+                    Kanban
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={viewMode === "planner" ? "default" : "ghost"}
+                    onClick={() => setViewMode("planner")}
+                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                      viewMode === "planner"
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        : "hover:bg-background"
+                    }`}
+                  >
+                    <LayoutDashboard className="h-3 w-3 mr-1" />
+                    Planejador
+                  </Button>
+                </div>
+                {viewMode === "kanban" && (
+                  <Button
+                    onClick={handleAddColumn}
+                    size="sm"
+                    className="h-7 text-xs px-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Nova Coluna
+                  </Button>
+                )}
+                {viewMode === "planner" && (
+                  <Button
+                    onClick={handleAddPlannerColumn}
+                    size="sm"
+                    className="h-7 text-xs px-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Nova Coluna
+                  </Button>
+                )}
+              </div>
+            </Card>
+
             {viewMode === "kanban" && (
               <div className="py-2 pb-0">
                 <DndContext
@@ -2781,66 +2647,132 @@ export default function AdminProjetosPage() {
         )}
 
         <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Clonar Projeto</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Tem certeza que deseja clonar este projeto?</p>
-                <p className="text-sm text-gray-600 mb-4">
-                  <strong>Projeto original:</strong> {projectToClone?.name}
-                </p>
-                <div className="bg-blue-50 border border-blue-200 p-3 rounded text-sm text-gray-700 mb-4">
-                  <p className="font-medium mb-2">O que será clonado:</p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Informações do cliente e agência</li>
-                    <li>Equipe e nômades designados</li>
-                    <li>Tarefas e configurações</li>
-                    <li><strong>Produtos disponíveis para contratar (sem dados de contratação anterior)</strong></li>
-                  </ul>
+          <DialogContent className="sm:max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Brand header */}
+            <div className="app-brand-header px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full bg-white/20 flex items-center justify-center">
+                  <Copy className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-white">Duplicar Projeto</h2>
+                  <p className="text-xs text-white/60 mt-0.5">Selecione o que deseja incluir na cópia</p>
                 </div>
               </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Name field */}
               <div>
-                <Label htmlFor="clone-name" className="text-sm font-medium mb-2 block">
-                  Nome do Projeto Clonado
+                <Label htmlFor="clone-name" className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 block">
+                  Nome do Novo Projeto
                 </Label>
                 <Input
                   id="clone-name"
                   value={cloneProjectName}
                   onChange={(e) => setCloneProjectName(e.target.value)}
-                  placeholder="Digite o nome do novo projeto"
-                  className="w-full"
+                  placeholder="Nome do projeto duplicado"
+                  className="h-9 text-sm"
                 />
               </div>
-              <div className="flex items-start gap-2 bg-green-50 p-3 rounded">
-                <input
-                  type="checkbox"
-                  id="clone-and-edit"
-                  checked={cloneAndEdit}
-                  onChange={(e) => setCloneAndEdit(e.target.checked)}
-                  className="rounded mt-1"
-                />
-                <label htmlFor="clone-and-edit" className="text-sm text-gray-700 cursor-pointer">
-                  Desejo editar o projeto clonado e escolher/contratar produtos após a criação
-                </label>
+
+              {/* Options */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">O que clonar</p>
+                <div className="space-y-2">
+                  {/* Dados do projeto - locked */}
+                  <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 opacity-70">
+                    <div className="mt-0.5 h-4 w-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
+                      <CheckCircle className="h-2.5 w-2.5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Dados do Projeto</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Cliente, agência, tipo, datas e descrição — sempre incluídos</p>
+                    </div>
+                  </div>
+
+                  {/* Equipe */}
+                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <Checkbox
+                      checked={cloneOptions.team}
+                      onCheckedChange={(v) => setCloneOptions(o => ({ ...o, team: !!v }))}
+                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Equipe / Usuários</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Consultor responsável, nômades e membros da equipe</p>
+                    </div>
+                  </label>
+
+                  {/* Produtos */}
+                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <Checkbox
+                      checked={cloneOptions.products}
+                      onCheckedChange={(v) => setCloneOptions(o => ({ ...o, products: !!v }))}
+                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Produtos</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Lista de produtos disponíveis (dados de contratação serão resetados)</p>
+                    </div>
+                  </label>
+
+                  {/* Cofre */}
+                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <Checkbox
+                      checked={cloneOptions.vault}
+                      onCheckedChange={(v) => setCloneOptions(o => ({ ...o, vault: !!v }))}
+                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Arquivos e Senhas (Cofre)</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Credenciais e cartões de pagamento — pode remover antes de salvar</p>
+                    </div>
+                  </label>
+
+                  {/* Orçamento */}
+                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <Checkbox
+                      checked={cloneOptions.financial}
+                      onCheckedChange={(v) => setCloneOptions(o => ({ ...o, financial: !!v }))}
+                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Orçamento</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Valor e orçamento do projeto (gastos serão zerados)</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Info note */}
+              <div className="flex gap-2.5 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-3">
+                <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  O projeto será aberto para revisão antes de ser salvo. Você poderá editar e remover qualquer informação na tela de criação.
+                </p>
               </div>
             </div>
-            <DialogFooter>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 bg-slate-50 border-t border-slate-100">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setShowCloneDialog(false)
-                  setProjectToClone(null)
-                  setCloneProjectName("")
-                }}
+                size="sm"
+                onClick={() => { setShowCloneDialog(false); setProjectToClone(null); setCloneProjectName("") }}
+                className="h-8 px-4 text-xs"
               >
                 Cancelar
               </Button>
-              <Button onClick={handleConfirmClone} className="btn-brand">
-                Clonar Projeto
+              <Button
+                size="sm"
+                onClick={handleConfirmCloneAndOpen}
+                disabled={!cloneProjectName.trim()}
+                className="h-8 px-4 text-xs btn-brand"
+              >
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                Abrir para Editar
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -3024,13 +2956,14 @@ export default function AdminProjetosPage() {
           onSkip={handleSkipWizard}
           onCreateWithAI={handleCreateWithAI}
         />
-        <ProjectCreateSlidePanel
+        <ProjectCreateNewPanel
           open={showProjectCreate}
-          onClose={() => {
-            setShowProjectCreate(false)
-            setProjectCreateData(null)
+          onOpenChange={(v) => {
+            setShowProjectCreate(v)
+            if (!v) setProjectCreateData(null)
           }}
           initialData={projectCreateData}
+          cloneMode={!!projectCreateData}
         />
       </div>
     </div>
