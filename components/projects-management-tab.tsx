@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { mockProjects as allPlatformProjects } from "@/lib/mock-projects"
+import { mockProjects as allPlatformProjects, addMockProject } from "@/lib/mock-projects"
 
 interface ProjectsManagementTabProps {
   company: {
@@ -39,11 +39,15 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const [cloneInitialData, setCloneInitialData] = useState<any>(null)
   const [quickStatusFilter, setQuickStatusFilter] = useState<string | null>(null)
 
-  const companyProjects = useMemo(() => {
-    return allPlatformProjects.filter(
-      (p) => p.companyId === parseInt(company.id)
-    )
-  }, [company.id])
+  const [companyProjects, setCompanyProjects] = useState(() =>
+    allPlatformProjects.filter((p) => p.companyId === parseInt(company.id))
+  )
+
+  const handleProjectCreated = (project: any) => {
+    const withCompany = { ...project, companyId: parseInt(company.id) }
+    addMockProject(withCompany)
+    setCompanyProjects(prev => [...prev, withCompany])
+  }
 
   const filteredProjects = useMemo(() => {
     return companyProjects.filter((p) => {
@@ -260,33 +264,25 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                       <div className="flex items-center justify-end gap-0">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleViewProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors">
-                              <Eye className="h-3 w-3" />
-                            </button>
+                            <Button variant="ghost" size="sm" onClick={() => handleViewProject(project)} className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50">
+                              <Eye className="h-2.5 w-2.5" />
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Visualizar</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleCloneProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 transition-colors">
-                              <Copy className="h-3 w-3" />
-                            </button>
+                            <Button variant="ghost" size="sm" onClick={() => handleCloneProject(project)} className="h-5 w-5 p-0 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50">
+                              <Copy className="h-2.5 w-2.5" />
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Duplicar</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleEditProject(project)} className="h-6 w-6 flex items-center justify-center rounded hover:bg-violet-50 text-violet-500 hover:text-violet-700 transition-colors">
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent className="text-xs">Editar</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50">
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Cancelar</TooltipContent>
                         </Tooltip>
@@ -339,6 +335,10 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
         onOpenChange={setModalOpen}
         project={selectedProject}
         mode={modalMode}
+        onEdit={() => setModalMode("edit")}
+        onClone={() => handleCloneProject(selectedProject)}
+        onExport={() => console.log("Exportar:", selectedProject?.name)}
+        onCancel={() => { setModalOpen(false) }}
         onSave={handleSaveProjectChanges}
       />
     )}
@@ -347,6 +347,9 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
     <ProjectCreateNewPanel
       open={createPanelOpen}
       onOpenChange={setCreatePanelOpen}
+      companyId={parseInt(company.id)}
+      companyName={company.name}
+      onCreate={handleProjectCreated}
     />
 
     {/* Clone panel */}
@@ -356,6 +359,9 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
         onOpenChange={(v) => { setClonePanelOpen(v); if (!v) setCloneInitialData(null) }}
         initialData={cloneInitialData}
         cloneMode
+        companyId={parseInt(company.id)}
+        companyName={company.name}
+        onCreate={handleProjectCreated}
       />
     )}
 

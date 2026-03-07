@@ -39,6 +39,8 @@ export const mockProjects = [
     value: 15000,
     fromLead: true,
     tasks: 12,
+    isActive: true,
+    lifecycle: "avulso",
     companyId: 1,
   },
   {
@@ -66,6 +68,9 @@ export const mockProjects = [
     value: 25000,
     fromLead: false,
     tasks: 18,
+    isActive: true,
+    lifecycle: "mensal",
+    billingConfig: { billingDay: 1, billingStartDate: "2024-02-01" },
     companyId: 2,
   },
   {
@@ -93,6 +98,8 @@ export const mockProjects = [
     value: 8000,
     fromLead: true,
     tasks: 7,
+    isActive: false,
+    lifecycle: "avulso",
     companyId: 4,
   },
   {
@@ -120,6 +127,8 @@ export const mockProjects = [
     value: 32000,
     fromLead: true,
     tasks: 25,
+    isActive: true,
+    lifecycle: "avulso",
     companyId: 3,
   },
   {
@@ -147,6 +156,8 @@ export const mockProjects = [
     value: 45000,
     fromLead: false,
     tasks: 20,
+    isActive: false,
+    lifecycle: "avulso",
     companyId: 5,
   },
   {
@@ -174,6 +185,9 @@ export const mockProjects = [
     value: 62000,
     fromLead: true,
     tasks: 38,
+    isActive: true,
+    lifecycle: "mensal",
+    billingConfig: { billingDay: 20, billingStartDate: "2023-11-15" },
     companyId: 17,
   },
   {
@@ -201,6 +215,9 @@ export const mockProjects = [
     value: 78000,
     fromLead: false,
     tasks: 45,
+    isActive: true,
+    lifecycle: "mensal",
+    billingConfig: { billingDay: 15, billingStartDate: "2023-10-01" },
     companyId: 10,
   },
   {
@@ -228,6 +245,8 @@ export const mockProjects = [
     value: 18000,
     fromLead: true,
     tasks: 10,
+    isActive: true,
+    lifecycle: "avulso",
     companyId: 14,
   },
   {
@@ -255,6 +274,9 @@ export const mockProjects = [
     value: 48000,
     fromLead: true,
     tasks: 30,
+    isActive: true,
+    lifecycle: "mensal",
+    billingConfig: { billingDay: 10, billingStartDate: "2024-02-10" },
     companyId: 7,
   },
   {
@@ -282,6 +304,8 @@ export const mockProjects = [
     value: 35000,
     fromLead: false,
     tasks: 22,
+    isActive: true,
+    lifecycle: "avulso",
     companyId: 12,
   },
   {
@@ -309,6 +333,9 @@ export const mockProjects = [
     value: 95000,
     fromLead: true,
     tasks: 56,
+    isActive: true,
+    lifecycle: "mensal",
+    billingConfig: { billingDay: 1, billingStartDate: "2023-11-01" },
     companyId: 13,
   },
   {
@@ -336,6 +363,13 @@ export const mockProjects = [
     value: 28000,
     fromLead: true,
     tasks: 16,
+    isActive: true,
+    lifecycle: "avulso",
     companyId: 15,
   },
 ]
+
+/** Push a newly created project into the shared mock array so all views see it. */
+export function addMockProject(project: any): void {
+  mockProjects.push(project)
+}

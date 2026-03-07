@@ -9,7 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import {
   FolderKanban, Mail, Calendar, DollarSign, User, AlertCircle, Check, Camera, ZoomIn, Trash2, Crosshair,
+  UserPlus, Search, Building2, ShoppingBag, Package, X as XIcon,
 } from "lucide-react"
+import { mockCompaniesList, mockClientsByCompany, mockUsersByCompany } from "@/lib/mock-companies"
+import type { MockClientItem } from "@/lib/mock-companies"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
@@ -85,6 +88,12 @@ interface ProjectCreateNewPanelProps {
     status: ProjectStatus
   }>
   cloneMode?: boolean
+  /** When set, empresa field is shown as read-only with this name (company-modal mode) */
+  companyName?: string
+  /** When set, empresa field is shown as read-only and maps to this id */
+  companyId?: number
+  /** When true, empresa field becomes a dropdown (admin-projetos mode) */
+  allowCompanySelect?: boolean
 }
 
 interface FormData {
@@ -126,7 +135,10 @@ const EMPTY_FORM: FormData = {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialData, cloneMode = false }: ProjectCreateNewPanelProps) {
+export function ProjectCreateNewPanel({
+  open, onOpenChange, onCreate, initialData, cloneMode = false,
+  companyName, companyId: companyIdProp, allowCompanySelect = false,
+}: ProjectCreateNewPanelProps) {
   const { toast } = useToast()
   const { sidebarWidth } = useSidebar()
   const [loading, setLoading] = useState(false)
@@ -134,8 +146,35 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const ALL_ACCORDIONS = ["dados", "responsavel", "datas", "orcamento", "config"]
   const [openAccordions, setOpenAccordions] = useState<string[]>(["dados"])
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  // Company-scoping state
+  const [resolvedCompanyId, setResolvedCompanyId] = useState<number | null>(companyIdProp ?? null)
+  const [resolvedCompanyName, setResolvedCompanyName] = useState<string>(companyName ?? "")
+
+  // New-client inline form state
+  const [showNewClientForm, setShowNewClientForm] = useState(false)
+  const [newClientName, setNewClientName] = useState("")
+  const [newClientEmail, setNewClientEmail] = useState("")
+  const [localClients, setLocalClients] = useState<MockClientItem[]>([])
+
+  // Products confirmation + step state
+  const [showProductsDialog, setShowProductsDialog] = useState(false)
+  const [showProductsStep, setShowProductsStep] = useState(false)
+  const [productSearch, setProductSearch] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<{name:string;price:number} | null>(null)
+  const [productQty, setProductQty] = useState(1)
+
+  const FAKE_PRODUCTS = [
+    { name: "Gestão de Redes Sociais", price: 2500 },
+    { name: "Criação de Site Institucional", price: 8000 },
+    { name: "Identidade Visual Completa", price: 5500 },
+    { name: "SEO e Tráfego Pago", price: 3200 },
+    { name: "Produção de Conteúdo Mensal", price: 1800 },
+    { name: "Branding & Posicionamento", price: 6000 },
+    { name: "Desenvolvimento de E-commerce", price: 12000 },
+    { name: "Consultoria Estratégica", price: 4500 },
+  ]
 
   // Avatar / crop states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -172,6 +211,18 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
       setCropOpen(false)
       setShowAvatarMenu(false)
       setOpenAccordions(["dados"])
+      // Reset company-scoping
+      setResolvedCompanyId(companyIdProp ?? null)
+      setResolvedCompanyName(companyName ?? "")
+      setLocalClients([])
+      setShowNewClientForm(false)
+      setNewClientName("")
+      setNewClientEmail("")
+      setShowProductsDialog(false)
+      setShowProductsStep(false)
+      setSelectedProduct(null)
+      setProductQty(1)
+      setProductSearch("")
     }
   }, [open])
 
@@ -185,7 +236,9 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
     const e: FormErrors = {}
     if (!formData.nome.trim()) e.nome = "Nome do projeto é obrigatório"
     if (!formData.tipo) e.tipo = "Tipo é obrigatório"
-    if (!formData.agencia.trim()) e.agencia = "Agência é obrigatória"
+    // Empresa required only when allowCompanySelect is true (must pick one)
+    if (allowCompanySelect && !resolvedCompanyId) e.agencia = "Empresa é obrigatória"
+    if (!formData.agencia.trim() && !allowCompanySelect && !companyName) e.agencia = "Empresa é obrigatória"
     if (!formData.cliente.trim()) e.cliente = "Cliente é obrigatório"
     if (!formData.consultor.trim()) e.consultor = "Consultor é obrigatório"
     if (!formData.emailConsultor.trim()) {
@@ -199,41 +252,47 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
 
   const handleSubmit = () => {
     if (!validateForm()) { setSubmitAttempted(true); return }
-    setShowConfirmDialog(true)
+    setShowProductsDialog(true)
   }
 
-  const confirmSubmit = async () => {
+  const buildProject = (status: string, products?: {name:string;price:number;qty:number}[]) => ({
+    id: Date.now(),
+    name: formData.nome,
+    type: formData.tipo,
+    agency: resolvedCompanyName || formData.agencia,
+    client: formData.cliente,
+    clientCNPJ: formData.clienteCnpj,
+    consultant: formData.consultor,
+    consultantEmail: formData.emailConsultor,
+    startDate: formData.dataInicio,
+    deadline: formData.prazo,
+    budget: parseFloat(formData.orcamento.replace(/[^\d.,]/g, "").replace(",", ".")) || 0,
+    portfolioPermission: formData.permitePortfolio,
+    bitrixSync: formData.sincronizadoBitrix,
+    descricao: formData.descricao,
+    status,
+    companyId: resolvedCompanyId ?? undefined,
+    lifecycle: "avulso",
+    progress: 0,
+    spent: 0,
+    team: 0,
+    nomades: [],
+    products: products ?? [],
+    createdDate: new Date().toLocaleDateString("pt-BR"),
+    avatar: avatarPreview,
+    fromLead: false,
+    overdue: false,
+    value: parseFloat(formData.orcamento.replace(/[^\d.,]/g, "").replace(",", ".")) || 0,
+  })
+
+  const confirmSubmit = async (status: string, products?: {name:string;price:number;qty:number}[]) => {
     setLoading(true)
-    setShowConfirmDialog(false)
+    setShowProductsDialog(false)
+    setShowProductsStep(false)
     try {
-      const project = {
-        id: Date.now(),
-        name: formData.nome,
-        type: formData.tipo,
-        agency: formData.agencia,
-        client: formData.cliente,
-        clientCNPJ: formData.clienteCnpj,
-        consultant: formData.consultor,
-        consultantEmail: formData.emailConsultor,
-        startDate: formData.dataInicio,
-        deadline: formData.prazo,
-        budget: parseFloat(formData.orcamento.replace(/[^\d.,]/g, "").replace(",", ".")) || 0,
-        portfolioPermission: formData.permitePortfolio,
-        bitrixSync: formData.sincronizadoBitrix,
-        descricao: formData.descricao,
-        status: formData.status,
-        progress: 0,
-        spent: 0,
-        team: 0,
-        nomades: [],
-        createdDate: new Date().toLocaleDateString("pt-BR"),
-        avatar: avatarPreview,
-        fromLead: false,
-        overdue: false,
-        value: parseFloat(formData.orcamento.replace(/[^\d.,]/g, "").replace(",", ".")) || 0,
-      }
-      await new Promise((r) => setTimeout(r, 500))
-      toast({ title: "Sucesso", description: cloneMode ? "Projeto clonado com sucesso!" : "Projeto criado com sucesso!" })
+      const project = buildProject(status, products)
+      await new Promise((r) => setTimeout(r, 400))
+      toast({ title: "Sucesso", description: cloneMode ? "Projeto clonado!" : "Projeto criado!" })
       onCreate(project)
       onOpenChange(false)
     } catch {
@@ -412,28 +471,6 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
 
-            {/* STATUS SELECTOR */}
-            <div className="mb-4 w-fit px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-blue-900 whitespace-nowrap">Status:</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {STATUS_OPTIONS.map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={() => updateField("status", key)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs transition-all duration-200",
-                        formData.status === key ? cfg.btnSelected : cfg.btn,
-                      )}
-                    >
-                      <span className={cn("h-2 w-2 rounded-full flex-shrink-0", cfg.dot)} />
-                      {cfg.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             {/* Validation warning */}
             {submitAttempted && totalErrors > 0 && (
               <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
@@ -501,27 +538,118 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
                         {errors.tipo && <p className="text-xs text-red-500">{errors.tipo}</p>}
                       </div>
 
-                      {/* Agência */}
-                      <div className="space-y-1">
-                        <Label className="text-xs font-medium text-slate-600">Agência *</Label>
-                        <Input
-                          placeholder="Nome da agência"
-                          value={formData.agencia}
-                          onChange={(e) => updateField("agencia", e.target.value)}
-                          className={cn("h-8 text-xs", errors.agencia && "border-red-400")}
-                        />
+                      {/* Empresa */}
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-xs font-medium text-slate-600">Empresa *</Label>
+                        {companyName ? (
+                          <div className="flex items-center gap-2 h-8 px-2.5 bg-slate-100 rounded-md border border-slate-200">
+                            <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="text-xs font-semibold text-slate-700 truncate">{companyName}</span>
+                          </div>
+                        ) : allowCompanySelect ? (
+                          <Select
+                            value={resolvedCompanyId ? String(resolvedCompanyId) : ""}
+                            onValueChange={(v) => {
+                              const id = Number(v)
+                              const co = mockCompaniesList.find(c => c.id === id)
+                              setResolvedCompanyId(id)
+                              setResolvedCompanyName(co?.name ?? "")
+                              updateField("agencia", co?.name ?? "")
+                              updateField("cliente", "")
+                              updateField("clienteCnpj", "")
+                              updateField("consultor", "")
+                              updateField("emailConsultor", "")
+                              setLocalClients([])
+                            }}
+                          >
+                            <SelectTrigger className={cn("h-8 text-xs", errors.agencia && "border-red-400")}>
+                              <SelectValue placeholder="Selecione a empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {mockCompaniesList.map(c => (
+                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder="Nome da empresa"
+                            value={formData.agencia}
+                            onChange={(e) => { updateField("agencia", e.target.value); setResolvedCompanyName(e.target.value) }}
+                            className={cn("h-8 text-xs", errors.agencia && "border-red-400")}
+                          />
+                        )}
                         {errors.agencia && <p className="text-xs text-red-500">{errors.agencia}</p>}
                       </div>
 
                       {/* Cliente */}
-                      <div className="space-y-1">
+                      <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">Cliente *</Label>
-                        <Input
-                          placeholder="Nome do cliente"
-                          value={formData.cliente}
-                          onChange={(e) => updateField("cliente", e.target.value)}
-                          className={cn("h-8 text-xs", errors.cliente && "border-red-400")}
-                        />
+                        {resolvedCompanyId ? (
+                          <>
+                            {!showNewClientForm ? (
+                              <div className="flex gap-1.5">
+                                <Select
+                                  value={formData.cliente}
+                                  onValueChange={(v) => {
+                                    const clients = [...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients]
+                                    const cl = clients.find(c => c.name === v)
+                                    updateField("cliente", v)
+                                    if (cl?.cnpj) updateField("clienteCnpj", cl.cnpj)
+                                  }}
+                                >
+                                  <SelectTrigger className={cn("h-8 text-xs flex-1", errors.cliente && "border-red-400")}>
+                                    <SelectValue placeholder="Selecione um cliente" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {[...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients].map(c => (
+                                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowNewClientForm(true)}
+                                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+                                  title="Novo cliente"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5 p-2.5 bg-violet-50 rounded-lg border border-violet-200">
+                                <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">Novo cliente</p>
+                                <Input placeholder="Nome do cliente *" value={newClientName} onChange={e => setNewClientName(e.target.value)} className="h-7 text-xs" />
+                                <Input placeholder="E-mail" value={newClientEmail} onChange={e => setNewClientEmail(e.target.value)} className="h-7 text-xs" />
+                                <div className="flex gap-1.5 pt-0.5">
+                                  <button type="button"
+                                    onClick={() => {
+                                      if (!newClientName.trim()) return
+                                      const nc: MockClientItem = { id: Date.now(), name: newClientName.trim(), email: newClientEmail.trim() }
+                                      setLocalClients(prev => [...prev, nc])
+                                      updateField("cliente", nc.name)
+                                      setNewClientName("")
+                                      setNewClientEmail("")
+                                      setShowNewClientForm(false)
+                                    }}
+                                    className="flex-1 h-7 rounded-md btn-brand text-xs font-semibold"
+                                  >Adicionar</button>
+                                  <button type="button" onClick={() => setShowNewClientForm(false)}
+                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 hover:bg-slate-50"
+                                  ><XIcon className="h-3 w-3" /></button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <Input
+                            placeholder={allowCompanySelect ? "Selecione uma empresa primeiro" : "Nome do cliente"}
+                            disabled={allowCompanySelect && !resolvedCompanyId}
+                            value={formData.cliente}
+                            onChange={(e) => updateField("cliente", e.target.value)}
+                            className={cn("h-8 text-xs", errors.cliente && "border-red-400")}
+                          />
+                        )}
                         {errors.cliente && <p className="text-xs text-red-500">{errors.cliente}</p>}
                       </div>
 
@@ -555,15 +683,41 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
                   <div className="border-t bg-white px-3 py-3 grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs font-medium text-slate-600">Consultor Responsável *</Label>
-                      <div className="relative">
-                        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                        <Input
-                          placeholder="Nome do consultor"
+                      {resolvedCompanyId ? (
+                        <Select
                           value={formData.consultor}
-                          onChange={(e) => updateField("consultor", e.target.value)}
-                          className={cn("h-8 text-xs pl-8", errors.consultor && "border-red-400")}
-                        />
-                      </div>
+                          onValueChange={(v) => {
+                            const users = mockUsersByCompany[resolvedCompanyId] ?? []
+                            const u = users.find(u => u.name === v)
+                            updateField("consultor", v)
+                            if (u?.email) updateField("emailConsultor", u.email)
+                          }}
+                        >
+                          <SelectTrigger className={cn("h-8 text-xs", errors.consultor && "border-red-400")}>
+                            <SelectValue placeholder="Selecione o consultor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(mockUsersByCompany[resolvedCompanyId] ?? []).map(u => (
+                              <SelectItem key={u.id} value={u.name}>
+                                <div className="flex flex-col">
+                                  <span>{u.name}</span>
+                                  <span className="text-[10px] text-slate-400">{u.role}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="relative">
+                          <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                          <Input
+                            placeholder="Nome do consultor"
+                            value={formData.consultor}
+                            onChange={(e) => updateField("consultor", e.target.value)}
+                            className={cn("h-8 text-xs pl-8", errors.consultor && "border-red-400")}
+                          />
+                        </div>
+                      )}
                       {errors.consultor && <p className="text-xs text-red-500">{errors.consultor}</p>}
                     </div>
                     <div className="col-span-2 space-y-1">
@@ -726,7 +880,7 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
               Cancelar
             </Button>
             <Button
-              className="bg-gradient-to-r from-blue-600 to-fuchsia-600 hover:from-blue-700 hover:to-fuchsia-700"
+              className="btn-brand"
               onClick={handleSubmit}
               disabled={loading}
             >
@@ -736,26 +890,133 @@ export function ProjectCreateNewPanel({ open, onOpenChange, onCreate, initialDat
         </div>
       </div>
 
-      {/* Confirm dialog */}
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
+      {/* Products Confirmation Dialog */}
+      <AlertDialog open={showProductsDialog} onOpenChange={setShowProductsDialog}>
+        <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>{cloneMode ? "Confirmar Clone de Projeto" : "Confirmar Criação de Projeto"}</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-violet-600" />
+              Adicionar Produtos?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {cloneMode
-                ? <>Deseja criar uma cópia do projeto como <strong>{formData.nome}</strong>?</>
-                : <>Deseja realmente criar o projeto <strong>{formData.nome}</strong>?</>
-              }
+              Deseja adicionar produtos ao projeto <strong>{formData.nome}</strong> agora ou deixar para depois?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSubmit} className="bg-blue-600 hover:bg-blue-700">
-              {cloneMode ? "Clonar Projeto" : "Criar Projeto"}
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              className="btn-brand w-full"
+              onClick={() => { setShowProductsDialog(false); setShowProductsStep(true) }}
+            >
+              <ShoppingBag className="h-4 w-4 mr-2" />
+              Adicionar produtos agora
+            </Button>
+            <AlertDialogCancel
+              className="w-full mt-0"
+              onClick={() => confirmSubmit("draft")}
+            >
+              Deixar para depois (Rascunho)
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Products Step (inline overlay on panel) */}
+      {showProductsStep && (
+        <div className="fixed top-0 z-[60] h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 shadow-2xl"
+          style={{ left: `${sidebarWidth}px`, right: 0 }}>
+          <ModalBrandHeader
+            title="Adicionar Produto"
+            subtitle={`Projeto: ${formData.nome}`}
+            onClose={() => { setShowProductsStep(false); setShowProductsDialog(true) }}
+          />
+          <div className="flex-1 overflow-y-auto px-[50px] py-[40px] bg-slate-100">
+            <div className="max-w-lg mx-auto space-y-4">
+              <p className="text-sm text-slate-500">Selecione um produto e defina a quantidade. Mais produtos poderão ser adicionados após a criação do projeto.</p>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <Input
+                  placeholder="Buscar produto..."
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  className="pl-9 h-9 bg-white"
+                />
+              </div>
+
+              {/* Product list */}
+              <div className="space-y-2">
+                {FAKE_PRODUCTS.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => setSelectedProduct(p)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all",
+                      selectedProduct?.name === p.name
+                        ? "border-violet-500 bg-violet-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-violet-300"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center",
+                        selectedProduct?.name === p.name ? "bg-violet-100" : "bg-slate-100"
+                      )}>
+                        <Package className={cn("h-4 w-4", selectedProduct?.name === p.name ? "text-violet-600" : "text-slate-400")} />
+                      </div>
+                      <span className="text-sm font-medium text-slate-800">{p.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-600">
+                      R$ {p.price.toLocaleString("pt-BR")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Qty */}
+              {selectedProduct && (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Produto selecionado</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-800">{selectedProduct.name}</span>
+                    <span className="text-sm text-violet-700 font-bold">R$ {(selectedProduct.price * productQty).toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Label className="text-xs text-slate-500">Quantidade:</Label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setProductQty(q => Math.max(1, q - 1))}
+                        className="h-7 w-7 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-lg leading-none">−</button>
+                      <span className="w-8 text-center text-sm font-semibold">{productQty}</span>
+                      <button type="button" onClick={() => setProductQty(q => q + 1)}
+                        className="h-7 w-7 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-lg leading-none">+</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 shrink-0">
+            <Button variant="outline" onClick={() => { setShowProductsStep(false); setShowProductsDialog(true) }}>
+              Voltar
+            </Button>
+            <Button
+              className="btn-brand"
+              disabled={loading}
+              onClick={() => {
+                const products = selectedProduct
+                  ? [{ name: selectedProduct.name, price: selectedProduct.price, qty: productQty }]
+                  : []
+                confirmSubmit("awaiting-payment", products)
+              }}
+            >
+              {loading ? "Criando..." : "Concluir e Criar Projeto"}
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
+

@@ -34,6 +34,7 @@ import {
   Edit,
   CreditCard,
   UserIcon,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -149,6 +150,8 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   const [productSearch, setProductSearch] = useState("")
   const [productCategory, setProductCategory] = useState("Todos")
   const [activeTab, setActiveTab] = useState("info")
+  const [formLifecycle, setFormLifecycle] = useState<"Avulso" | "Mensal">("Avulso")
+  const [formBillingDay, setFormBillingDay] = useState<number>(15)
 
   const [showProductModal, setShowProductModal] = useState(false)
 
@@ -227,7 +230,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   const handleSaveDraft = async () => {
     const draftProject = {
       ...formData,
-      status: "planning" as const,
+      status: "draft" as const,
       id: Date.now(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -330,7 +333,9 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
         description: formData.description,
         client_id: Number.parseInt(formData.client_id),
         manager_id: Number.parseInt(formData.manager_id),
-        status: formData.status,
+        status: "awaiting-payment" as any,
+        lifecycle: formLifecycle,
+        billingConfig: formLifecycle === "Mensal" ? { billingDay: formBillingDay } : undefined,
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
         budget: formData.budget ? Number.parseFloat(formData.budget) : undefined,
@@ -1263,28 +1268,45 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label
-                                htmlFor="status"
-                                className="text-xs font-semibold text-green-900 dark:text-green-100"
-                              >
-                                Status
+                              <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
+                                Tipo de Projeto
                               </Label>
-                              <Select
-                                value={formData.status}
-                                onValueChange={(value: any) => updateField("status", value)}
-                              >
-                                <SelectTrigger className="h-9 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="planning">Planejamento</SelectItem>
-                                  <SelectItem value="active">Ativo</SelectItem>
-                                  <SelectItem value="on_hold">Em Espera</SelectItem>
-                                  <SelectItem value="completed">Concluído</SelectItem>
-                                  <SelectItem value="cancelled">Cancelado</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-2">
+                                {(["Avulso", "Mensal"] as const).map((lc) => (
+                                  <button
+                                    key={lc}
+                                    type="button"
+                                    onClick={() => setFormLifecycle(lc)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                                      formLifecycle === lc
+                                        ? "bg-violet-600 text-white border-violet-600"
+                                        : "bg-white border-slate-300 text-slate-600 hover:border-violet-400"
+                                    }`}
+                                  >
+                                    {lc === "Mensal" && <RefreshCw className="h-3 w-3" />}
+                                    {lc}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
+                            {formLifecycle === "Mensal" && (
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
+                                  Dia mensal de cobrança
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={28}
+                                    value={formBillingDay}
+                                    onChange={e => setFormBillingDay(Math.min(28, Math.max(1, parseInt(e.target.value) || 1)))}
+                                    className="h-9 w-20 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
+                                  />
+                                  <span className="text-xs text-slate-500">de cada mês</span>
+                                </div>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
 

@@ -1,5 +1,6 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { Textarea } from "@/components/ui/textarea"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 
 import { Label } from "@/components/ui/label"
 
@@ -71,6 +72,8 @@ import {
   ShieldCheck,
   KeyRound,
   RefreshCw,
+  Play,
+  Pause,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -79,6 +82,25 @@ import { DialogFooter } from "@/components/ui/dialog"
 import { ChevronLeft, ChevronRight, Search, ChevronDown, FolderOpen } from "lucide-react"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { useAccountType } from "@/contexts/account-type-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  buildProposalData,
+  exportProposalPDF,
+  processCustomDocx,
+  customDocxToPDF,
+  generateTemplateModel,
+  parseBrandGradient,
+  downloadBlob,
+  PROPOSAL_PLACEHOLDERS,
+  PROPOSAL_LOOP_PLACEHOLDERS,
+} from "@/lib/proposal-export"
 
 interface Project {
   id: number
@@ -108,9 +130,41 @@ interface ProjectManagementModalProps {
   onCancel?: () => void
 }
 
+const STATUS_LABEL_MAP: Record<string, { label: string; cls: string }> = {
+  "awaiting-payment": { label: "Ag. Pagamento",  cls: "bg-amber-500 text-white" },
+  "in-progress":      { label: "Em Andamento",    cls: "bg-blue-500 text-white" },
+  "completed":        { label: "Concluído",       cls: "bg-emerald-500 text-white" },
+  "negotiation":      { label: "Negociação",      cls: "bg-slate-500 text-white" },
+  "draft":            { label: "Rascunho",        cls: "bg-slate-400 text-white" },
+  "planning":         { label: "Planejamento",    cls: "bg-orange-500 text-white" },
+  "paused":           { label: "Pausado",         cls: "bg-slate-400 text-white" },
+  "cancelled":        { label: "Cancelado",       cls: "bg-red-500 text-white" },
+  "canceled":         { label: "Cancelado",       cls: "bg-red-500 text-white" },
+  "active":           { label: "Ativo",           cls: "bg-emerald-500 text-white" },
+  "overdue":          { label: "Atrasado",        cls: "bg-red-400 text-white" },
+}
+
+function getProjectStatusBadge(status: string) {
+  const entry = STATUS_LABEL_MAP[status] ?? { label: status, cls: "bg-slate-300 text-slate-700" }
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border-0 ${entry.cls}`}>
+      {entry.label}
+    </span>
+  )
+}
+
 export function ProjectManagementModal({ project, open, onOpenChange, mode, onEdit, onClone, onExport, onSave, onCancel }: ProjectManagementModalProps) {
   const { toast } = useToast()
-  const { sidebarWidth } = useSidebar()
+  const { sidebarWidth, sidebarSettings, agencyProfile } = useSidebar()
+  const { accountType } = useAccountType()
+  const canSeeNomadNames = accountType === "admin"
+
+  // ── Proposal export state ──────────────────────────────────────────────────
+  const [showCustomDocDialog, setShowCustomDocDialog] = useState(false)
+  const [customDocFile, setCustomDocFile] = useState<File | null>(null)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [isExportingDocx, setIsExportingDocx] = useState(false)
+  const [customDocDragOver, setCustomDocDragOver] = useState(false)
 
   // Avatar / crop state
   const [avatar, setAvatar] = useState<string | null>(null)
@@ -214,11 +268,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [allkoinExchangeRate] = useState(1.0)
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+  const [faturamentoSubTab, setFaturamentoSubTab] = useState<"faturas" | "formas-pagamento">("faturas")
+  const [showReativarDialog, setShowReativarDialog] = useState(false)
+  const [showAvulsoReativarAlert, setShowAvulsoReativarAlert] = useState(false)
 
   const [productSortBy, setProductSortBy] = useState<string>("nome")
 
   // Dados do Projeto tab
-  const DADOS_PROJECT_ACCORDIONS = ["info", "descricao"]
   const [dadosProjOpenAccordions, setDadosProjOpenAccordions] = useState<string[]>(["info"])
   const [isDadosProjEditMode, setIsDadosProjEditMode] = useState(false)
   const [isSavingDados, setIsSavingDados] = useState(false)
@@ -226,16 +282,44 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   const [showDadosProjCancelConfirm, setShowDadosProjCancelConfirm] = useState(false)
   const [dadosProjForm, setDadosProjForm] = useState({
     nomeProjeto: project?.name || "Novo Projeto",
-    situacao: "Ag. Pagamento",
-    agencia: "Lamego Academy",
-    consultor: "Equipe Lamego",
-    emailConsultor: "contato@lamego.com.vc",
-    cliente: "Florescer",
-    dataCriacao: "19/02/2025",
-    permitePortfolio: false,
-    sincronizadoBitrix: false,
-    descricao: "Projeto de hospedagem e cuidados para idosos da empresa Florescer. Inclui desenvolvimento de website institucional, sistema de gestão de pacientes, e materiais de marketing digital para divulgação dos serviços.",
+    situacao: project?.status || "Ag. Pagamento",
+    agencia: project?.agency || "Lamego Academy",
+    consultor: project?.consultant || "Equipe Lamego",
+    emailConsultor: project?.consultantEmail || "contato@lamego.com.vc",
+    cliente: project?.client || "Florescer",
+    dataCriacao: project?.createdDate || project?.created_at || "19/02/2025",
+    permitePortfolio: project?.portfolioPermission ?? false,
+    sincronizadoBitrix: project?.bitrixSync ?? false,
+    lifecycle: (project?.lifecycle === "mensal" ? "Mensal" : "Avulso") as "Avulso" | "Mensal",
+    isAtivo: project?.isActive ?? true,
+    diaCobranca: project?.billingConfig?.billingDay ?? 15,
+    dataInicioCobranca: project?.billingConfig?.billingStartDate ?? "",
+    descricao: project?.description || "Projeto de hospedagem e cuidados para idosos da empresa Florescer. Inclui desenvolvimento de website institucional, sistema de gestão de pacientes, e materiais de marketing digital para divulgação dos serviços.",
   })
+
+  // Dynamic accordion list - computed after dadosProjForm is declared
+  const DADOS_PROJECT_ACCORDIONS = ["info", "descricao", ...(dadosProjForm.lifecycle === "Mensal" ? ["ciclo"] : [])]
+
+  React.useEffect(() => {
+    if (project) {
+      setDadosProjForm({
+        nomeProjeto: project.name || "Novo Projeto",
+        situacao: project.status || "Ag. Pagamento",
+        agencia: project.agency || "Lamego Academy",
+        consultor: project.consultant || "Equipe Lamego",
+        emailConsultor: project.consultantEmail || "contato@lamego.com.vc",
+        cliente: project.client || "Florescer",
+        dataCriacao: project.createdDate || project.created_at || "19/02/2025",
+        permitePortfolio: project.portfolioPermission ?? false,
+        sincronizadoBitrix: project.bitrixSync ?? false,
+        lifecycle: (project.lifecycle === "mensal" ? "Mensal" : "Avulso") as "Avulso" | "Mensal",
+        isAtivo: project.isActive ?? true,
+        diaCobranca: project.billingConfig?.billingDay ?? 15,
+        dataInicioCobranca: project.billingConfig?.billingStartDate ?? "",
+        descricao: project.description || "",
+      })
+    }
+  }, [project?.id])
 
   const handleDadosProjSave = async () => {
     setIsSavingDados(true)
@@ -263,6 +347,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
     if (mode === "edit" && project) {
       setEditedProject({ ...project })
       setEditedProducts(project.products || [])
+      setIsDadosProjEditMode(true)
     }
   }, [mode, project])
   const [showEditCredentialDialog, setShowEditCredentialDialog] = useState(false)
@@ -1663,9 +1748,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               headerStyle={getHeaderStyle()}
               right={
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge className="bg-blue-500/90 text-white text-[10px] px-2 py-0.5 font-semibold border-0">
-                    {dadosProjForm.situacao}
-                  </Badge>
+                  {getProjectStatusBadge(project?.status ?? dadosProjForm.situacao)}
                   {/* Palette button */}
                   <button
                     onClick={() => setShowColorPicker((p) => !p)}
@@ -1679,17 +1762,80 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                     <Palette className="h-3 w-3" />
                     Tema
                   </button>
-                  {mode === "view" && project && (
+                  {isDadosProjEditMode ? (
                     <>
-                      <button onClick={onClone} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
-                        <Copy className="h-3 w-3" />
-                        Clonar
+                      <button
+                        onClick={() => setShowDadosProjSaveConfirm(true)}
+                        disabled={isSavingDados}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500/30 hover:bg-green-500/40 text-white text-[10px] font-medium transition-colors border border-green-400/40 disabled:opacity-50"
+                      >
+                        {isSavingDados ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        {isSavingDados ? "Salvando..." : "Salvar"}
                       </button>
-                      <button onClick={onExport} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
-                        <FileText className="h-3 w-3" />
-                        Exportar
+                      <button
+                        onClick={() => setShowDadosProjCancelConfirm(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Cancelar
                       </button>
                     </>
+                  ) : (
+                    project && (
+                      <>
+                        <button onClick={onClone} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
+                          <Copy className="h-3 w-3" />
+                          Clonar
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
+                              <FileText className="h-3 w-3" />
+                              Exportar Proposta
+                              <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                if (!project) return
+                                setIsExportingPdf(true)
+                                try {
+                                  const brandCfg = {
+                                    gradient: parseBrandGradient(sidebarSettings.backgroundColor),
+                                    logoUrl: sidebarSettings.sidebarLogo || agencyProfile.logo || "/images/logob.png",
+                                    agencyName: agencyProfile.name || "Allka Digital",
+                                  }
+                                  const proposalData = buildProposalData(mockData, dadosProjForm, project)
+                                  await exportProposalPDF(
+                                    proposalData,
+                                    brandCfg,
+                                    `proposta_${(dadosProjForm.agencia || project?.name || "projeto").replace(/\s+/g, "_")}.pdf`
+                                  )
+                                } finally {
+                                  setIsExportingPdf(false)
+                                }
+                              }}
+                              disabled={isExportingPdf}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-2" />
+                              {isExportingPdf ? "Gerando PDF..." : "Documento Padrão (PDF)"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setCustomDocFile(null); setShowCustomDocDialog(true) }}>
+                              <Upload className="h-3.5 w-3.5 mr-2" />
+                              Documento Personalizado
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {project.status !== "cancelled" && project.status !== "canceled" && (
+                          <button onClick={onCancel} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-medium transition-colors border border-red-400/30">
+                            <Ban className="h-3 w-3" />
+                            Cancelar
+                          </button>
+                        )}
+                      </>
+                    )
                   )}
                 </div>
               }
@@ -1737,6 +1883,40 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       <span className="text-white/70 text-xs flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {dadosProjForm.dataCriacao}
+                      </span>
+                    </div>
+                    {/* Ativo/Inativo + Lifecycle badges */}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      {isDadosProjEditMode && dadosProjForm.situacao !== "Cancelado" ? (
+                        <button
+                          type="button"
+                          onClick={() => setDadosProjForm(f => ({ ...f, isAtivo: !f.isAtivo }))}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors border ${
+                            dadosProjForm.isAtivo
+                              ? "bg-emerald-500/30 border-emerald-400/50 text-white"
+                              : "bg-white/10 border-white/20 text-white/60"
+                          }`}
+                        >
+                          <div className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.isAtivo ? "bg-emerald-300" : "bg-white/40"}`} />
+                          {dadosProjForm.isAtivo ? "Ativo" : "Inativo"}
+                        </button>
+                      ) : (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          dadosProjForm.situacao === "Cancelado" || !dadosProjForm.isAtivo
+                            ? "bg-white/10 border-white/20 text-white/60"
+                            : "bg-emerald-500/30 border-emerald-400/50 text-white"
+                        }`}>
+                          <div className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.situacao === "Cancelado" || !dadosProjForm.isAtivo ? "bg-white/40" : "bg-emerald-300"}`} />
+                          {dadosProjForm.situacao === "Cancelado" ? "Cancelado" : (dadosProjForm.isAtivo ? "Ativo" : "Inativo")}
+                        </span>
+                      )}
+                      <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        dadosProjForm.lifecycle === "Mensal"
+                          ? "bg-violet-500/30 border-violet-400/40 text-white"
+                          : "bg-white/10 border-white/20 text-white/70"
+                      }`}>
+                        {dadosProjForm.lifecycle === "Mensal" && <RefreshCw className="h-2.5 w-2.5" />}
+                        {dadosProjForm.lifecycle}
                       </span>
                     </div>
                   </div>
@@ -1878,7 +2058,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
             <div className="flex-1 flex flex-col bg-white overflow-hidden">
             <Tabs defaultValue="dashboard" className="w-full flex flex-col h-full">
               <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                <TabsList className="grid w-max grid-cols-8 gap-1 bg-transparent p-0 h-auto">
+                <TabsList className="grid w-max grid-cols-7 gap-1 bg-transparent p-0 h-auto">
                   <TabsTrigger value="dashboard" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Dashboard
                   </TabsTrigger>
@@ -1888,20 +2068,17 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   <TabsTrigger value="produtos" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Produtos
                   </TabsTrigger>
+                  <TabsTrigger value="tarefas" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
+                    Tarefas
+                  </TabsTrigger>
                   <TabsTrigger value="arquivos" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Arquivos
                   </TabsTrigger>
                   <TabsTrigger value="cofre" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Cofre
                   </TabsTrigger>
-                  <TabsTrigger value="tarefas" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
-                    Tarefas
-                  </TabsTrigger>
                   <TabsTrigger value="faturamento" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Faturamento
-                  </TabsTrigger>
-                  <TabsTrigger value="pagamento" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
-                    Pagamento
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -2056,7 +2233,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         </div>
                       </button>
                       {!isDadosProjEditMode ? (
-                        <Button onClick={() => setIsDadosProjEditMode(true)} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                        <Button onClick={() => setIsDadosProjEditMode(true)} size="sm" className="btn-brand">
                           <Edit2 className="h-4 w-4 mr-2" />
                           Editar
                         </Button>
@@ -2090,44 +2267,68 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                           <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 col-span-2">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Situação</p>
                             {isDadosProjEditMode ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {[
-                                  { value: "Rascunho",      dot: "bg-slate-400",   active: "bg-slate-800 text-white border-slate-800",    idle: "bg-white border-slate-300 text-slate-600 hover:border-slate-500" },
-                                  { value: "Ag. Pagamento", dot: "bg-cyan-500",    active: "bg-cyan-600 text-white border-cyan-600",      idle: "bg-white border-slate-300 text-slate-600 hover:border-cyan-400" },
-                                  { value: "Planejamento",  dot: "bg-orange-500", active: "bg-orange-500 text-white border-orange-500",  idle: "bg-white border-slate-300 text-slate-600 hover:border-orange-400" },
-                                  { value: "Em Andamento",  dot: "bg-blue-500",   active: "bg-blue-600 text-white border-blue-600",      idle: "bg-white border-slate-300 text-slate-600 hover:border-blue-400" },
-                                  { value: "Pausado",       dot: "bg-amber-400",  active: "bg-amber-500 text-white border-amber-500",    idle: "bg-white border-slate-300 text-slate-600 hover:border-amber-400" },
-                                  { value: "Concluído",     dot: "bg-emerald-500",active: "bg-emerald-600 text-white border-emerald-600",idle: "bg-white border-slate-300 text-slate-600 hover:border-emerald-400" },
-                                  { value: "Cancelado",     dot: "bg-red-500",    active: "bg-red-600 text-white border-red-600",        idle: "bg-white border-slate-300 text-slate-600 hover:border-red-400" },
-                                ].map(opt => (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => setDadosProjForm(f => ({ ...f, situacao: opt.value }))}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-                                      dadosProjForm.situacao === opt.value ? opt.active : opt.idle
-                                    }`}
-                                  >
-                                    <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
-                                      dadosProjForm.situacao === opt.value ? "bg-white" : opt.dot
-                                    }`} />
-                                    {opt.value}
-                                  </button>
-                                ))}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${{"Rascunho":"bg-slate-400","Ag. Pagamento":"bg-cyan-500","Planejamento":"bg-orange-500","Em Andamento":"bg-blue-500","Pausado":"bg-amber-400","Concluído":"bg-emerald-500","Cancelado":"bg-red-500"}[dadosProjForm.situacao] ?? "bg-slate-400"}`} />
+                                  <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
+                                </div>
+                                {dadosProjForm.situacao === "Cancelado" ? (
+                                  <div className="flex items-center gap-1.5 text-red-500 text-xs">
+                                    <Ban className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span>Projeto cancelado — status não pode ser alterado</span>
+                                  </div>
+                                ) : dadosProjForm.situacao === "Concluído" ? (
+                                  <div className="flex items-center gap-1.5 text-slate-500 text-xs">
+                                    <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span>Projeto concluído — status não pode ser alterado</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-1.5 text-indigo-600 text-xs">
+                                      <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+                                      <span>Controlado pelo sistema · ações administrativas:</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {dadosProjForm.situacao === "Pausado" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDadosProjForm(f => ({ ...f, situacao: "Em Andamento" }))}
+                                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-300 bg-white text-xs font-semibold text-blue-600 hover:bg-blue-50 transition-colors"
+                                        >
+                                          <Play className="h-3 w-3" /> Retomar
+                                        </button>
+                                      )}
+                                      {(dadosProjForm.situacao === "Em Andamento" || dadosProjForm.situacao === "Planejamento") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDadosProjForm(f => ({ ...f, situacao: "Pausado" }))}
+                                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
+                                        >
+                                          <Pause className="h-3 w-3" /> Pausar
+                                        </button>
+                                      )}
+                                      {dadosProjForm.situacao !== "Rascunho" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDadosProjForm(f => ({ ...f, situacao: "Cancelado", isAtivo: false }))}
+                                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-300 bg-white text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                                        >
+                                          <Ban className="h-3 w-3" /> Cancelar projeto
+                                        </button>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             ) : (
                               <div className="flex items-center gap-1.5">
-                                {[{ value: "Rascunho", dot: "bg-slate-400" },{ value: "Ag. Pagamento", dot: "bg-cyan-500" },{ value: "Planejamento", dot: "bg-orange-500" },{ value: "Em Andamento", dot: "bg-blue-500" },{ value: "Pausado", dot: "bg-amber-400" },{ value: "Concluído", dot: "bg-emerald-500" },{ value: "Cancelado", dot: "bg-red-500" }].find(o => o.value === dadosProjForm.situacao) && (
-                                  <>
-                                    <div className={`h-2.5 w-2.5 rounded-full ${{"Rascunho":"bg-slate-400","Ag. Pagamento":"bg-cyan-500","Planejamento":"bg-orange-500","Em Andamento":"bg-blue-500","Pausado":"bg-amber-400","Concluído":"bg-emerald-500","Cancelado":"bg-red-500"}[dadosProjForm.situacao] ?? "bg-slate-400"}`} />
-                                    <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
-                                  </>
-                                )}
+                                <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${{"Rascunho":"bg-slate-400","Ag. Pagamento":"bg-cyan-500","Planejamento":"bg-orange-500","Em Andamento":"bg-blue-500","Pausado":"bg-amber-400","Concluído":"bg-emerald-500","Cancelado":"bg-red-500"}[dadosProjForm.situacao] ?? "bg-slate-400"}`} />
+                                <p className="text-sm font-semibold text-slate-800">{dadosProjForm.situacao}</p>
                               </div>
                             )}
                           </div>
                           <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Agência</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Empresa</p>
                             {isDadosProjEditMode ? (
                               <Input value={dadosProjForm.agencia} onChange={e => setDadosProjForm(f => ({ ...f, agencia: e.target.value }))} className="h-8 text-sm border-slate-300" />
                             ) : (
@@ -2192,9 +2393,103 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                               </p>
                             )}
                           </div>
+                          {/* Tipo de Projeto */}
+                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 col-span-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Tipo de Projeto</p>
+                            {isDadosProjEditMode ? (
+                              <div className="flex gap-2">
+                                {(["Avulso", "Mensal"] as const).map((lc) => (
+                                  <button
+                                    key={lc}
+                                    type="button"
+                                    onClick={() => setDadosProjForm(f => ({ ...f, lifecycle: lc }))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                                      dadosProjForm.lifecycle === lc
+                                        ? "bg-violet-600 text-white border-violet-600"
+                                        : "bg-white border-slate-300 text-slate-600 hover:border-violet-400"
+                                    }`}
+                                  >
+                                    {lc === "Mensal" && <RefreshCw className="h-3 w-3"/>}
+                                    {lc}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                {dadosProjForm.lifecycle === "Mensal" && <RefreshCw className="h-3.5 w-3.5 text-violet-600"/>}
+                                <p className="text-sm font-semibold text-slate-800">{dadosProjForm.lifecycle}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </AccordionContent>
                     </AccordionItem>
+
+                    {/* Ciclo de Cobrança — Mensal only */}
+                    {dadosProjForm.lifecycle === "Mensal" && (
+                      <AccordionItem value="ciclo" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                        <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                          <div className="flex items-center gap-2">
+                            <RefreshCw className="h-4 w-4 text-violet-600" />
+                            <span className="font-semibold text-slate-800">Ciclo de Cobrança</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Dia mensal de cobrança</p>
+                              {isDadosProjEditMode ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={28}
+                                    value={dadosProjForm.diaCobranca}
+                                    onChange={e => setDadosProjForm(f => ({ ...f, diaCobranca: Math.min(28, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                                    className="h-8 w-20 text-sm border-slate-300"
+                                  />
+                                  <span className="text-xs text-slate-500">de cada mês</span>
+                                </div>
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">Todo dia {dadosProjForm.diaCobranca}</p>
+                              )}
+                            </div>
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Início do primeiro ciclo</p>
+                              {isDadosProjEditMode ? (
+                                <Input
+                                  type="date"
+                                  value={dadosProjForm.dataInicioCobranca}
+                                  onChange={e => setDadosProjForm(f => ({ ...f, dataInicioCobranca: e.target.value }))}
+                                  className="h-8 text-sm border-slate-300"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {dadosProjForm.dataInicioCobranca
+                                    ? new Date(dadosProjForm.dataInicioCobranca).toLocaleDateString("pt-BR")
+                                    : "—"}
+                                </p>
+                              )}
+                            </div>
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 col-span-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Próxima cobrança prevista</p>
+                              {(() => {
+                                const today = new Date()
+                                const day = dadosProjForm.diaCobranca || 15
+                                const next = new Date(today)
+                                if (today.getDate() >= day) next.setMonth(next.getMonth() + 1)
+                                next.setDate(day)
+                                return (
+                                  <p className="text-sm font-semibold text-violet-700">
+                                    {next.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                  </p>
+                                )
+                              })()}
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    )}
 
                     {/* Descrição */}
                     <AccordionItem value="descricao" className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
@@ -2205,16 +2500,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                        {isDadosProjEditMode ? (
-                          <Textarea
-                            value={dadosProjForm.descricao}
-                            onChange={e => setDadosProjForm(f => ({ ...f, descricao: e.target.value }))}
-                            className="min-h-[120px] text-sm border-slate-300 bg-white"
-                            placeholder="Descreva o projeto..."
-                          />
-                        ) : (
-                          <p className="text-sm text-slate-700 leading-relaxed px-1">{dadosProjForm.descricao}</p>
-                        )}
+                        <RichTextEditor
+                          value={dadosProjForm.descricao}
+                          onChange={val => setDadosProjForm(f => ({ ...f, descricao: val }))}
+                          editable={isDadosProjEditMode}
+                          placeholder="Descreva o projeto..."
+                          minHeight="160px"
+                        />
                       </AccordionContent>
                     </AccordionItem>
 
@@ -2229,6 +2521,23 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-900">Produtos Contratados</h3>
                     <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => {
+                          const allTarefas = mockData.produtos.flatMap((p: any) => p.tarefas || [])
+                          const isCompleted = dadosProjForm.situacao === "completed" || dadosProjForm.situacao === "Concluído"
+                          const allDone = allTarefas.length > 0 && allTarefas.every((t: any) => t.status === "Entregue" || t.status === "Aprovada")
+                          if (dadosProjForm.lifecycle === "Avulso" && (isCompleted || allDone)) {
+                            setShowAvulsoReativarAlert(true)
+                          } else {
+                            toast({ description: "Seleção de produtos em breve!" })
+                          }
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Adicionar Produto
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -3003,12 +3312,12 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                                 <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
                                   <span className="flex items-center gap-1">
                                     <User className="h-3 w-3" />
-                                    <span className="font-medium text-slate-600">{tarefa.executor}</span>
+                                    <span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.executor : "Nômade"}</span>
                                   </span>
                                   <span>·</span>
                                   <span className="flex items-center gap-1">
                                     <Users className="h-3 w-3" />
-                                    <span className="font-medium text-slate-600">{tarefa.lider}</span>
+                                    <span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.lider : "Equipe Allka"}</span>
                                   </span>
                                   <span>·</span>
                                   <span className="flex items-center gap-1">
@@ -3074,8 +3383,8 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                                       <p className="font-semibold text-xs text-slate-800 line-clamp-2 mb-1.5">{tarefa.nome}</p>
                                       <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 mb-1.5">{tarefa.produtoNome}</span>
                                       <div className="space-y-0.5 text-[9px] text-slate-400 pt-1.5 border-t border-slate-100">
-                                        <div className="flex items-center gap-1"><User className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.executor}</span></div>
-                                        <div className="flex items-center gap-1"><Users className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.lider}</span></div>
+                                        <div className="flex items-center gap-1"><User className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.executor : "Nômade"}</span></div>
+                                        <div className="flex items-center gap-1"><Users className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.lider : "Equipe Allka"}</span></div>
                                         <div className="flex items-center gap-1"><Calendar className="h-2.5 w-2.5" /><span className="font-medium text-slate-600">{tarefa.prazo}</span></div>
                                       </div>
                                     </div>
@@ -3097,308 +3406,423 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               </TabsContent>
 
               {/* Faturamento */}
-              <TabsContent value="faturamento" className="p-4 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-3 gap-4 pb-4 border-b">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Última Forma de Pagamento</p>
-                      <p className="text-sm font-semibold">Carteira</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Último Pagamento</p>
-                      <p className="text-sm font-semibold">15/10/2025</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Próxima Cobrança</p>
-                      <p className="text-sm font-semibold">15/11/2025</p>
-                    </div>
+              <TabsContent value="faturamento" className="p-0 m-0 flex-1 overflow-y-auto">
+                <div className="flex flex-col h-full">
+                  {/* Sub-tab toggle bar */}
+                  <div className="flex border-b border-slate-200 bg-white px-6 pt-3 shrink-0">
+                    <button
+                      onClick={() => setFaturamentoSubTab("faturas")}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all mr-2 ${
+                        faturamentoSubTab === "faturas"
+                          ? "border-blue-500 text-blue-600"
+                          : "border-transparent text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      Faturas
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${faturamentoSubTab === "faturas" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
+                        {mockInvoices.length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setFaturamentoSubTab("formas-pagamento")}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+                        faturamentoSubTab === "formas-pagamento"
+                          ? "border-blue-500 text-blue-600"
+                          : "border-transparent text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      Formas de Pagamento
+                    </button>
                   </div>
 
-                  {/* Invoices */}
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">Faturas</h3>
-                    <p className="text-xs text-muted-foreground mb-3">{mockInvoices.length} registro(s) encontrados.</p>
+                  {/* ── Faturas sub-tab ─────────────────────────────────── */}
+                  {faturamentoSubTab === "faturas" && (
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead className="text-xs font-semibold">SITUAÇÃO</TableHead>
-                            <TableHead className="text-xs font-semibold">COMPETÊNCIA</TableHead>
-                            <TableHead className="text-xs font-semibold">DESCRIÇÃO</TableHead>
-                            <TableHead className="text-xs font-semibold">VALOR</TableHead>
-                            <TableHead className="text-xs font-semibold text-right">AÇÕES</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {mockInvoices.map((invoice) => (
-                            <TableRow key={invoice.id} className="hover:bg-muted/30">
-                              <TableCell className="py-2">
-                                <Badge
-                                  className={`${
-                                    invoice.status === "PAGO"
-                                      ? "bg-green-500 hover:bg-green-600"
-                                      : "bg-yellow-500 hover:bg-yellow-600"
-                                  } text-white text-xs`}
-                                >
-                                  {invoice.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs font-medium">{invoice.month}</TableCell>
-                              <TableCell className="text-xs">{invoice.descricao}</TableCell>
-                              <TableCell className="text-xs font-semibold">
-                                R$ {invoice.valor.toFixed(2).replace(".", ",")}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 bg-blue-100 hover:bg-blue-200"
-                                    onClick={() => {
-                                      setSelectedInvoice(invoice)
-                                      setShowInvoiceDetails(true)
-                                    }}
-                                  >
-                                    <Eye className="h-3.5 w-3.5 text-blue-700" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 bg-yellow-100 hover:bg-yellow-200"
-                                    onClick={() => handleDownloadInvoicePDF(invoice)}
-                                  >
-                                    <Download className="h-3.5 w-3.5 text-yellow-700" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Formas de Pagamento */}
-              <TabsContent value="pagamento" className="p-6 m-0 flex-1 overflow-y-auto">
-                <div className="space-y-6">
-                  <h3 className="text-lg font-semibold">Formas de Pagamento</h3>
-
-                  {/* Info Banner */}
-                  <Card className="p-4 bg-blue-50 border-blue-200">
-                    <div className="flex items-start gap-3">
-                      <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <h4 className="font-semibold text-sm text-blue-900 mb-1">Forma de faturamento padrão</h4>
-                        <p className="text-xs text-blue-800">
-                          Selecione abaixo qual deverá ser a forma de faturamento padrão caso a forma de faturamento
-                          definida no projeto não funcione.
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Payment Methods */}
-                  <div className="space-y-2">
-                    {/* Credit Card */}
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <CreditCard className="h-4 w-4 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-xs">CARTÃO DE CRÉDITO</div>
-                          {savedCards.find((c) => c.isDefault) && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              {savedCards.find((c) => c.isDefault)?.number} •{" "}
-                              {savedCards.find((c) => c.isDefault)?.name}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="cartao"
-                        checked={defaultPaymentMethod === "cartao"}
-                        onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                    </label>
-
-                    {defaultPaymentMethod === "cartao" && (
-                      <Card className="p-4 ml-11 bg-gray-50 border-gray-200">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-xs font-semibold text-gray-700">Cartões Salvos</h4>
-                            <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
-                              <Plus className="h-3 w-3 mr-1" />
-                              Adicionar Cartão
-                            </Button>
-                          </div>
-                          {savedCards.map((card) => (
-                            <div
-                              key={card.id}
-                              className="flex items-center justify-between p-2.5 bg-white rounded-lg border"
-                            >
-                              <div className="flex items-center gap-2">
-                                <CreditCard className="h-4 w-4 text-gray-400" />
-                                <div>
-                                  <div className="text-xs font-medium">{card.number}</div>
-                                  <div className="text-[10px] text-gray-500">
-                                    {card.name} • Exp: {card.expiry}
+                      {/* MENSAL: billing info card */}
+                      {dadosProjForm.lifecycle === "Mensal" && (() => {
+                        const overdueInvoices = mockInvoices.filter((inv: any) => inv.status !== "PAGO")
+                        const today = new Date()
+                        const billingDay = dadosProjForm.diaCobranca || 15
+                        const nextDate = new Date(today.getFullYear(), today.getMonth() + (today.getDate() >= billingDay ? 1 : 0), billingDay)
+                        const nextBillingStr = nextDate.toLocaleDateString("pt-BR")
+                        return (
+                          <>
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                              <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-blue-900">Plano Mensal</p>
+                                <div className="grid grid-cols-2 gap-3 mt-2">
+                                  <div>
+                                    <p className="text-[10px] text-blue-600 uppercase font-semibold">Dia de Cobrança</p>
+                                    <p className="text-sm font-bold text-blue-900">Dia {billingDay}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-blue-600 uppercase font-semibold">Próxima Cobrança</p>
+                                    <p className="text-sm font-bold text-blue-900">{nextBillingStr}</p>
                                   </div>
                                 </div>
-                                {card.isDefault && (
-                                  <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0">Padrão</Badge>
-                                )}
+                                <p className="text-xs text-blue-700 mt-2 opacity-80">
+                                  Projetos mensais possuem data de cobrança fixa. O não pagamento até a data da próxima cobrança resultará no cancelamento automático do projeto.
+                                </p>
                               </div>
-                              <div className="flex gap-1">
-                                {!card.isDefault && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0"
-                                    onClick={() => {
-                                      setSavedCards(savedCards.map((c) => ({ ...c, isDefault: c.id === card.id })))
-                                      toast({ description: "Cartão definido como padrão" })
-                                    }}
-                                  >
-                                    <CheckCircle className="h-3 w-3" />
-                                  </Button>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                                  onClick={() => {
-                                    setSavedCards(savedCards.filter((c) => c.id !== card.id))
-                                    toast({ description: "Cartão removido" })
-                                  }}
-                                >
-                                  <Trash2 className="h-3 w-3" />
+                            </div>
+                            {overdueInvoices.length > 0 && (
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-red-800">⚠️ {overdueInvoices.length} fatura(s) em aberto</p>
+                                  <p className="text-xs text-red-700 mt-0.5">
+                                    O projeto será cancelado automaticamente antes da próxima cobrança caso não seja regularizado. Para reativar após o cancelamento, pague as faturas em aberto ou clone o projeto.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+
+                      {/* Cancelled project: reactivation banner */}
+                      {(project?.status === "cancelled" || project?.status === "canceled") && (
+                        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-amber-900">Projeto cancelado por inadimplência</p>
+                              <p className="text-xs text-amber-700 mt-0.5">Pague as faturas em aberto para reativar, ou crie um novo projeto com base neste.</p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="bg-amber-500 hover:bg-amber-600 text-white shrink-0"
+                            onClick={() => setShowReativarDialog(true)}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                            Reativar Projeto
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* AVULSO: all tasks completed banner */}
+                      {dadosProjForm.lifecycle === "Avulso" && (() => {
+                        const allTarefas = mockData.produtos.flatMap((p: any) => p.tarefas || [])
+                        const allTasksDone = allTarefas.length > 0 && allTarefas.every((t: any) => t.status === "Entregue" || t.status === "Aprovada")
+                        if (!allTasksDone) return null
+                        return (
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-800">Projeto Concluído — Projeto Avulso</p>
+                              <p className="text-xs text-emerald-700 mt-0.5">
+                                Todas as tarefas foram entregues. Este projeto foi marcado como <strong>Concluído</strong>. Para reativar e manter o histórico em um só lugar, acesse a aba Produtos e adicione novos itens.
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })()}
+
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-3 gap-4 pb-4 border-b">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Última Forma de Pagamento</p>
+                          <p className="text-sm font-semibold">Carteira</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Último Pagamento</p>
+                          <p className="text-sm font-semibold">15/10/2025</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Próxima Cobrança</p>
+                          <p className="text-sm font-semibold">15/11/2025</p>
+                        </div>
+                      </div>
+
+                      {/* Invoices table */}
+                      <div>
+                        <h3 className="text-sm font-semibold mb-2">Faturas</h3>
+                        <p className="text-xs text-muted-foreground mb-3">{mockInvoices.length} registro(s) encontrados.</p>
+                        <div className="border rounded-lg overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50">
+                                <TableHead className="text-xs font-semibold">SITUAÇÃO</TableHead>
+                                <TableHead className="text-xs font-semibold">COMPETÊNCIA</TableHead>
+                                <TableHead className="text-xs font-semibold">DESCRIÇÃO</TableHead>
+                                <TableHead className="text-xs font-semibold">VALOR</TableHead>
+                                <TableHead className="text-xs font-semibold text-right">AÇÕES</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {mockInvoices.map((invoice) => (
+                                <TableRow key={invoice.id} className="hover:bg-muted/30">
+                                  <TableCell className="py-2">
+                                    <Badge
+                                      className={`${
+                                        invoice.status === "PAGO"
+                                          ? "bg-green-500 hover:bg-green-600"
+                                          : "bg-yellow-500 hover:bg-yellow-600"
+                                      } text-white text-xs`}
+                                    >
+                                      {invoice.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs font-medium">{invoice.month}</TableCell>
+                                  <TableCell className="text-xs">{invoice.descricao}</TableCell>
+                                  <TableCell className="text-xs font-semibold">
+                                    R$ {invoice.valor.toFixed(2).replace(".", ",")}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0 bg-blue-100 hover:bg-blue-200"
+                                        onClick={() => {
+                                          setSelectedInvoice(invoice)
+                                          setShowInvoiceDetails(true)
+                                        }}
+                                      >
+                                        <Eye className="h-3.5 w-3.5 text-blue-700" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0 bg-yellow-100 hover:bg-yellow-200"
+                                        onClick={() => handleDownloadInvoicePDF(invoice)}
+                                      >
+                                        <Download className="h-3.5 w-3.5 text-yellow-700" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Formas de Pagamento sub-tab ─────────────────────── */}
+                  {faturamentoSubTab === "formas-pagamento" && (
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                      <h3 className="text-lg font-semibold">Formas de Pagamento</h3>
+
+                      {/* Info Banner */}
+                      <Card className="p-4 bg-blue-50 border-blue-200">
+                        <div className="flex items-start gap-3">
+                          <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <h4 className="font-semibold text-sm text-blue-900 mb-1">Forma de faturamento padrão</h4>
+                            <p className="text-xs text-blue-800">
+                              Selecione abaixo qual deverá ser a forma de faturamento padrão caso a forma de faturamento
+                              definida no projeto não funcione.
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Payment Methods */}
+                      <div className="space-y-2">
+                        {/* Credit Card */}
+                        <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <CreditCard className="h-4 w-4 text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-xs">CARTÃO DE CRÉDITO</div>
+                              {savedCards.find((c) => c.isDefault) && (
+                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                  {savedCards.find((c) => c.isDefault)?.number} •{" "}
+                                  {savedCards.find((c) => c.isDefault)?.name}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <input
+                            type="radio"
+                            name="payment-method"
+                            value="cartao"
+                            checked={defaultPaymentMethod === "cartao"}
+                            onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                            className="w-4 h-4"
+                          />
+                        </label>
+
+                        {defaultPaymentMethod === "cartao" && (
+                          <Card className="p-4 ml-11 bg-gray-50 border-gray-200">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-xs font-semibold text-gray-700">Cartões Salvos</h4>
+                                <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Adicionar Cartão
                                 </Button>
                               </div>
+                              {savedCards.map((card) => (
+                                <div
+                                  key={card.id}
+                                  className="flex items-center justify-between p-2.5 bg-white rounded-lg border"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <CreditCard className="h-4 w-4 text-gray-400" />
+                                    <div>
+                                      <div className="text-xs font-medium">{card.number}</div>
+                                      <div className="text-[10px] text-gray-500">
+                                        {card.name} • Exp: {card.expiry}
+                                      </div>
+                                    </div>
+                                    {card.isDefault && (
+                                      <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0">Padrão</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1">
+                                    {!card.isDefault && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => {
+                                          setSavedCards(savedCards.map((c) => ({ ...c, isDefault: c.id === card.id })))
+                                          toast({ description: "Cartão definido como padrão" })
+                                        }}
+                                      >
+                                        <CheckCircle className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                      onClick={() => {
+                                        setSavedCards(savedCards.filter((c) => c.id !== card.id))
+                                        toast({ description: "Cartão removido" })
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
+                          </Card>
+                        )}
 
-                    {/* Wallet */}
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <Wallet className="h-4 w-4 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-xs">CARTEIRA</div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            Saldo: R$ {walletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="carteira"
-                        checked={defaultPaymentMethod === "carteira"}
-                        onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                    </label>
-
-                    {defaultPaymentMethod === "carteira" && (
-                      <Card className="p-4 ml-11 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-green-700 mb-1">Saldo Disponível</div>
-                            <div className="text-2xl font-bold text-green-900">
-                              R$ {walletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        {/* Wallet */}
+                        <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <Wallet className="h-4 w-4 text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-xs">CARTEIRA</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                Saldo: R$ {walletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </div>
                             </div>
                           </div>
-                          <Wallet className="h-10 w-10 text-green-600 opacity-20" />
-                        </div>
-                      </Card>
-                    )}
+                          <input
+                            type="radio"
+                            name="payment-method"
+                            value="carteira"
+                            checked={defaultPaymentMethod === "carteira"}
+                            onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                            className="w-4 h-4"
+                          />
+                        </label>
 
-                    {/* Boleto */}
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <FileText className="h-4 w-4 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-xs">BOLETO</div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">Pagamento via código de barras</div>
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="boleto"
-                        checked={defaultPaymentMethod === "boleto"}
-                        onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                    </label>
+                        {defaultPaymentMethod === "carteira" && (
+                          <Card className="p-4 ml-11 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-xs text-green-700 mb-1">Saldo Disponível</div>
+                                <div className="text-2xl font-bold text-green-900">
+                                  R$ {walletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                              <Wallet className="h-10 w-10 text-green-600 opacity-20" />
+                            </div>
+                          </Card>
+                        )}
 
-                    {/* PIX */}
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <Zap className="h-4 w-4 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-xs">PIX</div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">Transferência instantânea</div>
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="pix"
-                        checked={defaultPaymentMethod === "pix"}
-                        onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                    </label>
-
-                    {/* Allkoin - NEW */}
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden">
-                      <div className="flex items-center gap-2.5 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 via-blue-600 to-blue-800 flex items-center justify-center shadow-lg">
-                          {/* Wolf silhouette icon */}
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-white">
-                            <path d="M12 2C11.5 2 11 2.19 10.59 2.59L8 5.17L5.41 2.59C5 2.19 4.5 2 4 2C2.9 2 2 2.9 2 4C2 4.5 2.19 5 2.59 5.41L4 6.83V9C4 10.1 4.9 11 6 11H7L6 13L4 14C3.45 14 3 14.45 3 15V17C3 17.55 3.45 18 4 18H6V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V18H20C20.55 18 21 17.55 21 17V15C21 14.45 20.55 14 20 14L18 13L17 11H18C19.1 11 20 10.1 20 9V6.83L21.41 5.41C21.81 5 22 4.5 22 4C22 2.9 21.1 2 20 2C19.5 2 19 2.19 18.59 2.59L16 5.17L13.41 2.59C13 2.19 12.5 2 12 2M12 6C12.55 6 13 6.45 13 7S12.55 8 12 8 11 7.55 11 7 11.45 6 12 6M9 9C9.55 9 10 9.45 10 10S9.55 11 9 11 8 10.55 8 10 8.45 9 9 9M15 9C15.55 9 16 9.45 16 10S15.55 11 15 11 14 10.55 14 10 14.45 9 15 9Z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-xs">ALLKOIN</span>
-                            <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[9px] px-1.5 py-0">
-                              Novo
-                            </Badge>
+                        {/* Boleto */}
+                        <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <FileText className="h-4 w-4 text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-xs">BOLETO</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">Pagamento via código de barras</div>
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            {allkoinBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} AK • 1 AK = R${" "}
-                            {allkoinExchangeRate.toFixed(2)}
+                          <input
+                            type="radio"
+                            name="payment-method"
+                            value="boleto"
+                            checked={defaultPaymentMethod === "boleto"}
+                            onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                            className="w-4 h-4"
+                          />
+                        </label>
+
+                        {/* PIX */}
+                        <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <Zap className="h-4 w-4 text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-xs">PIX</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">Transferência instantânea</div>
+                            </div>
                           </div>
-                        </div>
+                          <input
+                            type="radio"
+                            name="payment-method"
+                            value="pix"
+                            checked={defaultPaymentMethod === "pix"}
+                            onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                            className="w-4 h-4"
+                          />
+                        </label>
+
+                        {/* Allkoin */}
+                        <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 via-blue-600 to-blue-800 flex items-center justify-center shadow-lg">
+                              <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-white">
+                                <path d="M12 2C11.5 2 11 2.19 10.59 2.59L8 5.17L5.41 2.59C5 2.19 4.5 2 4 2C2.9 2 2 2.9 2 4C2 4.5 2.19 5 2.59 5.41L4 6.83V9C4 10.1 4.9 11 6 11H7L6 13L4 14C3.45 14 3 14.45 3 15V17C3 17.55 3.45 18 4 18H6V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V18H20C20.55 18 21 17.55 21 17V15C21 14.45 20.55 14 20 14L18 13L17 11H18C19.1 11 20 10.1 20 9V6.83L21.41 5.41C21.81 5 22 4.5 22 4C22 2.9 21.1 2 20 2C19.5 2 19 2.19 18.59 2.59L16 5.17L13.41 2.59C13 2.19 12.5 2 12 2M12 6C12.55 6 13 6.45 13 7S12.55 8 12 8 11 7.55 11 7 11.45 6 12 6M9 9C9.55 9 10 9.45 10 10S9.55 11 9 11 8 10.55 8 10 8.45 9 9 9M15 9C15.55 9 16 9.45 16 10S15.55 11 15 11 14 10.55 14 10 14.45 9 15 9Z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-xs">ALLKOIN</span>
+                                <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[9px] px-1.5 py-0">
+                                  Novo
+                                </Badge>
+                              </div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {allkoinBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} AK • 1 AK = R${" "}
+                                {allkoinExchangeRate.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                          <input
+                            type="radio"
+                            name="payment-method"
+                            value="allkoin"
+                            checked={defaultPaymentMethod === "allkoin"}
+                            onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                            className="w-4 h-4"
+                          />
+                        </label>
                       </div>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="allkoin"
-                        checked={defaultPaymentMethod === "allkoin"}
-                        onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                    </label>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
@@ -3738,9 +4162,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{selectedProduct.nome}</span>
                                   </div>
                                   <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
-                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.executor}</span></span>
+                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /><span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.executor : "Nômade"}</span></span>
                                     <span>·</span>
-                                    <span className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.lider}</span></span>
+                                    <span className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.lider : "Equipe Allka"}</span></span>
                                     {tarefa.prazo && (<><span>·</span><span className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.prazo}</span></span></>)}
                                   </div>
                                 </div>
@@ -3798,7 +4222,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                                           <p className="text-xs font-semibold text-slate-800 mb-1.5 leading-tight">{tarefa.nome}</p>
                                           <div className="flex items-center gap-1 text-[10px] text-slate-400">
                                             <User className="h-2.5 w-2.5" />
-                                            <span>{tarefa.executor}</span>
+                                            <span>{canSeeNomadNames ? tarefa.executor : "Nômade"}</span>
                                           </div>
                                           {tarefa.prazo && (
                                             <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
@@ -4518,6 +4942,254 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
         cancelText="Voltar edição"
         destructive={true}
       />
+
+      {/* Reativar Projeto Dialog (MENSAL cancelled) */}
+      <Dialog open={showReativarDialog} onOpenChange={setShowReativarDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-amber-600" />
+              Reativar Projeto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-600">Para reativar o projeto, é necessário quitar as faturas em aberto:</p>
+            {(() => {
+              const overdueInvoices = mockInvoices.filter((inv: any) => inv.status !== "PAGO")
+              const overdueTotal = overdueInvoices.reduce((acc: number, inv: any) => acc + inv.valor, 0)
+              const currentMonthAmount = overdueInvoices[overdueInvoices.length - 1]?.valor || 890
+              return (
+                <div className="bg-slate-50 rounded-lg p-4 space-y-2 border">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Fatura(s) vencida(s)</span>
+                    <span className="font-semibold text-red-600">R$ {overdueTotal.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Competência atual</span>
+                    <span className="font-semibold">R$ {currentMonthAmount.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold border-t pt-2">
+                    <span>Total a pagar</span>
+                    <span className="text-blue-600">R$ {(overdueTotal + currentMonthAmount).toFixed(2).replace(".", ",")}</span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setShowReativarDialog(false); onClone?.() }}>
+              <Copy className="h-3.5 w-3.5 mr-1.5" />
+              Clonar Projeto
+            </Button>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={() => {
+                setShowReativarDialog(false)
+                toast({ title: "✅ Projeto Reativado", description: "Pagamento processado. O projeto voltou a ficar ativo." })
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Pagar e Reativar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AVULSO Reativar Alert */}
+      <Dialog open={showAvulsoReativarAlert} onOpenChange={setShowAvulsoReativarAlert}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reativar Projeto Avulso?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600 py-2">
+            Este projeto está <strong>Concluído</strong>. Deseja reativá-lo adicionando novos itens? Todo o histórico será preservado em um único lugar.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowAvulsoReativarAlert(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="btn-brand"
+              onClick={() => {
+                setShowAvulsoReativarAlert(false)
+                toast({ title: "✅ Projeto Reativado", description: "Adicione novos produtos para continuar." })
+              }}
+            >
+              Reativar e Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Custom Document Dialog ─────────────────────────────────────────── */}
+      <Dialog open={showCustomDocDialog} onOpenChange={setShowCustomDocDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-4 w-4 text-violet-600" />
+              Documento Personalizado
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* Upload area */}
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Template Word (.docx)</p>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setCustomDocDragOver(true) }}
+                onDragLeave={() => setCustomDocDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setCustomDocDragOver(false)
+                  const f = e.dataTransfer.files?.[0]
+                  if (f && f.name.endsWith(".docx")) setCustomDocFile(f)
+                }}
+                onClick={() => document.getElementById("custom-doc-input")?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                  customDocDragOver
+                    ? "border-violet-400 bg-violet-50"
+                    : customDocFile
+                    ? "border-emerald-400 bg-emerald-50"
+                    : "border-slate-200 hover:border-violet-300 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  id="custom-doc-input"
+                  type="file"
+                  accept=".docx"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) setCustomDocFile(f)
+                  }}
+                />
+                {customDocFile ? (
+                  <div className="flex items-center justify-center gap-2 text-emerald-700">
+                    <File className="h-5 w-5" />
+                    <span className="font-medium text-sm">{customDocFile.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCustomDocFile(null) }}
+                      className="ml-1 text-emerald-500 hover:text-red-500"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-slate-400">
+                    <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm font-medium">Arraste um arquivo .docx ou clique para selecionar</p>
+                    <p className="text-xs mt-1">Somente arquivos Word (.docx)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Download template model */}
+            <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-100">
+              <div>
+                <p className="text-sm font-medium text-violet-800">Não tem um template?</p>
+                <p className="text-xs text-violet-600 mt-0.5">Baixe nosso modelo com todos os códigos documentados</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-violet-300 text-violet-700 hover:bg-violet-100 shrink-0"
+                onClick={() => generateTemplateModel()}
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Baixar Modelo
+              </Button>
+            </div>
+
+            {/* Placeholders reference */}
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-2">Códigos disponíveis</p>
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="bg-slate-50 grid grid-cols-[auto_1fr] gap-0 text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2 border-b border-slate-200">
+                  <span className="w-44">Código</span>
+                  <span>Descrição</span>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                  {PROPOSAL_PLACEHOLDERS.map((ph) => (
+                    <div key={ph.code} className="grid grid-cols-[auto_1fr] gap-0 px-3 py-2 hover:bg-slate-50 text-xs">
+                      <code className="w-44 font-mono text-violet-700 text-[11px]">{ph.code}</code>
+                      <span className="text-slate-600">{ph.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Loop placeholders reference */}
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-1">Loop de produtos</p>
+              <p className="text-xs text-slate-500 mb-2">
+                Tudo entre <code className="font-mono text-violet-700">{"{#produtos}"}</code> e{" "}
+                <code className="font-mono text-violet-700">{"{/produtos}"}</code> se repete para cada produto do projeto.
+              </p>
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="divide-y divide-slate-100">
+                  {PROPOSAL_LOOP_PLACEHOLDERS.map((ph) => (
+                    <div key={ph.code} className="grid grid-cols-[auto_1fr] gap-0 px-3 py-2 hover:bg-slate-50 text-xs">
+                      <code className="w-44 font-mono text-emerald-700 text-[11px]">{ph.code}</code>
+                      <span className="text-slate-600">{ph.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowCustomDocDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!customDocFile || isExportingDocx}
+              onClick={async () => {
+                if (!customDocFile || !project) return
+                setIsExportingDocx(true)
+                try {
+                  const data = buildProposalData(mockData, dadosProjForm, project)
+                  const blob = await processCustomDocx(customDocFile, data)
+                  downloadBlob(blob, `proposta_${(dadosProjForm.agencia || project.name || "projeto").replace(/\s+/g, "_")}.docx`)
+                } finally {
+                  setIsExportingDocx(false)
+                }
+              }}
+            >
+              <File className="h-3.5 w-3.5 mr-1.5" />
+              {isExportingDocx ? "Gerando..." : "Baixar .docx"}
+            </Button>
+            <Button
+              size="sm"
+              className="btn-brand"
+              disabled={!customDocFile || isExportingPdf}
+              onClick={async () => {
+                if (!customDocFile || !project) return
+                setIsExportingPdf(true)
+                try {
+                  const data = buildProposalData(mockData, dadosProjForm, project)
+                  const blob = await processCustomDocx(customDocFile, data)
+                  await customDocxToPDF(
+                    blob,
+                    `proposta_${(dadosProjForm.agencia || project.name || "projeto").replace(/\s+/g, "_")}_personalizada.pdf`
+                  )
+                } finally {
+                  setIsExportingPdf(false)
+                }
+              }}
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5" />
+              {isExportingPdf ? "Gerando PDF..." : "Baixar como PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
