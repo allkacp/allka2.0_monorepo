@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast"
 interface ExportButtonProps {
   pageRef: React.RefObject<HTMLElement>
   filename?: string
+  onlyImageFormats?: boolean
 }
 
 function dateStr() {
@@ -33,7 +34,7 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url)
 }
 
-export function ExportButton({ pageRef, filename = "export" }: ExportButtonProps) {
+export function ExportButton({ pageRef, filename = "export", onlyImageFormats = false }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false)
   const { toast } = useToast()
 
@@ -166,15 +167,19 @@ export function ExportButton({ pageRef, filename = "export" }: ExportButtonProps
           <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
           <span className="text-sm">PDF</span>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsExcel}>
-          <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-          <span className="text-sm">Excel (.xls)</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsDoc}>
-          <FileDown className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-          <span className="text-sm">Word (.doc)</span>
-        </DropdownMenuItem>
+        {!onlyImageFormats && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsExcel}>
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <span className="text-sm">Excel (.xls)</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsDoc}>
+              <FileDown className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              <span className="text-sm">Word (.doc)</span>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

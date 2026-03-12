@@ -41,7 +41,6 @@ const AdminRelatoriosPage = React.lazy(() => import("@/app/admin/relatorios/page
 const AdminDisponibilidadePage = React.lazy(() => import("@/app/admin/disponibilidade/page"))
 const AdminComissionamentosPage = React.lazy(() => import("@/app/admin/comissionamentos/page"))
 const AdminCommissionsPage = React.lazy(() => import("@/app/admin/commissions/page"))
-const AdminPromocoesPage = React.lazy(() => import("@/app/admin/promocoes/page"))
 const AdminCampanhasIndicacao = React.lazy(() => import("@/app/admin/campanhas-indicacao/page"))
 const AdminOnboardingPage = React.lazy(() => import("@/app/admin/onboarding/page"))
 const AdminPermissoesPage = React.lazy(() => import("@/app/admin/permissoes/page"))
@@ -249,7 +248,6 @@ export default function App() {
               <Route path="/admin/disponibilidade" element={<AdminDisponibilidadePage />} />
               <Route path="/admin/comissionamentos" element={<AdminComissionamentosPage />} />
               <Route path="/admin/commissions" element={<AdminCommissionsPage />} />
-              <Route path="/admin/promocoes" element={<AdminPromocoesPage />} />
               <Route path="/admin/campanhas-indicacao" element={<AdminCampanhasIndicacao />} />
               <Route path="/admin/onboarding" element={<AdminOnboardingPage />} />
               <Route path="/admin/permissoes" element={<AdminPermissoesPage />} />

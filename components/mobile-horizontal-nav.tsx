@@ -62,7 +62,6 @@ const mobileNavigationConfig = {
     { name: "Projetos", href: "/admin/projetos", icon: FolderOpen, badge: "156" },
     { name: "Produtos", href: "/admin/produtos", icon: Package },
     { name: "Preços", href: "/admin/precificacao", icon: Calculator },
-    { name: "Promoções", href: "/admin/promocoes", icon: Tag },
     { name: "Campanhas", href: "/admin/campanhas-indicacao", icon: Share2 },
     { name: "Níveis", href: "/admin/niveis", icon: Star },
     { name: "Financeiro", href: "/admin/financeiro", icon: Wallet },

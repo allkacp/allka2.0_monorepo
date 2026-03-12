@@ -102,6 +102,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "view_analytics",
     "admin_access",
   ],
+  partner: [
+    "view_partner_dashboard",
+    "request_withdrawal",
+    "view_analytics",
+  ],
 }
 
 export function getUserPermissions(role: UserRole): Permission[] {

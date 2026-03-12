@@ -30,6 +30,9 @@ import {
   Download,
   Plus,
   AlertCircle,
+  Users,
+  XCircle,
+  UserCheck,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -182,6 +185,25 @@ export default function AdminFinanceiroPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
 
+  const MOCK_PENDING_WITHDRAWALS = [
+    { id: "w1", partnerName: "Carlos Mendonça", partnerEmail: "carlos@exemplo.com", amount: 800, pixKey: "carlos@exemplo.com", pixKeyType: "email", requestedAt: "2025-06-01T14:30:00Z", status: "pending" as const, notes: "" },
+    { id: "w2", partnerName: "Ana Beatriz", partnerEmail: "ana.beatriz@nomade.io", amount: 450, pixKey: "123.456.789-00", pixKeyType: "cpf", requestedAt: "2025-06-02T09:15:00Z", status: "pending" as const, notes: "" },
+    { id: "w3", partnerName: "Pedro Alves", partnerEmail: "pedro@agencia.com", amount: 1200, pixKey: "11987654321", pixKeyType: "phone", requestedAt: "2025-05-30T16:00:00Z", status: "pending" as const, notes: "" },
+  ]
+
+  const [withdrawals, setWithdrawals] = useState(MOCK_PENDING_WITHDRAWALS)
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+
+  function approveWithdrawal(id: string) {
+    setWithdrawals(ws => ws.map(w => w.id === id ? { ...w, status: "paid" as const, notes: "Aprovado e pago" } : w))
+  }
+
+  function rejectWithdrawal(id: string) {
+    setWithdrawals(ws => ws.map(w => w.id === id ? { ...w, status: "rejected" as const, notes: rejectNotes[id] ?? "" } : w))
+    setRejectingId(null)
+  }
+
   return (
     <div className="container mx-auto space-y-6 px-0 py-0">
       <div className="flex items-center justify-between">
@@ -286,11 +308,20 @@ export default function AdminFinanceiroPage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="wallet">Carteira</TabsTrigger>
           <TabsTrigger value="postpaid">Clientes Pós-Pagos</TabsTrigger>
           <TabsTrigger value="reconciliation">Conciliação Bancária</TabsTrigger>
+          <TabsTrigger value="partner-withdrawals" className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            Saques Parceiros
+            {withdrawals.filter(w => w.status === "pending").length > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold">
+                {withdrawals.filter(w => w.status === "pending").length}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -777,6 +808,126 @@ export default function AdminFinanceiroPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="partner-withdrawals" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Saques de Parceiros</h3>
+              <p className="text-sm text-gray-600 mt-1">Aprove ou rejeite solicitações de saque dos parceiros influencers</p>
+            </div>
+            <div className="flex gap-3 text-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                <Clock className="h-3.5 w-3.5" />
+                {withdrawals.filter(w => w.status === "pending").length} pendentes
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {withdrawals.filter(w => w.status === "paid").length} pagos
+              </span>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Parceiro</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Solicitado em</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {withdrawals.map((w) => (
+                    <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-slate-800">{w.partnerName}</p>
+                        <p className="text-xs text-slate-400">{w.partnerEmail}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-medium text-slate-600">{w.pixKey}</p>
+                        <p className="text-[10px] text-slate-400 uppercase">{w.pixKeyType}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
+                        {w.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {new Date(w.requestedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                      </td>
+                      <td className="px-4 py-3">
+                        {w.status === "pending" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                            <Clock className="h-3 w-3" /> Aguardando
+                          </span>
+                        )}
+                        {w.status === "paid" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                            <CheckCircle2 className="h-3 w-3" /> Pago
+                          </span>
+                        )}
+                        {w.status === "rejected" && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
+                              <XCircle className="h-3 w-3" /> Rejeitado
+                            </span>
+                            {w.notes && <p className="text-[10px] text-slate-400 mt-1">{w.notes}</p>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {w.status === "pending" && (
+                          <div className="space-y-2">
+                            {rejectingId === w.id ? (
+                              <div className="flex gap-1.5 items-center">
+                                <input
+                                  autoFocus
+                                  className="h-7 text-xs rounded border border-slate-200 px-2 w-40 focus:outline-none focus:ring-1 focus:ring-red-400"
+                                  placeholder="Motivo da rejeição..."
+                                  value={rejectNotes[w.id] ?? ""}
+                                  onChange={(e) => setRejectNotes(n => ({ ...n, [w.id]: e.target.value }))}
+                                />
+                                <button onClick={() => rejectWithdrawal(w.id)} className="h-7 px-2 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-700">OK</button>
+                                <button onClick={() => setRejectingId(null)} className="h-7 px-2 rounded border border-slate-200 text-slate-500 text-xs hover:bg-slate-50">X</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => approveWithdrawal(w.id)}
+                                  className="h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                                >
+                                  <UserCheck className="h-3 w-3" /> Aprovar
+                                </button>
+                                <button
+                                  onClick={() => setRejectingId(w.id)}
+                                  className="h-7 px-2.5 rounded-md border border-red-300 text-red-600 hover:bg-red-50 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                                >
+                                  <XCircle className="h-3 w-3" /> Rejeitar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {w.status !== "pending" && (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {withdrawals.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
+                        Nenhuma solicitação de saque encontrada
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </CardContent>
           </Card>
         </TabsContent>

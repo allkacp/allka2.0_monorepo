@@ -294,10 +294,10 @@ export interface Guideline {
   importance: "high" | "medium" | "low"
 }
 
-export type AccountType = "empresas" | "agencias" | "nomades" | "admin"
+export type AccountType = "empresas" | "agencias" | "nomades" | "admin" | "parceiro"
 export type AccountSubType = "company" | "in-house" | null
 
-export type UserRole = "company_admin" | "company_user" | "agency_admin" | "agency_user" | "nomad" | "admin"
+export type UserRole = "company_admin" | "company_user" | "agency_admin" | "agency_user" | "nomad" | "admin" | "partner"
 
 export type Permission =
   | "view_projects"
@@ -314,6 +314,8 @@ export type Permission =
   | "edit_ai_knowledge"
   | "view_analytics"
   | "admin_access"
+  | "view_partner_dashboard"
+  | "request_withdrawal"
 
 export interface Project {
   id: number

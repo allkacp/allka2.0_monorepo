@@ -111,7 +111,6 @@ const navigationConfig = {
         { name: "Projetos", href: "/admin/projetos", icon: FolderOpen, current: false, badge: "156" },
         { name: "Produtos", href: "/admin/produtos", icon: Package, current: false },
         { name: "Precificação", href: "/admin/precificacao", icon: Calculator, current: false },
-        { name: "Promoções", href: "/admin/promocoes", icon: Tag, current: false },
         { name: "Campanhas", href: "/admin/campanhas-indicacao", icon: Share2, current: false },
       ],
     },
