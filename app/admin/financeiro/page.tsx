@@ -181,26 +181,41 @@ const mockFinancialData = {
   ],
 }
 
+type AdminPartnerWithdrawalStatus = "pending" | "paid" | "rejected"
+type AdminPartnerPixKeyType = "cpf" | "email" | "phone" | "random"
+
+interface AdminPartnerWithdrawal {
+  id: string
+  partnerName: string
+  partnerEmail: string
+  amount: number
+  pixKey: string
+  pixKeyType: AdminPartnerPixKeyType
+  requestedAt: string
+  status: AdminPartnerWithdrawalStatus
+  notes: string
+}
+
 export default function AdminFinanceiroPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
 
-  const MOCK_PENDING_WITHDRAWALS = [
-    { id: "w1", partnerName: "Carlos Mendonça", partnerEmail: "carlos@exemplo.com", amount: 800, pixKey: "carlos@exemplo.com", pixKeyType: "email", requestedAt: "2025-06-01T14:30:00Z", status: "pending" as const, notes: "" },
-    { id: "w2", partnerName: "Ana Beatriz", partnerEmail: "ana.beatriz@nomade.io", amount: 450, pixKey: "123.456.789-00", pixKeyType: "cpf", requestedAt: "2025-06-02T09:15:00Z", status: "pending" as const, notes: "" },
-    { id: "w3", partnerName: "Pedro Alves", partnerEmail: "pedro@agencia.com", amount: 1200, pixKey: "11987654321", pixKeyType: "phone", requestedAt: "2025-05-30T16:00:00Z", status: "pending" as const, notes: "" },
+  const MOCK_PENDING_WITHDRAWALS: AdminPartnerWithdrawal[] = [
+    { id: "w1", partnerName: "Carlos Mendonça", partnerEmail: "carlos@exemplo.com", amount: 800, pixKey: "carlos@exemplo.com", pixKeyType: "email", requestedAt: "2025-06-01T14:30:00Z", status: "pending", notes: "" },
+    { id: "w2", partnerName: "Ana Beatriz", partnerEmail: "ana.beatriz@nomade.io", amount: 450, pixKey: "123.456.789-00", pixKeyType: "cpf", requestedAt: "2025-06-02T09:15:00Z", status: "pending", notes: "" },
+    { id: "w3", partnerName: "Pedro Alves", partnerEmail: "pedro@agencia.com", amount: 1200, pixKey: "11987654321", pixKeyType: "phone", requestedAt: "2025-05-30T16:00:00Z", status: "pending", notes: "" },
   ]
 
-  const [withdrawals, setWithdrawals] = useState(MOCK_PENDING_WITHDRAWALS)
+  const [withdrawals, setWithdrawals] = useState<AdminPartnerWithdrawal[]>(MOCK_PENDING_WITHDRAWALS)
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
   const [rejectingId, setRejectingId] = useState<string | null>(null)
 
   function approveWithdrawal(id: string) {
-    setWithdrawals(ws => ws.map(w => w.id === id ? { ...w, status: "paid" as const, notes: "Aprovado e pago" } : w))
+    setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "paid", notes: "Aprovado e pago" } : w)))
   }
 
   function rejectWithdrawal(id: string) {
-    setWithdrawals(ws => ws.map(w => w.id === id ? { ...w, status: "rejected" as const, notes: rejectNotes[id] ?? "" } : w))
+    setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "rejected", notes: rejectNotes[id] ?? "" } : w)))
     setRejectingId(null)
   }
 
