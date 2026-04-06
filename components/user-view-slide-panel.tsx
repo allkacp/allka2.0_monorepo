@@ -771,7 +771,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       setShowAddBalanceModal(false)
       setShowWalletConfirmDialog(false)
     } catch (error) {
-      console.error('[v0] Error adding balance:', error)
+      console.error('Error adding balance:', error)
       toast({ title: "Erro", description: "Falha ao adicionar crédito", variant: "destructive" })
     } finally {
       setIsApplyingWallet(false)
@@ -837,7 +837,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       
       setShowPasswordResetModal(false)
     } catch (error) {
-      console.error('[v0] Error resetting password:', error)
+      console.error('Error resetting password:', error)
       toast({ title: "Erro", description: "Falha ao redefinir senha", variant: "destructive" })
     } finally {
       setIsSavingSecurityAction(false)
@@ -876,7 +876,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       toast({ title: "Sucesso!", description: "2FA foi desativado" })
       setShowConfirmSecurityAction(false)
     } catch (error) {
-      console.error('[v0] Error disabling 2FA:', error)
+      console.error('Error disabling 2FA:', error)
       toast({ title: "Erro", description: "Falha ao desativar 2FA", variant: "destructive" })
     } finally {
       setIsSavingSecurityAction(false)
@@ -911,7 +911,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       setShowTwoFAVerification(false)
       setTwoFAVerificationCode("")
     } catch (error) {
-      console.error('[v0] Error verifying 2FA:', error)
+      console.error('Error verifying 2FA:', error)
       toast({ title: "Erro", description: "Código inválido", variant: "destructive" })
     } finally {
       setIsSavingSecurityAction(false)
@@ -1010,7 +1010,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
       setWalletAdjustValue("")
       setShowWalletConfirmDialog(false)
     } catch (error) {
-      console.error('[v0] Error applying wallet adjustment:', error)
+      console.error('Error applying wallet adjustment:', error)
       toast({ title: "Erro", description: "Falha ao aplicar ajuste", variant: "destructive" })
     } finally {
       setIsApplyingWallet(false)
@@ -1117,7 +1117,7 @@ export function UserViewSlidePanel({ open, onClose, user }: UserViewSlidePanelPr
         body: JSON.stringify(updatePayload)
       })
     } catch (error) {
-      console.warn('[v0] API sync failed (local state already updated):', error)
+      console.warn('API sync failed (local state already updated):', error)
     }
   }
 

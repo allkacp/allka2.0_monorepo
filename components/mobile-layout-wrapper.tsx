@@ -16,23 +16,20 @@ export function MobileLayoutWrapper({ children }: MobileLayoutWrapperProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    console.log("[v0] MobileLayoutWrapper mounted")
     setMounted(true)
   }, [])
 
   const handleMenuClick = () => {
-    console.log("[v0] Menu clicked, opening sheet")
     setMenuOpen(true)
   }
 
   const handleMenuClose = () => {
-    console.log("[v0] Menu closed")
     setMenuOpen(false)
   }
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      console.error("[v0] Error caught in MobileLayoutWrapper:", event.error)
+      console.error("Error caught in MobileLayoutWrapper:", event.error)
     }
 
     window.addEventListener("error", handleError)

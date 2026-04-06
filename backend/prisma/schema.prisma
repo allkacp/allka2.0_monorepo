@@ -1,0 +1,631 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth & Users ────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password_hash String
+  name          String
+  role          String   @default("company_user")
+  // company_user | company_admin | agency_user | agency_admin | nomad | admin | partner
+  account_type  String   @default("empresas")
+  // empresas | agencias | nomades | admin | parceiro
+  is_active     Boolean  @default(true)
+  avatar        String?
+  phone         String?
+  admin_profile_id String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  nomade              Nomade?
+  agency              Agency?
+  partner             PartnerProfile?
+  term_acceptances    TermAcceptance[]
+  chat_participations ChatParticipant[]
+  sent_messages       ChatMessage[]      @relation("SentMessages")
+  course_enrollments  CourseEnrollment[]
+
+  @@map("users")
+}
+
+// ─── Companies (Empresas / Clientes) ─────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  cnpj        String?  @unique
+  email       String?
+  phone       String?
+  status      String   @default("ativo")
+  // ativo | inativo | prospecto | inadimplente
+  segment     String?
+  address     String?
+  description String?
+  logo        String?
+  website     String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  projects Project[]
+  invoices Invoice[]
+
+  @@map("companies")
+}
+
+// ─── Agencies ────────────────────────────────────────────────────────────────
+
+model Agency {
+  id             String   @id @default(cuid())
+  user_id        String   @unique
+  user           User     @relation(fields: [user_id], references: [id])
+  name           String
+  cnpj           String?  @unique
+  email          String?
+  phone          String?
+  partner_level  String   @default("bronze")
+  // bronze | silver | gold | platinum | diamond
+  wallet_balance Float    @default(0)
+  status         String   @default("ativo")
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  match_queue_entry MatchQueueEntry?
+
+  @@map("agencies")
+}
+
+// ─── Nômades ─────────────────────────────────────────────────────────────────
+
+model Nomade {
+  id                        String    @id @default(cuid())
+  user_id                   String?   @unique
+  user                      User?     @relation(fields: [user_id], references: [id])
+  name                      String
+  email                     String    @unique
+  whatsapp                  String?
+  avatar                    String?
+  level                     String    @default("bronze")
+  // bronze | silver | gold | platinum | diamond | leader
+  status                    String    @default("aguardando_aprovacao")
+  // ativo | inativo | aguardando_aprovacao | reprovado | pausado
+  score                     Int       @default(0)
+  tasks_completed_quarter   Int       @default(0)
+  tasks_completed_total     Int       @default(0)
+  areas_of_interest         String?
+  // JSON: string[]
+  registration_date         DateTime  @default(now())
+  last_access               DateTime?
+  terms_accepted            Boolean   @default(false)
+  is_leader                 Boolean   @default(false)
+  leader_id                 String?
+  min_monthly_goal          Float?
+  performance_avg_rating    Float     @default(0)
+  performance_on_time       Float     @default(0)
+  performance_rejection_rate Float    @default(0)
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @updatedAt
+
+  qualifications      Qualification[]
+  wallet_transactions WalletTransaction[]
+  bank_account        BankAccount?
+  task_executions     TaskExecution[]
+  withdrawal_requests WithdrawalRequest[]
+
+  @@map("nomades")
+}
+
+model NomadeLevel {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  // bronze | silver | gold | platinum | diamond | leader
+  name         String
+  min_score    Int
+  max_score    Int?
+  color        String?
+  icon         String?
+  benefits     String?
+  // JSON: string[]
+  requirements String?
+  // JSON: { label: string, value: string }[]
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("nomade_levels")
+}
+
+model Qualification {
+  id                 String    @id @default(cuid())
+  nomade_id          String
+  nomade             Nomade    @relation(fields: [nomade_id], references: [id])
+  category           String
+  task               String
+  status             String    @default("teste_pendente")
+  // habilitado | pausado | teste_pendente | reprovado
+  certification_date DateTime?
+  paused_date        DateTime?
+  test_required      Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  @@map("qualifications")
+}
+
+model WalletTransaction {
+  id            String   @id @default(cuid())
+  nomade_id     String
+  nomade        Nomade   @relation(fields: [nomade_id], references: [id])
+  type          String
+  // credit | debit | bonus | penalty | withdrawal
+  amount        Float
+  description   String
+  date          DateTime @default(now())
+  receipt       String?
+  justification String?
+
+  @@map("wallet_transactions")
+}
+
+model BankAccount {
+  id           String   @id @default(cuid())
+  nomade_id    String   @unique
+  nomade       Nomade   @relation(fields: [nomade_id], references: [id])
+  bank         String
+  agency       String
+  account      String
+  account_type String   @default("corrente")
+  // corrente | poupanca
+  cnpj         String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("bank_accounts")
+}
+
+// ─── Projects & Tasks ─────────────────────────────────────────────────────────
+
+model Project {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  client_id   String?
+  client      Company?  @relation(fields: [client_id], references: [id])
+  status      String    @default("draft")
+  // draft | awaiting-payment | planning | in-progress | paused | completed | cancelled
+  lifecycle   String    @default("avulso")
+  // avulso | mensal
+  value       Float     @default(0)
+  start_date  DateTime?
+  end_date    DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  task_executions TaskExecution[]
+  invoices        Invoice[]
+
+  @@map("projects")
+}
+
+model Specialty {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  hourly_rate     Float    @default(0)
+  category        String
+  required_skills String?
+  // JSON: string[]
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  task_templates TaskTemplate[]
+
+  @@map("specialties")
+}
+
+model TaskTemplate {
+  id                   String    @id @default(cuid())
+  name                 String
+  description          String?
+  specialty_id         String?
+  specialty            Specialty? @relation(fields: [specialty_id], references: [id])
+  base_price           Float     @default(0)
+  complexity           String    @default("basic")
+  // basic | intermediate | advanced | premium
+  category             String?
+  tags                 String?
+  // JSON: string[]
+  estimated_hours      Float     @default(1)
+  profit_margin        Float     @default(30)
+  emergency_multiplier Float     @default(1.5)
+  is_active            Boolean   @default(true)
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  executions TaskExecution[]
+
+  @@map("task_templates")
+}
+
+model TaskExecution {
+  id           String    @id @default(cuid())
+  project_id   String?
+  project      Project?     @relation(fields: [project_id], references: [id])
+  template_id  String?
+  template     TaskTemplate? @relation(fields: [template_id], references: [id])
+  nomade_id    String?
+  nomade       Nomade?      @relation(fields: [nomade_id], references: [id])
+  title        String
+  description  String?
+  status       String    @default("draft")
+  // draft | launched | in_progress | returned | paused | agency_approval | client_approval | approved | rejected | expired
+  priority     String    @default("medium")
+  // low | medium | high | urgent
+  type         String    @default("standard")
+  // standard | qualification | learning
+  due_date     DateTime?
+  delivered_at DateTime?
+  approved_at  DateTime?
+  rating       Float?
+  feedback     String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  @@map("task_executions")
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+
+model Product {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  short_description String?
+  category          String
+  tags              String?
+  // JSON: string[]
+  base_price        Float    @default(0)
+  complexity        String   @default("basic")
+  // basic | intermediate | advanced | premium
+  visibility        String   @default("{\"company\":true,\"agency\":true,\"partner\":false,\"inHouse\":false}")
+  // JSON: ProductVisibility
+  image             String?
+  demonstrations    String?
+  // JSON: string[]
+  contract_count    Int      @default(0)
+  average_rating    Float    @default(0)
+  completion_time   String?
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  variations ProductVariation[]
+  addons     ProductAddon[]
+
+  @@map("products")
+}
+
+model ProductVariation {
+  id             String   @id @default(cuid())
+  product_id     String
+  product        Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  price_modifier Float    @default(0)
+  features       String?
+  // JSON: string[]
+  created_at     DateTime @default(now())
+
+  @@map("product_variations")
+}
+
+model ProductAddon {
+  id          String   @id @default(cuid())
+  product_id  String
+  product     Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Float    @default(0)
+  category    String?
+  created_at  DateTime @default(now())
+
+  @@map("product_addons")
+}
+
+// ─── Financial ────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id             String    @id @default(cuid())
+  company_id     String?
+  company        Company?  @relation(fields: [company_id], references: [id])
+  project_id     String?
+  project        Project?  @relation(fields: [project_id], references: [id])
+  amount         Float
+  status         String    @default("pending")
+  // pending | paid | overdue | cancelled
+  due_date       DateTime?
+  paid_at        DateTime?
+  description    String?
+  invoice_number String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@map("invoices")
+}
+
+model WithdrawalRequest {
+  id            String    @id @default(cuid())
+  nomade_id     String
+  nomade        Nomade    @relation(fields: [nomade_id], references: [id])
+  amount        Float
+  status        String    @default("aguardando_analise")
+  // aguardando_analise | pagamento_agendado | pagamento_efetuado | cancelado | reprovado
+  pix_key       String?
+  pix_key_type  String?
+  // cpf | email | phone | random
+  notes         String?
+  reviewed_by   String?
+  reviewed_at   DateTime?
+  scheduled_for DateTime?
+  paid_at       DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@map("withdrawal_requests")
+}
+
+// ─── Terms ────────────────────────────────────────────────────────────────────
+
+model Term {
+  id                   String   @id @default(cuid())
+  title                String
+  content              String
+  version              String
+  acceptance_level     String   @default("usuario")
+  // empresa | usuario
+  target_account_types String?
+  // JSON: string[]
+  is_active            Boolean  @default(true)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  acceptances TermAcceptance[]
+
+  @@map("terms")
+}
+
+model TermAcceptance {
+  id          String   @id @default(cuid())
+  term_id     String
+  term        Term     @relation(fields: [term_id], references: [id])
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id])
+  accepted_at DateTime @default(now())
+  ip_address  String?
+
+  @@unique([term_id, user_id])
+  @@map("term_acceptances")
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id         String   @id @default(cuid())
+  title      String?
+  type       String   @default("direct")
+  // direct | group | support
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+
+  @@map("conversations")
+}
+
+model ChatParticipant {
+  id              String       @id @default(cuid())
+  conversation_id String
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  user_id         String
+  user            User         @relation(fields: [user_id], references: [id])
+  role            String       @default("member")
+  joined_at       DateTime     @default(now())
+
+  @@unique([conversation_id, user_id])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id              String       @id @default(cuid())
+  conversation_id String
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  sender_id       String
+  sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
+  content         String
+  is_read         Boolean      @default(false)
+  created_at      DateTime     @default(now())
+
+  @@map("chat_messages")
+}
+
+// ─── Allkademy ────────────────────────────────────────────────────────────────
+
+model Course {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  category     String
+  thumbnail    String?
+  duration     Int?
+  is_published Boolean  @default(false)
+  is_free      Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  modules     CourseModule[]
+  enrollments CourseEnrollment[]
+
+  @@map("courses")
+}
+
+model CourseModule {
+  id         String   @id @default(cuid())
+  course_id  String
+  course     Course   @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  title      String
+  order      Int      @default(0)
+  created_at DateTime @default(now())
+
+  lessons Lesson[]
+
+  @@map("course_modules")
+}
+
+model Lesson {
+  id           String       @id @default(cuid())
+  module_id    String
+  module       CourseModule @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  title        String
+  content_type String       @default("video")
+  // video | text | quiz
+  content_url  String?
+  duration     Int?
+  order        Int          @default(0)
+  created_at   DateTime     @default(now())
+
+  @@map("lessons")
+}
+
+model CourseEnrollment {
+  id           String    @id @default(cuid())
+  course_id    String
+  course       Course    @relation(fields: [course_id], references: [id])
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id])
+  enrolled_at  DateTime  @default(now())
+  progress     Float     @default(0)
+  completed_at DateTime?
+
+  @@unique([course_id, user_id])
+  @@map("course_enrollments")
+}
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+model AdminProfile {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  is_master   Boolean  @default(false)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  permissions AdminPermission[]
+
+  @@map("admin_profiles")
+}
+
+model AdminPermission {
+  id         String       @id @default(cuid())
+  profile_id String
+  profile    AdminProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  module     String
+  action     String
+  // view | edit | create | delete | not_applicable
+  resource   String?
+  created_at DateTime     @default(now())
+
+  @@unique([profile_id, module, action])
+  @@map("admin_permissions")
+}
+
+// ─── Partners & Campaigns ─────────────────────────────────────────────────────
+
+model PartnerProfile {
+  id              String   @id @default(cuid())
+  user_id         String   @unique
+  user            User     @relation(fields: [user_id], references: [id])
+  balance         Float    @default(0)
+  total_earned    Float    @default(0)
+  total_withdrawn Float    @default(0)
+  referral_link   String?
+  referral_code   String?  @unique
+  status          String   @default("pending")
+  // active | suspended | pending
+  pix_key         String?
+  pix_key_type    String?
+  // cpf | email | phone | random
+  linked_campaign_id String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  commissions PartnerCommission[]
+
+  @@map("partner_profiles")
+}
+
+model Campaign {
+  id               String    @id @default(cuid())
+  name             String
+  type             String    @default("coupon")
+  // coupon | link | referral
+  status           String    @default("active")
+  // active | paused | ended
+  commission_type  String    @default("percentage")
+  // percentage | fixed
+  commission_value Float     @default(10)
+  coupon_code      String?   @unique
+  start_date       DateTime?
+  end_date         DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  commissions PartnerCommission[]
+
+  @@map("campaigns")
+}
+
+model PartnerCommission {
+  id           String         @id @default(cuid())
+  partner_id   String
+  partner      PartnerProfile @relation(fields: [partner_id], references: [id])
+  campaign_id  String?
+  campaign     Campaign?      @relation(fields: [campaign_id], references: [id])
+  amount       Float
+  status       String         @default("pending")
+  // pending | approved | paid
+  company_name String?
+  project_name String?
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+
+  @@map("partner_commissions")
+}
+
+// ─── Match Queue ──────────────────────────────────────────────────────────────
+
+model MatchQueueEntry {
+  id           String   @id @default(cuid())
+  agency_id    String   @unique
+  agency       Agency   @relation(fields: [agency_id], references: [id])
+  tier         String   @default("basic")
+  // basic | premium | elite
+  score        Float    @default(0)
+  status       String   @default("active")
+  // active | paused | suspended
+  position     Int      @default(0)
+  joined_queue DateTime @default(now())
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("match_queue_entries")
+}

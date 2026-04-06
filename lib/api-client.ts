@@ -1,6 +1,6 @@
 // Allka MVP - API Client utility functions
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "/api"
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api"
 
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

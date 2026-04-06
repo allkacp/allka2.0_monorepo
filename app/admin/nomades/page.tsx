@@ -25,7 +25,7 @@ const mockNomades = [
     tasksCompleted: 45,
     rating: 4.8,
     earnings: 12500,
-    status: "active",
+    status: "ativo",
     joinedDate: "2023-06-15",
     online_status: "online",
     last_login: "2024-01-22T14:30:00",
@@ -43,7 +43,7 @@ const mockNomades = [
     tasksCompleted: 89,
     rating: 4.9,
     earnings: 28900,
-    status: "active",
+    status: "ativo",
     joinedDate: "2023-03-10",
     online_status: "busy",
     last_login: "2024-01-22T10:15:00",
@@ -61,12 +61,177 @@ const mockNomades = [
     tasksCompleted: 12,
     rating: 4.5,
     earnings: 3200,
-    status: "pending",
+    status: "teste_pendente",
     joinedDate: "2024-01-05",
     online_status: "offline",
     last_login: "2024-01-20T16:45:00",
   },
+  {
+    id: 4,
+    name: "Rafael Mendes",
+    email: "rafael@example.com",
+    phone: "+55 31 97654-3210",
+    level: "Platinum",
+    specialties: ["Motion Design", "Vídeo"],
+    products: ["Produção de Vídeo", "Animação"],
+    categories: ["Design", "Produção"],
+    taskTypes: ["Edição de Vídeo", "Motion Graphics"],
+    tasksCompleted: 214,
+    rating: 4.9,
+    earnings: 67400,
+    status: "ativo",
+    joinedDate: "2022-09-20",
+    online_status: "online",
+    last_login: "2024-01-22T15:00:00",
+  },
+  {
+    id: 5,
+    name: "Juliana Costa",
+    email: "juliana@example.com",
+    phone: "+55 51 96543-2109",
+    level: "Diamond",
+    specialties: ["Estratégia Digital", "Growth"],
+    products: ["Growth Hacking", "Marketing Digital"],
+    categories: ["Marketing", "Estratégia"],
+    taskTypes: ["Planejamento Estratégico", "Análise de Dados"],
+    tasksCompleted: 412,
+    rating: 5.0,
+    earnings: 138000,
+    status: "ativo",
+    joinedDate: "2021-05-12",
+    online_status: "away",
+    last_login: "2024-01-22T09:00:00",
+  },
+  {
+    id: 6,
+    name: "Thiago Rocha",
+    email: "thiago@example.com",
+    phone: "+55 41 95432-1098",
+    level: "Leader",
+    specialties: ["Gestão de Equipes", "Product"],
+    products: ["Gestão de Projetos", "Desenvolvimento"],
+    categories: ["Tecnologia", "Gestão"],
+    taskTypes: ["Coordenação de Equipe", "Revisão de Entregas"],
+    tasksCompleted: 318,
+    rating: 4.9,
+    earnings: 102500,
+    status: "ativo",
+    joinedDate: "2021-11-03",
+    online_status: "online",
+    last_login: "2024-01-22T16:00:00",
+  },
+  {
+    id: 7,
+    name: "Lucas Ferreira",
+    email: "lucas@example.com",
+    phone: "+55 11 99000-1111",
+    level: "Bronze",
+    specialties: ["Design Gráfico"],
+    products: ["Branding"],
+    categories: ["Design"],
+    taskTypes: ["Design de Logos"],
+    tasksCompleted: 0,
+    rating: 0,
+    earnings: 0,
+    status: "cadastrado",
+    joinedDate: "2026-03-28",
+    online_status: "offline",
+    last_login: "2026-03-28T10:00:00",
+  },
+  {
+    id: 8,
+    name: "Fernanda Alves",
+    email: "fernanda@example.com",
+    phone: "+55 21 98000-2222",
+    level: "Bronze",
+    specialties: ["Copywriting"],
+    products: ["Conteúdo"],
+    categories: ["Marketing"],
+    taskTypes: ["Redação de Artigos"],
+    tasksCompleted: 0,
+    rating: 0,
+    earnings: 0,
+    status: "teste_pendente",
+    joinedDate: "2026-03-15",
+    online_status: "offline",
+    last_login: "2026-03-15T09:00:00",
+  },
+  {
+    id: 9,
+    name: "Roberto Nunes",
+    email: "roberto@example.com",
+    phone: "+55 85 97000-3333",
+    level: "Bronze",
+    specialties: ["Social Media"],
+    products: ["Marketing Digital"],
+    categories: ["Marketing"],
+    taskTypes: ["Criação de Posts"],
+    tasksCompleted: 8,
+    rating: 2.3,
+    earnings: 1200,
+    status: "atencao",
+    joinedDate: "2025-10-01",
+    online_status: "away",
+    last_login: "2026-04-02T08:00:00",
+  },
+  {
+    id: 10,
+    name: "Bianca Torres",
+    email: "bianca@example.com",
+    phone: "+55 31 96000-4444",
+    level: "Silver",
+    specialties: ["SEO"],
+    products: ["SEO"],
+    categories: ["Marketing"],
+    taskTypes: ["Otimização SEO"],
+    tasksCompleted: 22,
+    rating: 4.2,
+    earnings: 5800,
+    status: "sem_tarefas",
+    joinedDate: "2025-06-10",
+    online_status: "offline",
+    last_login: "2026-02-28T14:00:00",
+  },
+  {
+    id: 11,
+    name: "Paulo Carvalho",
+    email: "paulo@example.com",
+    phone: "+55 51 95000-5555",
+    level: "Bronze",
+    specialties: ["Desenvolvimento Web"],
+    products: ["Desenvolvimento"],
+    categories: ["Tecnologia"],
+    taskTypes: ["Desenvolvimento Frontend"],
+    tasksCompleted: 0,
+    rating: 0,
+    earnings: 0,
+    status: "reprovado",
+    joinedDate: "2026-02-20",
+    online_status: "offline",
+    last_login: "2026-02-21T11:00:00",
+  },
 ]
+
+const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
+  Bronze:   { icon: "🥉", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  Silver:   { icon: "🥈", className: "bg-slate-100 text-slate-600 border-slate-300" },
+  Gold:     { icon: "🥇", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  Platinum: { icon: "💎", className: "bg-sky-50 text-sky-700 border-sky-200" },
+  Diamond:  { icon: "👑", className: "bg-violet-50 text-violet-700 border-violet-200" },
+  Leader:   { icon: "🔥", className: "bg-rose-50 text-rose-700 border-rose-200" },
+}
+
+const NOMAD_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  cadastrado:    { label: "Cadastrado",    className: "bg-slate-100 text-slate-700 border-slate-300" },
+  teste_pendente:{ label: "Teste Pendente",className: "bg-amber-100 text-amber-800 border-amber-300" },
+  ativo:         { label: "Ativo",         className: "bg-green-100 text-green-800 border-green-300" },
+  active:        { label: "Ativo",         className: "bg-green-100 text-green-800 border-green-300" },
+  atencao:       { label: "Atenção",       className: "bg-orange-100 text-orange-800 border-orange-300" },
+  sem_tarefas:   { label: "Sem Tarefas",   className: "bg-sky-100 text-sky-800 border-sky-300" },
+  inativo:       { label: "Inativo",       className: "bg-gray-100 text-gray-600 border-gray-300" },
+  inactive:      { label: "Inativo",       className: "bg-gray-100 text-gray-600 border-gray-300" },
+  reprovado:     { label: "Reprovado",     className: "bg-red-100 text-red-700 border-red-300" },
+}
 
 const availableProducts = ["Marketing Digital", "Branding", "Desenvolvimento", "SEO", "Conteúdo"]
 const availableCategories = ["Design", "Marketing", "Tecnologia", "Comunicação"]
@@ -95,6 +260,11 @@ export default function AdminNomadesPage() {
   const [selectedNomad, setSelectedNomad] = useState<(typeof mockNomades)[0] | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [invitedNomads, setInvitedNomads] = useState<Set<number>>(new Set())
+
+  const handleInvite = (nomadId: number) => {
+    setInvitedNomads((prev) => new Set([...prev, nomadId]))
+  }
 
   const filteredNomades = mockNomades.filter((nomade) => {
     const matchesSearch =
@@ -168,7 +338,6 @@ export default function AdminNomadesPage() {
   }
 
   const handleSave = (updatedNomad: (typeof mockNomades)[0]) => {
-    console.log("Saving nomad:", updatedNomad)
   }
 
   const handlePhoneCall = (phone: string) => {
@@ -249,6 +418,9 @@ export default function AdminNomadesPage() {
                   <option value="Bronze">Bronze</option>
                   <option value="Silver">Silver</option>
                   <option value="Gold">Gold</option>
+                  <option value="Platinum">Platinum</option>
+                  <option value="Diamond">Diamond</option>
+                  <option value="Leader">Leader</option>
                 </select>
                 <select
                   value={filterStatus}
@@ -256,9 +428,13 @@ export default function AdminNomadesPage() {
                   className="px-4 py-2 border rounded-md"
                 >
                   <option value="all">Todos os status</option>
-                  <option value="active">Ativos</option>
-                  <option value="pending">Pendentes</option>
-                  <option value="inactive">Inativos</option>
+                  <option value="cadastrado">Cadastrado</option>
+                  <option value="teste_pendente">Teste Pendente</option>
+                  <option value="ativo">Ativo</option>
+                  <option value="atencao">Atenção</option>
+                  <option value="sem_tarefas">Sem Tarefas</option>
+                  <option value="inativo">Inativo</option>
+                  <option value="reprovado">Reprovado</option>
                 </select>
                 <Button
                   variant="outline"
@@ -428,28 +604,23 @@ export default function AdminNomadesPage() {
                       <h3 className="font-semibold text-base leading-none">{nomade.name}</h3>
                       <Badge
                         variant="outline"
-                        className={
-                          nomade.level === "Gold"
-                            ? "bg-yellow-50 text-yellow-700 border-yellow-200 text-xs py-0"
-                            : nomade.level === "Silver"
-                              ? "bg-gray-50 text-gray-700 border-gray-200 text-xs py-0"
-                              : "bg-orange-50 text-orange-700 border-orange-200 text-xs py-0"
-                        }
+                        className={`text-xs py-0 ${(NOMAD_LEVEL_BADGE[nomade.level] ?? NOMAD_LEVEL_BADGE["Bronze"]).className}`}
                       >
-                        {nomade.level}
+                        {(NOMAD_LEVEL_BADGE[nomade.level] ?? NOMAD_LEVEL_BADGE["Bronze"]).icon} {nomade.level}
                       </Badge>
-                      <Badge
-                        variant={nomade.status === "active" ? "default" : "secondary"}
-                        className={
-                          nomade.status === "active"
-                            ? "bg-green-500 text-white text-xs py-0"
-                            : nomade.status === "pending"
-                              ? "bg-orange-500 text-white text-xs py-0"
-                              : "bg-gray-500 text-white text-xs py-0"
-                        }
-                      >
-                        {nomade.status === "active" ? "Ativo" : nomade.status === "pending" ? "Pendente" : "Inativo"}
-                      </Badge>
+                      {(() => {
+                        const sc = NOMAD_STATUS_CONFIG[nomade.status] || { label: nomade.status, className: "bg-gray-100 text-gray-600 border-gray-300" }
+                        return (
+                          <Badge variant="outline" className={`text-xs py-0 ${sc.className}`}>
+                            {sc.label}
+                          </Badge>
+                        )
+                      })()}
+                      {invitedNomads.has(nomade.id) && (
+                        <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-xs py-0">
+                          Convite Enviado
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-gray-600 leading-none">{nomade.email}</p>
                     <div className="flex gap-4 mt-1 text-xs text-gray-600">
@@ -537,6 +708,7 @@ export default function AdminNomadesPage() {
               setIsViewModalOpen(false)
               setIsEditModalOpen(true)
             }}
+            onInvite={handleInvite}
           />
           <NomadEditModal
             nomad={selectedNomad}

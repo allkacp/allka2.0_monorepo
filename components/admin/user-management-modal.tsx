@@ -203,7 +203,7 @@ export function UserManagementModal({ user, open, onOpenChange, onSave }: UserMa
 
         setCepLoading(false)
       } catch (error) {
-        console.error("[v0] Error fetching CEP:", error)
+        console.error("Error fetching CEP:", error)
         setCepError("Erro ao buscar CEP")
         setCepLoading(false)
       }
@@ -211,8 +211,6 @@ export function UserManagementModal({ user, open, onOpenChange, onSave }: UserMa
   }
 
   const handleLocationSelect = (lat: number, lng: number, address: string) => {
-    console.log("[v0] Location selected:", { lat, lng, address })
-
     setEditedUser({
       ...editedUser,
       address: {

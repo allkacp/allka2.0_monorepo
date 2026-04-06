@@ -317,14 +317,10 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
 
-    console.log("[v0] Form submitted with data:", formData)
-
     if (!validateForm()) {
-      console.log("[v0] Validation failed:", errors)
       return
     }
 
-    console.log("[v0] Validation passed, creating project...")
     setLoading(true)
 
     try {
@@ -345,12 +341,9 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
         paymentCards: paymentCards.filter((card) => card.isPrimary), // Only save the primary card or selected cards
       }
 
-      console.log("[v0] Project data prepared:", projectData)
-
       let result: Project
       if (initialData) {
         result = { ...initialData, ...projectData, id: initialData.id }
-        console.log("[v0] Project updated:", result)
         toast({
           title: "Sucesso",
           description: "Projeto atualizado com sucesso",
@@ -364,7 +357,6 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
-        console.log("[v0] Project created:", result)
         setCreatedProject(result)
         setProjectCreated(true)
         toast({
@@ -374,7 +366,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
         onSubmit(result)
       }
     } catch (error) {
-      console.error("[v0] Error creating project:", error)
+      console.error("Error creating project:", error)
       toast({
         title: "Erro",
         description: `Falha ao ${initialData ? "atualizar" : "criar"} projeto`,
@@ -583,8 +575,6 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   }
 
   const handleCheckoutComplete = (checkoutData: CheckoutData) => {
-    console.log("[v0] Checkout completed:", checkoutData)
-
     // Create project with "awaiting_payment" status
     const finalProject = {
       ...createdProject!, // This should be guaranteed to be non-null if we reached here after creation
@@ -860,7 +850,6 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
             maxWidth: `calc(100vw - ${sidebarWidth}px)`,
           }}
         >
-          {console.log("[v0] ProjectCreateSlidePanel sidebarWidth:", sidebarWidth)}
           <div
             className={cn(
               "h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800",

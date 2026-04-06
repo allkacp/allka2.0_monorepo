@@ -91,8 +91,6 @@ export function MobileBottomNav({ onMenuClick }: MobileBottomNavProps) {
   }, [lastScrollY])
 
   const getNavigationItems = () => {
-    console.log("[v0] Getting mobile navigation items for:", accountType, accountSubType)
-
     // Admin users see admin menu
     if (accountType === "admin") {
       return mobileNavigationConfig.admin
@@ -102,12 +100,10 @@ export function MobileBottomNav({ onMenuClick }: MobileBottomNavProps) {
     if (accountType === "empresas") {
       const subType = accountSubType || "company"
       const items = mobileNavigationConfig.empresas[subType as keyof typeof mobileNavigationConfig.empresas]
-      console.log("[v0] Empresas mobile navigation items:", items)
       return items || mobileNavigationConfig.empresas.company
     }
 
     const items = mobileNavigationConfig[accountType as keyof typeof mobileNavigationConfig]
-    console.log("[v0] Mobile navigation items for", accountType, ":", items)
 
     // Ensure we always return an array
     if (Array.isArray(items)) {

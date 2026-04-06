@@ -25,7 +25,6 @@ export default function AdminConfiguracoesPage() {
   })
 
   const handleSave = () => {
-    console.log("[v0] Saving settings:", settings)
     // Save settings logic here
   }
 

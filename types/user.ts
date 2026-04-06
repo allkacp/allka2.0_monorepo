@@ -1,79 +1,87 @@
 export interface UserLGPD {
-  consent_given: boolean
-  consent_date: string
-  consent_version: string
-  legal_basis: "consent" | "contract" | "legitimate_interest" | "legal_obligation"
-  data_retention_until: string
-  communication_opt_in: boolean
-  data_export_requested: boolean
-  data_export_requested_at?: string
-  deletion_requested: boolean
-  deletion_requested_at?: string
-  data_processing_purposes: string[]
-  consent_history: { date: string; version: string; action: string }[]
+  consent_given: boolean;
+  consent_date: string;
+  consent_version: string;
+  legal_basis:
+    | "consent"
+    | "contract"
+    | "legitimate_interest"
+    | "legal_obligation";
+  data_retention_until: string;
+  communication_opt_in: boolean;
+  data_export_requested: boolean;
+  data_export_requested_at?: string;
+  deletion_requested: boolean;
+  deletion_requested_at?: string;
+  data_processing_purposes: string[];
+  consent_history: { date: string; version: string; action: string }[];
 }
 
 export interface CompanyLGPD {
-  dpo_name: string
-  dpo_email: string
-  dpo_phone?: string
-  privacy_policy_accepted: boolean
-  policy_accepted_at: string
-  policy_version: string
-  data_processing_purposes: string[]
-  security_incidents: { date: string; description: string; resolved: boolean }[]
+  dpo_name: string;
+  dpo_email: string;
+  dpo_phone?: string;
+  privacy_policy_accepted: boolean;
+  policy_accepted_at: string;
+  policy_version: string;
+  data_processing_purposes: string[];
+  security_incidents: {
+    date: string;
+    description: string;
+    resolved: boolean;
+  }[];
 }
 
 export interface User {
-  id: number
-  email: string
-  name: string
-  phone?: string
-  account_type: AccountType
-  account_sub_type: AccountSubType | null
-  company_id?: number
-  agency_id?: number
-  role: UserRole
-  permissions: Permission[]
-  is_admin: boolean
-  is_active: boolean
-  last_project_date?: string
-  created_at: string
-  updated_at: string
-  online_status?: "online" | "offline" | "busy" | "away"
-  last_login?: string
+  id: number;
+  email: string;
+  name: string;
+  phone?: string;
+  account_type: AccountType;
+  account_sub_type: AccountSubType | null;
+  company_id?: number;
+  agency_id?: number;
+  role: UserRole;
+  permissions: Permission[];
+  is_admin: boolean;
+  is_active: boolean;
+  last_project_date?: string;
+  created_at: string;
+  updated_at: string;
+  online_status?: "online" | "offline" | "busy" | "away";
+  last_login?: string;
   address?: {
-    cep: string
-    street: string
-    number: string
-    complement?: string
-    neighborhood: string
-    city: string
-    state: string
-    latitude?: number
-    longitude?: number
-  }
-  company_associations?: CompanyAssociation[]
-  agency_associations?: AgencyAssociation[]
-  active_company_id?: number
-  active_agency_id?: number
-  company?: Company
-  agency?: Agency
-  lgpd?: UserLGPD
+    cep: string;
+    street: string;
+    number: string;
+    complement?: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  company_associations?: CompanyAssociation[];
+  agency_associations?: AgencyAssociation[];
+  active_company_id?: number;
+  active_agency_id?: number;
+  company?: Company;
+  agency?: Agency;
+  lgpd?: UserLGPD;
 }
 
 // Per-company category-based permissions (managed by company admin/responsible)
 export interface CompanyPermission {
-  id: string
-  name: string
-  enabled: boolean
+  id: string;
+  name: string;
+  enabled: boolean;
 }
 
 export interface CompanyPermissions {
-  gestao: CompanyPermission[]
-  tasks: CompanyPermission[]
-  projects: CompanyPermission[]
-  users: CompanyPermission[]
+  gestao: CompanyPermission[];
+  tasks: CompanyPermission[];
+  projects: CompanyPermission[];
+  users: CompanyPermission[];
 }
 
 export const DEFAULT_COMPANY_PERMISSIONS: CompanyPermissions = {
@@ -98,7 +106,7 @@ export const DEFAULT_COMPANY_PERMISSIONS: CompanyPermissions = {
     { id: "edit_users", name: "Editar usuários", enabled: false },
     { id: "block_users", name: "Bloquear usuários", enabled: false },
   ],
-}
+};
 
 // Admin company permissions (all enabled by default)
 export const ADMIN_COMPANY_PERMISSIONS: CompanyPermissions = {
@@ -123,7 +131,7 @@ export const ADMIN_COMPANY_PERMISSIONS: CompanyPermissions = {
     { id: "edit_users", name: "Editar usuários", enabled: true },
     { id: "block_users", name: "Bloquear usuários", enabled: true },
   ],
-}
+};
 
 // Granular permissions a user can hold on a specific project
 export type ProjectPermission =
@@ -134,170 +142,221 @@ export type ProjectPermission =
   | "approve_deliveries"
   | "manage_finances"
   | "manage_team"
-  | "admin"
+  | "admin";
 
-export const ALL_PROJECT_PERMISSIONS: { id: ProjectPermission; label: string; description: string }[] = [
-  { id: "view",               label: "Visualizar",         description: "Ver o projeto e suas tarefas" },
-  { id: "edit",               label: "Editar",             description: "Editar dados e configurações do projeto" },
-  { id: "create_tasks",       label: "Criar Tarefas",      description: "Criar novas tarefas no projeto" },
-  { id: "delete_tasks",       label: "Excluir Tarefas",    description: "Remover tarefas do projeto" },
-  { id: "approve_deliveries", label: "Aprovar Entregas",   description: "Validar e aprovar entregas" },
-  { id: "manage_finances",    label: "Gerenciar Finanças", description: "Ver e editar dados financeiros do projeto" },
-  { id: "manage_team",        label: "Gerenciar Equipe",   description: "Adicionar/remover membros do projeto" },
-  { id: "admin",              label: "Administrador",      description: "Acesso total ao projeto" },
-]
+export const ALL_PROJECT_PERMISSIONS: {
+  id: ProjectPermission;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "view",
+    label: "Visualizar",
+    description: "Ver o projeto e suas tarefas",
+  },
+  {
+    id: "edit",
+    label: "Editar",
+    description: "Editar dados e configurações do projeto",
+  },
+  {
+    id: "create_tasks",
+    label: "Criar Tarefas",
+    description: "Criar novas tarefas no projeto",
+  },
+  {
+    id: "delete_tasks",
+    label: "Excluir Tarefas",
+    description: "Remover tarefas do projeto",
+  },
+  {
+    id: "approve_deliveries",
+    label: "Aprovar Entregas",
+    description: "Validar e aprovar entregas",
+  },
+  {
+    id: "manage_finances",
+    label: "Gerenciar Finanças",
+    description: "Ver e editar dados financeiros do projeto",
+  },
+  {
+    id: "manage_team",
+    label: "Gerenciar Equipe",
+    description: "Adicionar/remover membros do projeto",
+  },
+  {
+    id: "admin",
+    label: "Administrador",
+    description: "Acesso total ao projeto",
+  },
+];
 
 // A user's membership in a specific project (within a company context)
 export interface ProjectMembership {
-  project_id: number
-  project_name: string
-  permissions: ProjectPermission[]
+  project_id: number;
+  project_name: string;
+  permissions: ProjectPermission[];
 }
 
 export interface CompanyAssociation {
-  id: number
-  user_id: number
-  company_id: number
-  company_name: string
-  role: UserRole
+  id: number;
+  user_id: number;
+  company_id: number;
+  company_name: string;
+  role: UserRole;
   /** Platform-level flat permissions (managed by platform admin only) */
-  permissions: Permission[]
+  permissions: Permission[];
   /** Company-level category permissions (managed by company admin/responsible) */
-  company_permissions: CompanyPermissions
+  company_permissions: CompanyPermissions;
   /** Per-project permissions within this company */
-  project_memberships: ProjectMembership[]
-  is_active: boolean
-  joined_at: string
+  project_memberships: ProjectMembership[];
+  is_active: boolean;
+  joined_at: string;
 }
 
 /** Lightweight version used in context/UI when full Company object isn't needed */
 export interface CompanyLink {
-  company_id: number
-  company_name: string
-  role: UserRole
-  company_permissions: CompanyPermissions
-  project_memberships: ProjectMembership[]
-  is_active: boolean
-  joined_at: string
+  company_id: number;
+  company_name: string;
+  role: UserRole;
+  company_permissions: CompanyPermissions;
+  project_memberships: ProjectMembership[];
+  is_active: boolean;
+  joined_at: string;
 }
 
 /** Mock project list per company for UI dropdowns — IDs match admin/empresas companies */
-export const MOCK_COMPANY_PROJECTS: Record<number, { id: number; name: string; status: string }[]> = {
+export const MOCK_COMPANY_PROJECTS: Record<
+  number,
+  { id: number; name: string; status: string }[]
+> = {
   // Coca-Cola Brasil (id: 1)
   1: [
-    { id: 101, name: "Campanha Verão 2026",          status: "active" },
-    { id: 102, name: "Rebranding Embalagens",        status: "active" },
-    { id: 103, name: "Ativação Ponto de Venda",      status: "paused" },
+    { id: 101, name: "Campanha Verão 2026", status: "active" },
+    { id: 102, name: "Rebranding Embalagens", status: "active" },
+    { id: 103, name: "Ativação Ponto de Venda", status: "paused" },
   ],
   // Starbucks Coffee (id: 2)
   2: [
-    { id: 201, name: "Campanha Sazonal Inverno",     status: "active" },
-    { id: 202, name: "Lançamento Nova Linha Fria",   status: "active" },
+    { id: 201, name: "Campanha Sazonal Inverno", status: "active" },
+    { id: 202, name: "Lançamento Nova Linha Fria", status: "active" },
   ],
   // Fundação Wikimedia (id: 3)
   3: [
     { id: 301, name: "Campanha de Arrecadação 2026", status: "active" },
-    { id: 302, name: "Vídeo Institucional",          status: "completed" },
+    { id: 302, name: "Vídeo Institucional", status: "completed" },
   ],
   // Agência Criativa Hub (id: 4)
   4: [
-    { id: 401, name: "Identidade Visual Cliente A",  status: "active" },
-    { id: 402, name: "Social Media Management",      status: "active" },
+    { id: 401, name: "Identidade Visual Cliente A", status: "active" },
+    { id: 402, name: "Social Media Management", status: "active" },
   ],
   // Spotify Brasil (id: 8)
   8: [
-    { id: 801, name: "Campanha Wrapped 2026",        status: "active" },
-    { id: 802, name: "Parcerias com Artistas",       status: "active" },
-    { id: 803, name: "Podcast Originals BR",         status: "paused" },
+    { id: 801, name: "Campanha Wrapped 2026", status: "active" },
+    { id: 802, name: "Parcerias com Artistas", status: "active" },
+    { id: 803, name: "Podcast Originals BR", status: "paused" },
   ],
   // Meta Business (id: 10)
   10: [
-    { id: 1001, name: "Ads Creative Studio Q1",     status: "active" },
-    { id: 1002, name: "Reels Strategy 2026",        status: "active" },
-    { id: 1003, name: "Marketplace Growth",         status: "active" },
+    { id: 1001, name: "Ads Creative Studio Q1", status: "active" },
+    { id: 1002, name: "Reels Strategy 2026", status: "active" },
+    { id: 1003, name: "Marketplace Growth", status: "active" },
   ],
-}
+};
 
 export interface AgencyAssociation {
-  id: number
-  user_id: number
-  agency_id: number
-  agency: Agency
-  role: UserRole
-  permissions: Permission[]
-  is_active: boolean
-  joined_at: string
+  id: number;
+  user_id: number;
+  agency_id: number;
+  agency: Agency;
+  role: UserRole;
+  permissions: Permission[];
+  is_active: boolean;
+  joined_at: string;
 }
 
 export interface Company {
-  id: number
-  name: string
-  email: string
-  phone?: string
-  document: string
-  account_type: "dependent" | "independent"
-  agency_id?: number
-  is_active: boolean
-  last_project_date?: string
-  ai_knowledge_base: AIKnowledgeBase
-  created_at: string
-  updated_at: string
-  agency?: Agency
-  users: User[]
-  projects: Project[]
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  document: string;
+  account_type: "dependent" | "independent";
+  agency_id?: number;
+  is_active: boolean;
+  last_project_date?: string;
+  ai_knowledge_base: AIKnowledgeBase;
+  created_at: string;
+  updated_at: string;
+  agency?: Agency;
+  users: User[];
+  projects: Project[];
 }
 
 export interface Agency {
-  id: number
-  name: string
-  email: string
-  phone?: string
-  document: string
-  partner_level: "basic" | "premium" | "elite"
-  commission_rate: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  companies: Company[]
-  users: User[]
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  document: string;
+  partner_level: "basic" | "premium" | "elite";
+  commission_rate: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  companies: Company[];
+  users: User[];
 }
 
 export interface AIKnowledgeBase {
-  id: number
-  company_id: number
-  summary: string
-  briefing_history: BriefingHistory[]
-  contracting_patterns: ContractingPattern[]
-  guidelines: Guideline[]
-  last_updated: string
-  auto_generated: boolean
+  id: number;
+  company_id: number;
+  summary: string;
+  briefing_history: BriefingHistory[];
+  contracting_patterns: ContractingPattern[];
+  guidelines: Guideline[];
+  last_updated: string;
+  auto_generated: boolean;
 }
 
 export interface BriefingHistory {
-  id: number
-  project_name: string
-  brief_summary: string
-  key_requirements: string[]
-  date: string
+  id: number;
+  project_name: string;
+  brief_summary: string;
+  key_requirements: string[];
+  date: string;
 }
 
 export interface ContractingPattern {
-  service_type: string
-  frequency: number
-  average_budget: number
-  preferred_timeline: string
+  service_type: string;
+  frequency: number;
+  average_budget: number;
+  preferred_timeline: string;
 }
 
 export interface Guideline {
-  category: string
-  description: string
-  importance: "high" | "medium" | "low"
+  category: string;
+  description: string;
+  importance: "high" | "medium" | "low";
 }
 
-export type AccountType = "empresas" | "agencias" | "nomades" | "admin" | "parceiro"
-export type AccountSubType = "company" | "in-house" | null
+export type AccountType =
+  | "empresas"
+  | "agencias"
+  | "nomades"
+  | "admin"
+  | "parceiro";
+export type AccountSubType = "company" | "in-house" | null;
 
-export type UserRole = "company_admin" | "company_user" | "agency_admin" | "agency_user" | "nomad" | "admin" | "partner"
+export type UserRole =
+  | "company_admin"
+  | "company_user"
+  | "agency_admin"
+  | "agency_user"
+  | "nomad"
+  | "admin"
+  | "partner";
 
 export type Permission =
   | "view_projects"
@@ -315,16 +374,16 @@ export type Permission =
   | "view_analytics"
   | "admin_access"
   | "view_partner_dashboard"
-  | "request_withdrawal"
+  | "request_withdrawal";
 
 export interface Project {
-  id: number
-  name: string
-  description?: string
-  company_id: number
-  status: "active" | "completed" | "paused" | "cancelled"
-  start_date?: string
-  end_date?: string
-  created_at: string
-  updated_at: string
+  id: number;
+  name: string;
+  description?: string;
+  company_id: number;
+  status: "active" | "completed" | "paused" | "cancelled";
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  updated_at: string;
 }

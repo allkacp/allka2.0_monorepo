@@ -126,6 +126,7 @@ type WidgetType =
   | "agenciesRanking" // Added agenciesRanking widget type
   | "statusOverview" // Added new status overview widget type
   | "accountsReceivable" // Added new accounts receivable widget type
+  | "partnerProgram" // Partner Program metrics widget
 
 type MetricType = "totalUsers" | "activeUsers" | "companies" | "activeProjects" | "revenue" | "avgRating"
 type WidgetSize = "standard" | "compact"
@@ -347,8 +348,6 @@ const formatDate = (date: Date, formatStr: string) => {
 // )
 
 export default function AdminDashboardPage() {
-  console.log("[v0] AdminDashboardPage component rendering")
-
   const { sidebarCollapsed } = useSidebar() // Get sidebar collapse state
   const { toast } = useToast() // Get toast function
 
@@ -690,7 +689,7 @@ export default function AdminDashboardPage() {
         description: `O widget "${widgetTitle}" foi exportado como PNG`,
       })
     } catch (error) {
-      console.error("[v0] Error exporting widget:", error)
+      console.error("Error exporting widget:", error)
       toast({
         title: "Erro ao exportar",
         description: "Não foi possível exportar o widget",
@@ -860,6 +859,7 @@ export default function AdminDashboardPage() {
     { id: "nomadsRanking", type: "nomadsRanking", visible: true, order: 24 },
     { id: "agenciesRanking", type: "agenciesRanking", visible: true, order: 25 },
     { id: "statusOverview", type: "statusOverview", visible: true, order: 26 },
+    { id: "partnerProgram", type: "partnerProgram", visible: true, order: 27 },
   ])
 
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null) // Use string for widget id
@@ -1005,7 +1005,7 @@ export default function AdminDashboardPage() {
           parsedConfig.map((w) => ({ ...w, id: w.id || `${w.type}-${Math.random().toString(36).substr(2, 9)}` })),
         ) // Ensure id exists
       } catch (e) {
-        console.error("[v0] Failed to parse saved widget config:", e)
+        console.error("Failed to parse saved widget config:", e)
       }
     }
 
@@ -1014,7 +1014,7 @@ export default function AdminDashboardPage() {
       try {
         setMetricCards(JSON.parse(savedMetrics))
       } catch (e) {
-        console.error("[v0] Failed to parse saved metric cards:", e)
+        console.error("Failed to parse saved metric cards:", e)
       }
     }
 
@@ -1029,7 +1029,7 @@ export default function AdminDashboardPage() {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods))
       } catch (e) {
-        console.error("[v0] Failed to parse saved widget periods:", e)
+        console.error("Failed to parse saved widget periods:", e)
       }
     }
 
@@ -1099,9 +1099,7 @@ export default function AdminDashboardPage() {
   }, [widgets, metricCards, widgetSize, widgetPeriods, savedDashboards, currentDashboardId])
 
   useEffect(() => {
-    console.log("[v0] AdminDashboardPage mounted successfully")
-    console.log("[v0] Widgets count:", widgets.length)
-    console.log("[v0] MetricCards count:", metricCards.length)
+    // intentionally empty - mounted
   }, [])
 
   const widgetLibrary: WidgetLibraryItem[] = [
@@ -1293,6 +1291,13 @@ export default function AdminDashboardPage() {
       description: "Acesso rápido a ferramentas administrativas essenciais",
       icon: Settings,
       color: "gray",
+    },
+    {
+      id: "partnerProgram",
+      name: "Programa Partner",
+      description: "Convites enviados, partners ativos e distribuição por nível",
+      icon: Award,
+      color: "amber",
     },
   ]
 
@@ -1965,6 +1970,7 @@ export default function AdminDashboardPage() {
       agenciesRanking: "Ranking de Agências",
       statusOverview: "Visão Geral por Status",
       accountsReceivable: "À Receber", // Added title for accounts receivable widget
+      partnerProgram: "Programa Partner",
     }
     return titles[widgetType] || widgetType
   }
@@ -3719,9 +3725,7 @@ export default function AdminDashboardPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 bg-transparent"
-                  onClick={() => {
-                    console.log("[v0] Ver detalhes de churn")
-                  }}
+                  onClick={() => {}}
                 >
                   <FileText className="h-3 w-3" />
                   Ver Detalhes
@@ -3730,9 +3734,7 @@ export default function AdminDashboardPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 bg-transparent"
-                  onClick={() => {
-                    console.log("[v0] Exportar relatório de churn")
-                  }}
+                  onClick={() => {}}
                 >
                   <Download className="h-3 w-3" />
                   Exportar
@@ -4916,6 +4918,78 @@ export default function AdminDashboardPage() {
               <div className="pt-2 border-t flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">Total ativo hoje</p>
                 <p className="text-sm font-bold">2.202</p>
+              </div>
+            </CardContent>
+          </Card>
+        )
+
+      case "partnerProgram":
+        return (
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2 border-b bg-linear-to-r from-amber-500/10 to-yellow-400/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/20 rounded-lg shrink-0">
+                    <Award className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">Programa Partner</CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">Convites e partners ativos por nível</p>
+                  </div>
+                </div>
+                <Link
+                  to="/admin/programa-partner"
+                  className="text-xs text-primary hover:underline shrink-0 flex items-center gap-1"
+                >
+                  Gerenciar
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              {/* Invite stats row */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "Convites Enviados", value: 5, color: "text-foreground" },
+                  { label: "Pendentes", value: 2, color: "text-warning" },
+                  { label: "Aceitos", value: 2, color: "text-success" },
+                ].map((stat) => (
+                  <div key={stat.label} className="flex flex-col items-center p-2 rounded-lg bg-muted/50 text-center">
+                    <span className={`text-xl font-bold ${stat.color}`}>{stat.value}</span>
+                    <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">{stat.label}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Active partners by level */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Partners Ativos por Nível</p>
+                <div className="space-y-1.5">
+                  {[
+                    { level: "Diamond", count: 1, total: 2, color: "bg-sky-500" },
+                    { level: "Platinum", count: 1, total: 2, color: "bg-violet-500" },
+                    { level: "Gold", count: 0, total: 2, color: "bg-yellow-500" },
+                    { level: "Silver", count: 0, total: 2, color: "bg-slate-400" },
+                    { level: "Bronze", count: 0, total: 2, color: "bg-orange-500" },
+                  ].map((item) => (
+                    <div key={item.level} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">{item.level}</span>
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${item.color}`}
+                          style={{ width: item.total > 0 ? `${(item.count / item.total) * 100}%` : "0%" }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium w-3 shrink-0 text-right">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* MRR from partners */}
+              <div className="pt-2 border-t flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">MRR gerado por Partners</p>
+                <span className="text-sm font-bold text-success">R$ 89.400</span>
               </div>
             </CardContent>
           </Card>

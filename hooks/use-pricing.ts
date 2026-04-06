@@ -100,17 +100,14 @@ export function usePricing() {
   const [pricingComponents, setPricingComponents] = useState<PricingComponent[]>(mockComponents)
 
   const addComponent = (component: PricingComponent) => {
-    console.log("[v0] Adding component:", component)
     setPricingComponents((prev) => [...prev, component])
   }
 
   const updateComponent = (id: string, updatedComponent: PricingComponent) => {
-    console.log("[v0] Updating component:", id, updatedComponent)
     setPricingComponents((prev) => prev.map((comp) => (comp.id === id ? updatedComponent : comp)))
   }
 
   const deleteComponent = (id: string) => {
-    console.log("[v0] Deleting component:", id)
     setPricingComponents((prev) => prev.filter((comp) => comp.id !== id))
   }
 

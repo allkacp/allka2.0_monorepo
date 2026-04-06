@@ -441,6 +441,7 @@ export default function UsuariosPage() {
   const [selectedFilterId, setSelectedFilterId] = useState<string | null>(null)
   const [isEditingFilter, setIsEditingFilter] = useState(false)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [pendingClose, setPendingClose] = useState<(() => void) | null>(null)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [isDuplicatingFilter, setIsDuplicatingFilter] = useState(false)
   const [showCreateUser, setShowCreateUser] = useState(false)
@@ -656,13 +657,13 @@ export default function UsuariosPage() {
 
     // Security check: prevent deletion of current user
     if (selectedUser.id === currentUserId) {
-      console.error("[v0] Cannot delete current logged-in user")
+      console.error("Cannot delete current logged-in user")
       return
     }
 
     // Security check: prevent deletion of main admin accounts
     if (selectedUser.is_admin && selectedUser.role === "admin") {
-      console.error("[v0] Cannot delete main admin account")
+      console.error("Cannot delete main admin account")
       return
     }
 
@@ -675,15 +676,6 @@ export default function UsuariosPage() {
       const updatedUsers = users.filter((u) => u.id !== selectedUser.id)
       setUsers(updatedUsers)
 
-      console.log("[v0] User deleted successfully:", {
-        userId: selectedUser.id,
-        userName: selectedUser.name,
-        userEmail: selectedUser.email,
-        deletionReason: deletionReason.trim(),
-        deletedBy: currentUserId,
-        timestamp: new Date().toISOString(),
-      })
-
       // TODO: Send deletion reason to backend for audit log
       // API call would go here with audit trail data
 
@@ -693,7 +685,7 @@ export default function UsuariosPage() {
       setDeletionReason("")
       setDeletionReasonError("")
     } catch (error) {
-      console.error("[v0] Error deleting user:", error)
+      console.error("Error deleting user:", error)
       setDeletionReasonError("Erro ao excluir usuário. Tente novamente.")
     } finally {
       setIsDeleteLoading(false)
@@ -805,22 +797,8 @@ export default function UsuariosPage() {
   const handleStatusConfirmation = (reason: string, duration: "indefinite" | Date) => {
     if (!selectedUser) return
 
-    console.log("[v0] Status change confirmed:", {
-      userId: selectedUser.id,
-      userName: selectedUser.name,
-      currentStatus: selectedUser.is_active,
-      newStatus: !selectedUser.is_active,
-      reason,
-      duration: duration === "indefinite" ? "indefinite" : duration.toISOString(),
-    })
-
     const updatedUsers = users.map((u) =>
       u.id === selectedUser.id ? { ...u, is_active: !u.is_active, updated_at: new Date().toISOString() } : u,
-    )
-
-    console.log(
-      "[v0] Updated users array:",
-      updatedUsers.find((u) => u.id === selectedUser.id),
     )
 
     setUsers(updatedUsers)
@@ -829,8 +807,6 @@ export default function UsuariosPage() {
 
     // Close dialog
     setIsDeleteAlertOpen(false)
-
-    console.log("[v0] Status change completed successfully")
   }
 
   const getAccountTypeBadge = (accountType: string, role?: string) => {
@@ -1002,9 +978,13 @@ export default function UsuariosPage() {
                   className="absolute inset-0 bg-black/30 backdrop-blur-sm"
                   onClick={() => {
                     if (unsavedChanges) {
-                      if (!window.confirm("Você tem alterações não salvas. Deseja sair?")) {
-                        return
-                      }
+                      setPendingClose(() => () => {
+                        setIsFilterModalOpen(false)
+                        setSelectedFilterId(null)
+                        setIsEditingFilter(false)
+                        setUnsavedChanges(false)
+                      })
+                      return
                     }
                     setIsFilterModalOpen(false)
                     setSelectedFilterId(null)
@@ -1026,9 +1006,13 @@ export default function UsuariosPage() {
                     <button
                       onClick={() => {
                         if (unsavedChanges) {
-                          if (!window.confirm("Você tem alterações não salvas. Deseja sair?")) {
-                            return
-                          }
+                          setPendingClose(() => () => {
+                            setIsFilterModalOpen(false)
+                            setSelectedFilterId(null)
+                            setIsEditingFilter(false)
+                            setUnsavedChanges(false)
+                          })
+                          return
                         }
                         setIsFilterModalOpen(false)
                         setSelectedFilterId(null)
@@ -1523,9 +1507,16 @@ export default function UsuariosPage() {
                       <Button
                         onClick={() => {
                           if (unsavedChanges) {
-                            if (!window.confirm("Você tem alterações não salvas. Deseja descartar?")) {
-                              return
-                            }
+                            setPendingClose(() => () => {
+                              setIsFilterModalOpen(false)
+                              setSelectedFilterId(null)
+                              setIsEditingFilter(false)
+                              setUnsavedChanges(false)
+                              setSaveAsFilter(false)
+                              setFilterName("")
+                              setIsDuplicatingFilter(false)
+                            })
+                            return
                           }
                           setIsFilterModalOpen(false)
                           setSelectedFilterId(null)
@@ -1876,7 +1867,6 @@ export default function UsuariosPage() {
         open={showCreateUser}
         onClose={() => setShowCreateUser(false)}
         onUserCreated={(newUser) => {
-          console.log("[v0] Novo usuário criado:", newUser)
           // Add to shared platform users context (syncs back to this page via useEffect)
           addPlatformUser(newUser)
           setShowCreateUser(false)
@@ -1896,6 +1886,17 @@ export default function UsuariosPage() {
         confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
         cancelText="Cancelar"
         destructive={selectedUser?.is_active}
+      />
+
+      <ConfirmationDialog
+        open={pendingClose !== null}
+        onClose={() => setPendingClose(null)}
+        onConfirm={() => { pendingClose?.(); setPendingClose(null) }}
+        title="Alterações não salvas"
+        message="Você tem alterações não salvas. Deseja sair sem salvar?"
+        confirmText="Sair sem salvar"
+        cancelText="Cancelar"
+        destructive={false}
       />
 
       {isDeleteUserAlertOpen && selectedUser && createPortal(

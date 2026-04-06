@@ -1,11 +1,17 @@
-"use client"
+"use client";
 
-import type { UserRole, Permission, AccountType, AccountSubType } from "@/types/user"
-import { useState, useEffect } from "react"
+import type {
+  UserRole,
+  Permission,
+  AccountType,
+  AccountSubType,
+} from "@/types/user";
+import { useState, useEffect } from "react";
 
 export function useUserPermissions() {
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>("company_user")
-  const [loading, setLoading] = useState(true)
+  const [currentUserRole, setCurrentUserRole] =
+    useState<UserRole>("company_user");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // In a real app, this would fetch the current user's role from context or API
@@ -14,25 +20,26 @@ export function useUserPermissions() {
       try {
         // This would typically come from your auth context or API
         // For demo purposes, we'll use a default role
-        const role: UserRole = "company_admin" // This should come from your auth system
-        setCurrentUserRole(role)
+        const role: UserRole = "company_admin"; // This should come from your auth system
+        setCurrentUserRole(role);
       } catch (error) {
-        console.error("Failed to fetch user role:", error)
-        setCurrentUserRole("company_user") // fallback to most restrictive role
+        console.error("Failed to fetch user role:", error);
+        setCurrentUserRole("company_user"); // fallback to most restrictive role
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchUserRole()
-  }, [])
+    fetchUserRole();
+  }, []);
 
   return {
     currentUserRole,
     loading,
-    hasPermission: (permission: Permission) => hasPermission(currentUserRole, permission),
+    hasPermission: (permission: Permission) =>
+      hasPermission(currentUserRole, permission),
     getUserPermissions: () => getUserPermissions(currentUserRole),
-  }
+  };
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -102,23 +109,25 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "view_analytics",
     "admin_access",
   ],
-  partner: [
-    "view_partner_dashboard",
-    "request_withdrawal",
-    "view_analytics",
-  ],
-}
+  partner: ["view_partner_dashboard", "request_withdrawal", "view_analytics"],
+};
 
 export function getUserPermissions(role: UserRole): Permission[] {
-  return ROLE_PERMISSIONS[role] || []
+  return ROLE_PERMISSIONS[role] || [];
 }
 
-export function hasPermission(userRole: UserRole, permission: Permission): boolean {
-  const permissions = getUserPermissions(userRole)
-  return permissions.includes(permission)
+export function hasPermission(
+  userRole: UserRole,
+  permission: Permission,
+): boolean {
+  const permissions = getUserPermissions(userRole);
+  return permissions.includes(permission);
 }
 
-export function getAccountAccess(accountType: AccountType, accountSubType: AccountSubType | null) {
+export function getAccountAccess(
+  accountType: AccountType,
+  accountSubType: AccountSubType | null,
+) {
   if (accountType === "empresas") {
     if (accountSubType === "in-house") {
       return {
@@ -126,14 +135,14 @@ export function getAccountAccess(accountType: AccountType, accountSubType: Accou
         pricing: "full_price",
         language: "enterprise",
         features: ["full_catalog", "direct_contracting", "priority_support"],
-      }
+      };
     } else {
       return {
         catalogAccess: "limited",
         pricing: "discounted",
         language: "company",
         features: ["project_based", "agency_managed", "approval_workflow"],
-      }
+      };
     }
   }
 
@@ -142,8 +151,12 @@ export function getAccountAccess(accountType: AccountType, accountSubType: Accou
       catalogAccess: "full",
       pricing: "agency_discount",
       language: "agency",
-      features: ["client_management", "project_creation", "commission_tracking"],
-    }
+      features: [
+        "client_management",
+        "project_creation",
+        "commission_tracking",
+      ],
+    };
   }
 
   return {
@@ -151,15 +164,17 @@ export function getAccountAccess(accountType: AccountType, accountSubType: Accou
     pricing: "standard",
     language: "default",
     features: [],
-  }
+  };
 }
 
 export function checkAccountStatus(lastProjectDate?: string): boolean {
-  if (!lastProjectDate) return false
+  if (!lastProjectDate) return false;
 
-  const lastProject = new Date(lastProjectDate)
-  const now = new Date()
-  const daysDiff = Math.floor((now.getTime() - lastProject.getTime()) / (1000 * 60 * 60 * 24))
+  const lastProject = new Date(lastProjectDate);
+  const now = new Date();
+  const daysDiff = Math.floor(
+    (now.getTime() - lastProject.getTime()) / (1000 * 60 * 60 * 24),
+  );
 
-  return daysDiff <= 90 // Active if last project was within 90 days
+  return daysDiff <= 90; // Active if last project was within 90 days
 }

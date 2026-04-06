@@ -149,7 +149,6 @@ export default function PermissionsPage() {
   }
 
   const handleSaveProfile = (profileData: any) => {
-    console.log("Saving profile:", profileData)
     setIsPanelOpen(false)
   }
 

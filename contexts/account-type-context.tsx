@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
-export type AccountType = "empresas" | "agencias" | "nomades" | "admin"
+export type AccountType = "empresas" | "agencias" | "nomades" | "admin" | "parceiro"
 export type AccountSubType = "company" | "in-house" | null
 
 interface AccountTypeContextType {
@@ -32,13 +32,12 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
           // This allows switching between account types during testing
         }
       } catch (error) {
-        console.error("[v0] Error loading stored user:", error)
+        console.error("Error loading stored user:", error)
       }
     }
   }, [])
 
   const setAccountType = (type: AccountType, subType: AccountSubType = null) => {
-    console.log("[v0] Setting account type:", type, subType)
     setAccountTypeState(type)
     setAccountSubType(subType)
 
@@ -50,18 +49,16 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
         user.accountSubType = subType
         localStorage.setItem("simulatedUser", JSON.stringify(user))
       } catch (error) {
-        console.error("[v0] Error updating stored user:", error)
+        console.error("Error updating stored user:", error)
       }
     }
   }
 
   const lockAccountType = () => {
-    console.log("[v0] Locking account type")
     setIsLocked(true)
   }
 
   const unlockAccountType = () => {
-    console.log("[v0] Unlocking account type")
     setIsLocked(false)
   }
 

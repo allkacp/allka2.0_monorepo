@@ -212,7 +212,7 @@ export function NomadMetricsWidgets() {
 
       doc.save(`dashboard-nomades-${new Date().toISOString().split("T")[0]}.pdf`)
     } catch (error) {
-      console.error("[v0] Error generating PDF:", error)
+      console.error("Error generating PDF:", error)
       alert("Erro ao gerar PDF. Por favor, tente novamente.")
     }
   }

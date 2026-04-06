@@ -128,7 +128,7 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
     const place = autocompleteRef.current.getPlace()
 
     if (!place.geometry) {
-      console.error("[v0] No geometry found for place")
+      console.error("No geometry found for place")
       return
     }
 
@@ -168,7 +168,7 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
         }
       })
     } catch (error) {
-      console.error("[v0] Geocoding error:", error)
+      console.error("Geocoding error:", error)
     }
   }
 

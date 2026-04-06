@@ -1,5 +1,6 @@
 
 import { useState, useMemo, type CSSProperties } from "react"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -258,6 +259,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
   const [filterNameInput, setFilterNameInput] = useState("")
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [pendingClose, setPendingClose] = useState<(() => void) | null>(null)
 
   // Filtrar tarefas
   const filteredTasks = useMemo(() => {
@@ -817,7 +819,10 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
             className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
-                if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                if (unsavedChanges) {
+                  setPendingClose(() => () => { setIsTaskFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false) })
+                  return
+                }
                 setIsTaskFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false)
               }
             }}
@@ -834,7 +839,10 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                 </div>
                 <button
                   onClick={() => {
-                    if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                    if (unsavedChanges) {
+                      setPendingClose(() => () => { setIsTaskFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false) })
+                      return
+                    }
                     setIsTaskFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false)
                   }}
                   className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
@@ -1122,6 +1130,15 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
           </div>
         )
       })()}
+      <ConfirmationDialog
+        open={pendingClose !== null}
+        onClose={() => setPendingClose(null)}
+        onConfirm={() => { pendingClose?.(); setPendingClose(null) }}
+        title="Alterações não salvas"
+        message="Você tem alterações não salvas. Deseja sair sem salvar?"
+        confirmText="Sair sem salvar"
+        destructive={false}
+      />
     </div>
   )
 }

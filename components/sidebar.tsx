@@ -50,12 +50,10 @@ import {
 const navigationConfig = {
   empresas: {
     company: [
-      { name: "Dashboard", href: "/company/dashboard", icon: LayoutDashboard, current: true },
-      { name: "Projetos", href: "/company/projetos", icon: FolderOpen, current: false, badge: "8" },
-      { name: "Aprovações", href: "/company/aprovacoes", icon: CheckSquare, current: false, badge: "3" },
-      { name: "Pagamentos", href: "/company/pagamentos", icon: CreditCard, current: false },
-      { name: "Relatórios", href: "/company/relatorios", icon: FileText, current: false },
-      { name: "Allkademy", href: "/allkademy", icon: BookOpen, current: false },
+      { name: "Dashboard", href: "/empresa/dashboard", icon: LayoutDashboard, current: true },
+      { name: "Projetos", href: "/empresa/projetos", icon: FolderOpen, current: false },
+      { name: "Tarefas", href: "/empresa/tarefas", icon: CheckSquare, current: false },
+      { name: "Faturas", href: "/empresa/faturas", icon: CreditCard, current: false },
     ],
     "in-house": [
       { name: "Dashboard", href: "/in-house/dashboard", icon: LayoutDashboard, current: true },
@@ -69,16 +67,17 @@ const navigationConfig = {
     ],
   },
   agencias: [
-    { name: "Dashboard", href: "/agencias/dashboard", icon: LayoutDashboard, current: true },
-    { name: "Perfil", href: "/agencias/perfil", icon: Building2, current: false },
-    { name: "Clientes", href: "/agencias/clientes", icon: Building2, current: false, badge: "15" },
-    { name: "Projetos", href: "/agencias/projetos", icon: FolderOpen, current: false, badge: "24" },
-    { name: "Equipe", href: "/agencias/equipe", icon: Users, current: false, badge: "8" },
-    { name: "Programa", href: "/agencias/programa", icon: Award, current: false },
-    { name: "Lideradas", href: "/agencias/lideradas", icon: TrendingUp, current: false, badge: "5" },
-    { name: "Financeiro", href: "/agencias/financeiro", icon: Wallet, current: false },
-    { name: "Allkademy", href: "/allkademy", icon: BookOpen, current: false },
-    { name: "Configurações", href: "/agencias/configuracoes", icon: Settings, current: false },
+    { name: "Dashboard", href: "/agencia/dashboard", icon: LayoutDashboard, current: true },
+    { name: "Projetos", href: "/agencia/projetos", icon: FolderOpen, current: false },
+    { name: "Tarefas", href: "/agencia/tarefas", icon: CheckSquare, current: false },
+    { name: "Financeiro", href: "/agencia/financeiro", icon: Wallet, current: false },
+  ],
+  parceiro: [
+    { name: "Dashboard", href: "/parceiro/dashboard", icon: LayoutDashboard, current: true },
+    { name: "Agências", href: "/parceiro/agencias", icon: Building2, current: false },
+    { name: "Projetos", href: "/parceiro/projetos", icon: FolderOpen, current: false },
+    { name: "Comissões", href: "/parceiro/comissoes", icon: TrendingUp, current: false },
+    { name: "Saques", href: "/parceiro/saques", icon: Wallet, current: false },
   ],
   nomades: [
     { name: "Dashboard", href: "/nomades/dashboard", icon: LayoutDashboard, current: true },
@@ -121,6 +120,7 @@ const navigationConfig = {
       subitems: [
         { name: "Níveis Agências", href: "/admin/niveis", icon: Building2, current: false },
         { name: "Níveis Nômades", href: "/admin/niveis-nomades", icon: UserCheck, current: false },
+        { name: "Programa Partner", href: "/admin/programa-partner", icon: Award, current: false },
       ],
     },
     { name: "Financeiro", href: "/admin/financeiro", icon: Wallet, current: false },

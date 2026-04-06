@@ -18,6 +18,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "useDefineForClassFields": true,
+    "types": ["vite/client"],
 
     "paths": {
       "@/*": [

@@ -18,7 +18,7 @@ export function useAutoGeocode() {
     async (address: string): Promise<GeocodeResult | null> => {
       try {
         if (typeof google === "undefined") {
-          console.error("[v0] Google Maps API not loaded")
+          console.error("Google Maps API not loaded")
           return null
         }
 
@@ -37,13 +37,13 @@ export function useAutoGeocode() {
                 placeId: place.place_id,
               })
             } else {
-              console.warn("[v0] Geocoding failed:", status)
+              console.warn("Geocoding failed:", status)
               resolve(null)
             }
           })
         })
       } catch (error) {
-        console.error("[v0] Geocoding error:", error)
+        console.error("Geocoding error:", error)
         return null
       }
     },

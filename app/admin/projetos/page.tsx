@@ -626,19 +626,11 @@ export default function AdminProjetosPage() {
         targetColumnId = String(over.id);
       }
 
-      console.log(
-        `[v0] Moving project ${projectId} to column ${targetColumnId}`,
-      );
-
       setProjectsData((currentProjects) => {
         const updatedProjects = currentProjects.map((project) =>
           project.id === projectId
             ? { ...project, status: targetColumnId }
             : project,
-        );
-        console.log(
-          "[v0] Updated projects:",
-          updatedProjects.filter((p) => p.id === projectId),
         );
         return updatedProjects;
       });
@@ -1177,7 +1169,6 @@ export default function AdminProjetosPage() {
     );
     setSelectedProject(updatedProject);
     setModalMode("view");
-    console.log("[v0] Projeto salvo com sucesso:", updatedProject.name);
   };
 
   const handleStartCancelProject = (project: (typeof mockProjects)[0]) => {
@@ -4235,7 +4226,6 @@ export default function AdminProjetosPage() {
           }}
           onClone={() => handleCloneProject(selectedProject)}
           onExport={() => {
-            console.log("Exportando proposta para:", selectedProject?.name);
           }}
           onSave={handleSaveProjectChanges}
           onCancel={() => handleStartCancelProject(selectedProject)}

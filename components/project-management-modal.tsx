@@ -1391,7 +1391,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       description: `Gerando PDF da fatura ${invoice.month}...`,
     })
     // In a real app, this would generate and download a PDF
-    console.log("[v0] Downloading invoice PDF:", invoice)
   }
 
   const togglePasswordVisibility = (id: number) => {
@@ -1451,7 +1450,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   }
 
   const handleDeleteCredential = (credentialId: number) => {
-    console.log("[v0] Deleting credential:", credentialId)
     // TODO: Implement actual delete logic
     setShowDeleteCredentialDialog(false)
   }
@@ -1462,7 +1460,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   }
 
   const handleSaveCredential = () => {
-    console.log("[v0] Saving credential:", editingCredential)
     // TODO: Implement actual save logic
     setShowEditCredentialDialog(false)
     setEditPasswordVisible(false) // Reset visibility
@@ -1471,7 +1468,6 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const handleAddFile = () => {
     if (newFileName.trim()) {
-      console.log("[v0] Adding file:", newFileName)
       // TODO: Implement actual file upload logic
       setNewFileName("")
       setShowAddFileDialog(false)

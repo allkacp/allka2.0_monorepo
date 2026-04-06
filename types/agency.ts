@@ -19,7 +19,7 @@ export interface Agency {
     }
   }
   status: "pending" | "active" | "inactive" | "suspended"
-  partner_level: "basic" | "premium" | "elite"
+  partner_level: "bronze" | "silver" | "gold" | "platinum" | "diamond"
   is_partner: boolean
   created_at: string
   approved_at?: string

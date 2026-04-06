@@ -426,7 +426,6 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   }
 
   const handleGenerateBoleto = () => {
-    console.log("[v0] Boleto gerado")
     setAdminActionModal(null)
   }
 
@@ -440,30 +439,25 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   }
 
   const handleMigrateClick = () => {
-    console.log("[v0] Migrate button clicked for company:", company.name)
     setMigrationStep("confirm")
     setShowMigrateModal(true)
   }
 
   const handleConfirmMigration = () => {
-    console.log("[v0] Moving to Partner Leader invitation step for:", company.name)
     setMigrationStep("leader")
   }
 
   const handleInviteLeader = () => {
-    console.log("[v0] Sending Partner Leader invitation to:", company.name)
     setShowMigrateModal(false)
     setMigrationStep("confirm")
   }
 
   const handleMigrateWithoutInvite = () => {
-    console.log("[v0] Migrating to Partner without Leader invitation for:", company.name)
     setShowMigrateModal(false)
     setMigrationStep("confirm")
   }
 
   const handleCloseMigrateModal = () => {
-    console.log("[v0] Closing migration modal")
     setShowMigrateModal(false)
     setMigrationStep("confirm")
   }

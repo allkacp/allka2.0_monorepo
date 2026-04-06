@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog } from "lucide-react"
+import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog, Award } from "lucide-react"
 import { ExportButton } from "@/components/export-button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -60,6 +60,8 @@ type Company = {
   location: string
   account_type?: string
   partner_level?: string
+  program_level?: "bronze" | "silver" | "gold" | "platinum" | "diamond"
+  is_partner?: boolean
   status: CompanyStatus
   users_count: number
   users_online: number
@@ -153,6 +155,8 @@ const mockCompanies: Company[] = [
     location: "Rio de Janeiro, RJ",
     account_type: "Standard",
     partner_level: "standard",
+    program_level: "silver",
+    is_partner: true,
     status: "active",
     users_count: 14,
     users_online: 3,
@@ -242,6 +246,8 @@ const mockCompanies: Company[] = [
     location: "Curitiba, PR",
     account_type: "Standard",
     partner_level: "start",
+    program_level: "bronze",
+    is_partner: false,
     status: "active",
     users_count: 8,
     users_online: 2,
@@ -370,6 +376,8 @@ const mockCompanies: Company[] = [
     location: "Salvador, BA",
     account_type: "Standard",
     partner_level: "start",
+    program_level: "bronze",
+    is_partner: false,
     status: "pending",
     users_count: 5,
     users_online: 0,
@@ -545,6 +553,8 @@ const mockCompanies: Company[] = [
     location: "Florianópolis, SC",
     account_type: "Standard",
     partner_level: "start",
+    program_level: "bronze",
+    is_partner: false,
     status: "pending",
     users_count: 4,
     users_online: 0,
@@ -676,6 +686,8 @@ const mockCompanies: Company[] = [
     location: "Vitória, ES",
     account_type: "Standard",
     partner_level: "start",
+    program_level: "bronze",
+    is_partner: false,
     status: "inactive",
     users_count: 7,
     users_online: 0,
@@ -806,6 +818,8 @@ const mockCompanies: Company[] = [
     location: "Natal, RN",
     account_type: "Standard",
     partner_level: "standard",
+    program_level: "gold",
+    is_partner: true,
     status: "active",
     users_count: 11,
     users_online: 4,
@@ -835,6 +849,14 @@ const mockCompanies: Company[] = [
     ],
   },
 ]
+
+const PARTNER_LEVEL_CONFIG = {
+  bronze:   { label: "Bronze",   icon: "🥉", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  silver:   { label: "Silver",   icon: "🥈", badge: "bg-slate-100 text-slate-600 border-slate-300" },
+  gold:     { label: "Gold",     icon: "🥇", badge: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  platinum: { label: "Platinum", icon: "💎", badge: "bg-sky-50 text-sky-700 border-sky-200" },
+  diamond:  { label: "Diamond",  icon: "👑", badge: "bg-violet-50 text-violet-700 border-violet-200" },
+}
 
 const companyInitials = (name: string) =>
   name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
@@ -995,6 +1017,7 @@ export default function EmpresasPage() {
   const [saveAsFilter, setSaveAsFilter] = useState(false)
   const [isDuplicatingFilter, setIsDuplicatingFilter] = useState(false)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [pendingClose, setPendingClose] = useState<(() => void) | null>(null)
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [filterNameInput, setFilterNameInput] = useState("")
   const [editingFilterId, setEditingFilterId] = useState<string | null>(null)
@@ -1157,7 +1180,6 @@ export default function EmpresasPage() {
   }
 
   const handleCreateCompany = (data: any) => {
-    console.log("Creating company:", data)
     setCreatePanelOpen(false)
   }
 
@@ -1172,7 +1194,6 @@ export default function EmpresasPage() {
   }
 
   const handleSaveCompany = (data: any) => {
-    console.log("Saving company:", data)
     setEditPanelOpen(false)
     setSelectedCompany(null)
   }
@@ -1715,15 +1736,30 @@ export default function EmpresasPage() {
                   {/* Type */}
                   {visibleCols.has("tipo") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                      company.type === "company"
-                        ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"
-                        : company.type === "agency"
-                        ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"
-                        : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
-                    }`}>
-                      {getTypeLabel(company.type)}
-                    </span>
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                        company.type === "company"
+                          ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"
+                          : company.type === "agency"
+                          ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"
+                          : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
+                      }`}>
+                        {getTypeLabel(company.type)}
+                      </span>
+                      {company.type === "agency" && company.program_level && (() => {
+                        const lvl = PARTNER_LEVEL_CONFIG[company.program_level as keyof typeof PARTNER_LEVEL_CONFIG]
+                        return lvl ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${lvl.badge}`}>
+                            {lvl.icon} {lvl.label}
+                          </span>
+                        ) : null
+                      })()}
+                      {company.type === "agency" && company.is_partner && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-50 text-rose-700 border-rose-200">
+                          <Award className="h-3 w-3" /> Partner
+                        </span>
+                      )}
+                    </div>
                   </td>
                   )}
 
@@ -1879,7 +1915,13 @@ export default function EmpresasPage() {
             style={{ left: sidebarWidth, top: headerHeight, bottom: footerHeight, right: 0 }}
             onClick={(e) => {
               if (e.target === e.currentTarget) {
-                if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                if (unsavedChanges) {
+                  setPendingClose(() => () => {
+                    setIsFilterModalOpen(false); setSelectedFilterId(null); setIsEditingFilter(false); setUnsavedChanges(false)
+                    setShowFieldPicker(false)
+                  })
+                  return
+                }
                 setIsFilterModalOpen(false); setSelectedFilterId(null); setIsEditingFilter(false); setUnsavedChanges(false)
                 setShowFieldPicker(false)
               }
@@ -1897,7 +1939,13 @@ export default function EmpresasPage() {
                 </div>
                 <button
                   onClick={() => {
-                    if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                    if (unsavedChanges) {
+                      setPendingClose(() => () => {
+                        setIsFilterModalOpen(false); setSelectedFilterId(null); setIsEditingFilter(false); setUnsavedChanges(false)
+                        setShowFieldPicker(false)
+                      })
+                      return
+                    }
                     setIsFilterModalOpen(false); setSelectedFilterId(null); setIsEditingFilter(false); setUnsavedChanges(false)
                     setShowFieldPicker(false)
                   }}
@@ -2334,6 +2382,17 @@ export default function EmpresasPage() {
         confirmText="Excluir"
         cancelText="Cancelar"
         destructive
+      />
+
+      <ConfirmationDialog
+        open={pendingClose !== null}
+        onClose={() => setPendingClose(null)}
+        onConfirm={() => { pendingClose?.(); setPendingClose(null) }}
+        title="Alterações não salvas"
+        message="Você tem alterações não salvas. Deseja sair sem salvar?"
+        confirmText="Sair sem salvar"
+        cancelText="Cancelar"
+        destructive={false}
       />
 
       {selectedCompany && (

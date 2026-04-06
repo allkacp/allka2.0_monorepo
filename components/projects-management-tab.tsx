@@ -337,7 +337,7 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
         mode={modalMode}
         onEdit={() => setModalMode("edit")}
         onClone={() => handleCloneProject(selectedProject)}
-        onExport={() => console.log("Exportar:", selectedProject?.name)}
+        onExport={() => {}}
         onCancel={() => { setModalOpen(false) }}
         onSave={handleSaveProjectChanges}
       />

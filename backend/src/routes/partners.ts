@@ -1,0 +1,168 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../lib/prisma";
+import { verifyToken } from "../middleware/auth";
+import { validate, parsePagination } from "../middleware/validate";
+
+const router = Router();
+
+// GET /api/partners
+router.get("/", verifyToken, async (req, res, next) => {
+  try {
+    const { page, limit, skip } = parsePagination(req.query);
+    const status = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    const where: Record<string, unknown> = {};
+    if (status) where["status"] = status;
+    if (search) {
+      where["user"] = {
+        OR: [{ name: { contains: search } }, { email: { contains: search } }],
+      };
+    }
+
+    const [total, data] = await Promise.all([
+      prisma.partnerProfile.count({ where }),
+      prisma.partnerProfile.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, email: true, avatar: true } },
+          _count: { select: { commissions: true } },
+        },
+        skip,
+        take: limit,
+        orderBy: { created_at: "desc" },
+      }),
+    ]);
+
+    res.json({ data, total, page, limit });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/partners/me
+router.get("/me", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+      include: {
+        commissions: {
+          orderBy: { created_at: "desc" },
+          take: 20,
+          include: { campaign: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    res.json(partner);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/partners/:id
+router.get("/:id", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { id: req.params.id },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        commissions: {
+          orderBy: { created_at: "desc" },
+          take: 50,
+        },
+      },
+    });
+
+    if (!partner) {
+      res.status(404).json({ error: "Parceiro não encontrado" });
+      return;
+    }
+
+    res.json(partner);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/partners
+router.post(
+  "/",
+  verifyToken,
+  validate(
+    z.object({
+      user_id: z.string().min(1),
+      referral_code: z.string().optional(),
+      pix_key: z.string().optional(),
+      pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
+      linked_campaign_id: z.string().optional(),
+    })
+  ),
+  async (req, res, next) => {
+    try {
+      const partner = await prisma.partnerProfile.create({
+        data: req.body,
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+      res.status(201).json(partner);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// PUT /api/partners/:id
+router.put(
+  "/:id",
+  verifyToken,
+  validate(
+    z.object({
+      status: z.enum(["active", "suspended", "pending"]).optional(),
+      pix_key: z.string().optional(),
+      pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
+      referral_code: z.string().optional(),
+      linked_campaign_id: z.string().optional(),
+    })
+  ),
+  async (req, res, next) => {
+    try {
+      const partner = await prisma.partnerProfile.update({
+        where: { id: req.params.id },
+        data: req.body,
+      });
+      res.json(partner);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /api/partners/:id/commissions
+router.get("/:id/commissions", verifyToken, async (req, res, next) => {
+  try {
+    const { page, limit, skip } = parsePagination(req.query);
+
+    const [total, data] = await Promise.all([
+      prisma.partnerCommission.count({ where: { partner_id: req.params.id } }),
+      prisma.partnerCommission.findMany({
+        where: { partner_id: req.params.id },
+        include: { campaign: { select: { id: true, name: true } } },
+        skip,
+        take: limit,
+        orderBy: { created_at: "desc" },
+      }),
+    ]);
+
+    res.json({ data, total, page, limit });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

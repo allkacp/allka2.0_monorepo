@@ -130,7 +130,7 @@ export function UserViewHeader({
       setSelectedFile(null)
       setIsAvatarModalOpen(false)
     } catch (error) {
-      console.error("[v0] Avatar upload error:", error)
+      console.error("Avatar upload error:", error)
       alert("Erro ao salvar imagem de perfil")
     }
   }

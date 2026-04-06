@@ -673,8 +673,6 @@ export default function AdminProdutosPage() {
   };
 
   const handleCreateProduct = () => {
-    console.log("[v0] Creating new product:", productFormData);
-
     if (!productFormData.name.trim()) {
       alert("Por favor, preencha o nome do produto");
       return;
@@ -795,7 +793,6 @@ export default function AdminProdutosPage() {
   };
 
   const handleOpenProductSheet = () => {
-    console.log("[v0] Opening product creation sheet");
     resetProductForm();
     setSelectedProduct(null); // Ensure we are in create mode
     setIsProductSheetOpen(true);
@@ -1057,7 +1054,6 @@ export default function AdminProdutosPage() {
   };
 
   const handleSaveDraft = () => {
-    console.log("[v0] Saving draft:", productFormData);
     if (!productFormData.name.trim()) {
       alert("Por favor, preencha pelo menos o nome do produto");
       return;
@@ -1125,12 +1121,6 @@ export default function AdminProdutosPage() {
   };
 
   const handleScheduleLaunch = () => {
-    console.log("[v0] Scheduling product launch:", {
-      product: productFormData,
-      activationDate,
-      deactivationDate,
-    });
-
     if (!activationDate) {
       alert("Por favor, defina a data de ativação");
       return;
@@ -1216,23 +1206,11 @@ export default function AdminProdutosPage() {
 
   // Renamed to toggleConfirmation for clarity
   const handleToggleProductStatus = (product: Product, newStatus: boolean) => {
-    console.log("[v0] Toggle clicked:", {
-      productId: product.id,
-      productName: product.name,
-      currentStatus: product.isActive,
-      newStatus,
-    });
     setToggleConfirmation({ product, newStatus });
   };
 
   const confirmToggleStatus = async () => {
     if (!toggleConfirmation.product) return;
-
-    console.log("[v0] Confirming toggle:", {
-      productId: toggleConfirmation.product.id,
-      productName: toggleConfirmation.product.name,
-      newStatus: toggleConfirmation.newStatus,
-    });
 
     try {
       // Call updateProduct with (id, product) signature
@@ -1242,17 +1220,12 @@ export default function AdminProdutosPage() {
         updatedAt: new Date().toISOString(),
       });
 
-      console.log("[v0] Toggle success:", {
-        productId: toggleConfirmation.product.id,
-        newStatus: toggleConfirmation.newStatus,
-      });
-
       toast({
         title: "Sucesso",
         description: `Produto ${toggleConfirmation.newStatus ? "ativado" : "desativado"} com sucesso`,
       });
     } catch (error) {
-      console.error("[v0] Toggle error:", error);
+      console.error("Toggle error:", error);
       toast({
         title: "Erro",
         description: "Erro ao atualizar status do produto",

@@ -189,8 +189,6 @@ export function UserCreateSlidePanel({ open, onClose, onUserCreated, companyId, 
   }
 
   const handleCreateUser = async () => {
-    console.log("[v0] Criando novo usuário:", newUser)
-    
     // Criar novo usuário com estrutura completa
     const newId = Math.floor(Math.random() * 10000) + 100
     const createdUser: any = {

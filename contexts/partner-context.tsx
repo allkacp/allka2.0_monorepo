@@ -1,13 +1,14 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState } from "react";
 import type {
   PartnerProfile,
   PartnerStats,
   PartnerCommission,
   PartnerWithdrawal,
   PartnerProject,
-} from "@/types/partner"
+  LedAgency,
+} from "@/types/partner";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,9 @@ export const MOCK_PARTNER_PROFILE: PartnerProfile = {
   createdAt: "2025-06-01",
   pixKey: "carlos@influencer.com",
   pixKeyType: "email",
-}
+  level: "silver",
+  currentMrr: 1650,
+};
 
 export const MOCK_PARTNER_STATS: PartnerStats = {
   clicks: 1842,
@@ -39,7 +42,70 @@ export const MOCK_PARTNER_STATS: PartnerStats = {
   contractedProjects: 38,
   commissionsEarned: 4870.5,
   period: "Últimos 30 dias",
-}
+};
+
+export const MOCK_LED_AGENCIES: LedAgency[] = [
+  {
+    id: "a1",
+    name: "Agência Criativa SP",
+    email: "contato@criativasp.com.br",
+    plan: "2000",
+    mrr: 2000,
+    status: "active",
+    joinedAt: "2025-09-01",
+    lastActiveAt: "2026-04-01",
+    totalProjects: 12,
+    commissionAmount: 100,
+  },
+  {
+    id: "a2",
+    name: "Studio Digital RJ",
+    email: "hello@studiodigital.com.br",
+    plan: "1000",
+    mrr: 950,
+    status: "at_risk",
+    joinedAt: "2025-10-15",
+    lastActiveAt: "2026-02-10",
+    totalProjects: 5,
+    commissionAmount: 47.5,
+  },
+  {
+    id: "a3",
+    name: "Maketer Agency",
+    email: "ops@maketer.com.br",
+    plan: "500",
+    mrr: 500,
+    status: "active",
+    joinedAt: "2025-11-01",
+    lastActiveAt: "2026-04-02",
+    totalProjects: 7,
+    commissionAmount: 25,
+  },
+  {
+    id: "a4",
+    name: "Brandcraft BH",
+    email: "time@brandcraft.com.br",
+    plan: "1000",
+    mrr: 0,
+    status: "onboarding",
+    joinedAt: "2026-03-20",
+    lastActiveAt: "2026-03-20",
+    totalProjects: 0,
+    commissionAmount: 0,
+  },
+  {
+    id: "a5",
+    name: "Pixels & Ideias",
+    email: "ola@pixelseideias.com.br",
+    plan: "2000",
+    mrr: 1800,
+    status: "active",
+    joinedAt: "2025-08-01",
+    lastActiveAt: "2026-04-03",
+    totalProjects: 18,
+    commissionAmount: 90,
+  },
+];
 
 export const MOCK_PARTNER_COMMISSIONS: PartnerCommission[] = [
   {
@@ -119,7 +185,7 @@ export const MOCK_PARTNER_COMMISSIONS: PartnerCommission[] = [
     status: "pending",
     convertedAt: "2026-03-10",
   },
-]
+];
 
 export const MOCK_PARTNER_WITHDRAWALS: PartnerWithdrawal[] = [
   {
@@ -155,7 +221,7 @@ export const MOCK_PARTNER_WITHDRAWALS: PartnerWithdrawal[] = [
     status: "pending",
     requestedAt: "2026-03-11",
   },
-]
+];
 
 export const MOCK_PARTNER_PROJECTS: PartnerProject[] = [
   {
@@ -225,29 +291,41 @@ export const MOCK_PARTNER_PROJECTS: PartnerProject[] = [
     commissionGenerated: 450,
     commissionStatus: "pending",
   },
-]
+];
 
 // ── Context ────────────────────────────────────────────────────────────────────
 
 interface PartnerContextType {
-  profile: PartnerProfile
-  stats: PartnerStats
-  commissions: PartnerCommission[]
-  withdrawals: PartnerWithdrawal[]
-  projects: PartnerProject[]
-  requestWithdrawal: (amount: number, pixKey: string, pixKeyType: PartnerWithdrawal["pixKeyType"]) => void
+  profile: PartnerProfile;
+  stats: PartnerStats;
+  commissions: PartnerCommission[];
+  withdrawals: PartnerWithdrawal[];
+  projects: PartnerProject[];
+  ledAgencies: LedAgency[];
+  requestWithdrawal: (
+    amount: number,
+    pixKey: string,
+    pixKeyType: PartnerWithdrawal["pixKeyType"],
+  ) => void;
 }
 
-const PartnerContext = createContext<PartnerContextType | undefined>(undefined)
+const PartnerContext = createContext<PartnerContextType | undefined>(undefined);
 
 export function PartnerProvider({ children }: { children: React.ReactNode }) {
-  const [profile] = useState<PartnerProfile>(MOCK_PARTNER_PROFILE)
-  const [stats] = useState<PartnerStats>(MOCK_PARTNER_STATS)
-  const [commissions] = useState<PartnerCommission[]>(MOCK_PARTNER_COMMISSIONS)
-  const [withdrawals, setWithdrawals] = useState<PartnerWithdrawal[]>(MOCK_PARTNER_WITHDRAWALS)
-  const [projects] = useState<PartnerProject[]>(MOCK_PARTNER_PROJECTS)
+  const [profile] = useState<PartnerProfile>(MOCK_PARTNER_PROFILE);
+  const [stats] = useState<PartnerStats>(MOCK_PARTNER_STATS);
+  const [commissions] = useState<PartnerCommission[]>(MOCK_PARTNER_COMMISSIONS);
+  const [withdrawals, setWithdrawals] = useState<PartnerWithdrawal[]>(
+    MOCK_PARTNER_WITHDRAWALS,
+  );
+  const [projects] = useState<PartnerProject[]>(MOCK_PARTNER_PROJECTS);
+  const [ledAgencies] = useState<LedAgency[]>(MOCK_LED_AGENCIES);
 
-  const requestWithdrawal = (amount: number, pixKey: string, pixKeyType: PartnerWithdrawal["pixKeyType"]) => {
+  const requestWithdrawal = (
+    amount: number,
+    pixKey: string,
+    pixKeyType: PartnerWithdrawal["pixKeyType"],
+  ) => {
     const newWithdrawal: PartnerWithdrawal = {
       id: `w${Date.now()}`,
       partnerId: profile.id,
@@ -256,19 +334,29 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
       pixKeyType,
       status: "pending",
       requestedAt: new Date().toISOString().split("T")[0],
-    }
-    setWithdrawals((prev) => [newWithdrawal, ...prev])
-  }
+    };
+    setWithdrawals((prev) => [newWithdrawal, ...prev]);
+  };
 
   return (
-    <PartnerContext.Provider value={{ profile, stats, commissions, withdrawals, projects, requestWithdrawal }}>
+    <PartnerContext.Provider
+      value={{
+        profile,
+        stats,
+        commissions,
+        withdrawals,
+        projects,
+        ledAgencies,
+        requestWithdrawal,
+      }}
+    >
       {children}
     </PartnerContext.Provider>
-  )
+  );
 }
 
 export function usePartner() {
-  const ctx = useContext(PartnerContext)
-  if (!ctx) throw new Error("usePartner must be used inside PartnerProvider")
-  return ctx
+  const ctx = useContext(PartnerContext);
+  if (!ctx) throw new Error("usePartner must be used inside PartnerProvider");
+  return ctx;
 }

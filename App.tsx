@@ -18,6 +18,10 @@ import { PricingProvider } from "@/lib/contexts/pricing-context"
 import { ProductProvider } from "@/lib/contexts/product-context"
 import { ChatProvider } from "@/contexts/chat-context"
 import { ChatWidget } from "@/components/chat-widget"
+import { DevRoleSwitcher } from "@/components/dev-role-switcher"
+import { PartnerProvider } from "@/contexts/partner-context"
+import { EmpresaProvider } from "@/contexts/empresa-context"
+import { AgenciaProvider } from "@/contexts/agencia-context"
 
 // ─── Admin Pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = React.lazy(() => import("@/app/admin/dashboard/page"))
@@ -27,13 +31,12 @@ const AdminUsuariosInternosPage = React.lazy(() => import("@/app/admin/usuarios-
 const AdminUsersPage = React.lazy(() => import("@/app/admin/users/page"))
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"))
 const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"))
-const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"))
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"))
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"))
 const AdminPrecificacaoPage = React.lazy(() => import("@/app/admin/precificacao/page"))
 const AdminNiveisPage = React.lazy(() => import("@/app/admin/niveis/page"))
 const AdminNiveisNomades = React.lazy(() => import("@/app/admin/niveis-nomades/page"))
-const AdminLevelsPage = React.lazy(() => import("@/app/admin/levels/page"))
+const AdminProgramaPartnerPage = React.lazy(() => import("@/app/admin/programa-partner/page"))
 const AdminEspecialidadesPage = React.lazy(() => import("@/app/admin/especialidades/page"))
 const AdminAllkademyPage = React.lazy(() => import("@/app/admin/allkademy/page"))
 const AdminFinanceiroPage = React.lazy(() => import("@/app/admin/financeiro/page"))
@@ -52,6 +55,35 @@ const AdminConfiguracoesPage = React.lazy(() => import("@/app/admin/configuracoe
 const AdminConfiguracionPage = React.lazy(() => import("@/app/admin/configuracion/page"))
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"))
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"))
+
+// ─── Nômades Pages ────────────────────────────────────────────────────────────
+const NomadesDashboardPage          = React.lazy(() => import("@/app/nomades/dashboard/page"))
+const NomadesProgramaPage           = React.lazy(() => import("@/app/nomades/programa/page"))
+const NomadesHabilitacoesPage       = React.lazy(() => import("@/app/nomades/habilitacoes/page"))
+const NomadesGanhosPage             = React.lazy(() => import("@/app/nomades/ganhos/page"))
+const NomadesTarefasDisponiveisPage = React.lazy(() => import("@/app/nomades/tarefasdisponiveis/page"))
+const NomadesMinhasTarefasPage      = React.lazy(() => import("@/app/nomades/minhastarefas/page"))
+const NomadesHistoricoPage          = React.lazy(() => import("@/app/nomades/historico/page"))
+const NomadesPerfilPage             = React.lazy(() => import("@/app/nomades/perfil/page"))
+
+// ─── Parceiro Pages ──────────────────────────────────────────────────────────
+const ParceiroDashboardPage  = React.lazy(() => import("@/app/parceiro/dashboard/page"))
+const ParceiroAgenciasPage   = React.lazy(() => import("@/app/parceiro/agencias/page"))
+const ParceiroProjetosPage   = React.lazy(() => import("@/app/parceiro/projetos/page"))
+const ParceiroComissoesPage  = React.lazy(() => import("@/app/parceiro/comissoes/page"))
+const ParceiroSaquesPage     = React.lazy(() => import("@/app/parceiro/saques/page"))
+
+// ─── Empresa Pages ──────────────────────────────────────────────────────────
+const EmpresaDashboardPage   = React.lazy(() => import("@/app/empresa/dashboard/page"))
+const EmpresaProjetosPage    = React.lazy(() => import("@/app/empresa/projetos/page"))
+const EmpresaTarefasPage     = React.lazy(() => import("@/app/empresa/tarefas/page"))
+const EmpresaFaturasPage     = React.lazy(() => import("@/app/empresa/faturas/page"))
+
+// ─── Agência Pages ─────────────────────────────────────────────────────────
+const AgenciaDashboardPage   = React.lazy(() => import("@/app/agencia/dashboard/page"))
+const AgenciaProjetosPage    = React.lazy(() => import("@/app/agencia/projetos/page"))
+const AgenciaTarefasPage     = React.lazy(() => import("@/app/agencia/tarefas/page"))
+const AgenciaFinanceiroPage  = React.lazy(() => import("@/app/agencia/financeiro/page"))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full">
@@ -149,7 +181,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   const handleAllAccepted = (ids: string[]) => {
-    console.log("[TermAcceptanceGate] Termos aceitos:", ids)
     localStorage.setItem(DEMO_STORAGE_KEY, "true")
     setTermsAccepted(true)
   }
@@ -157,9 +188,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <ChatProvider>
     <PlatformUsersProvider>
     <SettingsProvider>
-      <AccountTypeProvider>
-        <SidebarProvider>
-          <CompanyProvider>
+      <SidebarProvider>
+        <CompanyProvider>
+          <PartnerProvider>
+          <EmpresaProvider>
+          <AgenciaProvider>
             <SpecialtyProvider>
               <PricingProvider>
               <ProductProvider>
@@ -204,9 +237,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </ProductProvider>
               </PricingProvider>
             </SpecialtyProvider>
-          </CompanyProvider>
-        </SidebarProvider>
-      </AccountTypeProvider>
+          </AgenciaProvider>
+          </EmpresaProvider>
+          </PartnerProvider>
+        </CompanyProvider>
+      </SidebarProvider>
     </SettingsProvider>
     </PlatformUsersProvider>
     </ChatProvider>
@@ -215,9 +250,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <>
+    <AccountTypeProvider>
       <Routes>
-      {/* Rota inicial → Admin Dashboard */}
+      {/* ─── Todas as rotas passam pelo AppLayout (sidebar/header/footer padrão) ── */}
       <Route
         path="/*"
         element={
@@ -234,13 +269,13 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/empresas" element={<AdminEmpresasPage />} />
               <Route path="/admin/nomades" element={<AdminNomadesPg />} />
-              <Route path="/admin/agencias" element={<AdminAgenciasPage />} />
               <Route path="/admin/projetos" element={<AdminProjetosPage />} />
               <Route path="/admin/produtos" element={<AdminProdutosPage />} />
               <Route path="/admin/precificacao" element={<AdminPrecificacaoPage />} />
               <Route path="/admin/niveis" element={<AdminNiveisPage />} />
               <Route path="/admin/niveis-nomades" element={<AdminNiveisNomades />} />
-              <Route path="/admin/levels" element={<AdminLevelsPage />} />
+              <Route path="/admin/levels" element={<Navigate to="/admin/niveis" replace />} />
+              <Route path="/admin/programa-partner" element={<AdminProgramaPartnerPage />} />
               <Route path="/admin/especialidades" element={<AdminEspecialidadesPage />} />
               <Route path="/admin/allkademy" element={<AdminAllkademyPage />} />
               <Route path="/admin/financeiro" element={<AdminFinanceiroPage />} />
@@ -260,6 +295,35 @@ export default function App() {
               <Route path="/admin/sistema" element={<AdminSistemaPage />} />
               <Route path="/admin/alertas" element={<AdminAlertasPage />} />
 
+              {/* ─── Nômades ──────────────────────────────────────────────── */}
+              <Route path="/nomades/dashboard"         element={<NomadesDashboardPage />} />
+              <Route path="/nomades/programa"          element={<NomadesProgramaPage />} />
+              <Route path="/nomades/habilitacoes"      element={<NomadesHabilitacoesPage />} />
+              <Route path="/nomades/ganhos"            element={<NomadesGanhosPage />} />
+              <Route path="/nomades/tarefasdisponiveis" element={<NomadesTarefasDisponiveisPage />} />
+              <Route path="/nomades/minhastarefas"     element={<NomadesMinhasTarefasPage />} />
+              <Route path="/nomades/historico"         element={<NomadesHistoricoPage />} />
+              <Route path="/nomades/perfil"            element={<NomadesPerfilPage />} />
+
+              {/* ─── Parceiro ─────────────────────────────────────────── */}
+              <Route path="/parceiro/dashboard"  element={<ParceiroDashboardPage />} />
+              <Route path="/parceiro/agencias"   element={<ParceiroAgenciasPage />} />
+              <Route path="/parceiro/projetos"   element={<ParceiroProjetosPage />} />
+              <Route path="/parceiro/comissoes"  element={<ParceiroComissoesPage />} />
+              <Route path="/parceiro/saques"     element={<ParceiroSaquesPage />} />
+
+              {/* ─── Empresa ──────────────────────────────────────────── */}
+              <Route path="/empresa/dashboard"   element={<EmpresaDashboardPage />} />
+              <Route path="/empresa/projetos"    element={<EmpresaProjetosPage />} />
+              <Route path="/empresa/tarefas"     element={<EmpresaTarefasPage />} />
+              <Route path="/empresa/faturas"     element={<EmpresaFaturasPage />} />
+
+              {/* ─── Agência ──────────────────────────────────────────── */}
+              <Route path="/agencia/dashboard"   element={<AgenciaDashboardPage />} />
+              <Route path="/agencia/projetos"    element={<AgenciaProjetosPage />} />
+              <Route path="/agencia/tarefas"     element={<AgenciaTarefasPage />} />
+              <Route path="/agencia/financeiro"  element={<AgenciaFinanceiroPage />} />
+
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
@@ -268,6 +332,7 @@ export default function App() {
       />
       </Routes>
       <CookieConsentBanner />
-    </>
+      <DevRoleSwitcher />
+    </AccountTypeProvider>
   )
 }

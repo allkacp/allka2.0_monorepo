@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, type CSSProperties } from "react"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -288,6 +289,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
   const [filterNameInput, setFilterNameInput] = useState("")
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [pendingClose, setPendingClose] = useState<(() => void) | null>(null)
 
   const filteredLogs = useMemo(() => {
     return mockLogs.filter((log) => {
@@ -594,7 +596,10 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
             className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
-                if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                if (unsavedChanges) {
+                  setPendingClose(() => () => { setIsLogFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false) })
+                  return
+                }
                 setIsLogFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false)
               }
             }}
@@ -611,7 +616,10 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
                 </div>
                 <button
                   onClick={() => {
-                    if (unsavedChanges && !window.confirm("Alterações não salvas. Deseja sair?")) return
+                    if (unsavedChanges) {
+                      setPendingClose(() => () => { setIsLogFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false) })
+                      return
+                    }
                     setIsLogFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false); setShowFieldPicker(false)
                   }}
                   className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
@@ -888,6 +896,15 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
           </div>
         )
       })()}
+      <ConfirmationDialog
+        open={pendingClose !== null}
+        onClose={() => setPendingClose(null)}
+        onConfirm={() => { pendingClose?.(); setPendingClose(null) }}
+        title="Alterações não salvas"
+        message="Você tem alterações não salvas. Deseja sair sem salvar?"
+        confirmText="Sair sem salvar"
+        destructive={false}
+      />
     </div>
   )
 }

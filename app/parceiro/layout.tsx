@@ -1,29 +1,30 @@
 // @ts-nocheck
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { PartnerProvider } from "@/contexts/partner-context"
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { PartnerProvider } from "@/contexts/partner-context";
 import {
   LayoutDashboard,
   FolderOpen,
   DollarSign,
   Wallet,
+  Building2,
   LogOut,
   ChevronRight,
   Share2,
-} from "lucide-react"
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/parceiro/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/parceiro/projetos",  label: "Projetos",  icon: FolderOpen },
+  { href: "/parceiro/agencias", label: "Agências", icon: Building2 },
+  { href: "/parceiro/projetos", label: "Projetos", icon: FolderOpen },
   { href: "/parceiro/comissoes", label: "Comissões", icon: DollarSign },
-  { href: "/parceiro/saques",    label: "Saques",    icon: Wallet },
-]
+  { href: "/parceiro/saques", label: "Saques", icon: Wallet },
+];
 
 function PartnerSidebar() {
-  const pathname = usePathname()
+  const { pathname } = useLocation();
 
   return (
     <aside className="fixed left-0 top-0 h-full w-56 bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col z-30 shadow-xl">
@@ -43,22 +44,26 @@ function PartnerSidebar() {
       {/* Nav */}
       <nav className="flex-1 px-2.5 py-3 space-y-0.5">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/")
+          const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
-              href={href}
+              to={href}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all group ${
                 active
                   ? "bg-white/15 text-white"
                   : "text-white/60 hover:bg-white/8 hover:text-white"
               }`}
             >
-              <Icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-400" : "text-white/40 group-hover:text-white/70"}`} />
+              <Icon
+                className={`h-4 w-4 shrink-0 ${active ? "text-blue-400" : "text-white/40 group-hover:text-white/70"}`}
+              />
               {label}
-              {active && <ChevronRight className="h-3 w-3 ml-auto text-white/40" />}
+              {active && (
+                <ChevronRight className="h-3 w-3 ml-auto text-white/40" />
+              )}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -70,18 +75,20 @@ function PartnerSidebar() {
         </button>
       </div>
     </aside>
-  )
+  );
 }
 
-export default function PartnerLayout({ children }: { children: React.ReactNode }) {
+export default function PartnerLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <PartnerProvider>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <PartnerSidebar />
-        <main className="ml-56 min-h-screen">
-          {children}
-        </main>
+        <main className="ml-56 min-h-screen">{children}</main>
       </div>
     </PartnerProvider>
-  )
+  );
 }

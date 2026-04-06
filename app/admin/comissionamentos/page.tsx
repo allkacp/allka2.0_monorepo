@@ -85,12 +85,10 @@ export default function ComissionamentosPage() {
   const [editingCategory, setEditingCategory] = useState(null)
 
   const handleSaveCategory = (categoryData) => {
-    console.log("[v0] Saving category commission:", categoryData)
     setEditingCategory(null)
   }
 
   const handleAssignLeader = (categoryId, leaderId) => {
-    console.log("[v0] Assigning leader to category:", { categoryId, leaderId })
   }
 
   return (
