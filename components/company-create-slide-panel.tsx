@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 import { Building2, Mail, Phone, MapPin, CreditCard, User, AlertCircle, Check, Camera, ZoomIn, Trash2, Crosshair } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -215,50 +216,29 @@ export function CompanyCreateSlidePanel({ open, onOpenChange, onCreate }: Compan
     setShowConfirmDialog(false)
 
     try {
-      const companyData = {
-        id: Date.now().toString(),
-        razaoSocial: formData.razaoSocial,
-        nomeFantasia: formData.nomeFantasia,
-        cnpj: formData.cnpj,
-        inscricaoEstadual: formData.inscricaoEstadual,
-        status: formData.status,
-        emailPrincipal: formData.emailPrincipal,
-        telefone: formData.telefone,
-        socialLinks: formData.socialLinks,
-        endereco: {
-          cep: formData.cep,
-          rua: formData.rua,
-          numero: formData.numero,
-          complemento: formData.complemento,
-          cidade: formData.cidade,
-          estado: formData.estado,
-        },
-        tipoContato: formData.tipoContato,
-        planoCreditoId: formData.planoCreditoId,
-        limite: parseInt(formData.limite),
-        creditosIniciais: parseInt(formData.creditosIniciais),
-        metodoPagamento: formData.metodoPagamento,
-        adminInicial: {
-          nome: formData.nomeAdmin,
-          email: formData.emailAdmin,
-          perfil: "administrador",
-        },
-        createdAt: new Date().toISOString(),
-      }
+      const addressParts = [formData.rua, formData.numero, formData.complemento, formData.cidade, formData.estado, formData.cep].filter(Boolean)
 
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      const created = await apiClient.createCompany({
+        name: formData.nomeFantasia || formData.razaoSocial,
+        cnpj: formData.cnpj || undefined,
+        email: formData.emailPrincipal || undefined,
+        phone: formData.telefone || undefined,
+        status: formData.status === "ativo" ? "ativo" : formData.status || "ativo",
+        address: addressParts.join(", ") || undefined,
+        description: formData.razaoSocial || undefined,
+      })
 
       toast({
         title: "Sucesso",
         description: "Empresa criada com sucesso!",
       })
 
-      onCreate(companyData)
+      onCreate(created)
       onOpenChange(false)
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Falha ao criar empresa",
+        description: error.message || "Falha ao criar empresa",
         variant: "destructive",
       })
     } finally {

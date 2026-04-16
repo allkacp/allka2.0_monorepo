@@ -60,6 +60,7 @@ import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { createPortal } from "react-dom"
 import { usePlatformUsers } from "@/contexts/platform-users-context"
+import { useUsers } from "@/hooks/useUsers"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -408,7 +409,8 @@ const mockUsers: User[] = [
 ]
 
 export default function UsuariosPage() {
-  const { users: platformUsers, addUser: addPlatformUser } = usePlatformUsers()
+  const { addUser: addPlatformUser } = usePlatformUsers()
+  const { users: apiUsers, loading: usersLoading, error: usersError, refetch: refetchUsers, createUser, updateUser, deleteUser: apiDeleteUser } = useUsers()
   const { toast } = useToast()
   const pageRef = useRef<HTMLDivElement>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -486,10 +488,17 @@ export default function UsuariosPage() {
   const [paginatedUsers, setPaginatedUsers] = useState<User[]>([])
 
   useEffect(() => {
-    setUsers(platformUsers)
-    setFilteredUsers(platformUsers)
+    // Map API users to the shape the page expects
+    const mapped = apiUsers.map((u: any) => ({
+      ...u,
+      is_active: u.is_active ?? true,
+      online_status: "offline",
+      account_type: u.account_type || "empresas",
+    }))
+    setUsers(mapped)
+    setFilteredUsers(mapped)
     setCurrentPage(1)
-  }, [platformUsers])
+  }, [apiUsers])
 
   useEffect(() => {
     const filtered = users.filter((user) => {
@@ -669,24 +678,26 @@ export default function UsuariosPage() {
 
     setIsDeleteLoading(true)
     try {
-      // Simulate backend delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Real API call to delete user
+      await apiDeleteUser(String(selectedUser.id))
 
-      // Remove user from list
-      const updatedUsers = users.filter((u) => u.id !== selectedUser.id)
-      setUsers(updatedUsers)
-
-      // TODO: Send deletion reason to backend for audit log
-      // API call would go here with audit trail data
+      toast({
+        title: "Usuário excluído",
+        description: `O usuário "${selectedUser.name}" foi excluído com sucesso.`,
+      })
 
       // Close dialog and reset
       setIsDeleteUserAlertOpen(false)
       setSelectedUser(null)
       setDeletionReason("")
       setDeletionReasonError("")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error)
-      setDeletionReasonError("Erro ao excluir usuário. Tente novamente.")
+      toast({
+        title: "Erro ao excluir",
+        description: error.message || "Erro ao excluir usuário. Tente novamente.",
+        variant: "destructive",
+      })
     } finally {
       setIsDeleteLoading(false)
     }
@@ -794,16 +805,25 @@ export default function UsuariosPage() {
     }
   }
 
-  const handleStatusConfirmation = (reason: string, duration: "indefinite" | Date) => {
+  const handleStatusConfirmation = async (reason: string, duration: "indefinite" | Date) => {
     if (!selectedUser) return
 
-    const updatedUsers = users.map((u) =>
-      u.id === selectedUser.id ? { ...u, is_active: !u.is_active, updated_at: new Date().toISOString() } : u,
-    )
+    try {
+      const newStatus = !selectedUser.is_active
+      await updateUser(String(selectedUser.id), { is_active: newStatus })
 
-    setUsers(updatedUsers)
-
-    setSelectedUser({ ...selectedUser, is_active: !selectedUser.is_active })
+      setSelectedUser({ ...selectedUser, is_active: newStatus })
+      toast({
+        title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
+        description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar status do usuário.",
+        variant: "destructive",
+      })
+    }
 
     // Close dialog
     setIsDeleteAlertOpen(false)
@@ -1859,6 +1879,7 @@ export default function UsuariosPage() {
             setIsViewDialogOpen(false)
             setSelectedUser(null)
           }}
+          onRefresh={refetchUsers}
           user={selectedUser}
         />
       )}
@@ -1866,9 +1887,8 @@ export default function UsuariosPage() {
       <UserCreateSlidePanel
         open={showCreateUser}
         onClose={() => setShowCreateUser(false)}
-        onUserCreated={(newUser) => {
-          // Add to shared platform users context (syncs back to this page via useEffect)
-          addPlatformUser(newUser)
+        onUserCreated={() => {
+          refetchUsers()
           setShowCreateUser(false)
         }}
       />

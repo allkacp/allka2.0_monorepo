@@ -13,6 +13,7 @@ const createSchema = z.object({
   status: z
     .enum([
       "draft",
+      "negotiation",
       "awaiting-payment",
       "planning",
       "in-progress",
@@ -22,7 +23,23 @@ const createSchema = z.object({
     ])
     .default("draft"),
   lifecycle: z.enum(["avulso", "mensal"]).default("avulso"),
+  type: z.string().optional(),
   value: z.number().min(0).default(0),
+  budget: z.number().min(0).default(0),
+  spent: z.number().min(0).default(0),
+  progress: z.number().min(0).max(100).default(0),
+  agency: z.string().optional(),
+  company_type: z.enum(["company", "agency", "nomad"]).optional(),
+  consultant: z.string().optional(),
+  consultant_email: z.string().optional(),
+  team_size: z.number().min(0).default(0),
+  nomades: z.string().optional(),
+  bitrix_sync: z.boolean().default(false),
+  portfolio_permission: z.boolean().default(false),
+  overdue: z.boolean().default(false),
+  from_lead: z.boolean().default(false),
+  billing_day: z.number().optional(),
+  billing_start_date: z.string().optional(),
   start_date: z.string().datetime({ offset: true }).optional(),
   end_date: z.string().datetime({ offset: true }).optional(),
 });
@@ -47,7 +64,7 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.project.findMany({
         where,
         include: {
-          client: { select: { id: true, name: true } },
+          client: { select: { id: true, name: true, cnpj: true } },
           _count: { select: { task_executions: true } },
         },
         skip,
@@ -114,7 +131,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
   try {
     const project = await prisma.project.create({
       data: req.body,
-      include: { client: { select: { id: true, name: true } } },
+      include: { client: { select: { id: true, name: true, cnpj: true } } },
     });
     res.status(201).json(project);
   } catch (err) {
@@ -128,7 +145,7 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
     const project = await prisma.project.update({
       where: { id: req.params.id },
       data: req.body,
-      include: { client: { select: { id: true, name: true } } },
+      include: { client: { select: { id: true, name: true, cnpj: true } } },
     });
     res.json(project);
   } catch (err) {

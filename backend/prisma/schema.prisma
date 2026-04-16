@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.0.x", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
@@ -198,10 +199,29 @@ model Project {
   client_id   String?
   client      Company?  @relation(fields: [client_id], references: [id])
   status      String    @default("draft")
-  // draft | awaiting-payment | planning | in-progress | paused | completed | cancelled
+  // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled
   lifecycle   String    @default("avulso")
   // avulso | mensal
+  type        String?
+  // Marketing Digital | Desenvolvimento Web | Design | E-commerce | Desenvolvimento Mobile | Consultoria
   value       Float     @default(0)
+  budget      Float     @default(0)
+  spent       Float     @default(0)
+  progress    Int       @default(0)
+  agency      String?
+  company_type String?
+  // company | agency | nomad
+  consultant       String?
+  consultant_email String?
+  team_size   Int       @default(0)
+  nomades     String?
+  // JSON: string[]
+  bitrix_sync          Boolean @default(false)
+  portfolio_permission Boolean @default(false)
+  overdue     Boolean   @default(false)
+  from_lead   Boolean   @default(false)
+  billing_day          Int?
+  billing_start_date   String?
   start_date  DateTime?
   end_date    DateTime?
   created_at  DateTime  @default(now())

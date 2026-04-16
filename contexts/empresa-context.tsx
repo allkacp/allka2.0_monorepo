@@ -4,11 +4,25 @@ import { createContext, useContext, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface EmpresaProjectStage {
+  name: string;
+  status: "pending" | "in_progress" | "done";
+}
+
+export interface EmpresaContractedProduct {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  value: number;
+  stages?: EmpresaProjectStage[];
+}
+
 export interface EmpresaProject {
   id: string;
   name: string;
   category: string;
-  status: "briefing" | "producao" | "revisao" | "entregue" | "cancelado";
+  status: "briefing" | "producao" | "revisao" | "entregue" | "cancelado" | "aguardando_pagamento";
   value: number;
   startDate: string;
   deliveryDate?: string;
@@ -16,6 +30,9 @@ export interface EmpresaProject {
   tasksDone: number;
   tasksTotal: number;
   nomadeCount: number;
+  products?: EmpresaContractedProduct[];
+  checkoutLinks?: { self: string; client: string };
+  payerMode?: "self" | "client";
 }
 
 export interface EmpresaTask {
@@ -262,18 +279,45 @@ interface EmpresaContextType {
   projects: EmpresaProject[];
   tasks: EmpresaTask[];
   invoices: EmpresaInvoice[];
+  addProject: (project: EmpresaProject) => void;
+  confirmProjectPayment: (projectId: string) => void;
 }
 
 const EmpresaContext = createContext<EmpresaContextType | undefined>(undefined);
 
 export function EmpresaProvider({ children }: { children: React.ReactNode }) {
   const [profile] = useState<EmpresaProfile>(MOCK_PROFILE);
-  const [projects] = useState<EmpresaProject[]>(MOCK_PROJECTS);
+  const [projects, setProjects] = useState<EmpresaProject[]>(MOCK_PROJECTS);
   const [tasks] = useState<EmpresaTask[]>(MOCK_TASKS);
   const [invoices] = useState<EmpresaInvoice[]>(MOCK_INVOICES);
 
+  const addProject = (project: EmpresaProject) => {
+    setProjects((prev) => [project, ...prev]);
+  };
+
+  const confirmProjectPayment = (projectId: string) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const stages: EmpresaProjectStage[] = [
+          { name: "Briefing e Planejamento", status: "pending" },
+          { name: "Desenvolvimento", status: "pending" },
+          { name: "Revisão", status: "pending" },
+          { name: "Entrega Final", status: "pending" },
+        ];
+        return {
+          ...p,
+          status: "briefing" as const,
+          tasksDone: 0,
+          tasksTotal: p.products?.length ?? 0,
+          products: p.products?.map((prod) => ({ ...prod, stages })),
+        };
+      })
+    );
+  };
+
   return (
-    <EmpresaContext.Provider value={{ profile, projects, tasks, invoices }}>
+    <EmpresaContext.Provider value={{ profile, projects, tasks, invoices, addProject, confirmProjectPayment }}>
       {children}
     </EmpresaContext.Provider>
   );

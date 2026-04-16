@@ -193,7 +193,7 @@ export default function ProductSelectionModal({
     <>
       <div className="fixed inset-0 z-60 bg-black/20 pointer-events-none"></div>
       <div
-        className="fixed right-0 top-0 h-full bg-white shadow-2xl overflow-y-auto pointer-events-auto"
+        className="fixed right-0 top-0 h-full bg-white shadow-2xl flex flex-col pointer-events-auto"
         style={{
           width: "calc(100% - 240px)",
           left: "240px",
@@ -212,6 +212,7 @@ export default function ProductSelectionModal({
           </Button>
         </div>
 
+        <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-4">
@@ -295,21 +296,7 @@ export default function ProductSelectionModal({
             ))}
           </div>
 
-          {tempSelectedProducts.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-blue-900">
-                {tempSelectedProducts.length} produto(s) selecionado(s)
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setTempSelectedProducts([])}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                Limpar seleção
-              </Button>
-            </div>
-          )}
+
 
           <div className={`grid ${getGridClasses()} gap-4`}>
             {filteredProducts.map((product) => {
@@ -427,6 +414,47 @@ export default function ProductSelectionModal({
           {filteredProducts.length === 0 && (
             <div className="text-center py-12 text-gray-500">Nenhum produto encontrado</div>
           )}
+        </div>
+        </div>
+      </div>
+
+      {/* Sticky action bar */}
+      <div className="border-t border-gray-200 bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            {tempSelectedProducts.length > 0 ? (
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  {tempSelectedProducts.length} produto{tempSelectedProducts.length !== 1 ? "s" : ""} selecionado{tempSelectedProducts.length !== 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Total: {formatCurrency(tempSelectedProducts.reduce((s, p) => s + (p.finalPrice || 0) * (p.quantity || 1), 0))}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">Nenhum produto selecionado ainda</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {tempSelectedProducts.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTempSelectedProducts([])}
+                className="text-gray-500 hover:text-red-600"
+              >
+                Limpar
+              </Button>
+            )}
+            <Button
+              onClick={handleAddAndReturn}
+              disabled={tempSelectedProducts.length === 0}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6"
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Confirmar Seleção{tempSelectedProducts.length > 0 ? ` (${tempSelectedProducts.length})` : ""}
+            </Button>
+          </div>
         </div>
       </div>
       <Dialog open={customizationModal} onOpenChange={setCustomizationModal}>

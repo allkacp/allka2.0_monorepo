@@ -35,6 +35,10 @@ import {
   CreditCard,
   UserIcon,
   RefreshCw,
+  Eye,
+  FileEdit,
+  Grid3x3,
+  Grid2x2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -57,6 +61,10 @@ interface ProjectCreateSlidePanelProps {
   onClose: () => void
   onSubmit: (project: Project) => void
   initialData?: Project
+  payerType?: "agency" | "company" | "nomad"
+  /** Pre-selected products coming from the standalone catalog page */
+  initialProducts?: any[]
+  initialProductQuantities?: Record<string, number>
 }
 
 interface FormData {
@@ -86,7 +94,7 @@ interface User {
   created_at: string
 }
 
-export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }: ProjectCreateSlidePanelProps) {
+export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, payerType, initialProducts, initialProductQuantities }: ProjectCreateSlidePanelProps) {
   const { toast } = useToast()
   const { sidebarWidth } = useSidebar()
   const navigate = useNavigate()
@@ -134,6 +142,9 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   const [gridLayout, setGridLayout] = useState<3 | 4 | 6>(3)
 
   const [showCheckout, setShowCheckout] = useState(false)
+  const [showCart, setShowCart] = useState(false)
+  const [showDraftConfirm, setShowDraftConfirm] = useState(false)
+  const [showReview, setShowReview] = useState(false)
   const [productQuantities, setProductQuantities] = useState<Record<string, number>>({})
 
   const [customizationModal, setCustomizationModal] = useState(false)
@@ -228,19 +239,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   }
 
   const handleSaveDraft = async () => {
-    const draftProject = {
-      ...formData,
-      status: "draft" as const,
-      id: Date.now(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }
-    toast({
-      title: "Rascunho Salvo",
-      description: "O projeto foi salvo como rascunho",
-    })
-    onSubmit(draftProject as any)
-    onClose()
+    setShowDraftConfirm(true)
   }
 
   useEffect(() => {
@@ -360,10 +359,10 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
         setCreatedProject(result)
         setProjectCreated(true)
         toast({
-          title: "Sucesso",
-          description: "Projeto criado com sucesso",
+          title: "Projeto criado!",
+          description: "Agora selecione os produtos que deseja contratar.",
         })
-        onSubmit(result)
+        setShowCatalog(true)
       }
     } catch (error) {
       console.error("Error creating project:", error)
@@ -575,39 +574,23 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
   }
 
   const handleCheckoutComplete = (checkoutData: CheckoutData) => {
-    // Create project with "awaiting_payment" status
     const finalProject = {
-      ...createdProject!, // This should be guaranteed to be non-null if we reached here after creation
-      status: "awaiting_payment",
+      ...createdProject!,
+      status: "aguardando_pagamento",
       products: selectedProducts,
       checkoutData,
     }
 
     toast({
-      title: "Contratação Finalizada!",
-      description: "Aguardando confirmação de pagamento...",
+      title: "Contratação Registrada!",
+      description: "Projeto aguardando confirmação de pagamento.",
     })
 
-    // Simulate payment confirmation after 3 seconds
-    setTimeout(() => {
-      const paidProject = {
-        ...finalProject,
-        status: "paid",
-        // Auto-generate tasks and stages from products
-        tasks: generateTasksFromProducts(selectedProducts),
-      }
-
-      onSubmit(paidProject)
-      toast({
-        title: "Pagamento Confirmado!",
-        description: "Tarefas e etapas foram criadas automaticamente",
-      })
-
-      onClose()
-      setShowCatalog(false)
-      setShowCheckout(false)
-      setSelectedProducts([])
-    }, 3000)
+    onSubmit(finalProject)
+    onClose()
+    setShowCatalog(false)
+    setShowCheckout(false)
+    setSelectedProducts([])
   }
 
   const generateTasksFromProducts = (products: any[]) => {
@@ -688,8 +671,18 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
       setCreatedProject(null)
       setShowCatalog(false)
       setShowCheckout(false)
-      setSelectedProducts([])
-      setProductQuantities({})
+      setShowDraftConfirm(false)
+      setShowReview(false)
+      // If opened with pre-selected products (from catalog page), jump straight to cart
+      if (initialProducts && initialProducts.length > 0) {
+        setSelectedProducts(initialProducts)
+        setProductQuantities(initialProductQuantities || {})
+        setShowCart(true)
+      } else {
+        setShowCart(false)
+        setSelectedProducts([])
+        setProductQuantities({})
+      }
       setClientMode("existing")
       setSelectedClient(null)
       setNewClient(null)
@@ -792,14 +785,34 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
     return matchesSearch && matchesCategory
   })
 
-  const handleAddProductsFromModal = (products: any[]) => {
-    const newProducts = products.filter((p) => !selectedProducts.find((sp) => sp.id === p.id))
-    setSelectedProducts([...selectedProducts, ...newProducts])
-    newProducts.forEach((p) => {
-      if (!(p.id in productQuantities)) {
-        productQuantities[p.id] = 1
+  const handleProductsFromModal = (newProds: any[]) => {
+    const merged = [...selectedProducts]
+    newProds.forEach((p) => {
+      if (!merged.find((sp) => sp.id === p.id)) {
+        merged.push({ ...p, quantity: p.quantity || 1, customizations: p.customizations || {} })
       }
     })
+    setSelectedProducts(merged)
+    const newQtys = { ...productQuantities }
+    newProds.forEach((p) => { if (!(p.id in newQtys)) newQtys[p.id] = p.quantity || 1 })
+    setProductQuantities(newQtys)
+    setShowCatalog(false)
+    setShowCart(true)
+  }
+
+  const handleConfirmDraft = async () => {
+    const draftProject = {
+      ...formData,
+      status: "draft" as const,
+      id: Date.now(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      products: selectedProducts,
+    }
+    toast({ title: "Rascunho Salvo", description: "O projeto foi salvo como rascunho." })
+    onSubmit(draftProject as any)
+    setShowDraftConfirm(false)
+    onClose()
   }
 
   const handleAddCredential = (credential: any) => {
@@ -884,178 +897,151 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                     onComplete={handleCheckoutComplete}
                     preselectedClient={clientMode === "existing" ? selectedClient : newClient}
                     preselectedProject={createdProject}
+                    payerType={payerType}
                   />
                 </div>
               </>
             ) : showCatalog ? (
               <>
+                {/* Catalog Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-purple-50/50 via-blue-50/30 to-pink-50/50 dark:from-purple-950/20 dark:via-blue-950/10 dark:to-pink-950/20">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg shadow-lg">
                       <ShoppingCart className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Contratar Produtos</h2>
+                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Selecionar Produtos</h2>
                       <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} selecionado
-                        {selectedProducts.length !== 1 ? "s" : ""}
+                        {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} selecionado{selectedProducts.length !== 1 ? "s" : ""}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowCatalog(false)}
-                    className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800"
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => setShowCatalog(false)} className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="p-4 space-y-4">
-                    {/* Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Buscar produtos..."
-                        value={productSearch}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        className="pl-9 h-9"
-                      />
+                    {/* Search + grid toggle */}
+                    <div className="flex gap-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Buscar produtos..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="pl-9 h-9"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 shrink-0">
+                        {([3, 4] as const).map((n) => (
+                          <Button key={n} size="sm" variant={gridLayout === n ? "default" : "ghost"} className="h-7 w-7 p-0" onClick={() => setGridLayout(n)}>
+                            {n === 3 ? <Grid3x3 className="h-3.5 w-3.5" /> : <Grid2x2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Category Filter - Made compact */}
+                    {/* Category pills */}
                     <div className="flex gap-2 flex-wrap">
-                      {["Todos", "Design", "Desenvolvimento", "Marketing", "Consultoria"].map((cat) => (
-                        <Button
-                          key={cat}
-                          variant={productCategory === cat ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setProductCategory(cat)}
-                          className="h-7 text-xs"
+                      {[
+                        { id: "Todos", label: "Todos", count: products.filter((p) => p.isActive).length },
+                        ...Array.from(new Set(products.filter((p) => p.isActive).map((p) => p.category))).map((cat) => ({
+                          id: cat,
+                          label: cat,
+                          count: products.filter((p) => p.isActive && p.category === cat).length,
+                        })),
+                      ].map(({ id, label, count }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setProductCategory(id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            productCategory === id
+                              ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm"
+                              : "bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600"
+                          }`}
                         >
-                          {cat}
-                        </Button>
+                          {label}
+                          <span className={`text-[10px] ${productCategory === id ? "opacity-80" : "text-slate-400"}`}>({count})</span>
+                        </button>
                       ))}
                     </div>
 
-                    {/* Products Grid - Made more compact */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* Products Grid */}
+                    <div className={`grid gap-3 ${gridLayout === 3 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"}`}>
                       {filteredCatalogProducts.map((product) => {
-                        const selectedProduct = selectedProducts.find((p) => p.id === product.id)
-                        const isSelected = !!selectedProduct
+                        const isSelected = !!selectedProducts.find((p) => p.id === product.id)
                         const quantity = productQuantities[product.id] || 1
                         const CategoryIcon = getCategoryIcon(product.category)
-
                         return (
-                          <Card
-                            key={product.id}
-                            className={cn(
-                              "border-0 shadow-sm hover:shadow-md transition-all duration-200 group bg-white flex flex-col overflow-hidden",
-                              isSelected && "ring-2 ring-green-500",
-                            )}
-                          >
-                            <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                          <Card key={product.id} className={cn("border-0 shadow-sm hover:shadow-md transition-all duration-200 group bg-white flex flex-col overflow-hidden", isSelected && "ring-2 ring-green-500")}>
+                            <div className="relative h-36 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
                               {product.image ? (
-                                <img
-                                  src={product.image || "/placeholder.svg"}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                />
+                                <img src={product.image || "/placeholder.svg"} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                               ) : (
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-8 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                                    <CategoryIcon className="h-16 w-16 text-blue-600" />
+                                  <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6 rounded-2xl group-hover:scale-110 transition-transform duration-300">
+                                    <CategoryIcon className="h-12 w-12 text-blue-600" />
                                   </div>
                                 </div>
                               )}
                               {isSelected && (
-                                <Badge className="absolute top-3 right-3 bg-green-500 text-white">
-                                  <Check className="h-3 w-3 mr-1" />
+                                <Badge className="absolute top-2 right-2 bg-green-500 text-white text-[10px]">
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />
                                   Adicionado
                                 </Badge>
                               )}
                             </div>
 
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-sm group-hover:text-blue-600 transition-colors line-clamp-2">
-                                {product.name}
-                              </CardTitle>
+                            <CardHeader className="pb-2 pt-3 px-3">
+                              <CardTitle className="text-xs group-hover:text-blue-600 transition-colors line-clamp-2">{product.name}</CardTitle>
                             </CardHeader>
 
-                            <CardContent className="space-y-3 flex-1 flex flex-col">
-                              <p className="text-xs text-gray-600 line-clamp-2">{product.description}</p>
+                            <CardContent className="space-y-2 flex-1 flex flex-col px-3 pb-3">
+                              <p className="text-[10px] text-gray-500 line-clamp-2">{product.description}</p>
 
-                              <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-                                <div className="flex items-center space-x-1 text-yellow-500">
-                                  <Star className="h-3 w-3 fill-current" />
+                              <div className="flex items-center justify-between text-[10px]">
+                                <div className="flex items-center gap-0.5 text-yellow-500">
+                                  <Star className="h-2.5 w-2.5 fill-current" />
                                   <span className="font-medium text-gray-900">5.0</span>
                                 </div>
                                 {product.deliveryDays && (
-                                  <div className="flex items-center space-x-1 text-gray-600">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{product.deliveryDays} dias</span>
+                                  <div className="flex items-center gap-0.5 text-gray-500">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    <span>{product.deliveryDays}d</span>
                                   </div>
                                 )}
                               </div>
 
-                              <div className="pt-3 border-t mt-auto space-y-2">
-                                <p className="text-xs text-gray-500 mb-1">Preço final</p>
-                                <p className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                              <div className="pt-2 border-t mt-auto space-y-1.5">
+                                <p className="text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
                                   {formatCurrency(product.finalPrice * (isSelected ? quantity : 1))}
                                 </p>
 
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs mb-2 bg-transparent"
-                                  onClick={() => handleCustomizeProduct(product)}
-                                >
-                                  <Palette className="h-3 w-3 mr-1" />
-                                  Personalizar
+                                <Button size="sm" variant="outline" className="w-full text-[10px] h-6 bg-transparent" onClick={() => handleCustomizeProduct(product)}>
+                                  <Palette className="h-2.5 w-2.5 mr-1" /> Personalizar
                                 </Button>
 
                                 {isSelected ? (
                                   <>
-                                    <div className="flex items-center justify-between gap-2 mb-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 px-2 bg-transparent"
-                                        onClick={() => handleDecreaseQuantity(product.id)}
-                                      >
-                                        <Minus className="h-3 w-3" />
+                                    <div className="flex items-center justify-between gap-1">
+                                      <Button size="sm" variant="outline" className="h-6 px-1.5 bg-transparent" onClick={() => handleDecreaseQuantity(product.id)}>
+                                        <Minus className="h-2.5 w-2.5" />
                                       </Button>
-                                      <span className="text-sm font-semibold px-3">{quantity}</span>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 px-2 bg-transparent"
-                                        onClick={() => handleIncreaseQuantity(product.id)}
-                                      >
-                                        <Plus className="h-3 w-3" />
+                                      <span className="text-xs font-semibold">{quantity}</span>
+                                      <Button size="sm" variant="outline" className="h-6 px-1.5 bg-transparent" onClick={() => handleIncreaseQuantity(product.id)}>
+                                        <Plus className="h-2.5 w-2.5" />
                                       </Button>
                                     </div>
-
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="w-full text-red-600 hover:bg-red-50 border-red-200 text-xs bg-transparent"
-                                      onClick={() => handleRemoveProductFromProject(product.id)}
-                                    >
-                                      <Minus className="h-3 w-3 mr-1" />
-                                      Remover do Projeto
+                                    <Button size="sm" variant="outline" className="w-full text-[10px] h-6 text-red-600 hover:bg-red-50 border-red-200 bg-transparent" onClick={() => handleRemoveProductFromProject(product.id)}>
+                                      <Minus className="h-2.5 w-2.5 mr-1" /> Remover
                                     </Button>
                                   </>
                                 ) : (
-                                  <Button
-                                    size="sm"
-                                    className="w-full btn-brand"
-                                    onClick={() => handleAddProductToProject(product)}
-                                  >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Adicionar ao Projeto
+                                  <Button size="sm" className="w-full h-6 text-[10px] btn-brand" onClick={() => handleAddProductToProject(product)}>
+                                    <Plus className="h-2.5 w-2.5 mr-1" /> Adicionar
                                   </Button>
                                 )}
                               </div>
@@ -1064,29 +1050,225 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
                         )
                       })}
                     </div>
+
+                    {filteredCatalogProducts.length === 0 && (
+                      <div className="text-center py-12 text-gray-400 text-sm">Nenhum produto encontrado</div>
+                    )}
                   </div>
                 </div>
 
-                {/* Footer - Made compact */}
+                {/* Catalog Footer */}
                 <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900/50">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Selecionado:</span>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total selecionado:</span>
+                    <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
                       {formatCurrency(calculateTotal())}
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setShowCatalog(false)} className="flex-1 h-9">
-                      Voltar
+                    <Button variant="outline" onClick={() => setShowCatalog(false)} className="flex-1 h-9 text-xs">
+                      ← Voltar ao formulário
                     </Button>
                     <Button
-                      onClick={handleContinueToCheckout}
+                      onClick={() => { setShowCatalog(false); setShowCart(true); }}
                       disabled={selectedProducts.length === 0}
-                      className="flex-1 h-9 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                      className="flex-1 h-9 text-xs bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
                     >
-                      Continuar ({selectedProducts.length})
+                      <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                      Ver Carrinho ({selectedProducts.length})
                     </Button>
                   </div>
+                </div>
+              </>
+            ) : showCart ? (
+              <>
+                {/* Cart View Header */}
+                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-violet-50/60 via-purple-50/40 to-blue-50/60">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg shadow-lg">
+                      <ShoppingCart className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Carrinho do Projeto</h2>
+                      <p className="text-xs text-gray-500">
+                        {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} · {formData.name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setShowCart(false); setShowCatalog(true); }}
+                      className="text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                    >
+                      ← Adicionar mais
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onClose}
+                      className="shrink-0 h-8 w-8"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cart Content */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+                  {selectedProducts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                        <ShoppingCart className="h-7 w-7 text-slate-400" />
+                      </div>
+                      <p className="text-slate-600 font-medium">Carrinho vazio</p>
+                      <p className="text-slate-400 text-sm mt-1">Adicione produtos para continuar</p>
+                      <Button
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => { setShowCart(false); setShowCatalog(true); }}
+                      >
+                        Ver catálogo
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedProducts.map((product) => {
+                        const qty = productQuantities[product.id] || product.quantity || 1
+                        const lineTotal = (product.finalPrice || 0) * qty
+                        return (
+                          <div
+                            key={product.id}
+                            className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-start gap-3"
+                          >
+                            {/* Icon */}
+                            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center shrink-0 border border-slate-100">
+                              {product.image ? (
+                                <img src={product.image} alt={product.name} className="w-full h-full object-cover rounded-lg" />
+                              ) : (
+                                <Package className="h-5 w-5 text-blue-500" />
+                              )}
+                            </div>
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 line-clamp-1">{product.name}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{product.category}</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Unit.: {formatCurrency(product.finalPrice || 0)}
+                              </p>
+                            </div>
+                            {/* Qty + price + remove */}
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProductFromProject(product.id)}
+                                className="text-red-400 hover:text-red-600 transition-colors"
+                                title="Remover"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                              <div className="flex items-center gap-1 border border-slate-200 rounded-lg overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDecreaseQuantity(product.id)}
+                                  className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 text-slate-600"
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </button>
+                                <span className="w-8 text-center text-sm font-semibold text-slate-900">{qty}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleIncreaseQuantity(product.id)}
+                                  className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 text-slate-600"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <p className="text-sm font-bold text-slate-900">{formatCurrency(lineTotal)}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Price Summary */}
+                  {selectedProducts.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                      <p className="text-sm font-semibold text-slate-700">Resumo do Pedido</p>
+                      <div className="space-y-2">
+                        {selectedProducts.map((p) => {
+                          const qty = productQuantities[p.id] || p.quantity || 1
+                          return (
+                            <div key={p.id} className="flex justify-between text-xs text-slate-600">
+                              <span className="truncate flex-1 pr-2">{p.name} × {qty}</span>
+                              <span className="shrink-0">{formatCurrency((p.finalPrice || 0) * qty)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="border-t border-slate-200 pt-2 space-y-1">
+                        {formLifecycle === "Mensal" ? (
+                          <>
+                            <div className="flex justify-between text-xs text-slate-500">
+                              <span>Tipo de cobrança</span>
+                              <span className="font-medium text-blue-600">Recorrente Mensal</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-500">
+                              <span>Dia de cobrança</span>
+                              <span>Dia {formBillingDay}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex justify-between text-xs text-slate-500">
+                            <span>Tipo</span>
+                            <span className="font-medium text-slate-700">Pagamento Único</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-base font-bold text-slate-900 pt-1">
+                          <span>Total</span>
+                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
+                            {formatCurrency(calculateTotal())}
+                            {formLifecycle === "Mensal" && <span className="text-xs font-normal text-slate-500">/mês</span>}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cart Footer */}
+                <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSaveDraft}
+                      className="flex-1 h-9 text-xs"
+                    >
+                      <Edit className="h-3.5 w-3.5 mr-1.5" />
+                      Salvar Rascunho
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowReview(true)}
+                      disabled={selectedProducts.length === 0}
+                      className="flex-1 h-9 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1.5" />
+                      Revisar Pedido
+                    </Button>
+                  </div>
+                  <Button
+                    onClick={handleContinueToCheckout}
+                    disabled={selectedProducts.length === 0}
+                    className="w-full h-10 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold"
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Ir para Checkout ({selectedProducts.length})
+                  </Button>
                 </div>
               </>
             ) : (
@@ -2103,7 +2285,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
       <ProductSelectionModal
         open={showProductModal}
         onClose={() => setShowProductModal(false)}
-        onAddProducts={handleAddProductsFromModal}
+        onAddProducts={handleProductsFromModal}
         selectedProductIds={selectedProducts.map((p) => p.id)}
       />
 
@@ -2296,6 +2478,163 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData }
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Draft Confirmation Dialog */}
+      <Dialog open={showDraftConfirm} onOpenChange={setShowDraftConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Salvar como Rascunho?</DialogTitle>
+            <DialogDescription>
+              O projeto <strong>"{formData.name || "Novo Projeto"}"</strong> será salvo com os{" "}
+              {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} selecionado
+              {selectedProducts.length !== 1 ? "s" : ""}. Você pode continuar depois.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowDraftConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white"
+              onClick={handleConfirmDraft}
+            >
+              <FileEdit className="h-4 w-4 mr-2" />
+              Confirmar Rascunho
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Review Modal */}
+      <Dialog open={showReview} onOpenChange={setShowReview}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-blue-600" />
+              Revisão do Pedido
+            </DialogTitle>
+            <DialogDescription>Confirme todos os detalhes antes de finalizar</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Project info */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dados do Projeto</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                <div>
+                  <p className="text-xs text-slate-400">Projeto</p>
+                  <p className="font-medium text-slate-900 truncate">{formData.name || ""}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Tipo</p>
+                  <p className="font-medium text-slate-900">{formLifecycle}</p>
+                </div>
+                {formData.client_id && (
+                  <div>
+                    <p className="text-xs text-slate-400">Cliente</p>
+                    <p className="font-medium text-slate-900 truncate">
+                      {clients.find((c) => String(c.id) === formData.client_id)?.name || ""}
+                    </p>
+                  </div>
+                )}
+                {formData.start_date && (
+                  <div>
+                    <p className="text-xs text-slate-400">Início</p>
+                    <p className="font-medium text-slate-900">
+                      {new Date(formData.start_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Products list */}
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Produtos Selecionados ({selectedProducts.length})
+                </p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {selectedProducts.map((product) => {
+                  const qty = productQuantities[product.id] || product.quantity || 1
+                  const lineTotal = (product.finalPrice || 0) * qty
+                  return (
+                    <div key={product.id} className="flex items-center justify-between px-4 py-3 gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">{product.name}</p>
+                        <p className="text-xs text-slate-400">{product.category} · Qtd: {qty}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold text-slate-900">{formatCurrency(lineTotal)}</p>
+                        <p className="text-xs text-slate-400">unit. {formatCurrency(product.finalPrice || 0)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+                {selectedProducts.length === 0 && (
+                  <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum produto adicionado</p>
+                )}
+              </div>
+            </div>
+
+            {/* Financial summary */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2.5">
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Resumo Financeiro</p>
+              <div className="space-y-1.5">
+                {selectedProducts.map((p) => {
+                  const qty = productQuantities[p.id] || p.quantity || 1
+                  return (
+                    <div key={p.id} className="flex justify-between text-xs text-slate-600">
+                      <span className="truncate flex-1 pr-2">{p.name} × {qty}</span>
+                      <span>{formatCurrency((p.finalPrice || 0) * qty)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="border-t border-blue-200 pt-2 space-y-1.5">
+                {formLifecycle === "Mensal" ? (
+                  <>
+                    <div className="flex justify-between text-xs text-blue-700">
+                      <span>Cobranças mensais</span>
+                      <span className="font-medium">Dia {formBillingDay} de cada mês</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold text-blue-900">
+                      <span>Total/mês</span>
+                      <span>{formatCurrency(calculateTotal())}/mês</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs text-blue-700">
+                      <span>Tipo de pagamento</span>
+                      <span className="font-medium">Pagamento Único</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold text-blue-900">
+                      <span>Total</span>
+                      <span>{formatCurrency(calculateTotal())}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => setShowReview(false)}>
+              ← Voltar ao Carrinho
+            </Button>
+            <Button
+              disabled={selectedProducts.length === 0}
+              className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+              onClick={() => { setShowReview(false); handleContinueToCheckout(); }}
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Confirmar e ir ao Checkout
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

@@ -10,10 +10,12 @@ import { useToast } from "@/hooks/use-toast"
 import {
   FolderKanban, Mail, Calendar, DollarSign, User, AlertCircle, Check, Camera, ZoomIn, Trash2, Crosshair,
   UserPlus, Search, Building2, ShoppingBag, Package, X as XIcon,
+  Save, Eye, ArrowLeft, CreditCard, Percent, TrendingUp, ShoppingCart,
 } from "lucide-react"
 import { mockCompaniesList, mockClientsByCompany, mockUsersByCompany } from "@/lib/mock-companies"
 import type { MockClientItem } from "@/lib/mock-companies"
 import { cn } from "@/lib/utils"
+import { apiClient } from "@/lib/api-client"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +30,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+
+import { ProductCatalogView, type CatalogSelectedProduct } from "@/components/product-catalog-view"
+import { CheckoutFlow } from "@/components/checkout-flow"
+import type { CheckoutData } from "@/components/checkout-flow"
 
 // ── Project status types & config ─────────────────────────────────────────────
 type ProjectStatus =
@@ -94,6 +100,14 @@ interface ProjectCreateNewPanelProps {
   companyId?: number
   /** When true, empresa field becomes a dropdown (admin-projetos mode) */
   allowCompanySelect?: boolean
+  /** Resume a draft: pre-load these products into the catalog step */
+  draftProducts?: CatalogSelectedProduct[]
+  draftProductQuantities?: Record<string, number>
+  draftCommissions?: Record<string, number>
+  /** The backend project ID of the draft being resumed */
+  draftProjectId?: string | number
+  /** If true, skip straight to checkout step */
+  resumeToCheckout?: boolean
 }
 
 interface FormData {
@@ -138,6 +152,8 @@ const EMPTY_FORM: FormData = {
 export function ProjectCreateNewPanel({
   open, onOpenChange, onCreate, initialData, cloneMode = false,
   companyName, companyId: companyIdProp, allowCompanySelect = false,
+  draftProducts, draftProductQuantities, draftCommissions,
+  draftProjectId, resumeToCheckout,
 }: ProjectCreateNewPanelProps) {
   const { toast } = useToast()
   const { sidebarWidth } = useSidebar()
@@ -158,23 +174,15 @@ export function ProjectCreateNewPanel({
   const [newClientEmail, setNewClientEmail] = useState("")
   const [localClients, setLocalClients] = useState<MockClientItem[]>([])
 
-  // Products confirmation + step state
-  const [showProductsDialog, setShowProductsDialog] = useState(false)
+  // Products catalog + cart state
   const [showProductsStep, setShowProductsStep] = useState(false)
-  const [productSearch, setProductSearch] = useState("")
-  const [selectedProduct, setSelectedProduct] = useState<{name:string;price:number} | null>(null)
-  const [productQty, setProductQty] = useState(1)
-
-  const FAKE_PRODUCTS = [
-    { name: "Gestão de Redes Sociais", price: 2500 },
-    { name: "Criação de Site Institucional", price: 8000 },
-    { name: "Identidade Visual Completa", price: 5500 },
-    { name: "SEO e Tráfego Pago", price: 3200 },
-    { name: "Produção de Conteúdo Mensal", price: 1800 },
-    { name: "Branding & Posicionamento", price: 6000 },
-    { name: "Desenvolvimento de E-commerce", price: 12000 },
-    { name: "Consultoria Estratégica", price: 4500 },
-  ]
+  const [showReview, setShowReview] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [selectedProducts, setSelectedProducts] = useState<CatalogSelectedProduct[]>([])
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({})
+  const [productCommissions, setProductCommissions] = useState<Record<string, number>>({})
+  const [activeReviewTab, setActiveReviewTab] = useState<"resumo" | "comissoes">("resumo")
+  const [showNextStepModal, setShowNextStepModal] = useState(false)
 
   // Avatar / crop states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -218,11 +226,25 @@ export function ProjectCreateNewPanel({
       setShowNewClientForm(false)
       setNewClientName("")
       setNewClientEmail("")
-      setShowProductsDialog(false)
       setShowProductsStep(false)
-      setSelectedProduct(null)
-      setProductQty(1)
-      setProductSearch("")
+      setShowReview(false)
+      setShowCheckout(false)
+      setSelectedProducts([])
+      setProductQuantities({})
+      setProductCommissions({})
+      setActiveReviewTab("resumo")
+      setShowNextStepModal(false)
+      // Hydrate from draft props if resuming
+      if (draftProducts && draftProducts.length > 0) {
+        setSelectedProducts(draftProducts)
+        setProductQuantities(draftProductQuantities ?? {})
+        setProductCommissions(draftCommissions ?? {})
+        setShowProductsStep(true)
+      }
+      if (resumeToCheckout) {
+        setShowProductsStep(true)
+        setShowCheckout(true)
+      }
     }
   }, [open])
 
@@ -252,7 +274,7 @@ export function ProjectCreateNewPanel({
 
   const handleSubmit = () => {
     if (!validateForm()) { setSubmitAttempted(true); return }
-    setShowProductsDialog(true)
+    setShowNextStepModal(true)
   }
 
   const buildProject = (status: string, products?: {name:string;price:number;qty:number}[]) => ({
@@ -287,19 +309,166 @@ export function ProjectCreateNewPanel({
 
   const confirmSubmit = async (status: string, products?: {name:string;price:number;qty:number}[]) => {
     setLoading(true)
-    setShowProductsDialog(false)
     setShowProductsStep(false)
+    setShowReview(false)
+    setShowCheckout(false)
     try {
-      const project = buildProject(status, products)
-      await new Promise((r) => setTimeout(r, 400))
+      const budgetValue = parseFloat(formData.orcamento.replace(/[^\d.,]/g, "").replace(",", ".")) || 0
+      const payload: any = {
+        title: formData.nome,
+        type: formData.tipo,
+        agency: resolvedCompanyName || formData.agencia,
+        consultant: formData.consultor,
+        consultant_email: formData.emailConsultor,
+        start_date: formData.dataInicio,
+        end_date: formData.prazo,
+        budget: budgetValue,
+        value: budgetValue,
+        portfolio_permission: formData.permitePortfolio,
+        bitrix_sync: formData.sincronizadoBitrix,
+        description: formData.descricao,
+        status,
+        lifecycle: "avulso",
+        client_id: resolvedCompanyId ?? undefined,
+      }
+      const created: any = await apiClient.createProject(payload)
+      // Persist draft state to localStorage so the banner can restore it
+      if (status === "draft" || status === "awaiting-payment") {
+        const storageKey = `allka-draft-${created?.id ?? draftProjectId ?? Date.now()}`
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({
+            formData,
+            selectedProducts,
+            productQuantities,
+            productCommissions,
+            projectId: created?.id,
+            status,
+          }))
+        } catch (_) { /* quota exceeded – ignore */ }
+      }
       toast({ title: "Sucesso", description: cloneMode ? "Projeto clonado!" : "Projeto criado!" })
-      onCreate(project)
+      onCreate(created)
       onOpenChange(false)
-    } catch {
-      toast({ title: "Erro", description: "Falha ao criar projeto", variant: "destructive" })
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message || "Falha ao criar projeto", variant: "destructive" })
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Format helper ──
+  const formatCurrency = (value: number) =>
+    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+
+  // ── Product cart handlers ──
+  const handleAddProduct = (product: any) => {
+    const id = String(product.id)
+    setSelectedProducts((prev) => {
+      if (prev.find((p) => String(p.id) === id)) return prev
+      return [...prev, { ...product, id, quantity: 1 }]
+    })
+    setProductQuantities((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }))
+  }
+
+  const handleRemoveProduct = (productId: string) => {
+    setSelectedProducts((prev) => prev.filter((p) => String(p.id) !== productId))
+    setProductQuantities((prev) => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
+  }
+
+  const handleIncreaseProduct = (productId: string) => {
+    setProductQuantities((prev) => ({ ...prev, [productId]: (prev[productId] || 1) + 1 }))
+    setSelectedProducts((prev) =>
+      prev.map((p) => String(p.id) === productId ? { ...p, quantity: (p.quantity || 1) + 1 } : p)
+    )
+  }
+
+  const handleDecreaseProduct = (productId: string) => {
+    const currentQty = productQuantities[productId] || 1
+    if (currentQty <= 1) {
+      handleRemoveProduct(productId)
+    } else {
+      setProductQuantities((prev) => ({ ...prev, [productId]: prev[productId] - 1 }))
+      setSelectedProducts((prev) =>
+        prev.map((p) => String(p.id) === productId ? { ...p, quantity: p.quantity - 1 } : p)
+      )
+    }
+  }
+
+  const calculateTotal = () =>
+    selectedProducts.reduce((sum, p) => {
+      const qty = productQuantities[String(p.id)] || p.quantity || 1
+      return sum + (p.finalPrice * qty)
+    }, 0)
+
+  const handleSaveDraftNow = () => {
+    if (!formData.nome.trim()) {
+      toast({ title: "Nome obrigatório", description: "Informe o nome do projeto para salvar o rascunho.", variant: "destructive" })
+      return
+    }
+    const products = selectedProducts.map((p) => ({
+      name: p.name, price: p.finalPrice, qty: productQuantities[String(p.id)] || p.quantity || 1,
+    }))
+    confirmSubmit("draft", products)
+  }
+
+  const handleOpenReview = () => {
+    setActiveReviewTab("resumo")
+    setShowReview(true)
+  }
+
+  const calculateCommissionTotal = () =>
+    selectedProducts.reduce((sum, p) => {
+      const qty = productQuantities[String(p.id)] || p.quantity || 1
+      const pct = productCommissions[String(p.id)] || 0
+      return sum + (p.finalPrice * qty * pct / 100)
+    }, 0)
+
+  const calculateClientTotal = () => calculateTotal() + calculateCommissionTotal()
+
+  const getWeightedCommissionRate = () => {
+    const total = calculateTotal()
+    if (total === 0) return 0
+    return (calculateCommissionTotal() / total) * 100
+  }
+
+  const buildPreselectedClient = () => ({
+    name: formData.cliente,
+    email: formData.emailConsultor,
+    phone: "",
+    company: formData.clienteCnpj || formData.cliente,
+  })
+
+  const convertProductsToCartItems = () =>
+    selectedProducts.map((p) => ({
+      id: String(p.id),
+      product: {
+        id: String(p.id),
+        name: p.name,
+        description: p.description || "",
+        shortDescription: p.description || "",
+        category: p.category || "",
+        tags: [],
+        basePrice: p.finalPrice || 0,
+        complexity: "basic" as const,
+        visibility: { company: true, agency: true, partner: true, inHouse: true },
+        variations: [],
+        addons: [],
+        stats: { contractCount: 0, averageRating: 0, completionTime: "" },
+        demonstrations: [],
+        image: p.image || "",
+      },
+      quantity: productQuantities[String(p.id)] || p.quantity || 1,
+    }))
+
+  const handleCheckoutComplete = (_data: CheckoutData) => {
+    const products = selectedProducts.map((p) => ({
+      name: p.name, price: p.finalPrice, qty: productQuantities[String(p.id)] || p.quantity || 1,
+    }))
+    confirmSubmit("awaiting-payment", products)
   }
 
   // ── Avatar handlers ──
@@ -879,141 +1048,466 @@ export function ProjectCreateNewPanel({
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button
-              className="btn-brand"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? "Salvando..." : cloneMode ? "Clonar Projeto" : "Criar Projeto"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSaveDraftNow}
+                disabled={loading || !formData.nome.trim()}
+                className="gap-1.5"
+              >
+                <Save className="h-4 w-4" />
+                Salvar Rascunho
+              </Button>
+              <Button
+                className="btn-brand"
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? "Salvando..." : cloneMode ? "Clonar Projeto" : "Próximo"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Products Confirmation Dialog */}
-      <AlertDialog open={showProductsDialog} onOpenChange={setShowProductsDialog}>
-        <AlertDialogContent className="max-w-sm">
+      {/* Decision Modal after "Próximo" */}
+      <AlertDialog open={showNextStepModal} onOpenChange={setShowNextStepModal}>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-violet-600" />
-              Adicionar Produtos?
-            </AlertDialogTitle>
+            <AlertDialogTitle>O que deseja fazer?</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja adicionar produtos ao projeto <strong>{formData.nome}</strong> agora ou deixar para depois?
+              Escolha como deseja prosseguir com o projeto.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+          <div className="flex flex-col gap-3 py-2">
             <Button
-              className="btn-brand w-full"
-              onClick={() => { setShowProductsDialog(false); setShowProductsStep(true) }}
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => {
+                setShowNextStepModal(false)
+                handleSaveDraftNow()
+              }}
             >
-              <ShoppingBag className="h-4 w-4 mr-2" />
-              Adicionar produtos agora
+              <Save className="h-5 w-5 text-muted-foreground" />
+              <div className="text-left">
+                <div className="font-medium">Salvar Rascunho</div>
+                <div className="text-xs text-muted-foreground">Salvar projeto como rascunho e continuar depois</div>
+              </div>
             </Button>
-            <AlertDialogCancel
-              className="w-full mt-0"
-              onClick={() => confirmSubmit("draft")}
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => {
+                setShowNextStepModal(false)
+                setShowProductsStep(true)
+              }}
             >
-              Deixar para depois (Rascunho)
-            </AlertDialogCancel>
+              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+              <div className="text-left">
+                <div className="font-medium">Adicionar Produtos</div>
+                <div className="text-xs text-muted-foreground">Selecionar produtos e serviços para o projeto</div>
+              </div>
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Products Step (inline overlay on panel) */}
-      {showProductsStep && (
+      {/* Catalog/Products Step */}
+      {showProductsStep && !showCheckout && (
         <div className="fixed top-0 z-[60] h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 shadow-2xl"
           style={{ left: `${sidebarWidth}px`, right: 0 }}>
-          <ModalBrandHeader
-            title="Adicionar Produto"
-            subtitle={`Projeto: ${formData.nome}`}
-            onClose={() => { setShowProductsStep(false); setShowProductsDialog(true) }}
-          />
-          <div className="flex-1 overflow-y-auto px-[50px] py-[40px] bg-slate-100">
-            <div className="max-w-lg mx-auto space-y-4">
-              <p className="text-sm text-slate-500">Selecione um produto e defina a quantidade. Mais produtos poderão ser adicionados após a criação do projeto.</p>
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                <Input
-                  placeholder="Buscar produto..."
-                  value={productSearch}
-                  onChange={e => setProductSearch(e.target.value)}
-                  className="pl-9 h-9 bg-white"
-                />
+          {/* Header */}
+          <div className="relative h-[90px] flex-shrink-0 bg-linear-to-r from-violet-700 to-indigo-700 flex items-center justify-between px-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                <Package className="h-5 w-5 text-white" />
               </div>
-
-              {/* Product list */}
-              <div className="space-y-2">
-                {FAKE_PRODUCTS.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
-                  <button
-                    key={p.name}
-                    type="button"
-                    onClick={() => setSelectedProduct(p)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all",
-                      selectedProduct?.name === p.name
-                        ? "border-violet-500 bg-violet-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-violet-300"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "h-8 w-8 rounded-lg flex items-center justify-center",
-                        selectedProduct?.name === p.name ? "bg-violet-100" : "bg-slate-100"
-                      )}>
-                        <Package className={cn("h-4 w-4", selectedProduct?.name === p.name ? "text-violet-600" : "text-slate-400")} />
-                      </div>
-                      <span className="text-sm font-medium text-slate-800">{p.name}</span>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-600">
-                      R$ {p.price.toLocaleString("pt-BR")}
-                    </span>
-                  </button>
-                ))}
+              <div>
+                <p className="text-sm font-bold text-white">Selecionar Produtos</p>
+                <p className="text-xs text-white/70">{formData.nome || "Novo Projeto"}</p>
               </div>
-
-              {/* Qty */}
-              {selectedProduct && (
-                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Produto selecionado</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-800">{selectedProduct.name}</span>
-                    <span className="text-sm text-violet-700 font-bold">R$ {(selectedProduct.price * productQty).toLocaleString("pt-BR")}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Label className="text-xs text-slate-500">Quantidade:</Label>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setProductQty(q => Math.max(1, q - 1))}
-                        className="h-7 w-7 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-lg leading-none">−</button>
-                      <span className="w-8 text-center text-sm font-semibold">{productQty}</span>
-                      <button type="button" onClick={() => setProductQty(q => q + 1)}
-                        className="h-7 w-7 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-lg leading-none">+</button>
-                    </div>
-                  </div>
-                </div>
-              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSaveDraftNow}
+                disabled={loading || !formData.nome.trim()}
+                className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-white/15 border border-white/30 text-white text-xs font-medium hover:bg-white/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Salvar Rascunho
+              </button>
+              <button
+                onClick={() => setShowProductsStep(false)}
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 border border-white/30 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 shrink-0">
-            <Button variant="outline" onClick={() => { setShowProductsStep(false); setShowProductsDialog(true) }}>
-              Voltar
-            </Button>
-            <Button
-              className="btn-brand"
-              disabled={loading}
-              onClick={() => {
-                const products = selectedProduct
-                  ? [{ name: selectedProduct.name, price: selectedProduct.price, qty: productQty }]
-                  : []
-                confirmSubmit("awaiting-payment", products)
-              }}
-            >
-              {loading ? "Criando..." : "Concluir e Criar Projeto"}
-            </Button>
+          {/* Catalog fills remaining space */}
+          <div className="flex-1 overflow-hidden">
+            <ProductCatalogView
+              mode="panel"
+              panelTitle={`Produtos — ${formData.nome || "Novo Projeto"}`}
+              selectedProducts={selectedProducts}
+              productQuantities={productQuantities}
+              onAdd={handleAddProduct}
+              onRemove={handleRemoveProduct}
+              onIncrease={handleIncreaseProduct}
+              onDecrease={handleDecreaseProduct}
+              onConfirm={handleOpenReview}
+            />
           </div>
+
+          {/* Review Modal Overlay (inside this panel so z-index works correctly) */}
+          {showReview && (
+            <div className="absolute inset-0 z-10 bg-black/50 flex items-center justify-center p-6">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[calc(100%-48px)] flex flex-col overflow-hidden">
+
+                {/* Review Header */}
+                <div className="flex-shrink-0 bg-linear-to-r from-violet-700 to-indigo-700 px-6 py-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Eye className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white">Revisão do Projeto</h2>
+                        <p className="text-xs text-white/70">Confira os detalhes antes do checkout</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowReview(false)}
+                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/15 border border-white/30 text-white/70 hover:bg-white/25 hover:text-white transition-colors"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Tabs */}
+                  <div className="flex gap-1 mt-4">
+                    {(["resumo", "comissoes"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveReviewTab(tab)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                          activeReviewTab === tab
+                            ? "bg-white text-violet-700"
+                            : "text-white/70 hover:text-white hover:bg-white/15"
+                        )}
+                      >
+                        {tab === "resumo" ? <Eye className="h-3.5 w-3.5" /> : <Percent className="h-3.5 w-3.5" />}
+                        {tab === "resumo" ? "Resumo" : "Comissões"}
+                        {tab === "comissoes" && calculateCommissionTotal() > 0 && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-400 text-white text-[10px] font-bold">
+                            +{formatCurrency(calculateCommissionTotal())}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
+
+                  {/* ── TAB: RESUMO ── */}
+                  {activeReviewTab === "resumo" && (
+                    <>
+                      {/* Project Info */}
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Dados do Projeto</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] text-slate-400">Nome</p>
+                            <p className="text-sm font-semibold text-slate-800">{formData.nome || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400">Tipo</p>
+                            <p className="text-sm font-medium text-slate-700">{formData.tipo || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400">Cliente</p>
+                            <p className="text-sm font-medium text-slate-700">{formData.cliente || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400">Empresa</p>
+                            <p className="text-sm font-medium text-slate-700">{resolvedCompanyName || formData.agencia || "—"}</p>
+                          </div>
+                          {formData.dataInicio && (
+                            <div>
+                              <p className="text-[10px] text-slate-400">Início</p>
+                              <p className="text-sm font-medium text-slate-700">{formData.dataInicio}</p>
+                            </div>
+                          )}
+                          {formData.prazo && (
+                            <div>
+                              <p className="text-[10px] text-slate-400">Prazo</p>
+                              <p className="text-sm font-medium text-slate-700">{formData.prazo}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Products list */}
+                      {selectedProducts.length > 0 ? (
+                        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                            <p className="text-xs font-semibold text-slate-700">Produtos Selecionados</p>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold">
+                              {selectedProducts.length} {selectedProducts.length === 1 ? "item" : "itens"}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-slate-100">
+                            {selectedProducts.map((product) => {
+                              const id = String(product.id)
+                              const qty = productQuantities[id] || product.quantity || 1
+                              const lineTotal = product.finalPrice * qty
+                              const pct = productCommissions[id] || 0
+                              const commission = lineTotal * pct / 100
+                              return (
+                                <div key={id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                                      <Package className="h-4 w-4 text-violet-500" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-800">{product.name}</p>
+                                      <p className="text-xs text-slate-400">{product.category} &middot; Qtd: {qty}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-semibold text-slate-800">{formatCurrency(lineTotal)}</p>
+                                    {pct > 0 && (
+                                      <p className="text-xs text-emerald-600 font-medium">+{pct}% comissão ({formatCurrency(commission)})</p>
+                                    )}
+                                    <p className="text-xs text-slate-400">unit. {formatCurrency(product.finalPrice)}</p>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center bg-white">
+                          <Package className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                          <p className="text-sm text-slate-400">Nenhum produto adicionado</p>
+                        </div>
+                      )}
+
+                      {/* Financial Summary */}
+                      {selectedProducts.length > 0 && (
+                        <div className="rounded-xl overflow-hidden border border-indigo-200">
+                          <div className="px-4 py-3 bg-linear-to-r from-indigo-600 to-violet-600">
+                            <p className="text-xs font-semibold text-white uppercase tracking-wider">Resumo Financeiro</p>
+                          </div>
+                          <div className="p-4 space-y-2 bg-linear-to-br from-indigo-50 to-violet-50">
+                            {selectedProducts.map((p) => {
+                              const id = String(p.id)
+                              const qty = productQuantities[id] || p.quantity || 1
+                              return (
+                                <div key={id} className="flex items-center justify-between text-xs text-indigo-800">
+                                  <span className="truncate mr-2">{p.name} × {qty}</span>
+                                  <span className="font-medium shrink-0">{formatCurrency(p.finalPrice * qty)}</span>
+                                </div>
+                              )
+                            })}
+                            {calculateCommissionTotal() > 0 && (
+                              <div className="flex items-center justify-between text-xs text-emerald-700 border-t border-indigo-200 pt-2 mt-1">
+                                <span>Comissões</span>
+                                <span className="font-semibold">+{formatCurrency(calculateCommissionTotal())}</span>
+                              </div>
+                            )}
+                            <div className="pt-2 mt-1 border-t border-indigo-200 space-y-1">
+                              {calculateCommissionTotal() > 0 && (
+                                <div className="flex items-center justify-between text-sm text-indigo-700">
+                                  <span className="font-medium">Total Agência</span>
+                                  <span className="font-semibold">{formatCurrency(calculateTotal())}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-bold text-indigo-900">
+                                  {calculateCommissionTotal() > 0 ? "Total Cliente" : "Total Geral"}
+                                </span>
+                                <span className="text-xl font-bold text-indigo-900">{formatCurrency(calculateClientTotal())}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── TAB: COMISSÕES ── */}
+                  {activeReviewTab === "comissoes" && (
+                    <>
+                      {selectedProducts.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center bg-white">
+                          <Percent className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                          <p className="text-sm text-slate-400">Nenhum produto para configurar comissão</p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-500">Defina a porcentagem de comissão por produto. O valor da comissão será adicionado ao preço cobrado do cliente.</p>
+
+                          {/* Per-product commission rows */}
+                          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                              <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                <span className="col-span-4">Produto</span>
+                                <span className="col-span-2 text-right">Custo</span>
+                                <span className="col-span-2 text-center">Comissão %</span>
+                                <span className="col-span-2 text-right">Valor Com.</span>
+                                <span className="col-span-2 text-right">Preço Cliente</span>
+                              </div>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                              {selectedProducts.map((product) => {
+                                const id = String(product.id)
+                                const qty = productQuantities[id] || product.quantity || 1
+                                const baseCost = product.finalPrice * qty
+                                const pct = productCommissions[id] || 0
+                                const commissionValue = baseCost * pct / 100
+                                const clientPrice = baseCost + commissionValue
+                                return (
+                                  <div key={id} className="grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-slate-50 transition-colors">
+                                    <div className="col-span-4 flex items-center gap-2 min-w-0">
+                                      <div className="h-7 w-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                                        <Package className="h-3.5 w-3.5 text-violet-500" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-medium text-slate-800 truncate">{product.name}</p>
+                                        <p className="text-[10px] text-slate-400">Qtd: {qty}</p>
+                                      </div>
+                                    </div>
+                                    <div className="col-span-2 text-right">
+                                      <p className="text-xs font-semibold text-slate-700">{formatCurrency(baseCost)}</p>
+                                    </div>
+                                    <div className="col-span-2 flex items-center justify-center">
+                                      <div className="relative w-full max-w-[72px]">
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={200}
+                                          step={0.5}
+                                          value={pct === 0 ? "" : pct}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const v = parseFloat(e.target.value) || 0
+                                            setProductCommissions((prev) => ({ ...prev, [id]: v }))
+                                          }}
+                                          className="w-full h-7 text-xs text-center rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-4"
+                                        />
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">%</span>
+                                      </div>
+                                    </div>
+                                    <div className="col-span-2 text-right">
+                                      <p className={cn("text-xs font-semibold", commissionValue > 0 ? "text-emerald-600" : "text-slate-400")}>
+                                        {commissionValue > 0 ? formatCurrency(commissionValue) : "—"}
+                                      </p>
+                                    </div>
+                                    <div className="col-span-2 text-right">
+                                      <p className="text-xs font-bold text-slate-800">{formatCurrency(clientPrice)}</p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Commission Summary */}
+                          <div className="rounded-xl overflow-hidden border border-emerald-200">
+                            <div className="px-4 py-3 bg-linear-to-r from-emerald-600 to-teal-600 flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-white" />
+                              <p className="text-xs font-semibold text-white uppercase tracking-wider">Resumo de Comissões</p>
+                            </div>
+                            <div className="p-4 bg-linear-to-br from-emerald-50 to-teal-50 space-y-2">
+                              <div className="flex items-center justify-between text-xs text-slate-600">
+                                <span>Total Custo (Agência)</span>
+                                <span className="font-semibold text-slate-800">{formatCurrency(calculateTotal())}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-emerald-700">
+                                <span>Total Comissões</span>
+                                <span className="font-semibold">+{formatCurrency(calculateCommissionTotal())}</span>
+                              </div>
+                              <div className="pt-2 border-t border-emerald-200 flex items-center justify-between">
+                                <span className="text-sm font-bold text-slate-900">Total Cliente</span>
+                                <span className="text-lg font-bold text-emerald-700">{formatCurrency(calculateClientTotal())}</span>
+                              </div>
+                              {calculateCommissionTotal() > 0 && (
+                                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                                  <span>Margem média</span>
+                                  <span className="font-semibold text-emerald-600">
+                                    {(calculateCommissionTotal() / calculateTotal() * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t bg-white">
+                  <button
+                    onClick={() => setShowReview(false)}
+                    className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Voltar ao Catálogo
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setShowReview(false); handleSaveDraftNow() }}
+                      disabled={loading}
+                      className="gap-1.5"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      Salvar Rascunho
+                    </Button>
+                    <Button
+                      className="btn-brand gap-1.5"
+                      onClick={() => { setShowReview(false); setShowCheckout(true) }}
+                      disabled={selectedProducts.length === 0}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Confirmar e ir ao Checkout
+                    </Button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* Checkout Step */}
+      {showCheckout && (
+        <div className="fixed top-0 z-[70] h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 shadow-2xl overflow-hidden"
+          style={{ left: `${sidebarWidth}px`, right: 0 }}>
+          <CheckoutFlow
+            items={convertProductsToCartItems()}
+            onBack={() => setShowCheckout(false)}
+            onComplete={handleCheckoutComplete}
+            preselectedClient={buildPreselectedClient()}
+            preselectedProject={buildProject("awaiting-payment")}
+            payerType="agency"
+            presetCommissionRate={getWeightedCommissionRate()}
+          />
         </div>
       )}
     </>

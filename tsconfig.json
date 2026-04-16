@@ -32,6 +32,7 @@
   ],
   "exclude": [
     "node_modules",
+    "backend",
     "app/api",
     "ARQUIVOS_NAO_USADOS_NO_MOMENTO"
   ]

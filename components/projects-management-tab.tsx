@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { mockProjects as allPlatformProjects, addMockProject } from "@/lib/mock-projects"
+import { useProjects } from "@/hooks/useProjects"
+import type { FrontendProject } from "@/lib/project-adapter"
 
 interface ProjectsManagementTabProps {
   company: {
@@ -39,14 +40,12 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   const [cloneInitialData, setCloneInitialData] = useState<any>(null)
   const [quickStatusFilter, setQuickStatusFilter] = useState<string | null>(null)
 
-  const [companyProjects, setCompanyProjects] = useState(() =>
-    allPlatformProjects.filter((p) => p.companyId === parseInt(company.id))
-  )
+  const { projects: companyProjects, loading: projectsLoading, refetch: refetchProjects, setProjects: setCompanyProjects } = useProjects({ companyId: company.id })
 
   const handleProjectCreated = (project: any) => {
-    const withCompany = { ...project, companyId: parseInt(company.id) }
-    addMockProject(withCompany)
+    const withCompany = { ...project, companyId: parseInt(String(company.id)) }
     setCompanyProjects(prev => [...prev, withCompany])
+    refetchProjects()
   }
 
   const filteredProjects = useMemo(() => {

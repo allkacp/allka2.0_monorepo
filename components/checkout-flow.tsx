@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, ArrowRight, Check, Building2, FolderKanban, ShoppingBag, CreditCard, Smartphone, FileText, Wallet, Coins } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Building2, FolderKanban, ShoppingBag, CreditCard, Smartphone, FileText, Wallet, Coins, Copy, Users, Percent } from 'lucide-react'
 import type { Client, Project, CreateClientRequest, CreateProjectRequest } from "@/types/api"
 import type { CartItem } from "@/contexts/cart-context"
 
@@ -19,6 +19,9 @@ interface CheckoutFlowProps {
   onComplete: (data: CheckoutData) => void
   preselectedClient?: Client | CreateClientRequest
   preselectedProject?: Project | CreateProjectRequest
+  payerType?: "agency" | "company" | "nomad"
+  savedCards?: Array<{ id: string; lastDigits: string; holder: string; expiry: string; brand: string }>
+  presetCommissionRate?: number
 }
 
 export interface CheckoutData {
@@ -27,6 +30,10 @@ export interface CheckoutData {
   isNewClient: boolean
   isNewProject: boolean
   payment: PaymentData
+  payerMode: "self" | "client"
+  commissionRate: number
+  clientTotal: number
+  checkoutLinks: { self: string; client: string }
 }
 
 interface PaymentData {
@@ -96,7 +103,9 @@ const mockProjects: Project[] = [
   },
 ]
 
-export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, preselectedProject }: CheckoutFlowProps) {
+const TEST_CARD = { id: "test-card-1111", lastDigits: "1111", holder: "TESTE ALLKA", expiry: "12/28", brand: "Visa" }
+
+export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, preselectedProject, payerType, savedCards, presetCommissionRate }: CheckoutFlowProps) {
   const [step, setStep] = useState(1)
   const [clientMode, setClientMode] = useState<"existing" | "new">("existing")
   const [projectMode, setProjectMode] = useState<"existing" | "new">("existing")
@@ -148,6 +157,15 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
     allkoins: 1250,
   }
 
+  // Payer mode, commission, saved cards
+  const [payerMode, setPayerMode] = useState<"self" | "client">("self")
+  const [commissionRate, setCommissionRate] = useState(presetCommissionRate ?? 0)
+  const [selectedSavedCardId, setSelectedSavedCardId] = useState<string | null>(null)
+  const [checkoutSlug] = useState(() => Math.random().toString(36).slice(2, 10))
+  const allSavedCards = import.meta.env.VITE_USE_MOCKS === "true"
+    ? [...(savedCards ?? []), TEST_CARD]
+    : (savedCards ?? [])
+
   useEffect(() => {
     if (preselectedClient) {
       if ('id' in preselectedClient) {
@@ -170,6 +188,21 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
   }, [preselectedClient, preselectedProject])
 
 
+  // Determine which steps to show based on preselected data
+  const skipClient = !!preselectedClient
+  const skipProject = !!preselectedProject
+  const activeSteps = [1, ...(skipClient ? [] : [2]), ...(skipProject ? [] : [3]), 4, 5]
+  const totalSteps = activeSteps.length
+  const logicalStep = activeSteps[step - 1] // map display position → logical step
+
+  useEffect(() => {
+    if (payerMode === "client" && (selectedPaymentType === "credits" || selectedPaymentType === "allkoins")) {
+      setSelectedPaymentType("credit_card")
+    }
+  }, [payerMode])
+
+  const getClientTotal = () => getTotalPrice() * (1 + commissionRate / 100)
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -185,8 +218,10 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
   const canProceedFromStep2 = clientMode === "existing" ? selectedClient !== null : newClient.name && newClient.email
   const canProceedFromStep3 = projectMode === "existing" ? selectedProject !== null : newProject.name
   const canProceedFromStep4 = () => {
+    if (payerMode === "client") return true
     if (paymentMethod === "single") {
       if (selectedPaymentType === "credit_card") {
+        if (selectedSavedCardId) return true
         return creditCard.cardNumber && creditCard.cardName && creditCard.expiryDate && creditCard.cvv
       }
       return true
@@ -197,12 +232,19 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
   }
 
   const handleComplete = () => {
+    const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`
+    const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}?comissao=${commissionRate}`
     const paymentData: PaymentData = {
-      totalAmount: getTotalPrice(),
+      totalAmount: payerMode === "client" ? getClientTotal() : getTotalPrice(),
       methods: [],
     }
 
-    if (paymentMethod === "single") {
+    if (payerMode === "client") {
+      paymentData.methods.push({
+        type: selectedPaymentType,
+        amount: getClientTotal(),
+      })
+    } else if (paymentMethod === "single") {
       paymentData.methods.push({
         type: selectedPaymentType,
         amount: getTotalPrice(),
@@ -226,28 +268,38 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
       isNewClient: clientMode === "new",
       isNewProject: projectMode === "new",
       payment: paymentData,
+      payerMode,
+      commissionRate,
+      clientTotal: getClientTotal(),
+      checkoutLinks: { self: selfLink, client: clientLink },
     }
     onComplete(checkoutData)
   }
 
+  const stepLabels: Record<number, string> = { 1: "Itens", 2: "Cliente", 3: "Projeto", 4: "Pagamento", 5: "Revisão" }
+
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center space-x-2 mb-6">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <div key={s} className="flex items-center">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-              s === step
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-                : s < step
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400"
-            }`}
-          >
-            {s < step ? <Check className="h-4 w-4" /> : s}
+      {activeSteps.map((logicalS, displayIdx) => {
+        const displayNum = displayIdx + 1
+        return (
+          <div key={logicalS} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
+                displayNum === step
+                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                  : displayNum < step
+                    ? "bg-green-500 text-white"
+                    : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400"
+              }`}
+              title={stepLabels[logicalS]}
+            >
+              {displayNum < step ? <Check className="h-4 w-4" /> : displayNum}
+            </div>
+            {displayIdx < activeSteps.length - 1 && <div className={`w-12 h-0.5 ${displayNum < step ? "bg-green-500" : "bg-gray-200 dark:bg-slate-700"}`} />}
           </div>
-          {s < 5 && <div className={`w-12 h-0.5 ${s < step ? "bg-green-500" : "bg-gray-200 dark:bg-slate-700"}`} />}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 
@@ -569,6 +621,7 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
 
   const renderStep4 = () => {
     const totalPrice = getTotalPrice()
+    const clientTotal = getClientTotal()
     const totalSplit = Object.values(splitPayments).reduce((sum, p) => sum + (p.enabled ? p.amount : 0), 0)
     const remaining = totalPrice - totalSplit
 
@@ -584,14 +637,95 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
           </div>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Valor Total</span>
-            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(totalPrice)}</span>
+        {/* Payer mode toggle */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Quem vai pagar?</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPayerMode("self")}
+              className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                payerMode === "self"
+                  ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                  : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+              }`}
+            >
+              <Wallet className="h-4 w-4" />
+              Eu mesmo (agência)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayerMode("client")}
+              className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                payerMode === "client"
+                  ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400"
+                  : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              Cliente paga
+            </button>
           </div>
         </div>
 
-        <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "single" | "split")}>
+        {/* Commission — hidden when preset from project panel */}
+        {presetCommissionRate == null && (
+          <div className="space-y-2">
+            <Label htmlFor="commission" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+              <Percent className="h-3.5 w-3.5" />
+              Comissão (%)
+            </Label>
+            <Input
+              id="commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={commissionRate}
+              onChange={(e) => setCommissionRate(Math.max(0, Math.min(100, Number(e.target.value))))}
+              placeholder="0"
+            />
+          </div>
+        )}
+
+        {/* Price summary */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <div className="space-y-1 text-sm">
+            {payerMode === "client" ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Valor base</span>
+                  <span className="font-medium">{formatCurrency(totalPrice)}</span>
+                </div>
+                {commissionRate > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">+ Comissão ({commissionRate.toFixed(1)}%)</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(clientTotal - totalPrice)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-blue-200 dark:border-blue-700 pt-1 mt-1">
+                  <span className="font-semibold text-gray-900 dark:text-white">Total para o cliente</span>
+                  <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    {formatCurrency(clientTotal)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-900 dark:text-white">Total</span>
+                <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                  {formatCurrency(totalPrice)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {payerMode === "self" ? (
+          <>
+            <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "single" | "split")}>
           <div className="flex items-center space-x-2 mb-3">
             <RadioGroupItem value="single" id="single-payment" />
             <Label htmlFor="single-payment" className="cursor-pointer">
@@ -610,7 +744,7 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
           <div className="space-y-4 pr-4">
             {paymentMethod === "single" ? (
               <>
-                <Select value={selectedPaymentType} onValueChange={(v) => setSelectedPaymentType(v as any)}>
+                <Select value={selectedPaymentType} onValueChange={(v) => { setSelectedPaymentType(v as any); setSelectedSavedCardId(null) }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o método de pagamento" />
                   </SelectTrigger>
@@ -650,47 +784,93 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
 
                 {selectedPaymentType === "credit_card" && (
                   <div className="space-y-3 mt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="card-number">Número do Cartão *</Label>
-                      <Input
-                        id="card-number"
-                        value={creditCard.cardNumber}
-                        onChange={(e) => setCreditCard({ ...creditCard, cardNumber: e.target.value })}
-                        placeholder="0000 0000 0000 0000"
-                        maxLength={19}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="card-name">Nome no Cartão *</Label>
-                      <Input
-                        id="card-name"
-                        value={creditCard.cardName}
-                        onChange={(e) => setCreditCard({ ...creditCard, cardName: e.target.value })}
-                        placeholder="Nome como está no cartão"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    {allSavedCards.length > 0 && (
                       <div className="space-y-2">
-                        <Label htmlFor="expiry">Validade *</Label>
-                        <Input
-                          id="expiry"
-                          value={creditCard.expiryDate}
-                          onChange={(e) => setCreditCard({ ...creditCard, expiryDate: e.target.value })}
-                          placeholder="MM/AA"
-                          maxLength={5}
-                        />
+                        <Label className="text-xs text-gray-500 dark:text-gray-400">Cartões salvos</Label>
+                        <div className="space-y-2">
+                          {allSavedCards.map((card) => (
+                            <button
+                              key={card.id}
+                              type="button"
+                              onClick={() => setSelectedSavedCardId(selectedSavedCardId === card.id ? null : card.id)}
+                              className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
+                                selectedSavedCardId === card.id
+                                  ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                                  : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
+                              }`}
+                            >
+                              <CreditCard className="h-4 w-4 shrink-0 text-gray-500" />
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {card.brand} •••• {card.lastDigits}
+                                </p>
+                                <p className="text-xs text-gray-500">{card.holder} · {card.expiry}</p>
+                              </div>
+                              {selectedSavedCardId === card.id && (
+                                <Check className="h-4 w-4 text-blue-600 shrink-0" />
+                              )}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSavedCardId(null)}
+                            className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
+                              selectedSavedCardId === null
+                                ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                                : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
+                            }`}
+                          >
+                            <CreditCard className="h-4 w-4 shrink-0 text-gray-500" />
+                            <span className="font-medium text-gray-700 dark:text-gray-300">+ Novo cartão</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cvv">CVV *</Label>
-                        <Input
-                          id="cvv"
-                          value={creditCard.cvv}
-                          onChange={(e) => setCreditCard({ ...creditCard, cvv: e.target.value })}
-                          placeholder="123"
-                          maxLength={4}
-                        />
+                    )}
+                    {selectedSavedCardId === null && (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="card-number">Número do Cartão *</Label>
+                          <Input
+                            id="card-number"
+                            value={creditCard.cardNumber}
+                            onChange={(e) => setCreditCard({ ...creditCard, cardNumber: e.target.value })}
+                            placeholder="0000 0000 0000 0000"
+                            maxLength={19}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="card-name">Nome no Cartão *</Label>
+                          <Input
+                            id="card-name"
+                            value={creditCard.cardName}
+                            onChange={(e) => setCreditCard({ ...creditCard, cardName: e.target.value })}
+                            placeholder="Nome como está no cartão"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="expiry">Validade *</Label>
+                            <Input
+                              id="expiry"
+                              value={creditCard.expiryDate}
+                              onChange={(e) => setCreditCard({ ...creditCard, expiryDate: e.target.value })}
+                              placeholder="MM/AA"
+                              maxLength={5}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="cvv">CVV *</Label>
+                            <Input
+                              id="cvv"
+                              value={creditCard.cvv}
+                              onChange={(e) => setCreditCard({ ...creditCard, cvv: e.target.value })}
+                              placeholder="123"
+                              maxLength={4}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
@@ -935,6 +1115,40 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
             )}
           </div>
         </ScrollArea>
+          </>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Selecione o método de pagamento disponível para o cliente:
+            </p>
+            <div className="space-y-2">
+              {(["credit_card", "pix", "boleto"] as const).map((type) => {
+                const icons = { credit_card: CreditCard, pix: Smartphone, boleto: FileText }
+                const labels = { credit_card: "Cartão de Crédito", pix: "Pix", boleto: "Boleto Bancário" }
+                const Icon = icons[type]
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSelectedPaymentType(type)}
+                    className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
+                      selectedPaymentType === type
+                        ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
+                        : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-gray-500" />
+                    <span className="font-medium text-gray-700 dark:text-gray-300">{labels[type]}</span>
+                    {selectedPaymentType === type && <Check className="h-4 w-4 text-purple-600 ml-auto shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              O cliente receberá um link de pagamento seguro com o método selecionado.
+            </p>
+          </div>
+        )}
       </div>
     )
   }
@@ -942,6 +1156,8 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
   const renderStep5 = () => {
     const client = clientMode === "existing" ? selectedClient : newClient
     const project = projectMode === "existing" ? selectedProject : newProject
+    const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`
+    const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}?comissao=${commissionRate}`
 
     return (
       <div className="space-y-4">
@@ -1071,6 +1287,52 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
                 </div>
               </div>
             </Card>
+
+            {/* Checkout Links */}
+            <Card className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
+              <div className="flex items-start space-x-3">
+                <Copy className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="flex-1 space-y-3">
+                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Links de Checkout</h4>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Seu link de pagamento</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
+                        {selfLink}
+                      </code>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 h-7 px-2"
+                        onClick={() => navigator.clipboard?.writeText(selfLink)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      Link para o cliente{commissionRate > 0 ? ` (com ${commissionRate}% de comissão)` : ""}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
+                        {clientLink}
+                      </code>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 h-7 px-2"
+                        onClick={() => navigator.clipboard?.writeText(clientLink)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
           </div>
         </ScrollArea>
       </div>
@@ -1085,11 +1347,11 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
       {/* Content with proper scrolling */}
       <ScrollArea className="flex-1">
         <div className="p-6">
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-          {step === 5 && renderStep5()}
+          {logicalStep === 1 && renderStep1()}
+          {logicalStep === 2 && renderStep2()}
+          {logicalStep === 3 && renderStep3()}
+          {logicalStep === 4 && renderStep4()}
+          {logicalStep === 5 && renderStep5()}
         </div>
       </ScrollArea>
 
@@ -1108,14 +1370,14 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
             </Button>
           )}
 
-          {step < 5 ? (
+          {step < totalSteps ? (
             <Button
               onClick={() => setStep(step + 1)}
               disabled={
-                (step === 1 && !canProceedFromStep1) ||
-                (step === 2 && !canProceedFromStep2) ||
-                (step === 3 && !canProceedFromStep3) ||
-                (step === 4 && !canProceedFromStep4())
+                (logicalStep === 1 && !canProceedFromStep1) ||
+                (logicalStep === 2 && !canProceedFromStep2) ||
+                (logicalStep === 3 && !canProceedFromStep3) ||
+                (logicalStep === 4 && !canProceedFromStep4())
               }
               className="flex-1 btn-brand"
             >

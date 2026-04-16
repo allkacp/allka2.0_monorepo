@@ -7,9 +7,12 @@ async function main() {
   await prisma.$connect();
   console.log("✅ Banco de dados conectado");
 
-  app.listen(config.PORT, () => {
-    console.log(`🚀 Servidor Allka rodando em http://localhost:${config.PORT}`);
-    console.log(`   Health: http://localhost:${config.PORT}/api/health`);
+  // Passenger/cPanel sets PORT as a socket path or port number
+  // Use process.env.PORT directly to support both TCP and Unix socket
+  const port = process.env.PORT || config.PORT;
+
+  app.listen(port, () => {
+    console.log(`🚀 Servidor Allka rodando na porta/socket: ${port}`);
     console.log(`   Ambiente: ${config.NODE_ENV}`);
   });
 }

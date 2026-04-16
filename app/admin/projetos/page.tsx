@@ -77,6 +77,9 @@ import {
   Download,
   ImageDown,
   CheckCircle,
+  Lock,
+  CreditCard,
+  ArrowRight,
 } from "lucide-react";
 import { ProjectManagementModal } from "@/components/project-management-modal";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
@@ -115,11 +118,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockProjects, addMockProject } from "@/lib/mock-projects";
-
-const initialProjects = mockProjects;
+import { useProjects } from "@/hooks/useProjects";
+import { apiClient } from "@/lib/api-client";
+import type { FrontendProject } from "@/lib/project-adapter";
 
 export default function AdminProjetosPage() {
+  const { projects: apiProjects, loading: projectsLoading, refetch: refetchProjects, setProjects: setApiProjects } = useProjects();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -136,7 +140,7 @@ export default function AdminProjetosPage() {
   const [filterTasksMax, setFilterTasksMax] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedProject, setSelectedProject] = useState<
-    (typeof mockProjects)[0] | null
+    FrontendProject | null
   >(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"view" | "edit" | "create">(
@@ -145,6 +149,12 @@ export default function AdminProjetosPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [showProjectCreate, setShowProjectCreate] = useState(false);
   const [projectCreateData, setProjectCreateData] = useState<any>(null);
+  // Draft-resume state for ProjectCreateNewPanel
+  const [draftPanelProducts, setDraftPanelProducts] = useState<any[]>([]);
+  const [draftPanelQuantities, setDraftPanelQuantities] = useState<Record<string, number>>({});
+  const [draftPanelCommissions, setDraftPanelCommissions] = useState<Record<string, number>>({});
+  const [draftPanelProjectId, setDraftPanelProjectId] = useState<string | number | undefined>(undefined);
+  const [draftResumeToCheckout, setDraftResumeToCheckout] = useState(false);
   const [viewMode, setViewMode] = useState<"accordion" | "kanban" | "planner">(
     "accordion",
   );
@@ -153,7 +163,7 @@ export default function AdminProjetosPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [projectToClone, setProjectToClone] = useState<
-    (typeof mockProjects)[0] | null
+    FrontendProject | null
   >(null);
   const [cloneProjectName, setCloneProjectName] = useState("");
   const [cloneOptions, setCloneOptions] = useState({
@@ -164,7 +174,7 @@ export default function AdminProjetosPage() {
   });
   const [showCancelWizard, setShowCancelWizard] = useState(false);
   const [projectToCancel, setProjectToCancel] = useState<
-    (typeof mockProjects)[0] | null
+    FrontendProject | null
   >(null);
   const [cancelStep, setCancelStep] = useState<1 | 2 | 3>(1);
   const [cancelReason, setCancelReason] = useState("");
@@ -284,7 +294,14 @@ export default function AdminProjetosPage() {
     { id: "cancelled", label: "Cancelado", color: "bg-red-500", count: 0 },
   ]);
 
-  const [projectsData, setProjectsData] = useState(initialProjects);
+  const [projectsData, setProjectsData] = useState<FrontendProject[]>([]);
+
+  // Sync API data into local state when loaded
+  useEffect(() => {
+    if (apiProjects.length > 0) {
+      setProjectsData(apiProjects);
+    }
+  }, [apiProjects]);
 
   const [showColumnDialog, setShowColumnDialog] = useState(false);
   const [editingColumn, setEditingColumn] = useState<any>(null);
@@ -425,16 +442,16 @@ export default function AdminProjetosPage() {
 
   // Get unique companies and agencies for filters
   const uniqueCompanies = useMemo(() => {
-    return Array.from(new Set(mockProjects.map((p) => p.client))).sort();
-  }, []);
+    return Array.from(new Set(projectsData.map((p) => p.client))).sort();
+  }, [projectsData]);
 
   const uniqueAgencies = useMemo(() => {
-    return Array.from(new Set(mockProjects.map((p) => p.agency))).sort();
-  }, []);
+    return Array.from(new Set(projectsData.map((p) => p.agency))).sort();
+  }, [projectsData]);
 
   const uniqueConsultants = useMemo(() => {
-    return Array.from(new Set(mockProjects.map((p) => p.consultant))).sort();
-  }, []);
+    return Array.from(new Set(projectsData.map((p) => p.consultant))).sort();
+  }, [projectsData]);
 
   const allFilterFields = [
     { id: "buscar", label: "Buscar por nome" },
@@ -887,7 +904,7 @@ export default function AdminProjetosPage() {
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     // Filter projects by date range
-    const exportProjects = mockProjects.filter((p) =>
+    const exportProjects = projectsData.filter((p) =>
       isDateInRange(p.createdDate),
     );
 
@@ -927,7 +944,7 @@ export default function AdminProjetosPage() {
 
   // Calculate stats dynamically based on date range and lead filter
   const stats = useMemo(() => {
-    const statsFilteredProjects = mockProjects.filter((p) => {
+    const statsFilteredProjects = projectsData.filter((p) => {
       if (!isDateInRange(p.createdDate)) return false;
       if (filterFromLead === "lead") return p.fromLead === true;
       if (filterFromLead === "non-lead") return p.fromLead !== true;
@@ -1135,19 +1152,19 @@ export default function AdminProjetosPage() {
     };
   }, [dateRange, filterFromLead]);
 
-  const handleEditProject = (project: (typeof mockProjects)[0]) => {
+  const handleEditProject = (project: FrontendProject) => {
     setSelectedProject(project);
     setModalMode("edit");
     setModalOpen(true);
   };
 
-  const handleViewProject = (project: (typeof mockProjects)[0]) => {
+  const handleViewProject = (project: FrontendProject) => {
     setSelectedProject(project);
     setModalMode("view");
     setModalOpen(true);
   };
 
-  const handleCloneProject = (project: (typeof mockProjects)[0]) => {
+  const handleCloneProject = (project: FrontendProject) => {
     setProjectToClone(project);
     setCloneProjectName(`(copy) ${project.name}`);
     setCloneOptions({
@@ -1159,39 +1176,63 @@ export default function AdminProjetosPage() {
     setShowCloneDialog(true);
   };
 
-  const handleSaveProjectChanges = (
-    updatedProject: (typeof mockProjects)[0],
+  const handleSaveProjectChanges = async (
+    updatedProject: FrontendProject,
   ) => {
-    setProjectsData((prevProjects) =>
-      prevProjects.map((p) =>
-        p.id === updatedProject.id ? updatedProject : p,
-      ),
-    );
+    try {
+      await apiClient.updateProject(updatedProject.id, {
+        title: updatedProject.name,
+        description: updatedProject.description || undefined,
+        status: updatedProject.status,
+        type: updatedProject.type || undefined,
+        value: updatedProject.value || 0,
+        budget: updatedProject.budget || 0,
+        spent: updatedProject.spent || 0,
+        progress: updatedProject.progress || 0,
+        agency: updatedProject.agency || undefined,
+        consultant: updatedProject.consultant || undefined,
+        consultant_email: updatedProject.consultantEmail || undefined,
+        team_size: updatedProject.team || 0,
+        portfolio_permission: updatedProject.portfolioPermission || false,
+        bitrix_sync: updatedProject.bitrixSync || false,
+      });
+      toast({ title: "Projeto atualizado", description: "As alterações foram salvas com sucesso." });
+      refetchProjects();
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar", description: error.message || "Não foi possível salvar.", variant: "destructive" });
+    }
     setSelectedProject(updatedProject);
     setModalMode("view");
   };
 
-  const handleStartCancelProject = (project: (typeof mockProjects)[0]) => {
+  const handleStartCancelProject = (project: FrontendProject) => {
     setProjectToCancel(project);
     setCancelStep(1);
     setCancelReason("");
     setShowCancelWizard(true);
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!projectToCancel) return;
 
-    const cancelledProject = {
-      ...projectToCancel,
-      status: "cancelled" as const,
-      situacao: "Cancelado",
-    };
+    try {
+      await apiClient.updateProject(projectToCancel.id, {
+        status: "cancelled",
+      });
 
-    setProjectsData((prevProjects) =>
-      prevProjects.map((p) =>
-        p.id === projectToCancel.id ? cancelledProject : p,
-      ),
-    );
+      toast({
+        title: "Projeto Cancelado",
+        description:
+          "O projeto foi cancelado e as cobranças futuras foram suspensas.",
+      });
+      refetchProjects();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao cancelar",
+        description: error.message || "Não foi possível cancelar o projeto.",
+        variant: "destructive",
+      });
+    }
 
     setSelectedProject(null);
     setModalOpen(false);
@@ -1199,12 +1240,6 @@ export default function AdminProjetosPage() {
     setProjectToCancel(null);
     setCancelReason("");
     setCancelStep(1);
-
-    toast({
-      title: "Projeto Cancelado",
-      description:
-        "O projeto foi cancelado e as cobranças futuras foram suspensas.",
-    });
   };
 
   const handleConfirmCloneAndOpen = () => {
@@ -1248,6 +1283,63 @@ export default function AdminProjetosPage() {
   const handleSkipWizard = () => {
     setShowWizard(false);
     setProjectCreateData(null);
+    setShowProjectCreate(true);
+  };
+
+  const loadDraftFromStorage = (project: FrontendProject) => {
+    try {
+      const raw = localStorage.getItem(`allka-draft-${project.id}`);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  };
+
+  const handleContinueDraft = (project: FrontendProject) => {
+    const draft = loadDraftFromStorage(project);
+    if (draft) {
+      setProjectCreateData(draft.formData ?? null);
+      setDraftPanelProducts(draft.selectedProducts ?? []);
+      setDraftPanelQuantities(draft.productQuantities ?? {});
+      setDraftPanelCommissions(draft.productCommissions ?? {});
+      setDraftPanelProjectId(draft.projectId ?? project.id);
+      setDraftResumeToCheckout(false);
+    } else {
+      setProjectCreateData({
+        nome: project.name,
+        tipo: project.type,
+        cliente: project.client,
+        status: project.status,
+      });
+      setDraftPanelProducts([]);
+      setDraftPanelQuantities({});
+      setDraftPanelCommissions({});
+      setDraftPanelProjectId(project.id);
+      setDraftResumeToCheckout(false);
+    }
+    setShowProjectCreate(true);
+  };
+
+  const handleGoToPayment = (project: FrontendProject) => {
+    const draft = loadDraftFromStorage(project);
+    if (draft) {
+      setProjectCreateData(draft.formData ?? null);
+      setDraftPanelProducts(draft.selectedProducts ?? []);
+      setDraftPanelQuantities(draft.productQuantities ?? {});
+      setDraftPanelCommissions(draft.productCommissions ?? {});
+      setDraftPanelProjectId(draft.projectId ?? project.id);
+    } else {
+      setProjectCreateData({
+        nome: project.name,
+        tipo: project.type,
+        cliente: project.client,
+        status: project.status,
+      });
+      setDraftPanelProducts([]);
+      setDraftPanelQuantities({});
+      setDraftPanelCommissions({});
+      setDraftPanelProjectId(project.id);
+    }
+    setDraftResumeToCheckout(true);
     setShowProjectCreate(true);
   };
 
@@ -1892,6 +1984,87 @@ export default function AdminProjetosPage() {
           </AccordionItem>
         </Accordion>
 
+        {/* ── Draft / Awaiting-Payment Banner ── */}
+        {(() => {
+          const pendingProjects = projectsData.filter(
+            (p) => p.status === "draft" || p.status === "awaiting-payment"
+          );
+          if (pendingProjects.length === 0) return null;
+          return (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 mb-2">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">
+                      {pendingProjects.length === 1
+                        ? "1 projeto pendente"
+                        : `${pendingProjects.length} projetos pendentes`}
+                    </p>
+                    <p className="text-xs text-amber-600">
+                      Projetos em rascunho ou aguardando pagamento precisam de ação.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {pendingProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex items-center gap-3 bg-white rounded-lg border border-amber-200 px-3 py-2 shadow-sm min-w-0"
+                  >
+                    <div
+                      className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-bold"
+                      style={{
+                        background:
+                          project.status === "awaiting-payment"
+                            ? "linear-gradient(135deg,#0891b2,#6d28d9)"
+                            : "linear-gradient(135deg,#475569,#94a3b8)",
+                      }}
+                    >
+                      {(project.name ?? "P")[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{project.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{project.client}</p>
+                    </div>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                        project.status === "awaiting-payment"
+                          ? "bg-cyan-100 text-cyan-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {project.status === "awaiting-payment" ? "Ag. Pagamento" : "Rascunho"}
+                    </span>
+                    {project.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                        onClick={() => handleContinueDraft(project)}
+                      >
+                        Continuar
+                        <ArrowRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0"
+                        onClick={() => handleGoToPayment(project)}
+                      >
+                        Pagar Agora
+                        <CreditCard className="h-3 w-3 ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── View toggle ── */}
         {viewMode === "accordion" ? (
           <>
@@ -2427,55 +2600,144 @@ export default function AdminProjetosPage() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center justify-end gap-0">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleViewProject(project)}
-                                      className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
-                                    >
-                                      <Eye className="h-2.5 w-2.5" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    Visualizar
-                                  </TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleCloneProject(project)
-                                      }
-                                      className="h-5 w-5 p-0 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
-                                    >
-                                      <Copy className="h-2.5 w-2.5" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    Duplicar
-                                  </TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleStartCancelProject(project)
-                                      }
-                                      className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="h-2.5 w-2.5" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    Cancelar
-                                  </TooltipContent>
-                                </Tooltip>
+                                {project.status === "draft" ? (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleContinueDraft(project)}
+                                          className="h-5 w-5 p-0 rounded text-violet-500 hover:text-violet-700 hover:bg-violet-50"
+                                        >
+                                          <ArrowRight className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Continuar rascunho
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleStartCancelProject(project)
+                                          }
+                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Descartar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                ) : project.status === "awaiting-payment" ? (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleGoToPayment(project)}
+                                          className="h-5 w-5 p-0 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                                        >
+                                          <CreditCard className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Ir para Pagamento
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleViewProject(project)}
+                                          className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                        >
+                                          <Eye className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Visualizar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleStartCancelProject(project)
+                                          }
+                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Cancelar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleViewProject(project)}
+                                          className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                        >
+                                          <Eye className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Visualizar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleCloneProject(project)
+                                          }
+                                          className="h-5 w-5 p-0 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                        >
+                                          <Copy className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Duplicar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleStartCancelProject(project)
+                                          }
+                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Cancelar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -3634,7 +3896,7 @@ export default function AdminProjetosPage() {
                           cards={plannerCards.filter(
                             (c) => c.columnId === col.id,
                           )}
-                          projects={mockProjects}
+                          projects={projectsData}
                           onEdit={() => handleEditPlannerColumn(col)}
                           onDelete={() => handleDeletePlannerColumn(col.id)}
                           onAddCard={() => handleAddPlannerCard(col.id)}
@@ -3844,7 +4106,7 @@ export default function AdminProjetosPage() {
                           className="w-full h-9 px-2 text-sm border border-input rounded-md bg-background"
                         >
                           <option value="">Nenhum</option>
-                          {mockProjects.map((p) => (
+                          {projectsData.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
                             </option>
@@ -4229,6 +4491,8 @@ export default function AdminProjetosPage() {
           }}
           onSave={handleSaveProjectChanges}
           onCancel={() => handleStartCancelProject(selectedProject)}
+          onContinueDraft={selectedProject ? () => { setModalOpen(false); handleContinueDraft(selectedProject); } : undefined}
+          onGoToPayment={selectedProject ? () => { setModalOpen(false); handleGoToPayment(selectedProject); } : undefined}
         />
         <ProjectWizardSlidePanel
           open={showWizard}
@@ -4240,14 +4504,25 @@ export default function AdminProjetosPage() {
           open={showProjectCreate}
           onOpenChange={(v) => {
             setShowProjectCreate(v);
-            if (!v) setProjectCreateData(null);
+            if (!v) {
+              setProjectCreateData(null);
+              setDraftPanelProducts([]);
+              setDraftPanelQuantities({});
+              setDraftPanelCommissions({});
+              setDraftPanelProjectId(undefined);
+              setDraftResumeToCheckout(false);
+            }
           }}
           initialData={projectCreateData}
-          cloneMode={!!projectCreateData}
+          cloneMode={!!projectCreateData && !draftPanelProjectId}
           allowCompanySelect={!projectCreateData}
-          onCreate={(project) => {
-            addMockProject(project);
-            setProjectsData((prev) => [...prev, project]);
+          draftProducts={draftPanelProducts.length > 0 ? draftPanelProducts : undefined}
+          draftProductQuantities={draftPanelProducts.length > 0 ? draftPanelQuantities : undefined}
+          draftCommissions={draftPanelProducts.length > 0 ? draftPanelCommissions : undefined}
+          draftProjectId={draftPanelProjectId}
+          resumeToCheckout={draftResumeToCheckout}
+          onCreate={() => {
+            refetchProjects();
           }}
         />
       </div>

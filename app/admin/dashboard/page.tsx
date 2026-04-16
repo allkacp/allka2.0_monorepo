@@ -90,6 +90,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input" // Added Input
 import { Label } from "@/components/ui/label" // Added Label
 import { useSidebar } from "@/contexts/sidebar-context" // Added import for sidebar context
+import { useDashboard } from "@/hooks/useDashboard"
 import { Switch } from "@/components/ui/switch" // Added Switch
 import { useToast } from "@/hooks/use-toast" // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
@@ -350,6 +351,7 @@ const formatDate = (date: Date, formatStr: string) => {
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar() // Get sidebar collapse state
   const { toast } = useToast() // Get toast function
+  const { stats: apiStats, activities: apiActivities, loading: dashboardLoading } = useDashboard()
 
   const [globalPeriod, setGlobalPeriod] = useState<{
     type:
@@ -1420,10 +1422,33 @@ export default function AdminDashboardPage() {
     return baseMetrics[timeRange as keyof typeof baseMetrics]
   }
 
-  const metrics = getMetricsForPeriod()
+  const metrics = (() => {
+    const base = getMetricsForPeriod()
+    if (!apiStats) return base
+    const s = apiStats
+    return {
+      ...base,
+      totalUsers: { ...base.totalUsers, value: (s.nomades?.total ?? 0).toLocaleString("pt-BR") },
+      activeUsers: { ...base.activeUsers, value: (s.nomades?.active ?? 0).toLocaleString("pt-BR") },
+      companies: { ...base.companies, value: (s.companies?.total ?? 0).toLocaleString("pt-BR") },
+      activeProjects: { ...base.activeProjects, value: (s.projects?.active ?? 0).toLocaleString("pt-BR") },
+      revenue: { ...base.revenue, value: `R$ ${((s.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k` },
+    }
+  })()
 
-  // Mock data for recent activities
-  const recentActivities = [
+  // Recent activities from API (fallback to empty)
+  const recentActivities = apiActivities.length > 0
+    ? apiActivities.map((a, i) => ({
+        id: i + 1,
+        type: a.type || "info",
+        title: a.title,
+        description: a.subtitle || "",
+        time: a.date ? new Date(a.date).toLocaleDateString("pt-BR") : "",
+        icon: a.type === "project" ? Briefcase : a.type === "user" ? Users : a.type === "client" ? Building2 : Activity,
+        color: "text-primary",
+        bgColor: "bg-primary/10",
+      }))
+    : [
     {
       id: 1,
       type: "user_registered",

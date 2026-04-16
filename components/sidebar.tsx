@@ -68,6 +68,7 @@ const navigationConfig = {
   },
   agencias: [
     { name: "Dashboard", href: "/agencia/dashboard", icon: LayoutDashboard, current: true },
+    { name: "Catálogo", href: "/agencia/catalogo", icon: Package, current: false },
     { name: "Projetos", href: "/agencia/projetos", icon: FolderOpen, current: false },
     { name: "Tarefas", href: "/agencia/tarefas", icon: CheckSquare, current: false },
     { name: "Financeiro", href: "/agencia/financeiro", icon: Wallet, current: false },

@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
+import { useCompanies } from "@/hooks/useCompanies"
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900": "linear-gradient(to bottom right, #1e3a8a, #1e40af, #164e63)",
@@ -895,6 +896,7 @@ function CompanyAvatar({ company }: { company: Company }) {
 export default function EmpresasPage() {
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar()
   const { toast } = useToast()
+  const { companies: apiCompanies, loading: companiesLoading, error: companiesError, refetch: refetchCompanies, createCompany, updateCompany, deleteCompany: apiDeleteCompany } = useCompanies()
   const pageRef = useRef<HTMLDivElement>(null)
   const appliedTheme = previewTheme || sidebarSettings
   const themeBg = appliedTheme.backgroundColor
@@ -971,8 +973,8 @@ export default function EmpresasPage() {
     return () => window.removeEventListener("resize", measure)
   }, [])
 
-  const [companies, setCompanies] = useState<Company[]>(mockCompanies)
-  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>(companies)
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [createPanelOpen, setCreatePanelOpen] = useState(false)
   const [editPanelOpen, setEditPanelOpen] = useState(false)
@@ -1026,6 +1028,31 @@ export default function EmpresasPage() {
   const [dragOverFilterId, setDragOverFilterId] = useState<string | null>(null)
   const [visibleFields, setVisibleFields] = useState<string[]>(["nome","status","tipo","plano","parceiro","data_cadastro"])
   const [showFieldPicker, setShowFieldPicker] = useState(false)
+
+  // Sync API companies into local state
+  useEffect(() => {
+    const mapped = apiCompanies.map((c: any, idx: number) => ({
+      id: idx + 1,
+      _apiId: c.id,
+      name: c.name || "",
+      legal_name: c.name || "",
+      type: "company" as const,
+      status: c.status === "ativo" ? "active" : c.status === "inativo" ? "inactive" : "active",
+      email: c.email || "",
+      phone: c.phone || "",
+      document: c.cnpj || "",
+      location: c.address || "",
+      segment: c.segment || "",
+      description: c.description || "",
+      website: c.website || "",
+      plan: "starter",
+      users_count: 0,
+      projects_count: 0,
+      created_at: c.created_at || new Date().toISOString(),
+      logo_gradient: "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900",
+    })) as Company[]
+    setCompanies(mapped)
+  }, [apiCompanies])
 
   useEffect(() => {
     let filtered = companies
@@ -1179,7 +1206,8 @@ export default function EmpresasPage() {
     totalProjects: companies.reduce((acc, c) => acc + c.projects_count, 0),
   }
 
-  const handleCreateCompany = (data: any) => {
+  const handleCreateCompany = async () => {
+    refetchCompanies()
     setCreatePanelOpen(false)
   }
 
@@ -1193,7 +1221,25 @@ export default function EmpresasPage() {
     setViewPanelOpen(true)
   }
 
-  const handleSaveCompany = (data: any) => {
+  const handleSaveCompany = async (data: any) => {
+    try {
+      if (selectedCompany?._apiId) {
+        await updateCompany(selectedCompany._apiId, {
+          name: data.name || data.legal_name,
+          cnpj: data.document || data.cnpj || undefined,
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          status: data.status || undefined,
+          segment: data.segment || undefined,
+          address: data.location || undefined,
+          description: data.description || undefined,
+          website: data.website || undefined,
+        })
+        toast({ title: "Empresa atualizada", description: "Os dados foram salvos com sucesso." })
+      }
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar", description: error.message || "Não foi possível salvar.", variant: "destructive" })
+    }
     setEditPanelOpen(false)
     setSelectedCompany(null)
   }
@@ -1203,9 +1249,17 @@ export default function EmpresasPage() {
     setDeleteDialog({ open: true, companyId: id, companyName: company?.name ?? "" })
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteDialog.companyId !== null) {
-      setCompanies(companies.filter((c) => c.id !== deleteDialog.companyId))
+      const company = companies.find((c) => c.id === deleteDialog.companyId)
+      if (company?._apiId) {
+        try {
+          await apiDeleteCompany(company._apiId)
+          toast({ title: "Empresa excluída", description: `"${company.name}" foi excluída com sucesso.` })
+        } catch (error: any) {
+          toast({ title: "Erro ao excluir", description: error.message || "Não foi possível excluir.", variant: "destructive" })
+        }
+      }
     }
     setDeleteDialog({ open: false, companyId: null, companyName: "" })
   }

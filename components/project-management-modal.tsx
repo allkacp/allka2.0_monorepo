@@ -74,6 +74,8 @@ import {
   RefreshCw,
   Play,
   Pause,
+  Lock,
+  ArrowRight,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -128,6 +130,10 @@ interface ProjectManagementModalProps {
   onExport?: () => void
   onSave?: (project: any) => void
   onCancel?: () => void
+  /** Called when user clicks "Continuar Projeto" inside a locked tab (draft) */
+  onContinueDraft?: () => void
+  /** Called when user clicks "Ir para Pagamento" inside a locked tab (awaiting-payment) */
+  onGoToPayment?: () => void
 }
 
 const STATUS_LABEL_MAP: Record<string, { label: string; cls: string }> = {
@@ -153,11 +159,14 @@ function getProjectStatusBadge(status: string) {
   )
 }
 
-export function ProjectManagementModal({ project, open, onOpenChange, mode, onEdit, onClone, onExport, onSave, onCancel }: ProjectManagementModalProps) {
+export function ProjectManagementModal({ project, open, onOpenChange, mode, onEdit, onClone, onExport, onSave, onCancel, onContinueDraft, onGoToPayment }: ProjectManagementModalProps) {
   const { toast } = useToast()
   const { sidebarWidth, sidebarSettings, agencyProfile } = useSidebar()
   const { accountType } = useAccountType()
   const canSeeNomadNames = accountType === "admin"
+
+  // Gate tabs for projects that haven't been paid yet
+  const isUnpaid = project?.status === "draft" || project?.status === "awaiting-payment"
 
   // ── Proposal export state ──────────────────────────────────────────────────
   const [showCustomDocDialog, setShowCustomDocDialog] = useState(false)
@@ -2511,6 +2520,37 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
               </TabsContent>
 
               <TabsContent value="produtos" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                {isUnpaid ? (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-5 px-8">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center">
+                      <Lock className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <div className="text-center max-w-sm">
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Produtos bloqueados</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Os produtos e tarefas serão ativados após a confirmação do pagamento.
+                      </p>
+                    </div>
+                    {project?.status === "awaiting-payment" && onGoToPayment && (
+                      <button
+                        onClick={() => { onOpenChange(false); onGoToPayment(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Ir para Pagamento
+                      </button>
+                    )}
+                    {project?.status === "draft" && onContinueDraft && (
+                      <button
+                        onClick={() => { onOpenChange(false); onContinueDraft(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        Continuar Projeto
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
                 <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
 
                   {/* Header */}
@@ -2710,6 +2750,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   )}
 
                 </div>
+                )}
               </TabsContent>
 
               {/* Arquivos */}
@@ -3046,6 +3087,37 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
               {/* Tarefas */}
               <TabsContent value="tarefas" className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200">
+                {isUnpaid ? (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-5 px-8">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center">
+                      <Lock className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <div className="text-center max-w-sm">
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Tarefas bloqueadas</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        As tarefas serão criadas e ativadas após a confirmação do pagamento.
+                      </p>
+                    </div>
+                    {project?.status === "awaiting-payment" && onGoToPayment && (
+                      <button
+                        onClick={() => { onOpenChange(false); onGoToPayment(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Ir para Pagamento
+                      </button>
+                    )}
+                    {project?.status === "draft" && onContinueDraft && (
+                      <button
+                        onClick={() => { onOpenChange(false); onContinueDraft(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        Continuar Projeto
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
                 <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
 
                   {/* ── Stats bar ── */}
@@ -3399,10 +3471,42 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
                   </div>
                 </div>
+                )}
               </TabsContent>
 
               {/* Faturamento */}
               <TabsContent value="faturamento" className="p-0 m-0 flex-1 overflow-y-auto">
+                {isUnpaid ? (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-5 px-8">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center">
+                      <Lock className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <div className="text-center max-w-sm">
+                      <p className="text-sm font-semibold text-slate-700 mb-1">Faturamento bloqueado</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        As faturas e cobranças serão geradas após a confirmação do pagamento.
+                      </p>
+                    </div>
+                    {project?.status === "awaiting-payment" && onGoToPayment && (
+                      <button
+                        onClick={() => { onOpenChange(false); onGoToPayment(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Ir para Pagamento
+                      </button>
+                    )}
+                    {project?.status === "draft" && onContinueDraft && (
+                      <button
+                        onClick={() => { onOpenChange(false); onContinueDraft(); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        Continuar Projeto
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
                 <div className="flex flex-col h-full">
                   {/* Sub-tab toggle bar */}
                   <div className="flex border-b border-slate-200 bg-white px-6 pt-3 shrink-0">
@@ -3820,6 +3924,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                     </div>
                   )}
                 </div>
+                )}
               </TabsContent>
             </Tabs>
             </div>

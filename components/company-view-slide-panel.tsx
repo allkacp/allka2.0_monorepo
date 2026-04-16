@@ -15,6 +15,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 import { usePlatformUsers } from "@/contexts/platform-users-context"
 import { CompanyUsersTab } from "@/components/company-users-tab"
 import { TermsManagementTab } from "@/components/terms-management-tab"
@@ -518,7 +519,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     if (!company?.id) return
     setIsSavingSocial(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 400))
+      const apiId = (company as any)._apiId || company.id
+      await apiClient.updateCompany(String(apiId), {
+        website: links.find(l => l.platform === "site")?.url || undefined,
+      })
       onCompanyUpdate?.({ ...company, social_links: links })
       toast({ title: "Redes sociais salvas!", description: "Links atualizados com sucesso." })
     } catch {
@@ -625,8 +629,17 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
         status: getDadosDisplayValue("status") || company.status,
       }
 
-      // Simulate async save (no real API in mock mode)
-      await new Promise((resolve) => setTimeout(resolve, 600))
+      // Persist to API
+      const apiId = (company as any)._apiId || company.id
+      await apiClient.updateCompany(String(apiId), {
+        name: dataPayload.name,
+        email: dataPayload.email || undefined,
+        phone: dataPayload.phone || undefined,
+        website: dataPayload.website || undefined,
+        status: dataPayload.status === "active" ? "ativo" : dataPayload.status === "inactive" ? "inativo" : dataPayload.status || undefined,
+        address: [dataPayload.street, dataPayload.number, dataPayload.complement, dataPayload.city, dataPayload.state, dataPayload.zip_code].filter(Boolean).join(", ") || undefined,
+        description: dataPayload.admin_notes || undefined,
+      })
 
       const updatedCompany: Company = {
         ...company!,

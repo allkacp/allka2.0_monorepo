@@ -3,6 +3,9 @@ __v0_runtime_loader.js
 __v0_devtools.tsx
 __v0_jsx-dev-runtime.ts
 
+# Mock data (apenas para desenvolvimento local)
+dev-mocks/
+
 # Dependencies
 node_modules/
 .pnp

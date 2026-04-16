@@ -4,18 +4,35 @@ import { createContext, useContext, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface AgenciaProjectStage {
+  name: string;
+  status: "pending" | "in_progress" | "done";
+}
+
+export interface AgenciaContractedProduct {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  value: number;
+  stages?: AgenciaProjectStage[];
+}
+
 export interface AgenciaProject {
   id: string;
   clientName: string;
   name: string;
   category: string;
-  status: "briefing" | "producao" | "revisao" | "entregue" | "cancelado";
+  status: "briefing" | "producao" | "revisao" | "entregue" | "cancelado" | "aguardando_pagamento";
   value: number;
   startDate: string;
   deliveryDate?: string;
   completedDate?: string;
   tasksDone: number;
   tasksTotal: number;
+  products?: AgenciaContractedProduct[];
+  checkoutLinks?: { self: string; client: string };
+  payerMode?: "self" | "client";
 }
 
 export interface AgenciaTask {
@@ -238,18 +255,45 @@ interface AgenciaContextType {
   projects: AgenciaProject[];
   tasks: AgenciaTask[];
   invoices: AgenciaInvoice[];
+  addProject: (project: AgenciaProject) => void;
+  confirmProjectPayment: (projectId: string) => void;
 }
 
 const AgenciaContext = createContext<AgenciaContextType | undefined>(undefined);
 
 export function AgenciaProvider({ children }: { children: React.ReactNode }) {
   const [profile] = useState<AgenciaProfile>(MOCK_PROFILE);
-  const [projects] = useState<AgenciaProject[]>(MOCK_PROJECTS);
+  const [projects, setProjects] = useState<AgenciaProject[]>(MOCK_PROJECTS);
   const [tasks] = useState<AgenciaTask[]>(MOCK_TASKS);
   const [invoices] = useState<AgenciaInvoice[]>(MOCK_INVOICES);
 
+  const addProject = (project: AgenciaProject) => {
+    setProjects((prev) => [project, ...prev]);
+  };
+
+  const confirmProjectPayment = (projectId: string) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const stages: AgenciaProjectStage[] = [
+          { name: "Briefing e Planejamento", status: "pending" },
+          { name: "Desenvolvimento", status: "pending" },
+          { name: "Revisão", status: "pending" },
+          { name: "Entrega Final", status: "pending" },
+        ];
+        return {
+          ...p,
+          status: "briefing" as const,
+          tasksDone: 0,
+          tasksTotal: p.products?.length ?? 0,
+          products: p.products?.map((prod) => ({ ...prod, stages })),
+        };
+      })
+    );
+  };
+
   return (
-    <AgenciaContext.Provider value={{ profile, projects, tasks, invoices }}>
+    <AgenciaContext.Provider value={{ profile, projects, tasks, invoices, addProject, confirmProjectPayment }}>
       {children}
     </AgenciaContext.Provider>
   );
