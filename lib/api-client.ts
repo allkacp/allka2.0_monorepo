@@ -412,6 +412,26 @@ class ApiClient {
     return this.request(`/terms/${id}`, { method: "DELETE" });
   }
 
+  async checkTerms() {
+    const terms: any[] = await this.getTerms();
+    const activeTerms = Array.isArray(terms)
+      ? terms.filter((term) => term?.is_active !== false)
+      : [];
+
+    const pending = await Promise.all(
+      activeTerms.map(async (term) => {
+        try {
+          const result: any = await this.checkTermAccepted(term.id);
+          return result?.accepted ? null : term;
+        } catch {
+          return term;
+        }
+      }),
+    );
+
+    return { pending: pending.filter(Boolean) };
+  }
+
   async acceptTerm(termId: string) {
     return this.request(`/terms/${termId}/accept`, { method: "POST" });
   }
