@@ -495,8 +495,8 @@ export default function ProgramaPartnerPage() {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="w-auto! max-w-none! p-0 border-0"
-          style={{ width: `calc(100vw - ${sidebarWidth}px)`, maxWidth: `calc(100vw - ${sidebarWidth}px)` }}
+          className="p-0 border-0"
+          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
         >
           <div className="h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-linear-to-r from-violet-50/50 to-indigo-50/50">

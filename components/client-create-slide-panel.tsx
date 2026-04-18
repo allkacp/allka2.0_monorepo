@@ -38,6 +38,14 @@ export function ClientCreateSlidePanel({
   onClientCreated,
 }: ClientCreateSlidePanelProps) {
   const [isClosing, setIsClosing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    if (open) {
+      const id = requestAnimationFrame(() => setIsMounted(true));
+      return () => cancelAnimationFrame(id);
+    }
+    if (!isClosing) setIsMounted(false);
+  }, [open, isClosing]);
   const [currentStep, setCurrentStep] = useState(1);
   const { sidebarWidth } = useSidebar();
   const { toast } = useToast();
@@ -112,7 +120,7 @@ export function ClientCreateSlidePanel({
       setForm(emptyForm);
       setErrors({});
       setCompanySearch("");
-    }, 500);
+    }, 320);
   };
 
   const validate1 = () => {
@@ -160,17 +168,19 @@ export function ClientCreateSlidePanel({
   return (
     <div
       className={cn(
-        "fixed top-0 z-40 h-[calc(100vh-32px)]",
-        "bg-background overflow-hidden flex flex-col",
-        "transition-all duration-500 ease-in-out",
+        "fixed top-0 z-50 h-[calc(100vh-24px)]",
+        "bg-background flex flex-col",
+        "shadow-2xl border-l border-border overflow-hidden",
+        "transition-[transform,opacity]",
         isClosing
-          ? "slide-out-to-right opacity-0"
-          : "slide-in-from-right opacity-100",
+          ? "translate-x-full opacity-0 duration-300 ease-in"
+          : isMounted
+            ? "translate-x-0 opacity-100 duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)]"
+            : "translate-x-full opacity-0 duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] pointer-events-none",
       )}
       style={{
         left: panelStyle.left,
         width: panelStyle.width,
-        display: open && !isClosing ? "flex" : "none",
       }}
     >
       <ModalBrandHeader

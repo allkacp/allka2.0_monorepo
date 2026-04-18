@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react"
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 import { ExportButton } from "@/components/export-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -37,6 +38,7 @@ import {
   Download,
   ImageDown,
 } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import type { User } from "@/types/user"
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -413,6 +415,7 @@ export default function UsuariosPage() {
   const { users: apiUsers, loading: usersLoading, error: usersError, refetch: refetchUsers, createUser, updateUser, deleteUser: apiDeleteUser } = useUsers()
   const { toast } = useToast()
   const pageRef = useRef<HTMLDivElement>(null)
+  const { sortKey: userSortKey, sortDir: userSortDir, handleSort: handleUserSort, sortData: sortUsers, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting<User>()
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -571,8 +574,8 @@ export default function UsuariosPage() {
   useEffect(() => {
     const startIndex = (currentPage - 1) * pageSize
     const endIndex = startIndex + pageSize
-    setPaginatedUsers(filteredUsers.slice(startIndex, endIndex))
-  }, [filteredUsers, currentPage, pageSize])
+    setPaginatedUsers(sortUsers(filteredUsers).slice(startIndex, endIndex))
+  }, [filteredUsers, currentPage, pageSize, userSortKey, userSortDir])
 
   const totalPages = Math.ceil(filteredUsers.length / pageSize)
 
@@ -844,6 +847,14 @@ export default function UsuariosPage() {
     if (role === "team_allka")
       return { label: "Team allka", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:to-indigo-900" }
     return { label: "Outro", color: "bg-gray-100 text-gray-800 dark:bg-gray-950 dark:to-gray-900" }
+  }
+
+  if (usersLoading) {
+    return (
+      <div className="space-y-5">
+        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={6} />
+      </div>
+    )
   }
 
   return (
@@ -1599,11 +1610,19 @@ export default function UsuariosPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Usuário</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>
+                      <SortableHeader label="Usuário" field="name" type="text" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} />
+                    </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Contato</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Tipo / Função</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Status</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>Último Acesso</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>
+                      <SortableHeader label="Tipo / Função" field="account_type" type="status" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["company","nomad","agency"]} />
+                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>
+                      <SortableHeader label="Status" field="is_active" type="status" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["true","false"]} />
+                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>
+                      <SortableHeader label="Último Acesso" field="last_login" type="date" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} />
+                    </th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ position: "sticky", right: 0, zIndex: 2, borderLeft: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
                   </tr>
                 </thead>

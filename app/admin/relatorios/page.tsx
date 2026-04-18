@@ -230,7 +230,7 @@ export default function AdminRelatoriosPage() {
     <div className="container mx-auto space-y-6 bg-slate-200 px-0 py-0">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
+          <h1 className="font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
             Relatórios do Sistema
           </h1>
           <p className="text-gray-600">Gestão completa de relatórios e permissões de acesso</p>
@@ -388,7 +388,7 @@ export default function AdminRelatoriosPage() {
         {filteredCategories.map((category) => (
           <div key={category.id} className="space-y-4">
             <div className="flex items-center gap-3 mt-8">
-              <div className={`p-3 rounded-lg bg-gradient-to-br ${category.color} text-white`}>
+              <div className={`p-3 rounded-lg bg-linear-to-br ${category.color} text-white`}>
                 <category.icon className="h-6 w-6" />
               </div>
               <div>

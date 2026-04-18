@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { Search } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export default function EmpresaTarefas() {
   const { tasks } = useEmpresa();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const filtered = tasks.filter((t) => {
     const matchSearch =
@@ -47,6 +49,8 @@ export default function EmpresaTarefas() {
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const sorted = sortData(filtered);
 
   return (
     <div className="p-6 space-y-6">
@@ -104,12 +108,22 @@ export default function EmpresaTarefas() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tarefa</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Projeto</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Tarefa" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Projeto" field="projectName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nômade</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Entrega</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Valor" field="value" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={[...new Set(filtered.map((t) => t.status).filter(Boolean))]} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Entrega" field="deliveredAt" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -120,7 +134,7 @@ export default function EmpresaTarefas() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((task) => {
+                sorted.map((task) => {
                   const cfg = STATUS_CONFIG[task.status];
                   return (
                     <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">

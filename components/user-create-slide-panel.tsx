@@ -52,6 +52,14 @@ export function UserCreateSlidePanel({
   companyName,
 }: UserCreateSlidePanelProps) {
   const [isClosing, setIsClosing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    if (open) {
+      const id = requestAnimationFrame(() => setIsMounted(true));
+      return () => cancelAnimationFrame(id);
+    }
+    if (!isClosing) setIsMounted(false);
+  }, [open, isClosing]);
   const [currentStep, setCurrentStep] = useState(1);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -210,7 +218,7 @@ export function UserCreateSlidePanel({
       setLinkedCompanyIds(companyId ? [String(companyId)] : []);
       setNoCompanyLink(false);
       setCompanySearch("");
-    }, 500);
+    }, 420);
   };
 
   const validateStep1 = () => {
@@ -293,18 +301,12 @@ export function UserCreateSlidePanel({
   return (
     <>
       <div
-        className={cn(
-          "fixed top-0 z-40 h-[calc(100vh-32px)]",
-          "bg-background overflow-hidden flex flex-col",
-          "transition-all duration-500 ease-in-out",
-          isClosing
-            ? "slide-out-to-right opacity-0"
-            : "slide-in-from-right opacity-100",
-        )}
+        data-slot="sheet-content"
+        data-state={isClosing ? "closed" : "open"}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{
           left: panelStyle.left,
           width: panelStyle.width,
-          display: open && !isClosing ? "flex" : "none",
         }}
       >
         {/* Header with brand theme */}

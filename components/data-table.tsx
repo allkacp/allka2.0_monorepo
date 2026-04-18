@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, AlertCircle } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
+import type { ColumnType } from "@/hooks/useSorting"
 
 // Definição dos tipos para as colunas da tabela
 export interface DataTableColumn<T = any> {
@@ -16,6 +18,10 @@ export interface DataTableColumn<T = any> {
   width?: number
   renderCell?: (value: any, row: T) => React.ReactNode
   sortable?: boolean
+  /** Column type — drives the sort-option labels in the dropdown */
+  columnType?: ColumnType
+  /** Unique values for status/plan/type columns — enables the filter panel */
+  filterValues?: string[]
 }
 
 // Definição dos tipos para as ações da linha
@@ -69,6 +75,7 @@ export function DataTable<T extends Record<string, any>>({
   className,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState("")
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting<T>()
 
   // Filtrar dados baseado no termo de busca
   const filteredRows = searchable
@@ -79,6 +86,9 @@ export function DataTable<T extends Record<string, any>>({
         }),
       )
     : rows
+
+  // Ordenar dados
+  const sortedRows = sortData(filteredRows)
 
   // Renderizar estado de loading
   if (isLoading) {
@@ -166,14 +176,29 @@ export function DataTable<T extends Record<string, any>>({
                         style={{ width: column.width }}
                         className="whitespace-nowrap px-3 sm:px-4"
                       >
-                        {column.headerName}
+                        {column.sortable ? (
+                          <SortableHeader
+                            label={column.headerName}
+                            field={String(column.field)}
+                            type={column.columnType ?? "text"}
+                            sortKey={sortKey ? String(sortKey) : null}
+                            sortDir={sortDir}
+                            onSort={(f, d) => handleSort(f as keyof T, d)}
+                            columnFilters={columnFilters}
+                            onFilter={toggleColumnFilter}
+                            onClearFilter={clearColumnFilter}
+                            filterValues={column.filterValues}
+                          />
+                        ) : (
+                          column.headerName
+                        )}
                       </TableHead>
                     ))}
                     {actions.length > 0 && <TableHead className="whitespace-nowrap px-3 sm:px-4">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.length === 0 ? (
+                  {sortedRows.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={columns.length + (actions.length > 0 ? 1 : 0)}
@@ -185,7 +210,7 @@ export function DataTable<T extends Record<string, any>>({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredRows.map((row, index) => (
+                    sortedRows.map((row, index) => (
                       <TableRow key={row.id || index}>
                         {columns.map((column) => (
                           <TableCell key={String(column.field)} className="px-3 sm:px-4 py-3">

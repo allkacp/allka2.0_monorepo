@@ -62,7 +62,7 @@ const navigationConfig = {
       { name: "Equipe", href: "/in-house/equipe", icon: Users, current: false, badge: "8" },
       { name: "Financeiro", href: "/in-house/financeiro", icon: Wallet, current: false },
       { name: "Relatórios", href: "/in-house/relatorios", icon: BarChart3, current: false },
-      { name: "Allkademy", href: "/allkademy", icon: BookOpen, current: false },
+      { name: "Allkademy", href: "/admin/allkademy", icon: BookOpen, current: false },
       { name: "Configurações", href: "/in-house/configuracoes", icon: Settings, current: false },
     ],
   },
@@ -89,7 +89,7 @@ const navigationConfig = {
     { name: "Programa", href: "/nomades/programa", icon: Star, current: false },
     { name: "Ganhos", href: "/nomades/ganhos", icon: Wallet, current: false },
     { name: "Perfil", href: "/nomades/perfil", icon: UserCheck, current: false },
-    { name: "Allkademy", href: "/allkademy", icon: BookOpen, current: false },
+    { name: "Allkademy", href: "/admin/allkademy", icon: BookOpen, current: false },
   ],
   admin: [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, current: true },
@@ -126,7 +126,7 @@ const navigationConfig = {
     },
     { name: "Financeiro", href: "/admin/financeiro", icon: Wallet, current: false },
     { name: "Relatórios", href: "/admin/relatorios", icon: BarChart3, current: false },
-    { name: "Allkademy", href: "/allkademy", icon: BookOpen, current: false },
+    { name: "Allkademy", href: "/admin/allkademy", icon: BookOpen, current: false },
     {
       name: "Administração",
       icon: Shield,

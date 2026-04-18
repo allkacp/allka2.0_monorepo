@@ -21,114 +21,29 @@ import {
   Edit,
   Trash2,
   Eye,
+  Loader2,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-
-// Mock data for clients
-const mockClients = {
-  company: [
-    {
-      id: 1,
-      name: "Tech Innovations Inc",
-      type: "Company",
-      email: "contact@techinnovations.com",
-      phone: "+1 (555) 123-4567",
-      location: "San Francisco, CA",
-      joinDate: "2024-01-15",
-      activeProjects: 8,
-      totalSpent: "$125,000",
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "Global Solutions Ltd",
-      type: "Company",
-      email: "info@globalsolutions.com",
-      phone: "+1 (555) 234-5678",
-      location: "New York, NY",
-      joinDate: "2024-02-20",
-      activeProjects: 5,
-      totalSpent: "$89,500",
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "Digital Ventures Corp",
-      type: "Company",
-      email: "hello@digitalventures.com",
-      phone: "+1 (555) 345-6789",
-      location: "Austin, TX",
-      joinDate: "2024-03-10",
-      activeProjects: 12,
-      totalSpent: "$210,000",
-      status: "active",
-    },
-  ],
-  agency: [
-    {
-      id: 4,
-      name: "Creative Studio Agency",
-      type: "Agency",
-      email: "contact@creativestudio.com",
-      phone: "+1 (555) 456-7890",
-      location: "Los Angeles, CA",
-      joinDate: "2024-01-05",
-      activeProjects: 15,
-      totalSpent: "$180,000",
-      status: "active",
-    },
-    {
-      id: 5,
-      name: "Marketing Masters",
-      type: "Agency",
-      email: "info@marketingmasters.com",
-      phone: "+1 (555) 567-8901",
-      location: "Chicago, IL",
-      joinDate: "2024-02-12",
-      activeProjects: 10,
-      totalSpent: "$145,000",
-      status: "active",
-    },
-  ],
-  partner: [
-    {
-      id: 6,
-      name: "Strategic Partners Group",
-      type: "Partner",
-      email: "partners@strategicgroup.com",
-      phone: "+1 (555) 678-9012",
-      location: "Boston, MA",
-      joinDate: "2024-01-20",
-      activeProjects: 20,
-      totalSpent: "$350,000",
-      status: "active",
-    },
-    {
-      id: 7,
-      name: "Enterprise Solutions Partners",
-      type: "Partner",
-      email: "contact@enterprisepartners.com",
-      phone: "+1 (555) 789-0123",
-      location: "Seattle, WA",
-      joinDate: "2024-02-28",
-      activeProjects: 18,
-      totalSpent: "$295,000",
-      status: "active",
-    },
-  ],
-}
+import { useClients } from "@/hooks/useClients"
 
 export default function ClientesPage() {
+  const { clients: allApiClients, loading, error } = useClients()
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
 
-  const allClients = [...mockClients.company, ...mockClients.agency, ...mockClients.partner]
+  // Group by type (segment or type field from API)
+  const companyClients = allApiClients.filter((c: any) => (c.segment || c.type || "company").toLowerCase().includes("company") || (c.segment || c.type || "company").toLowerCase().includes("empresa"))
+  const agencyClients = allApiClients.filter((c: any) => (c.segment || c.type || "").toLowerCase().includes("agenc"))
+  const partnerClients = allApiClients.filter((c: any) => (c.segment || c.type || "").toLowerCase().includes("partner") || (c.segment || c.type || "").toLowerCase().includes("parceiro"))
+  // Anything not matching goes into company bucket
+  const unmatchedClients = allApiClients.filter((c: any) => !agencyClients.includes(c) && !partnerClients.includes(c) && !companyClients.includes(c))
+  const allCompanyClients = [...companyClients, ...unmatchedClients]
 
   const getFilteredClients = () => {
-    let clients = allClients
-    if (activeTab === "company") clients = mockClients.company
-    if (activeTab === "agency") clients = mockClients.agency
-    if (activeTab === "partner") clients = mockClients.partner
+    let clients: any[] = allApiClients
+    if (activeTab === "company") clients = allCompanyClients
+    if (activeTab === "agency") clients = agencyClients
+    if (activeTab === "partner") clients = partnerClients
 
     if (searchQuery) {
       clients = clients.filter(
@@ -146,29 +61,35 @@ export default function ClientesPage() {
   const stats = [
     {
       label: "Total Clientes",
-      value: allClients.length,
+      value: allApiClients.length,
       icon: Building2,
       color: "from-blue-500 to-cyan-500",
     },
     {
       label: "Companies",
-      value: mockClients.company.length,
+      value: allCompanyClients.length,
       icon: Briefcase,
       color: "from-purple-500 to-pink-500",
     },
     {
       label: "Agencies",
-      value: mockClients.agency.length,
+      value: agencyClients.length,
       icon: Users,
       color: "from-green-500 to-emerald-500",
     },
     {
       label: "Partners",
-      value: mockClients.partner.length,
+      value: partnerClients.length,
       icon: TrendingUp,
       color: "from-orange-500 to-amber-500",
     },
   ]
+
+  if (loading) return (
+    <div className="min-h-screen p-6 flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  )
 
   return (
     <div className="min-h-screen p-6 px-0 py-0 bg-slate-200">
@@ -221,10 +142,10 @@ export default function ClientesPage() {
         {/* Tabs and Client List */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-gray-100">
-            <TabsTrigger value="all">Todos ({allClients.length})</TabsTrigger>
-            <TabsTrigger value="company">Companies ({mockClients.company.length})</TabsTrigger>
-            <TabsTrigger value="agency">Agencies ({mockClients.agency.length})</TabsTrigger>
-            <TabsTrigger value="partner">Partners ({mockClients.partner.length})</TabsTrigger>
+            <TabsTrigger value="all">Todos ({allApiClients.length})</TabsTrigger>
+            <TabsTrigger value="company">Companies ({allCompanyClients.length})</TabsTrigger>
+            <TabsTrigger value="agency">Agencies ({agencyClients.length})</TabsTrigger>
+            <TabsTrigger value="partner">Partners ({partnerClients.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-4">

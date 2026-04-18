@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,9 +15,11 @@ import {
   Edit, Plus, Trash2, TrendingUp, Star, CheckCircle2, Award, X,
   Users, Gift, Zap, Target, BarChart3, ClipboardCheck,
   TrendingDown, AlertTriangle, RefreshCw, ArrowUpCircle, ArrowDownCircle, MinusCircle,
-  MessageSquare, Copy, ChevronRight,
+  MessageSquare, Copy, ChevronRight, Loader2,
 } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
+import { useNomadeLevels } from "@/hooks/useNomadeLevels"
+import { useNomades } from "@/hooks/useNomades"
 
 const LEVEL_THEMES: Record<string, {
   accent: string; headerBg: string; iconBg: string;
@@ -561,23 +563,35 @@ function RevisionTab() {
 
 export default function NiveisNomadesPage() {
   const { sidebarWidth } = useSidebar()
-  const [nomadLevels, setNomadLevels] = useState(mockNomadLevels)
+  const { levels: apiLevels, loading: levelsLoading, createLevel, updateLevel, deleteLevel: apiDeleteLevel } = useNomadeLevels()
+  const { nomades: apiNomades, loading: nomadesLoading } = useNomades()
+  const [nomadLevels, setNomadLevels] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState("config")
   const [editingLevel, setEditingLevel] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: "" })
 
-  const handleSaveLevel = (levelData: any) => {
-    if (levelData.id) {
-      setNomadLevels((levels) => levels.map((l) => (l.id === levelData.id ? levelData : l)))
-    } else {
-      setNomadLevels((levels) => [...levels, { ...levelData, id: Date.now() }])
-    }
+  // Sync API levels into local state
+  useEffect(() => {
+    if (apiLevels.length > 0) setNomadLevels(apiLevels)
+  }, [apiLevels])
+
+  const handleSaveLevel = async (levelData: any) => {
+    try {
+      if (levelData.id) {
+        await updateLevel(String(levelData.id), levelData)
+      } else {
+        await createLevel(levelData)
+      }
+    } catch { /* toast handled in hook */ }
     setEditingLevel(null)
     setIsDialogOpen(false)
   }
 
-  const handleDeleteLevel = (id: number) => {
+  const handleDeleteLevel = async (id: number) => {
+    try {
+      await apiDeleteLevel(String(id))
+    } catch { /* handled */ }
     setNomadLevels((levels) => levels.filter((l) => l.id !== id))
   }
 
@@ -773,11 +787,8 @@ export default function NiveisNomadesPage() {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="w-auto! max-w-none! p-0 border-0"
-          style={{
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
-          }}
+          className="p-0 border-0"
+          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
         >
           <div className="h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-linear-to-r from-violet-50/50 via-purple-50/30 to-indigo-50/50 dark:from-violet-950/20 dark:via-purple-950/10 dark:to-indigo-950/20">

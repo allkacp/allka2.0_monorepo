@@ -11,6 +11,7 @@ import {
   XCircle,
   Banknote,
 } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,8 @@ export default function PartnerSaques() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
+  const sortedWithdrawals = sortData(withdrawals);
 
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
   const balance = profile?.balance ?? 0;
@@ -215,27 +218,23 @@ export default function PartnerSaques() {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Valor
+                    <SortableHeader label="Valor" field="amount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["pending","approved","rejected","paid"]} />
                   </th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Chave PIX
+                    <SortableHeader label="Solicitado em" field="requestedAt" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                   </th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Status
+                    <SortableHeader label="Processado em" field="reviewedAt" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                   </th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Solicitado em
-                  </th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Processado em
-                  </th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Obs.
-                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Obs.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {withdrawals.map((w, idx) => {
+                {sortedWithdrawals.map((w, idx) => {
                   const sc = statusConfig[w.status];
                   const Icon = sc.icon;
                   return (

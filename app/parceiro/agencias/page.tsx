@@ -13,6 +13,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ export default function ParceiroAgencias() {
   const { ledAgencies } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const totalMrr = ledAgencies.reduce((s, a) => s + a.mrr, 0);
   const totalCommission = ledAgencies.reduce((s, a) => s + a.commissionAmount, 0);
@@ -153,25 +155,25 @@ export default function ParceiroAgencias() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Agência
+                  <SortableHeader label="Agência" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Plano
+                  <SortableHeader label="Plano" field="plan" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["500","1000","2000"]} />
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  MRR
+                  <SortableHeader label="MRR" field="mrr" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Comissão
+                  <SortableHeader label="Comissão" field="commissionAmount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Projetos
+                  <SortableHeader label="Projetos" field="projectsCount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Status
+                  <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["active","onboarding","at_risk","inactive"]} />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Última atividade
+                  <SortableHeader label="Última atividade" field="lastActivity" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
                 </th>
               </tr>
             </thead>
@@ -183,7 +185,7 @@ export default function ParceiroAgencias() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((agency) => {
+                sortData(filtered).map((agency) => {
                   const cfg = STATUS_CONFIG[agency.status];
                   const StatusIcon = cfg.icon;
                   return (

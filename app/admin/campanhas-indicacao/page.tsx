@@ -816,6 +816,12 @@ export default function CampanhasPage() {
   });
   const [accessSubmitting, setAccessSubmitting] = useState(false);
 
+  // isClosing states for unmount-on-close animated drawers
+  const [campaignClosing, setCampaignClosing] = useState(false);
+  const [couponClosing, setCouponClosing] = useState(false);
+  const [accessClosing, setAccessClosing] = useState(false);
+  const [reportClosing, setReportClosing] = useState(false);
+
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
@@ -952,8 +958,13 @@ export default function CampanhasPage() {
     setCampaignDialogOpen(true);
   };
   const closeCampaignDialog = () => {
-    setCampaignDialogOpen(false);
-    setEditingCampaign(null);
+    if (campaignClosing) return;
+    setCampaignClosing(true);
+    setTimeout(() => {
+      setCampaignDialogOpen(false);
+      setEditingCampaign(null);
+      setCampaignClosing(false);
+    }, 420);
   };
   const saveCampaign = () => {
     const linkedCoupon = coupons.find(
@@ -1060,6 +1071,19 @@ export default function CampanhasPage() {
     });
     setCouponDialogOpen(true);
   };
+  const closeCouponDrawer = () => {
+    if (couponClosing) return;
+    setCouponClosing(true);
+    setTimeout(() => {
+      setCouponDialogOpen(false);
+      setEditingCoupon(null);
+      setCompanySearchQuery("");
+      setUserSearchQuery("");
+      setCompanyPickerOpen(false);
+      setUserPickerOpen(false);
+      setCouponClosing(false);
+    }, 420);
+  };
   const saveCoupon = () => {
     const user = MOCK_USERS.find((u) => u.id === couponForm.linkedUserId);
     const data = {
@@ -1078,8 +1102,7 @@ export default function CampanhasPage() {
       ]);
       toast({ title: "Sucesso", description: "Cupom criado com sucesso" });
     }
-    setCouponDialogOpen(false);
-    setEditingCoupon(null);
+    closeCouponDrawer();
   };
   const deleteCoupon = (id: string) =>
     setCoupons((prev) => prev.filter((c) => c.id !== id));
@@ -1097,6 +1120,22 @@ export default function CampanhasPage() {
       description: `Cupom ${couponToggle.newStatus ? "ativado" : "desativado"} com sucesso`,
     });
     setCouponToggle({ coupon: null, newStatus: false });
+  };
+  const closeAccessDrawer = () => {
+    if (accessClosing) return;
+    setAccessClosing(true);
+    setTimeout(() => {
+      setAccessDrawerOpen(false);
+      setAccessClosing(false);
+    }, 420);
+  };
+  const closeReportDrawer = () => {
+    if (reportClosing) return;
+    setReportClosing(true);
+    setTimeout(() => {
+      setReportOpen(false);
+      setReportClosing(false);
+    }, 420);
   };
 
   // Sidebar gradient
@@ -2022,22 +2061,16 @@ export default function CampanhasPage() {
       </Card>
 
       {/* ── Campaign Drawer ──────────────────────────────────────── */}
-      {campaignDialogOpen && (
+      {(campaignDialogOpen || campaignClosing) && (<>
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
           onClick={closeCampaignDialog}
         />
-      )}
       <div
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className={`fixed top-0 right-0 h-full bg-white dark:bg-slate-950 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700 overflow-hidden ${
-          campaignDialogOpen
-            ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
-            : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)] pointer-events-none"
-        }`}
+        data-slot="sheet-content"
+        data-state={campaignClosing ? "closed" : "open"}
+        style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         <div
           className="px-6 pt-5 pb-6 relative"
@@ -2354,41 +2387,26 @@ export default function CampanhasPage() {
           </Button>
         </div>
       </div>
+      </>)}
 
       {/* ── Coupon Drawer ────────────────────────────────────────── */}
-      {couponDialogOpen && (
+      {(couponDialogOpen || couponClosing) && (<>
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-          onClick={() => {
-            setCouponDialogOpen(false);
-            setEditingCoupon(null);
-            setCompanySearchQuery("");
-            setUserSearchQuery("");
-            setCompanyPickerOpen(false);
-            setUserPickerOpen(false);
-          }}
+          onClick={closeCouponDrawer}
         />
-      )}
       <div
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className={`fixed top-0 right-0 h-full bg-white dark:bg-slate-950 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700 overflow-hidden ${
-          couponDialogOpen
-            ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
-            : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)] pointer-events-none"
-        }`}
+        data-slot="sheet-content"
+        data-state={couponClosing ? "closed" : "open"}
+        style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         <div
           className="px-6 pt-5 pb-6 relative"
           style={{ background: headerGradient }}
         >
           <button
-            onClick={() => {
-              setCouponDialogOpen(false);
-              setEditingCoupon(null);
-            }}
+            onClick={closeCouponDrawer}
             className="absolute top-3.5 right-3.5 text-white/60 hover:text-white hover:bg-white/15 rounded-md p-1 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -3355,14 +3373,7 @@ export default function CampanhasPage() {
             variant="outline"
             size="sm"
             className="h-9"
-            onClick={() => {
-              setCouponDialogOpen(false);
-              setEditingCoupon(null);
-              setCompanySearchQuery("");
-              setUserSearchQuery("");
-              setCompanyPickerOpen(false);
-              setUserPickerOpen(false);
-            }}
+            onClick={closeCouponDrawer}
           >
             Cancelar
           </Button>
@@ -3376,6 +3387,7 @@ export default function CampanhasPage() {
           </Button>
         </div>
       </div>
+      </>)}
 
       <ConfirmationDialog
         open={campaignToggle.campaign !== null}
@@ -3408,22 +3420,16 @@ export default function CampanhasPage() {
       />
 
       {/* ── Partner Access Drawer ───────────────────────────────── */}
-      {accessDrawerOpen && (
+      {(accessDrawerOpen || accessClosing) && (<>
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-          onClick={() => setAccessDrawerOpen(false)}
+          onClick={closeAccessDrawer}
         />
-      )}
       <div
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className={`fixed top-0 right-0 h-full bg-white dark:bg-slate-950 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700 overflow-hidden ${
-          accessDrawerOpen
-            ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
-            : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)] pointer-events-none"
-        }`}
+        data-slot="sheet-content"
+        data-state={accessClosing ? "closed" : "open"}
+        style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         {/* Header */}
         <div
@@ -3444,7 +3450,7 @@ export default function CampanhasPage() {
             </div>
           </div>
           <button
-            onClick={() => setAccessDrawerOpen(false)}
+            onClick={closeAccessDrawer}
             className="rounded-md p-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -3550,7 +3556,7 @@ export default function CampanhasPage() {
             variant="outline"
             size="sm"
             className="h-8 text-xs"
-            onClick={() => setAccessDrawerOpen(false)}
+            onClick={closeAccessDrawer}
           >
             Cancelar
           </Button>
@@ -3571,31 +3577,26 @@ export default function CampanhasPage() {
                 description: `${accessForm.name} já pode acessar o portal parceiro.`,
               });
               setAccessSubmitting(false);
-              setAccessDrawerOpen(false);
+              closeAccessDrawer();
             }}
           >
             {accessSubmitting ? "Criando..." : "Criar Acesso"}
           </Button>
         </div>
       </div>
+      </>)}
 
       {/* ── Report Drawer ────────────────────────────────────────── */}
-      {reportOpen && (
+      {(reportOpen || reportClosing) && (<>
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-          onClick={() => setReportOpen(false)}
+          onClick={closeReportDrawer}
         />
-      )}
       <div
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className={`fixed top-0 right-0 h-full bg-white dark:bg-slate-950 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700 overflow-hidden ${
-          reportOpen
-            ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
-            : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)] pointer-events-none"
-        }`}
+        data-slot="sheet-content"
+        data-state={reportClosing ? "closed" : "open"}
+        style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         {/* Header */}
         <div
@@ -3614,7 +3615,7 @@ export default function CampanhasPage() {
             </div>
           </div>
           <button
-            onClick={() => setReportOpen(false)}
+            onClick={closeReportDrawer}
             className="rounded-md p-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -4017,6 +4018,7 @@ export default function CampanhasPage() {
           </div>
         </div>
       </div>
+      </>)}
 
       {/* ── Advanced Filter Modal ─────────────────────────────────── */}
       {isFilterModalOpen && (

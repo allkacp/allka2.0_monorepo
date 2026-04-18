@@ -1,10 +1,11 @@
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
   TermAcceptanceGate,
   type PendingTerm,
 } from "@/components/term-acceptance-gate";
+import { apiClient } from "@/lib/api-client";
 
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
@@ -240,62 +241,40 @@ class PageErrorBoundary extends React.Component<
   }
 }
 
-// ─── Mock: termos pendentes para demonstração do fluxo de aceite ─────────────
-// Em produção, esta lista viria da API ao autenticar o usuário.
-// Armazenamos o estado no localStorage para não bloquear todo acesso no dev.
-const DEMO_STORAGE_KEY = "allka_terms_demo_accepted_v1";
-
-const MOCK_PENDING_TERMS: PendingTerm[] = [
-  {
-    id: "term-demo-1",
-    name: "Termo de Uso da Plataforma (Empresa)",
-    version: "2.1",
-    type: "terms_of_service",
-    is_mandatory: true,
-    acceptance_level: "empresa",
-    content:
-      "Ao utilizar esta plataforma como representante de uma empresa, você concorda com os presentes Termos de Uso.\n\n" +
-      "1. DA ACEITAÇÃO\n" +
-      'O presente instrumento regula as condições de uso da Plataforma Allka para pessoas jurídicas ("Empresa"). ' +
-      'Ao se cadastrar e realizar o primeiro acesso, o usuário administrador ("User Master") declara ter lido, compreendido e aceito integralmente este Termo em nome da Empresa.\n\n' +
-      "2. DAS OBRIGAÇÕES DA EMPRESA\n" +
-      "A Empresa compromete-se a: (a) utilizar a plataforma de forma lícita e ética; (b) manter seus dados cadastrais atualizados; " +
-      "(c) responder pelos atos de seus usuários vinculados; (d) não compartilhar credenciais de acesso.\n\n" +
-      "3. DA RESPONSABILIDADE\n" +
-      "A Allka não se responsabiliza por danos decorrentes do uso indevido da plataforma pela Empresa ou seus usuários.\n\n" +
-      "4. DA VIGÊNCIA\n" +
-      "Este Termo entra em vigor na data do aceite e permanece válido enquanto durar a relação contratual entre a Empresa e a Allka.",
-  },
-  {
-    id: "term-demo-2",
-    name: "Política de Privacidade",
-    version: "1.5",
-    type: "privacy_policy",
-    is_mandatory: true,
-    acceptance_level: "usuario",
-    content:
-      "Esta Política de Privacidade descreve como coletamos, usamos e protegemos seus dados pessoais na Plataforma Allka, " +
-      "em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).\n\n" +
-      "1. DADOS COLETADOS\n" +
-      "Coletamos dados de identificação (nome, CPF/CNPJ), contato (e-mail, telefone), navegação (IP, cookies, logs de acesso) " +
-      "e dados fornecidos voluntariamente durante o uso da plataforma.\n\n" +
-      "2. FINALIDADE DO TRATAMENTO\n" +
-      "Os dados são utilizados para: prestação do serviço contratado; comunicações sobre a plataforma; " +
-      "cumprimento de obrigações legais; melhoria contínua dos nossos serviços.\n\n" +
-      "3. COMPARTILHAMENTO\n" +
-      "Não compartilhamos seus dados com terceiros, exceto quando necessário para a prestação do serviço ou por exigência legal.\n\n" +
-      "4. SEUS DIREITOS\n" +
-      "Você tem direito de acesso, correção, portabilidade e exclusão dos seus dados. Entre em contato pelo e-mail privacy@allka.com.br.",
-  },
-];
+// ─── Pending terms: loaded from API ──────────────────────────────────────────
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const [termsAccepted, setTermsAccepted] = useState<boolean>(
-    () => localStorage.getItem(DEMO_STORAGE_KEY) === "true",
-  );
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(true); // default true to avoid flash
+  const [pendingTerms, setPendingTerms] = useState<PendingTerm[]>([]);
 
-  const handleAllAccepted = (ids: string[]) => {
-    localStorage.setItem(DEMO_STORAGE_KEY, "true");
+  useEffect(() => {
+    let cancelled = false;
+    async function checkTerms() {
+      try {
+        const res: any = await apiClient.checkTerms();
+        if (cancelled) return;
+        const pending = res.pending || res.data || (Array.isArray(res) ? res : []);
+        if (pending.length > 0) {
+          setPendingTerms(pending);
+          setTermsAccepted(false);
+        }
+      } catch (err) {
+        // If API fails, don't block: allow access
+        console.error("[App] Failed to check terms:", err);
+      }
+    }
+    checkTerms();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleAllAccepted = async (ids: string[]) => {
+    try {
+      for (const id of ids) {
+        await apiClient.acceptTerm(id);
+      }
+    } catch (err) {
+      console.error("[App] Failed to accept terms via API:", err);
+    }
     setTermsAccepted(true);
   };
   return (
@@ -341,7 +320,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                           {/* Gate de aceite de termos — posição fixed, bloqueia toda a UI */}
                           {!termsAccepted && (
                             <TermAcceptanceGate
-                              pendingTerms={MOCK_PENDING_TERMS}
+                              pendingTerms={pendingTerms}
                               user={{
                                 name: "Administrador Master",
                                 email: "admin@empresa.com",

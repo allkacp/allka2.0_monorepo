@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { usePartner } from "@/contexts/partner-context";
 import { FolderOpen, CheckCircle2, Clock, XCircle, Search } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
@@ -19,6 +20,7 @@ export default function PartnerProjetos() {
   const { projects, stats } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const filtered = projects.filter((p) => {
     if (
@@ -139,30 +141,30 @@ export default function PartnerProjetos() {
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
               <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Projeto
+                <SortableHeader label="Projeto" field="projectName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Empresa
+                <SortableHeader label="Empresa" field="companyName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Categoria
+                <SortableHeader label="Categoria" field="serviceCategory" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["Branding","Social Media","Produção de Vídeo","Conteúdo"]} />
               </th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Valor
+                <SortableHeader label="Valor" field="projectValue" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
               </th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Comissão
+                <SortableHeader label="Comissão" field="commissionGenerated" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Status
+                <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["active","completed","cancelled"]} />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Contratado
+                <SortableHeader label="Contratado" field="startDate" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filtered.map((p, idx) => {
+            {sortData(filtered).map((p, idx) => {
               const sc = statusConfig[p.status];
               const cc = commStatusConfig[p.commissionStatus];
               return (

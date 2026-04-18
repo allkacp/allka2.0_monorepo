@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DollarSign, Users, TrendingUp, Settings, Plus, Edit, Save, X } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
 
 const categories = [
   {
@@ -83,6 +84,7 @@ export default function ComissionamentosPage() {
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [isEditingGlobal, setIsEditingGlobal] = useState(false)
   const [editingCategory, setEditingCategory] = useState(null)
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting()
 
   const handleSaveCategory = (categoryData) => {
     setEditingCategory(null)
@@ -341,18 +343,18 @@ export default function ComissionamentosPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-3">Líder</th>
-                      <th className="text-left p-3">Categoria</th>
-                      <th className="text-left p-3">Salário Fixo</th>
-                      <th className="text-left p-3">Comissão</th>
+                      <th className="text-left p-3"><SortableHeader label="Líder" field="leader" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>
+                      <th className="text-left p-3"><SortableHeader label="Categoria" field="name" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["Design Gráfico","Copywriting","Social Media","Desenvolvimento Web","Edição de Vídeo"]} /></th>
+                      <th className="text-left p-3"><SortableHeader label="Salário Fixo" field="fixedSalary" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>
+                      <th className="text-left p-3"><SortableHeader label="Comissão" field="commissionRate" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>
                       <th className="text-left p-3">Total Ganho</th>
-                      <th className="text-left p-3">Receita Gerada</th>
+                      <th className="text-left p-3"><SortableHeader label="Receita Gerada" field="monthlyRevenue" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>
                       <th className="text-left p-3">ROI</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {categories
-                      .filter((c) => c.status === "active")
+                    {sortData(categories
+                      .filter((c) => c.status === "active"))
                       .map((category) => {
                         const commissionEarned = (category.monthlyRevenue * category.commissionRate) / 100
                         const totalEarned = category.fixedSalary + commissionEarned

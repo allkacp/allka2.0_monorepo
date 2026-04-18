@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Tag,
 } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -41,6 +42,7 @@ const PLAN_DISCOUNTS: Record<string, { label: string; discount: number; color: s
 export default function AgenciaFinanceiro() {
   const { profile, invoices } = useAgencia();
   const [statusFilter, setStatusFilter] = useState("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const planInfo = PLAN_DISCOUNTS[profile.plan] ?? {
     label: `Plano ${profile.plan}`,
@@ -51,6 +53,8 @@ export default function AgenciaFinanceiro() {
   const filtered = invoices.filter(
     (i) => statusFilter === "all" || i.status === statusFilter
   );
+
+  const sorted = sortData(filtered);
 
   const pendingTotal = invoices
     .filter((i) => i.status === "pending")
@@ -163,10 +167,18 @@ export default function AgenciaFinanceiro() {
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nº</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Vencimento</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <SortableHeader label="Descrição" field="description" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <SortableHeader label="Valor" field="amount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <SortableHeader label="Vencimento" field="dueDate" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={[...new Set(filtered.map((r) => r.status).filter(Boolean))]} />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -177,7 +189,7 @@ export default function AgenciaFinanceiro() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((invoice) => {
+                  sorted.map((invoice) => {
                     const cfg = INVOICE_STATUS_CONFIG[invoice.status];
                     const StatusIcon = cfg.icon;
                     return (

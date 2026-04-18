@@ -288,6 +288,14 @@ export function UserViewSlidePanel({
     updateUser,
   } = usePlatformUsers();
   const [isClosing, setIsClosing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    if (open) {
+      const id = requestAnimationFrame(() => setIsMounted(true));
+      return () => cancelAnimationFrame(id);
+    }
+    if (!isClosing) setIsMounted(false);
+  }, [open, isClosing]);
   const [onlineStatus, setOnlineStatus] = useState("online");
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -811,7 +819,10 @@ export function UserViewSlidePanel({
       setEditedData({});
     }
     setIsClosing(true);
-    setTimeout(onClose, 300);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 420);
   };
 
   const handleEditMode = () => {
@@ -1762,18 +1773,12 @@ export function UserViewSlidePanel({
   return (
     <>
       <div
-        className={cn(
-          "fixed top-0 z-40 h-[calc(100vh-25px)]",
-          "bg-background overflow-hidden flex flex-col",
-          "transition-all duration-300 ease-in-out",
-          isClosing
-            ? "slide-out-to-right opacity-0"
-            : "slide-in-from-right opacity-100",
-        )}
+        data-slot="sheet-content"
+        data-state={isClosing ? "closed" : "open"}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{
           left: panelStyle.left,
           width: panelStyle.width,
-          display: open && !isClosing ? "flex" : "none",
         }}
       >
         {/* Header - Modern and Premium */}

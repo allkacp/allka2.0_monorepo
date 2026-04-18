@@ -5,212 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, Eye, Edit, Star, ChevronDown, ChevronUp, X, Phone, MessageCircle, Mail } from "lucide-react"
+import { Search, Eye, Edit, Star, ChevronDown, ChevronUp, X, Phone, MessageCircle, Mail, Loader2 } from "lucide-react"
 import { NomadMetricsWidgets } from "@/components/admin/nomad-metrics-widgets"
 import { NomadViewModal } from "@/components/admin/nomad-view-modal"
 import { NomadEditModal } from "@/components/admin/nomad-edit-modal"
 import { PageHeader } from "@/components/page-header"
-
-const mockNomades = [
-  {
-    id: 1,
-    name: "Ana Santos",
-    email: "ana@example.com",
-    phone: "+55 11 98765-4321",
-    level: "Silver",
-    specialties: ["Design Gráfico", "Social Media"],
-    products: ["Marketing Digital", "Branding"],
-    categories: ["Design", "Marketing"],
-    taskTypes: ["Criação de Posts", "Design de Logos"],
-    tasksCompleted: 45,
-    rating: 4.8,
-    earnings: 12500,
-    status: "ativo",
-    joinedDate: "2023-06-15",
-    online_status: "online",
-    last_login: "2024-01-22T14:30:00",
-  },
-  {
-    id: 2,
-    name: "Carlos Lima",
-    email: "carlos@example.com",
-    phone: "+55 21 99876-5432",
-    level: "Gold",
-    specialties: ["Desenvolvimento Web", "SEO"],
-    products: ["Desenvolvimento", "SEO"],
-    categories: ["Tecnologia", "Marketing"],
-    taskTypes: ["Desenvolvimento Frontend", "Otimização SEO"],
-    tasksCompleted: 89,
-    rating: 4.9,
-    earnings: 28900,
-    status: "ativo",
-    joinedDate: "2023-03-10",
-    online_status: "busy",
-    last_login: "2024-01-22T10:15:00",
-  },
-  {
-    id: 3,
-    name: "Maria Silva",
-    email: "maria@example.com",
-    phone: "+55 85 98123-4567",
-    level: "Bronze",
-    specialties: ["Copywriting"],
-    products: ["Conteúdo"],
-    categories: ["Marketing", "Comunicação"],
-    taskTypes: ["Redação de Artigos", "Criação de Textos"],
-    tasksCompleted: 12,
-    rating: 4.5,
-    earnings: 3200,
-    status: "teste_pendente",
-    joinedDate: "2024-01-05",
-    online_status: "offline",
-    last_login: "2024-01-20T16:45:00",
-  },
-  {
-    id: 4,
-    name: "Rafael Mendes",
-    email: "rafael@example.com",
-    phone: "+55 31 97654-3210",
-    level: "Platinum",
-    specialties: ["Motion Design", "Vídeo"],
-    products: ["Produção de Vídeo", "Animação"],
-    categories: ["Design", "Produção"],
-    taskTypes: ["Edição de Vídeo", "Motion Graphics"],
-    tasksCompleted: 214,
-    rating: 4.9,
-    earnings: 67400,
-    status: "ativo",
-    joinedDate: "2022-09-20",
-    online_status: "online",
-    last_login: "2024-01-22T15:00:00",
-  },
-  {
-    id: 5,
-    name: "Juliana Costa",
-    email: "juliana@example.com",
-    phone: "+55 51 96543-2109",
-    level: "Diamond",
-    specialties: ["Estratégia Digital", "Growth"],
-    products: ["Growth Hacking", "Marketing Digital"],
-    categories: ["Marketing", "Estratégia"],
-    taskTypes: ["Planejamento Estratégico", "Análise de Dados"],
-    tasksCompleted: 412,
-    rating: 5.0,
-    earnings: 138000,
-    status: "ativo",
-    joinedDate: "2021-05-12",
-    online_status: "away",
-    last_login: "2024-01-22T09:00:00",
-  },
-  {
-    id: 6,
-    name: "Thiago Rocha",
-    email: "thiago@example.com",
-    phone: "+55 41 95432-1098",
-    level: "Leader",
-    specialties: ["Gestão de Equipes", "Product"],
-    products: ["Gestão de Projetos", "Desenvolvimento"],
-    categories: ["Tecnologia", "Gestão"],
-    taskTypes: ["Coordenação de Equipe", "Revisão de Entregas"],
-    tasksCompleted: 318,
-    rating: 4.9,
-    earnings: 102500,
-    status: "ativo",
-    joinedDate: "2021-11-03",
-    online_status: "online",
-    last_login: "2024-01-22T16:00:00",
-  },
-  {
-    id: 7,
-    name: "Lucas Ferreira",
-    email: "lucas@example.com",
-    phone: "+55 11 99000-1111",
-    level: "Bronze",
-    specialties: ["Design Gráfico"],
-    products: ["Branding"],
-    categories: ["Design"],
-    taskTypes: ["Design de Logos"],
-    tasksCompleted: 0,
-    rating: 0,
-    earnings: 0,
-    status: "cadastrado",
-    joinedDate: "2026-03-28",
-    online_status: "offline",
-    last_login: "2026-03-28T10:00:00",
-  },
-  {
-    id: 8,
-    name: "Fernanda Alves",
-    email: "fernanda@example.com",
-    phone: "+55 21 98000-2222",
-    level: "Bronze",
-    specialties: ["Copywriting"],
-    products: ["Conteúdo"],
-    categories: ["Marketing"],
-    taskTypes: ["Redação de Artigos"],
-    tasksCompleted: 0,
-    rating: 0,
-    earnings: 0,
-    status: "teste_pendente",
-    joinedDate: "2026-03-15",
-    online_status: "offline",
-    last_login: "2026-03-15T09:00:00",
-  },
-  {
-    id: 9,
-    name: "Roberto Nunes",
-    email: "roberto@example.com",
-    phone: "+55 85 97000-3333",
-    level: "Bronze",
-    specialties: ["Social Media"],
-    products: ["Marketing Digital"],
-    categories: ["Marketing"],
-    taskTypes: ["Criação de Posts"],
-    tasksCompleted: 8,
-    rating: 2.3,
-    earnings: 1200,
-    status: "atencao",
-    joinedDate: "2025-10-01",
-    online_status: "away",
-    last_login: "2026-04-02T08:00:00",
-  },
-  {
-    id: 10,
-    name: "Bianca Torres",
-    email: "bianca@example.com",
-    phone: "+55 31 96000-4444",
-    level: "Silver",
-    specialties: ["SEO"],
-    products: ["SEO"],
-    categories: ["Marketing"],
-    taskTypes: ["Otimização SEO"],
-    tasksCompleted: 22,
-    rating: 4.2,
-    earnings: 5800,
-    status: "sem_tarefas",
-    joinedDate: "2025-06-10",
-    online_status: "offline",
-    last_login: "2026-02-28T14:00:00",
-  },
-  {
-    id: 11,
-    name: "Paulo Carvalho",
-    email: "paulo@example.com",
-    phone: "+55 51 95000-5555",
-    level: "Bronze",
-    specialties: ["Desenvolvimento Web"],
-    products: ["Desenvolvimento"],
-    categories: ["Tecnologia"],
-    taskTypes: ["Desenvolvimento Frontend"],
-    tasksCompleted: 0,
-    rating: 0,
-    earnings: 0,
-    status: "reprovado",
-    joinedDate: "2026-02-20",
-    online_status: "offline",
-    last_login: "2026-02-21T11:00:00",
-  },
-]
+import { useNomades } from "@/hooks/useNomades"
 
 const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
   Bronze:   { icon: "🥉", className: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -245,6 +45,7 @@ const availableTaskTypes = [
 ]
 
 export default function AdminNomadesPage() {
+  const { nomades: apiNomades, loading, error, updateNomade } = useNomades()
   const [searchTerm, setSearchTerm] = useState("")
   const [filterLevel, setFilterLevel] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -257,7 +58,7 @@ export default function AdminNomadesPage() {
   const [filterProducts, setFilterProducts] = useState<string[]>([])
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterTaskTypes, setFilterTaskTypes] = useState<string[]>([])
-  const [selectedNomad, setSelectedNomad] = useState<(typeof mockNomades)[0] | null>(null)
+  const [selectedNomad, setSelectedNomad] = useState<any | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [invitedNomads, setInvitedNomads] = useState<Set<number>>(new Set())
@@ -266,7 +67,7 @@ export default function AdminNomadesPage() {
     setInvitedNomads((prev) => new Set([...prev, nomadId]))
   }
 
-  const filteredNomades = mockNomades.filter((nomade) => {
+  const filteredNomades = apiNomades.filter((nomade: any) => {
     const matchesSearch =
       nomade.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       nomade.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -327,17 +128,18 @@ export default function AdminNomadesPage() {
     setFilterTaskTypes((prev) => (prev.includes(taskType) ? prev.filter((t) => t !== taskType) : [...prev, taskType]))
   }
 
-  const handleView = (nomad: (typeof mockNomades)[0]) => {
+  const handleView = (nomad: any) => {
     setSelectedNomad(nomad)
     setIsViewModalOpen(true)
   }
 
-  const handleEdit = (nomad: (typeof mockNomades)[0]) => {
+  const handleEdit = (nomad: any) => {
     setSelectedNomad(nomad)
     setIsEditModalOpen(true)
   }
 
-  const handleSave = (updatedNomad: (typeof mockNomades)[0]) => {
+  const handleSave = async (updatedNomad: any) => {
+    if (updatedNomad.id) await updateNomade(String(updatedNomad.id), updatedNomad)
   }
 
   const handlePhoneCall = (phone: string) => {
@@ -388,6 +190,18 @@ export default function AdminNomadesPage() {
         return "Desconhecido"
     }
   }
+
+  if (loading) return (
+    <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  )
+
+  if (error) return (
+    <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
+      <p className="text-destructive">Erro ao carregar nômades: {error}</p>
+    </div>
+  )
 
   return (
     <div className="container mx-auto px-0 py-0 space-y-5">

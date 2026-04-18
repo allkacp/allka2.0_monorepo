@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { apiClient } from "@/lib/api-client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,212 +74,14 @@ export interface EmpresaProfile {
   activeProjects: number;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_PROFILE: EmpresaProfile = {
-  id: "emp1",
-  name: "Coca-Cola Brasil Ltda.",
-  cnpj: "49.808.095/0001-00",
-  email: "marketing@cocacola.com.br",
-  phone: "(11) 99999-1234",
-  address: "Av. Paulista, 1578 — São Paulo, SP",
-  plan: "2000",
-  status: "active",
-  createdAt: "2025-01-15",
-  totalInvested: 86400,
-  activeProjects: 3,
-};
-
-const MOCK_PROJECTS: EmpresaProject[] = [
-  {
-    id: "p1",
-    name: "Campanha Rebranding Q1",
-    category: "Branding",
-    status: "entregue",
-    value: 12000,
-    startDate: "2026-01-10",
-    completedDate: "2026-02-28",
-    tasksDone: 8,
-    tasksTotal: 8,
-    nomadeCount: 3,
-  },
-  {
-    id: "p2",
-    name: "Social Media Pack — Fevereiro",
-    category: "Social Media",
-    status: "producao",
-    value: 8500,
-    startDate: "2026-02-01",
-    deliveryDate: "2026-04-30",
-    tasksDone: 5,
-    tasksTotal: 12,
-    nomadeCount: 4,
-  },
-  {
-    id: "p3",
-    name: "Vídeo Institucional 2026",
-    category: "Produção de Vídeo",
-    status: "briefing",
-    value: 22000,
-    startDate: "2026-03-15",
-    deliveryDate: "2026-05-15",
-    tasksDone: 1,
-    tasksTotal: 15,
-    nomadeCount: 2,
-  },
-  {
-    id: "p4",
-    name: "E-mail Marketing — Newsletter",
-    category: "E-mail Marketing",
-    status: "revisao",
-    value: 4200,
-    startDate: "2026-03-01",
-    deliveryDate: "2026-04-10",
-    tasksDone: 4,
-    tasksTotal: 5,
-    nomadeCount: 1,
-  },
-  {
-    id: "p5",
-    name: "Landing Page Lançamento",
-    category: "UX/UI + Dev",
-    status: "producao",
-    value: 18500,
-    startDate: "2026-02-20",
-    deliveryDate: "2026-05-01",
-    tasksDone: 6,
-    tasksTotal: 18,
-    nomadeCount: 3,
-  },
-];
-
-const MOCK_TASKS: EmpresaTask[] = [
-  {
-    id: "t1",
-    projectId: "p2",
-    projectName: "Social Media Pack — Fevereiro",
-    name: "Criação de 10 posts para Instagram",
-    category: "Design",
-    status: "done",
-    nomadeName: "Ana Lima",
-    value: 850,
-    dueDate: "2026-03-10",
-    deliveredAt: "2026-03-09",
-  },
-  {
-    id: "t2",
-    projectId: "p2",
-    projectName: "Social Media Pack — Fevereiro",
-    name: "Roteiro para 2 Reels",
-    category: "Redação",
-    status: "in_progress",
-    nomadeName: "Pedro Sousa",
-    value: 600,
-    dueDate: "2026-04-15",
-  },
-  {
-    id: "t3",
-    projectId: "p3",
-    projectName: "Vídeo Institucional 2026",
-    name: "Briefing criativo e roteiro",
-    category: "Roteiro",
-    status: "review",
-    nomadeName: "Carla Nunes",
-    value: 1200,
-    dueDate: "2026-04-08",
-  },
-  {
-    id: "t4",
-    projectId: "p4",
-    projectName: "E-mail Marketing — Newsletter",
-    name: "Criação de template HTML",
-    category: "Dev",
-    status: "review",
-    nomadeName: "Lucas Dias",
-    value: 900,
-    dueDate: "2026-04-05",
-  },
-  {
-    id: "t5",
-    projectId: "p5",
-    projectName: "Landing Page Lançamento",
-    name: "Wireframes e protótipo no Figma",
-    category: "UX/UI",
-    status: "in_progress",
-    nomadeName: "Sofia Ramos",
-    value: 1400,
-    dueDate: "2026-04-20",
-  },
-  {
-    id: "t6",
-    projectId: "p5",
-    projectName: "Landing Page Lançamento",
-    name: "Desenvolvimento front-end",
-    category: "Dev",
-    status: "available",
-    value: 3000,
-    dueDate: "2026-05-01",
-  },
-];
-
-const MOCK_INVOICES: EmpresaInvoice[] = [
-  {
-    id: "inv1",
-    number: "2026-0042",
-    description: "Campanha Rebranding Q1",
-    amount: 12000,
-    status: "paid",
-    issuedAt: "2026-01-10",
-    dueDate: "2026-01-20",
-    paidAt: "2026-01-18",
-  },
-  {
-    id: "inv2",
-    number: "2026-0058",
-    description: "Social Media Pack — Fevereiro",
-    amount: 8500,
-    status: "paid",
-    issuedAt: "2026-02-01",
-    dueDate: "2026-02-10",
-    paidAt: "2026-02-09",
-  },
-  {
-    id: "inv3",
-    number: "2026-0074",
-    description: "Vídeo Institucional 2026 — Entrada (50%)",
-    amount: 11000,
-    status: "paid",
-    issuedAt: "2026-03-15",
-    dueDate: "2026-03-20",
-    paidAt: "2026-03-19",
-  },
-  {
-    id: "inv4",
-    number: "2026-0089",
-    description: "E-mail Marketing — Newsletter",
-    amount: 4200,
-    status: "pending",
-    issuedAt: "2026-03-25",
-    dueDate: "2026-04-10",
-  },
-  {
-    id: "inv5",
-    number: "2026-0102",
-    description: "Landing Page Lançamento — Entrada (40%)",
-    amount: 7400,
-    status: "pending",
-    issuedAt: "2026-04-01",
-    dueDate: "2026-04-15",
-  },
-];
-
 // ── Context ────────────────────────────────────────────────────────────────────
 
 interface EmpresaContextType {
-  profile: EmpresaProfile;
+  profile: EmpresaProfile | null;
   projects: EmpresaProject[];
   tasks: EmpresaTask[];
   invoices: EmpresaInvoice[];
+  loading: boolean;
   addProject: (project: EmpresaProject) => void;
   confirmProjectPayment: (projectId: string) => void;
 }
@@ -286,16 +89,76 @@ interface EmpresaContextType {
 const EmpresaContext = createContext<EmpresaContextType | undefined>(undefined);
 
 export function EmpresaProvider({ children }: { children: React.ReactNode }) {
-  const [profile] = useState<EmpresaProfile>(MOCK_PROFILE);
-  const [projects, setProjects] = useState<EmpresaProject[]>(MOCK_PROJECTS);
-  const [tasks] = useState<EmpresaTask[]>(MOCK_TASKS);
-  const [invoices] = useState<EmpresaInvoice[]>(MOCK_INVOICES);
+  const [profile, setProfile] = useState<EmpresaProfile | null>(null);
+  const [projects, setProjects] = useState<EmpresaProject[]>([]);
+  const [tasks, setTasks] = useState<EmpresaTask[]>([]);
+  const [invoices, setInvoices] = useState<EmpresaInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addProject = (project: EmpresaProject) => {
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [companiesRes, projectsRes, invoicesRes] = await Promise.allSettled([
+          apiClient.getCompanies({ limit: "1" }),
+          apiClient.getProjects({ limit: "100" }),
+          apiClient.getInvoices({ limit: "100" }),
+        ]);
+        if (cancelled) return;
+        if (companiesRes.status === "fulfilled") {
+          const data: any = companiesRes.value;
+          const list = data.data || (Array.isArray(data) ? data : []);
+          if (list[0]) setProfile({
+            id: String(list[0].id),
+            name: list[0].name || "",
+            cnpj: list[0].document || "",
+            email: list[0].email || "",
+            phone: list[0].phone || "",
+            address: list[0].address || "",
+            plan: list[0].plan || "",
+            status: list[0].status || "active",
+            createdAt: list[0].created_at || list[0].createdAt || "",
+            totalInvested: list[0].totalInvested || 0,
+            activeProjects: list[0].activeProjects || 0,
+          });
+        }
+        if (projectsRes.status === "fulfilled") {
+          const data: any = projectsRes.value;
+          const list = data.data || (Array.isArray(data) ? data : []);
+          setProjects(list.map((p: any) => ({
+            id: String(p.id),
+            name: p.name || "",
+            category: p.type || p.category || "",
+            status: p.status || "briefing",
+            value: p.budget || p.value || 0,
+            startDate: p.startDate || p.start_date || "",
+            deliveryDate: p.deliveryDate || p.delivery_date || "",
+            completedDate: p.completedDate || "",
+            tasksDone: p.tasksDone || 0,
+            tasksTotal: p.tasksTotal || 0,
+            nomadeCount: p.nomadeCount || 0,
+          })));
+        }
+        if (invoicesRes.status === "fulfilled") {
+          const data: any = invoicesRes.value;
+          const list = data.data || (Array.isArray(data) ? data : []);
+          setInvoices(list);
+        }
+      } catch (err) {
+        console.error("[EmpresaProvider] Failed to load:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const addProject = useCallback((project: EmpresaProject) => {
     setProjects((prev) => [project, ...prev]);
-  };
+  }, []);
 
-  const confirmProjectPayment = (projectId: string) => {
+  const confirmProjectPayment = useCallback((projectId: string) => {
     setProjects((prev) =>
       prev.map((p) => {
         if (p.id !== projectId) return p;
@@ -314,10 +177,10 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
         };
       })
     );
-  };
+  }, []);
 
   return (
-    <EmpresaContext.Provider value={{ profile, projects, tasks, invoices, addProject, confirmProjectPayment }}>
+    <EmpresaContext.Provider value={{ profile, projects, tasks, invoices, loading, addProject, confirmProjectPayment }}>
       {children}
     </EmpresaContext.Provider>
   );

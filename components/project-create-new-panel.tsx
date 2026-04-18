@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
   FolderKanban, Mail, Calendar, DollarSign, User, AlertCircle, Check, Camera, ZoomIn, Trash2, Crosshair,
   UserPlus, Search, Building2, ShoppingBag, Package, X as XIcon,
-  Save, Eye, ArrowLeft, CreditCard, Percent, TrendingUp, ShoppingCart,
+  Save, Eye, ArrowLeft, CreditCard, Percent, TrendingUp, ShoppingCart, Plus,
 } from "lucide-react"
-import { mockCompaniesList, mockClientsByCompany, mockUsersByCompany } from "@/lib/mock-companies"
-import type { MockClientItem } from "@/lib/mock-companies"
+import { useCompanyData } from "@/lib/mock-companies"
+import type { MockClientItem, MockCompanyItem } from "@/lib/mock-companies"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel"
+import { useProjects } from "@/hooks/useProjects"
 import { cn } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -162,7 +164,7 @@ export function ProjectCreateNewPanel({
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const ALL_ACCORDIONS = ["dados", "responsavel", "datas", "orcamento", "config"]
   const [openAccordions, setOpenAccordions] = useState<string[]>(["dados"])
-  const [mounted, setMounted] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
 
   // Company-scoping state
   const [resolvedCompanyId, setResolvedCompanyId] = useState<number | null>(companyIdProp ?? null)
@@ -173,6 +175,23 @@ export function ProjectCreateNewPanel({
   const [newClientName, setNewClientName] = useState("")
   const [newClientEmail, setNewClientEmail] = useState("")
   const [localClients, setLocalClients] = useState<MockClientItem[]>([])
+
+  // Custom project types added inline
+  const [localProjectTypes, setLocalProjectTypes] = useState<string[]>([])
+  const [showNewTypeForm, setShowNewTypeForm] = useState(false)
+  const [newTypeName, setNewTypeName] = useState("")
+
+  // Company creation
+  const [showCreateCompany, setShowCreateCompany] = useState(false)
+  const [localCompanies, setLocalCompanies] = useState<MockCompanyItem[]>([])
+
+  // Project name uniqueness
+  const { projects: existingProjects } = useProjects()
+  const existingProjectNames = existingProjects.map(p => p.name.toLowerCase())
+  const [warnings, setWarnings] = useState<Record<string, string>>({})
+
+  // Company data from API
+  const { companies: mockCompaniesList, clientsByCompany: mockClientsByCompany, usersByCompany: mockUsersByCompany } = useCompanyData()
 
   // Products catalog + cart state
   const [showProductsStep, setShowProductsStep] = useState(false)
@@ -205,7 +224,18 @@ export function ProjectCreateNewPanel({
 
   const [formData, setFormData] = useState<FormData>(buildFormFromInitial)
 
-  useEffect(() => { setMounted(true) }, [])
+  const handleClose = () => {
+    if (isClosing) return
+    setIsClosing(true)
+    setTimeout(() => {
+      onOpenChange(false)
+    }, 420)
+  }
+
+  // Reset closing flag once the parent confirms close
+  useEffect(() => {
+    if (!open) setIsClosing(false)
+  }, [open])
 
   // Sync when panel opens / initialData changes
   useEffect(() => {
@@ -348,7 +378,7 @@ export function ProjectCreateNewPanel({
       }
       toast({ title: "Sucesso", description: cloneMode ? "Projeto clonado!" : "Projeto criado!" })
       onCreate(created)
-      onOpenChange(false)
+      handleClose()
     } catch (err: any) {
       toast({ title: "Erro", description: err.message || "Falha ao criar projeto", variant: "destructive" })
     } finally {
@@ -521,17 +551,14 @@ export function ProjectCreateNewPanel({
 
   const panelWidth = `calc(100vw - ${sidebarWidth}px)`
 
-  if (!mounted) return null
+  if (!open && !isClosing) return null
 
   return (
     <>
       <div
-        className={cn(
-          "fixed top-0 right-0 h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 z-50 shadow-2xl",
-          open
-            ? "translate-x-0 opacity-100 transition-[transform,opacity] duration-[560ms] ease-[cubic-bezier(0.2,0,0,1)]"
-            : "translate-x-full opacity-0 transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.4,0,1,1)]",
-        )}
+        data-slot="sheet-content"
+        data-state={isClosing ? "closed" : "open"}
+        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         <div className="relative h-full flex flex-col overflow-hidden">
@@ -559,7 +586,7 @@ export function ProjectCreateNewPanel({
                 </div>
               </button>
             }
-            onClose={() => onOpenChange(false)}
+            onClose={handleClose}
           />
 
           {/* Avatar menu */}
@@ -687,23 +714,59 @@ export function ProjectCreateNewPanel({
                         <Input
                           placeholder="Ex: Website Institucional Florescer"
                           value={formData.nome}
-                          onChange={(e) => updateField("nome", e.target.value)}
-                          className={cn("h-8 text-xs", errors.nome && "border-red-400")}
+                          onChange={(e) => {
+                            updateField("nome", e.target.value)
+                            if (warnings.nome) setWarnings(prev => ({ ...prev, nome: "" }))
+                          }}
+                          onBlur={() => {
+                            if (formData.nome.trim() && existingProjectNames.includes(formData.nome.trim().toLowerCase())) {
+                              setWarnings(prev => ({ ...prev, nome: "Este nome já está em uso" }))
+                            } else {
+                              setWarnings(prev => ({ ...prev, nome: "" }))
+                            }
+                          }}
+                          className={cn("h-8 text-xs", errors.nome && "border-red-400", !errors.nome && warnings.nome && "border-amber-400")}
                         />
                         {errors.nome && <p className="text-xs text-red-500">{errors.nome}</p>}
+                        {!errors.nome && warnings.nome && <p className="text-xs text-amber-600">{warnings.nome}</p>}
                       </div>
 
                       {/* Tipo */}
                       <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">Tipo de Projeto *</Label>
-                        <Select value={formData.tipo} onValueChange={(v) => updateField("tipo", v)}>
-                          <SelectTrigger className={cn("h-8 text-xs", errors.tipo && "border-red-400")}>
-                            <SelectValue placeholder="Selecione o tipo" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {PROJECT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        {!showNewTypeForm ? (
+                          <SearchableSelect
+                            items={[...PROJECT_TYPES, ...localProjectTypes].map(t => ({ value: t, label: t }))}
+                            value={formData.tipo}
+                            onValueChange={(v) => updateField("tipo", v)}
+                            placeholder="Selecione o tipo"
+                            searchPlaceholder="Pesquisar tipo..."
+                            emptyMessage="Nenhum tipo encontrado."
+                            className={cn("h-8 text-xs", errors.tipo && "border-red-400")}
+                            onAddNew={() => setShowNewTypeForm(true)}
+                            addNewLabel="Adicionar tipo"
+                          />
+                        ) : (
+                          <div className="space-y-1.5 p-2.5 bg-violet-50 rounded-lg border border-violet-200">
+                            <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">Novo tipo</p>
+                            <Input placeholder="Nome do tipo *" value={newTypeName} onChange={e => setNewTypeName(e.target.value)} className="h-7 text-xs" />
+                            <div className="flex gap-1.5 pt-0.5">
+                              <button type="button"
+                                onClick={() => {
+                                  if (!newTypeName.trim()) return
+                                  setLocalProjectTypes(prev => [...prev, newTypeName.trim()])
+                                  updateField("tipo", newTypeName.trim())
+                                  setNewTypeName("")
+                                  setShowNewTypeForm(false)
+                                }}
+                                className="flex-1 h-7 rounded-md btn-brand text-xs font-semibold"
+                              >Adicionar</button>
+                              <button type="button" onClick={() => { setShowNewTypeForm(false); setNewTypeName("") }}
+                                className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 hover:bg-slate-50"
+                              ><XIcon className="h-3 w-3" /></button>
+                            </div>
+                          </div>
+                        )}
                         {errors.tipo && <p className="text-xs text-red-500">{errors.tipo}</p>}
                       </div>
 
@@ -716,11 +779,13 @@ export function ProjectCreateNewPanel({
                             <span className="text-xs font-semibold text-slate-700 truncate">{companyName}</span>
                           </div>
                         ) : allowCompanySelect ? (
-                          <Select
+                          <SearchableSelect
+                            items={[...mockCompaniesList, ...localCompanies].map(c => ({ value: String(c.id), label: c.name }))}
                             value={resolvedCompanyId ? String(resolvedCompanyId) : ""}
                             onValueChange={(v) => {
                               const id = Number(v)
-                              const co = mockCompaniesList.find(c => c.id === id)
+                              const allCos = [...mockCompaniesList, ...localCompanies]
+                              const co = allCos.find(c => c.id === id)
                               setResolvedCompanyId(id)
                               setResolvedCompanyName(co?.name ?? "")
                               updateField("agencia", co?.name ?? "")
@@ -730,16 +795,13 @@ export function ProjectCreateNewPanel({
                               updateField("emailConsultor", "")
                               setLocalClients([])
                             }}
-                          >
-                            <SelectTrigger className={cn("h-8 text-xs", errors.agencia && "border-red-400")}>
-                              <SelectValue placeholder="Selecione a empresa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {mockCompaniesList.map(c => (
-                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Pesquisar empresa..."
+                            searchPlaceholder="Digite para buscar..."
+                            emptyMessage="Nenhuma empresa encontrada."
+                            className={cn("h-8 text-xs", errors.agencia && "border-red-400")}
+                            onAddNew={() => setShowCreateCompany(true)}
+                            addNewLabel="Cadastrar empresa"
+                          />
                         ) : (
                           <Input
                             placeholder="Nome da empresa"
@@ -757,34 +819,26 @@ export function ProjectCreateNewPanel({
                         {resolvedCompanyId ? (
                           <>
                             {!showNewClientForm ? (
-                              <div className="flex gap-1.5">
-                                <Select
-                                  value={formData.cliente}
-                                  onValueChange={(v) => {
-                                    const clients = [...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients]
-                                    const cl = clients.find(c => c.name === v)
-                                    updateField("cliente", v)
-                                    if (cl?.cnpj) updateField("clienteCnpj", cl.cnpj)
-                                  }}
-                                >
-                                  <SelectTrigger className={cn("h-8 text-xs flex-1", errors.cliente && "border-red-400")}>
-                                    <SelectValue placeholder="Selecione um cliente" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {[...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients].map(c => (
-                                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowNewClientForm(true)}
-                                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
-                                  title="Novo cliente"
-                                >
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
+                              <SearchableSelect
+                                items={[...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients].map(c => ({
+                                  value: c.name,
+                                  label: c.name,
+                                  sublabel: c.cnpj || c.email || undefined,
+                                }))}
+                                value={formData.cliente}
+                                onValueChange={(v) => {
+                                  const clients = [...(mockClientsByCompany[resolvedCompanyId] ?? []), ...localClients]
+                                  const cl = clients.find(c => c.name === v)
+                                  updateField("cliente", v)
+                                  if (cl?.cnpj) updateField("clienteCnpj", cl.cnpj)
+                                }}
+                                placeholder="Pesquisar cliente..."
+                                searchPlaceholder="Digite para buscar..."
+                                emptyMessage="Nenhum cliente encontrado."
+                                className={cn("h-8 text-xs", errors.cliente && "border-red-400")}
+                                onAddNew={() => setShowNewClientForm(true)}
+                                addNewLabel="Novo cliente"
+                              />
                             ) : (
                               <div className="space-y-1.5 p-2.5 bg-violet-50 rounded-lg border border-violet-200">
                                 <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">Novo cliente</p>
@@ -853,7 +907,12 @@ export function ProjectCreateNewPanel({
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs font-medium text-slate-600">Consultor Responsável *</Label>
                       {resolvedCompanyId ? (
-                        <Select
+                        <SearchableSelect
+                          items={(mockUsersByCompany[resolvedCompanyId] ?? []).map(u => ({
+                            value: u.name,
+                            label: u.name,
+                            sublabel: u.role,
+                          }))}
                           value={formData.consultor}
                           onValueChange={(v) => {
                             const users = mockUsersByCompany[resolvedCompanyId] ?? []
@@ -861,21 +920,11 @@ export function ProjectCreateNewPanel({
                             updateField("consultor", v)
                             if (u?.email) updateField("emailConsultor", u.email)
                           }}
-                        >
-                          <SelectTrigger className={cn("h-8 text-xs", errors.consultor && "border-red-400")}>
-                            <SelectValue placeholder="Selecione o consultor" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(mockUsersByCompany[resolvedCompanyId] ?? []).map(u => (
-                              <SelectItem key={u.id} value={u.name}>
-                                <div className="flex flex-col">
-                                  <span>{u.name}</span>
-                                  <span className="text-[10px] text-slate-400">{u.role}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Pesquisar consultor..."
+                          searchPlaceholder="Digite para buscar..."
+                          emptyMessage="Nenhum consultor encontrado."
+                          className={cn("h-8 text-xs", errors.consultor && "border-red-400")}
+                        />
                       ) : (
                         <div className="relative">
                           <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
@@ -1045,7 +1094,7 @@ export function ProjectCreateNewPanel({
 
           {/* Footer */}
           <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button variant="outline" onClick={handleClose} disabled={loading}>
               Cancelar
             </Button>
             <div className="flex items-center gap-2">
@@ -1510,6 +1559,31 @@ export function ProjectCreateNewPanel({
           />
         </div>
       )}
+
+      {/* Company creation panel */}
+      <CompanyCreateSlidePanel
+        open={showCreateCompany}
+        onOpenChange={setShowCreateCompany}
+        onCreate={(company: any) => {
+          const allExisting = [...mockCompaniesList, ...localCompanies]
+          const dupByName = allExisting.some(c => c.name.toLowerCase() === (company.name || "").toLowerCase())
+          if (dupByName) {
+            toast({ title: "Empresa duplicada", description: "Já existe uma empresa com este nome.", variant: "destructive" })
+            return
+          }
+          const newCo: MockCompanyItem = { id: company.id ?? Date.now(), name: company.name }
+          setLocalCompanies(prev => [...prev, newCo])
+          setResolvedCompanyId(newCo.id)
+          setResolvedCompanyName(newCo.name)
+          updateField("agencia", newCo.name)
+          updateField("cliente", "")
+          updateField("clienteCnpj", "")
+          updateField("consultor", "")
+          updateField("emailConsultor", "")
+          setLocalClients([])
+          setShowCreateCompany(false)
+        }}
+      />
     </>
   )
 }

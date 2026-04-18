@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useAgencia } from "@/contexts/agencia-context";
 import { Search } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export default function AgenciaTarefas() {
   const { tasks } = useAgencia();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const filtered = tasks.filter((t) => {
     const matchSearch =
@@ -47,6 +49,8 @@ export default function AgenciaTarefas() {
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const sorted = sortData(filtered);
 
   return (
     <div className="p-6 space-y-6">
@@ -107,12 +111,22 @@ export default function AgenciaTarefas() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tarefa</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Cliente</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Tarefa" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Cliente" field="clientName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nômade</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Prazo</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Valor" field="value" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={[...new Set(filtered.map((t) => t.status).filter(Boolean))]} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Prazo" field="dueDate" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -123,7 +137,7 @@ export default function AgenciaTarefas() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((task) => {
+                sorted.map((task) => {
                   const cfg = STATUS_CONFIG[task.status];
                   return (
                     <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">
@@ -151,9 +165,9 @@ export default function AgenciaTarefas() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 0 && (
+        {sorted.length > 0 && (
           <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-400">
-            {filtered.length} tarefa{filtered.length !== 1 ? "s" : ""}
+            {sorted.length} tarefa{sorted.length !== 1 ? "s" : ""}
           </div>
         )}
       </div>

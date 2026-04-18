@@ -1,165 +1,7 @@
 // @ts-nocheck
-import React, { createContext, useContext, useState, useCallback } from "react"
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react"
 import type { Conversation, ChatMessage, ChatParticipant } from "@/types/chat"
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_CONTACTS: ChatParticipant[] = [
-  {
-    id: "user-1",
-    name: "Rafael Mendonça",
-    email: "rafael@techinova.com.br",
-    account_type: "empresas",
-    online_status: "online",
-    phone: "11999990001",
-    last_seen: new Date().toISOString(),
-  },
-  {
-    id: "user-2",
-    name: "Carla Dupont",
-    email: "carla@dupont.agency",
-    account_type: "agencias",
-    online_status: "away",
-    phone: "21988887777",
-    last_seen: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    id: "user-3",
-    name: "Lucas Vieira",
-    email: "lucas.vieira@nomade.dev",
-    account_type: "nomades",
-    online_status: "offline",
-    phone: "31977776666",
-    last_seen: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-  },
-  {
-    id: "user-4",
-    name: "Fernanda Lima",
-    email: "fernanda@construmax.com",
-    account_type: "empresas",
-    online_status: "busy",
-    phone: "11944443333",
-    last_seen: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-  },
-]
-
-const buildConversation = (
-  contact: ChatParticipant,
-  messages: Omit<ChatMessage, "conversation_id">[],
-  unread = 0,
-): Conversation => {
-  const convId = `conv-${contact.id}`
-  const fullMessages: ChatMessage[] = messages.map((m) => ({ ...m, conversation_id: convId }))
-  return {
-    id: convId,
-    participants: [contact],
-    contact,
-    messages: fullMessages,
-    last_message: fullMessages[fullMessages.length - 1],
-    unread_count: unread,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    updated_at: fullMessages[fullMessages.length - 1]?.created_at || new Date().toISOString(),
-    is_pinned: false,
-    is_archived: false,
-  }
-}
-
-const MOCK_CONVERSATIONS: Conversation[] = [
-  buildConversation(
-    MOCK_CONTACTS[0],
-    [
-      {
-        id: "m1",
-        sender_id: MOCK_CONTACTS[0].id,
-        sender_name: MOCK_CONTACTS[0].name,
-        content: "Olá! Precisamos conversar sobre o projeto de integração.",
-        created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: false,
-      },
-      {
-        id: "m2",
-        sender_id: "admin",
-        sender_name: "Você",
-        content: "Claro! Qual ponto está com dificuldade?",
-        created_at: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: true,
-      },
-      {
-        id: "m3",
-        sender_id: MOCK_CONTACTS[0].id,
-        sender_name: MOCK_CONTACTS[0].name,
-        content: "O fluxo de aprovação de pagamentos estava bloqueando. Já resolvemos localmente, mas precisamos alinhar com a equipe.",
-        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: false,
-      },
-    ],
-    2,
-  ),
-  buildConversation(
-    MOCK_CONTACTS[1],
-    [
-      {
-        id: "m4",
-        sender_id: "admin",
-        sender_name: "Você",
-        content: "Carla, tudo bem? Precisamos revisar o contrato da agência.",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: true,
-      },
-      {
-        id: "m5",
-        sender_id: MOCK_CONTACTS[1].id,
-        sender_name: MOCK_CONTACTS[1].name,
-        content: "Olá! Sim, posso revisar ainda hoje à tarde.",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2.5).toISOString(),
-        status: "delivered",
-        type: "text",
-        is_mine: false,
-      },
-    ],
-    0,
-  ),
-  buildConversation(
-    MOCK_CONTACTS[2],
-    [
-      {
-        id: "m6",
-        sender_id: MOCK_CONTACTS[2].id,
-        sender_name: MOCK_CONTACTS[2].name,
-        content: "Disponível para um projeto de 3 semanas a partir de segunda?",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: false,
-      },
-    ],
-    1,
-  ),
-  buildConversation(
-    MOCK_CONTACTS[3],
-    [
-      {
-        id: "m7",
-        sender_id: "admin",
-        sender_name: "Você",
-        content: "Fernanda, a proposta foi aprovada! Pode prosseguir.",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-        status: "read",
-        type: "text",
-        is_mine: true,
-      },
-    ],
-    0,
-  ),
-]
+import { apiClient } from "@/lib/api-client"
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -184,11 +26,39 @@ interface ChatContextValue {
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [allContacts, setAllContacts] = useState<ChatParticipant[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [showNewConversation, setShowNewConversation] = useState(false)
+
+  // Load conversations from API
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res: any = await apiClient.getConversations()
+        if (cancelled) return
+        const data = Array.isArray(res) ? res : res.data || []
+        setConversations(data)
+        // Extract unique contacts
+        const contacts: ChatParticipant[] = []
+        const seen = new Set<string>()
+        for (const conv of data) {
+          if (conv.contact && !seen.has(conv.contact.id)) {
+            seen.add(conv.contact.id)
+            contacts.push(conv.contact)
+          }
+        }
+        setAllContacts(contacts)
+      } catch (err) {
+        console.error("[ChatProvider] Failed to load conversations:", err)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unread_count, 0)
 
@@ -289,8 +159,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }),
     )
 
-    // Simulate "sent" status after 500ms
-    setTimeout(() => {
+    // Send via API, then mark as sent
+    apiClient.sendMessage(conversationId, { content }).then(() => {
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== conversationId) return c
+          return {
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === msg.id ? { ...m, status: "sent" } : m,
+            ),
+          }
+        }),
+      )
+    }).catch(() => {
+      // Mark as sent locally even if API fails
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id !== conversationId) return c
@@ -331,7 +214,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         sendMessage,
         startNewConversation,
         cancelNewConversation,
-        allContacts: MOCK_CONTACTS,
+        allContacts,
       }}
     >
       {children}

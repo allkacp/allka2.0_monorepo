@@ -38,9 +38,11 @@ import {
   Target,
   Clock,
   GraduationCap,
+  Loader2,
 } from "lucide-react"
 import type { Course, CourseCategory, CourseEnrollment } from "@/types/allkademy"
 import { PageHeader } from "@/components/page-header"
+import { useCourses, useEnrollments } from "@/hooks/useCourses"
 
 interface Module {
   id: number
@@ -110,15 +112,17 @@ interface UserProgress {
 }
 
 export default function AdminAllkademyPage() {
-  const [courses, setCourses] = useState<Course[]>([])
+  const { courses: apiCourses, loading: coursesLoading, createCourse, updateCourse, deleteCourse } = useCourses()
+  const { enrollments: apiEnrollments, loading: enrollLoading } = useEnrollments()
+  const [courses, setCourses] = useState<any[]>([])
   const [categories, setCategories] = useState<CourseCategory[]>([])
-  const [enrollments, setEnrollments] = useState<CourseEnrollment[]>([])
+  const [enrollments, setEnrollments] = useState<any[]>([])
   const [modules, setModules] = useState<Module[]>([])
   const [tests, setTests] = useState<Test[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [userProgress, setUserProgress] = useState<UserProgress[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
+  const [selectedCourse, setSelectedCourse] = useState<any | null>(null)
   const [selectedModule, setSelectedModule] = useState<Module | null>(null)
   const [selectedTest, setSelectedTest] = useState<Test | null>(null)
   const [selectedCircuit, setSelectedCircuit] = useState<Circuit | null>(null)
@@ -130,199 +134,28 @@ export default function AdminAllkademyPage() {
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
   const [isCircuitModalOpen, setIsCircuitModalOpen] = useState(false)
 
-  // Mock data - replace with API calls
+  // Sync API data into local state
   useEffect(() => {
-    const mockCategories: CourseCategory[] = [
-      { id: 1, name: "Plataforma Allka", description: "Como usar a plataforma", icon: "🚀", color: "blue" },
-      { id: 2, name: "Marketing Digital", description: "Estratégias e táticas", icon: "📈", color: "green" },
-      { id: 3, name: "Gestão de Projetos", description: "Metodologias e ferramentas", icon: "📋", color: "purple" },
-      { id: 4, name: "Vendas", description: "Técnicas de vendas", icon: "💰", color: "orange" },
-      { id: 5, name: "Liderança", description: "Desenvolvimento de liderança", icon: "👑", color: "red" },
-    ]
+    if (!coursesLoading) {
+      setCourses(apiCourses)
+      // Extract unique categories from courses
+      const cats: CourseCategory[] = []
+      const seen = new Set<string>()
+      for (const c of apiCourses) {
+        const cat = (c as any).category
+        if (cat && !seen.has(cat.name || cat.id)) {
+          seen.add(cat.name || cat.id)
+          cats.push(cat)
+        }
+      }
+      setCategories(cats.length > 0 ? cats : [])
+      setLoading(false)
+    }
+  }, [apiCourses, coursesLoading])
 
-    const mockCourses: Course[] = [
-      {
-        id: 1,
-        title: "Introdução à Plataforma Allka",
-        description: "Aprenda os fundamentos da plataforma e como maximizar seus resultados",
-        thumbnail_url: "/allka-platform-tutorial.jpg",
-        category: mockCategories[0],
-        level: "beginner",
-        duration_minutes: 120,
-        price: 0,
-        is_free: true,
-        access_requirements: [],
-        instructor: {
-          name: "Equipe Allka",
-          avatar_url: "/instructor-avatar.png",
-          bio: "Especialistas da plataforma Allka",
-        },
-        status: "published",
-        created_at: "2024-01-15",
-        updated_at: "2024-01-15",
-        modules: [],
-        stats: {
-          total_enrollments: 1250,
-          completion_rate: 85,
-          average_rating: 4.8,
-          total_reviews: 156,
-        },
-      },
-      {
-        id: 2,
-        title: "Marketing Digital Avançado",
-        description: "Estratégias avançadas de marketing digital para agências",
-        thumbnail_url: "/digital-marketing-course.png",
-        category: mockCategories[1],
-        level: "advanced",
-        duration_minutes: 480,
-        price: 299,
-        is_free: false,
-        access_requirements: [
-          { type: "account_type", value: "agencias", description: "Disponível apenas para agências" },
-        ],
-        instructor: {
-          name: "Carlos Marketing",
-          avatar_url: "/marketing-instructor.jpg",
-          bio: "15 anos de experiência em marketing digital",
-        },
-        status: "published",
-        created_at: "2024-01-10",
-        updated_at: "2024-01-10",
-        modules: [],
-        stats: {
-          total_enrollments: 450,
-          completion_rate: 72,
-          average_rating: 4.6,
-          total_reviews: 89,
-        },
-      },
-    ]
-
-    const mockModules: Module[] = [
-      {
-        id: 1,
-        course_id: 1,
-        title: "Módulo 1: Primeiros Passos",
-        description: "Introdução à plataforma e configuração inicial",
-        order: 1,
-        lessons: [
-          {
-            id: 1,
-            module_id: 1,
-            title: "Bem-vindo à Allka",
-            description: "Visão geral da plataforma",
-            content_type: "video",
-            content_url: "/videos/welcome.mp4",
-            duration_minutes: 10,
-            order: 1,
-            is_free_preview: true,
-          },
-          {
-            id: 2,
-            module_id: 1,
-            title: "Configurando seu Perfil",
-            description: "Como configurar seu perfil profissional",
-            content_type: "video",
-            content_url: "/videos/profile-setup.mp4",
-            duration_minutes: 15,
-            order: 2,
-            is_free_preview: false,
-          },
-        ],
-      },
-    ]
-
-    const mockTests: Test[] = [
-      {
-        id: 1,
-        title: "Avaliação: Fundamentos da Plataforma",
-        description: "Teste seus conhecimentos sobre os fundamentos da Allka",
-        course_id: 1,
-        passing_score: 70,
-        time_limit_minutes: 30,
-        points_reward: 100,
-        questions: [
-          {
-            id: 1,
-            test_id: 1,
-            question_text: "Qual é o principal objetivo da plataforma Allka?",
-            question_type: "multiple_choice",
-            options: [
-              "Conectar empresas e profissionais",
-              "Vender produtos online",
-              "Criar redes sociais",
-              "Gerenciar emails",
-            ],
-            correct_answer: "Conectar empresas e profissionais",
-            points: 10,
-            order: 1,
-          },
-        ],
-      },
-    ]
-
-    const mockCircuits: Circuit[] = [
-      {
-        id: 1,
-        title: "Jornada do Iniciante",
-        description: "Circuito completo para novos usuários da plataforma",
-        courses: [1],
-        tests: [1],
-        total_points: 500,
-        completion_badge: "🎓",
-        estimated_duration_hours: 8,
-      },
-    ]
-
-    const mockUserProgress: UserProgress[] = [
-      {
-        user_id: 1,
-        user_name: "João Silva",
-        user_avatar: "/avatars/user1.jpg",
-        completed_courses: [1],
-        completed_tests: [1],
-        completed_circuits: [],
-        total_points: 350,
-        current_level: 2,
-        progress_percentage: 65,
-      },
-      {
-        user_id: 2,
-        user_name: "Maria Santos",
-        user_avatar: "/avatars/user2.jpg",
-        completed_courses: [1, 2],
-        completed_tests: [1],
-        completed_circuits: [1],
-        total_points: 850,
-        current_level: 4,
-        progress_percentage: 92,
-      },
-    ]
-
-    const mockEnrollments: CourseEnrollment[] = [
-      {
-        id: 1,
-        user_id: 1,
-        course_id: 1,
-        enrolled_at: "2024-01-20",
-        progress: 65,
-        current_lesson_id: 3,
-        payment_status: "free",
-        lesson_progress: [],
-        quiz_attempts: [],
-      },
-    ]
-
-    setCategories(mockCategories)
-    setCourses(mockCourses)
-    setEnrollments(mockEnrollments)
-    setModules(mockModules)
-    setTests(mockTests)
-    setCircuits(mockCircuits)
-    setUserProgress(mockUserProgress)
-    setLoading(false)
-  }, [])
+  useEffect(() => {
+    if (!enrollLoading) setEnrollments(apiEnrollments)
+  }, [apiEnrollments, enrollLoading])
 
   const courseColumns = [
     {
@@ -1052,7 +885,7 @@ export default function AdminAllkademyPage() {
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
-                          className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-300"
+                          className="bg-linear-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${user.progress_percentage}%` }}
                         />
                       </div>

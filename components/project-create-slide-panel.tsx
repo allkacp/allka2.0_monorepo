@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Project, Client } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { useClients } from "@/hooks/useClients"
+import { useUsers } from "@/hooks/useUsers"
 import {
   X,
   Upload,
@@ -27,6 +29,7 @@ import {
   Minus,
   Plus,
   Briefcase,
+  Building2,
   Lock,
   Key,
   Globe,
@@ -55,6 +58,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import ProductSelectionModal from "./product-selection-modal" // Added import
 import { Sheet, SheetContent } from "@/components/ui/sheet" // Added Sheet import
+import { ClientCreateSlidePanel } from "@/components/client-create-slide-panel"
+import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel"
+import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
+import { useCompanies, type ApiCompany } from "@/hooks/useCompanies"
 
 interface ProjectCreateSlidePanelProps {
   open: boolean
@@ -72,6 +79,7 @@ interface FormData {
   description: string
   client_id: string
   manager_id: string
+  company_id: string
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled" | "awaiting_payment" | "paid"
   start_date: string
   end_date: string
@@ -85,51 +93,33 @@ interface FormErrors {
   manager_id?: string
 }
 
-// Define the User interface explicitly
-interface User {
-  id: number
-  name: string
-  email: string
-  role: string
-  created_at: string
-}
-
 export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, payerType, initialProducts, initialProductQuantities }: ProjectCreateSlidePanelProps) {
   const { toast } = useToast()
   const { sidebarWidth } = useSidebar()
   const navigate = useNavigate()
   const { products } = useProducts()
+  const { companies: apiCompanies, refetch: refetchCompanies } = useCompanies()
+  const { clients: apiClients, refetch: refetchClients } = useClients()
+  const { users: apiUsers, refetch: refetchUsers } = useUsers()
   const [loading, setLoading] = useState(false)
   const [projectCreated, setProjectCreated] = useState(false)
   const [createdProject, setCreatedProject] = useState<Project | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<any[]>([])
 
-  const [clients, setClients] = useState<Client[]>([
-    { id: 1, name: "Tech Solutions LTDA", email: "contato@techsolutions.com", created_at: "2024-01-15" },
-    { id: 2, name: "Digital Marketing Pro", email: "info@digitalmarketingpro.com", created_at: "2024-02-20" },
-    { id: 3, name: "E-commerce Brasil", email: "comercial@ecommercebrasil.com", created_at: "2024-03-10" },
-  ])
 
-  const [users, setUsers] = useState<User[]>([
-    { id: 1, name: "João Silva", email: "joao.silva@empresa.com", role: "manager", created_at: "2024-01-01" },
-    { id: 2, name: "Maria Santos", email: "maria.santos@empresa.com", role: "manager", created_at: "2024-01-05" },
-    { id: 3, name: "Pedro Costa", email: "pedro.costa@empresa.com", role: "manager", created_at: "2024-01-10" },
-  ])
   const [errors, setErrors] = useState<FormErrors>({})
 
   const [showCreateClient, setShowCreateClient] = useState(false)
   const [showCreateManager, setShowCreateManager] = useState(false)
-  const [newClientName, setNewClientName] = useState("")
-  const [newClientEmail, setNewClientEmail] = useState("")
-  const [newManagerName, setNewManagerName] = useState("")
-  const [newManagerEmail, setNewManagerEmail] = useState("")
+  const [showCreateCompany, setShowCreateCompany] = useState(false)
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
     description: "",
     client_id: "",
     manager_id: "",
+    company_id: "",
     status: "planning",
     start_date: "",
     end_date: "",
@@ -161,8 +151,9 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
   const [productSearch, setProductSearch] = useState("")
   const [productCategory, setProductCategory] = useState("Todos")
   const [activeTab, setActiveTab] = useState("info")
-  const [formLifecycle, setFormLifecycle] = useState<"Avulso" | "Mensal">("Avulso")
+  const [formLifecycle, setFormLifecycle] = useState<"Avulso" | "Mensal" | "Outro">("Avulso")
   const [formBillingDay, setFormBillingDay] = useState<number>(15)
+  const [customProjectType, setCustomProjectType] = useState("")
 
   const [showProductModal, setShowProductModal] = useState(false)
 
@@ -394,71 +385,27 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
     }
   }
 
-  const handleCreateClient = async () => {
-    if (!newClientName.trim() || !newClientEmail.trim()) {
-      toast({
-        title: "Erro",
-        description: "Nome e email são obrigatórios",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const newClientData: Omit<Client, "created_at"> = {
-      id: clients.length + 1,
-      name: newClientName,
-      email: newClientEmail,
-    }
-
-    const newClient: Client = {
-      ...newClientData,
-      created_at: new Date().toISOString(),
-    }
-
-    setClients([...clients, newClient])
-    updateField("client_id", newClient.id.toString())
-    setNewClient(newClient)
+  const handleClientCreated = (client: any) => {
+    refetchClients()
+    updateField("client_id", (client.id ?? "").toString())
+    setNewClient(client)
     setClientMode("new")
     setShowCreateClient(false)
-    setNewClientName("")
-    setNewClientEmail("")
-    toast({
-      title: "Sucesso",
-      description: "Cliente criado com sucesso",
-    })
+    toast({ title: "Sucesso", description: "Cliente criado com sucesso" })
   }
 
-  const handleCreateManager = async () => {
-    if (!newManagerName.trim() || !newManagerEmail.trim()) {
-      toast({
-        title: "Erro",
-        description: "Nome e email são obrigatórios",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const newManagerData: Omit<User, "created_at" | "role"> = {
-      id: users.length + 1,
-      name: newManagerName,
-      email: newManagerEmail,
-    }
-
-    const newManager: User = {
-      ...newManagerData,
-      role: "manager",
-      created_at: new Date().toISOString(),
-    }
-
-    setUsers([...users, newManager])
-    updateField("manager_id", newManager.id.toString())
+  const handleManagerCreated = (user: any) => {
+    refetchUsers()
+    updateField("manager_id", (user.id ?? "").toString())
     setShowCreateManager(false)
-    setNewManagerName("")
-    setNewManagerEmail("")
-    toast({
-      title: "Sucesso",
-      description: "Gerente criado com sucesso",
-    })
+    toast({ title: "Sucesso", description: "Gerente criado com sucesso" })
+  }
+
+  const handleCompanyCreated = (company: any) => {
+    refetchCompanies()
+    updateField("company_id", company.id?.toString() ?? "")
+    setShowCreateCompany(false)
+    toast({ title: "Sucesso", description: "Empresa criada com sucesso" })
   }
 
   const handleContinueToProducts = () => {
@@ -1443,7 +1390,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                                 Tipo de Projeto
                               </Label>
                               <div className="flex gap-2">
-                                {(["Avulso", "Mensal"] as const).map((lc) => (
+                                {(["Avulso", "Mensal", "Outro"] as const).map((lc) => (
                                   <button
                                     key={lc}
                                     type="button"
@@ -1460,6 +1407,20 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                                 ))}
                               </div>
                             </div>
+                            {formLifecycle === "Outro" && (
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
+                                  Nome do tipo personalizado
+                                </Label>
+                                <Input
+                                  type="text"
+                                  value={customProjectType}
+                                  onChange={e => setCustomProjectType(e.target.value)}
+                                  placeholder="Ex: Consultoria, Implantação..."
+                                  className="h-9 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
+                                />
+                              </div>
+                            )}
                             {formLifecycle === "Mensal" && (
                               <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
@@ -1481,6 +1442,48 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                           </CardContent>
                         </Card>
 
+                        {/* Empresa Card */}
+                        <Card className="border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 dark:from-blue-950 dark:via-sky-950 dark:to-cyan-950">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-semibold flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                              <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                              Empresa
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold flex items-center gap-1 text-blue-900 dark:text-blue-100">
+                                Selecione a Empresa
+                              </Label>
+                              <div className="flex gap-2">
+                                <SearchableSelect
+                                  items={apiCompanies.map((c) => ({
+                                    value: c.id,
+                                    label: c.name,
+                                    sublabel: c.cnpj || c.email || undefined,
+                                  }))}
+                                  value={formData.company_id}
+                                  onValueChange={(value) => updateField("company_id", value)}
+                                  placeholder="Pesquisar empresa..."
+                                  searchPlaceholder="Digite para buscar..."
+                                  emptyMessage="Nenhuma empresa encontrada."
+                                  className="flex-1 border-blue-200 dark:border-blue-800"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => setShowCreateCompany(true)}
+                                  className="h-9 w-9 shrink-0 border-blue-200 dark:border-blue-800"
+                                  title="Adicionar nova empresa"
+                                >
+                                  <Plus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
                         {/* Client Card */}
                         <Card className="border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 dark:from-purple-950 dark:via-pink-950 dark:to-rose-950">
                           <CardHeader className="pb-3">
@@ -1498,36 +1501,35 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                                 Selecione o Cliente <span className="text-red-500">*</span>
                               </Label>
                               <div className="flex gap-2">
-                                <Select
+                                <SearchableSelect
+                                  items={apiClients.map((c) => ({
+                                    value: c.id?.toString() ?? "",
+                                    label: c.name,
+                                    sublabel: c.email || undefined,
+                                  }))}
                                   value={formData.client_id}
                                   onValueChange={(value) => {
                                     updateField("client_id", value)
-                                    const client = clients.find((c) => c.id.toString() === value)
+                                    const client = apiClients.find((c) => c.id?.toString() === value)
                                     if (client) {
-                                      setSelectedClient(client)
+                                      setSelectedClient(client as any)
                                       setClientMode("existing")
                                     }
                                   }}
-                                >
-                                  <SelectTrigger className="flex-1 h-9 bg-white dark:bg-gray-900 border-purple-200 dark:border-purple-800">
-                                    <SelectValue placeholder="Selecione um cliente" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {clients.map((client) => (
-                                      <SelectItem key={client.id} value={client.id.toString()}>
-                                        {client.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="Pesquisar cliente..."
+                                  searchPlaceholder="Digite para buscar..."
+                                  emptyMessage="Nenhum cliente encontrado."
+                                  className="flex-1 border-purple-200 dark:border-purple-800"
+                                />
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="icon"
                                   onClick={() => setShowCreateClient(true)}
                                   className="h-9 w-9 shrink-0 border-purple-200 dark:border-purple-800"
+                                  title="Adicionar novo cliente"
                                 >
-                                  <UserPlus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                  <Plus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                                 </Button>
                               </div>
                               {errors.client_id && (
@@ -1543,29 +1545,28 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                                 Gerente do Projeto <span className="text-red-500">*</span>
                               </Label>
                               <div className="flex gap-2">
-                                <Select
+                                <SearchableSelect
+                                  items={apiUsers.map((u) => ({
+                                    value: u.id?.toString() ?? "",
+                                    label: u.name,
+                                    sublabel: u.email || undefined,
+                                  }))}
                                   value={formData.manager_id}
                                   onValueChange={(value) => updateField("manager_id", value)}
-                                >
-                                  <SelectTrigger className="flex-1 h-9 bg-white dark:bg-gray-900 border-purple-200 dark:border-purple-800">
-                                    <SelectValue placeholder="Selecione um gerente" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {users.map((user) => (
-                                      <SelectItem key={user.id} value={user.id.toString()}>
-                                        {user.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="Pesquisar gerente..."
+                                  searchPlaceholder="Digite para buscar..."
+                                  emptyMessage="Nenhum gerente encontrado."
+                                  className="flex-1 border-purple-200 dark:border-purple-800"
+                                />
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="icon"
                                   onClick={() => setShowCreateManager(true)}
                                   className="h-9 w-9 shrink-0 border-purple-200 dark:border-purple-800"
+                                  title="Adicionar novo gerente"
                                 >
-                                  <UserPlus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                  <Plus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                                 </Button>
                               </div>
                               {errors.manager_id && (
@@ -2035,7 +2036,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900/50">
+                  <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900/50 shrink-0">
                     <div className="flex gap-2 justify-between">
                       <div className="flex gap-2">
                         <Button
@@ -2078,77 +2079,23 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
         </SheetContent>
       </Sheet>
 
-      <Dialog open={showCreateClient} onOpenChange={setShowCreateClient}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Criar Novo Cliente</DialogTitle>
-            <DialogDescription>Preencha os dados do novo cliente</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-client-name">Nome do Cliente *</Label>
-              <Input
-                id="new-client-name"
-                value={newClientName}
-                onChange={(e) => setNewClientName(e.target.value)}
-                placeholder="Ex: Empresa ABC"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-client-email">Email *</Label>
-              <Input
-                id="new-client-email"
-                type="email"
-                value={newClientEmail}
-                onChange={(e) => setNewClientEmail(e.target.value)}
-                placeholder="contato@empresa.com"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setShowCreateClient(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateClient}>Criar Cliente</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ClientCreateSlidePanel
+        open={showCreateClient}
+        onClose={() => setShowCreateClient(false)}
+        onClientCreated={handleClientCreated}
+      />
 
-      <Dialog open={showCreateManager} onOpenChange={setShowCreateManager}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Criar Novo Gerente</DialogTitle>
-            <DialogDescription>Preencha os dados do novo gerente</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-manager-name">Nome do Gerente *</Label>
-              <Input
-                id="new-manager-name"
-                value={newManagerName}
-                onChange={(e) => setNewManagerName(e.target.value)}
-                placeholder="Ex: João Silva"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-manager-email">Email *</Label>
-              <Input
-                id="new-manager-email"
-                type="email"
-                value={newManagerEmail}
-                onChange={(e) => setNewManagerEmail(e.target.value)}
-                placeholder="joao@empresa.com"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setShowCreateManager(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateManager}>Criar Gerente</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <UserCreateSlidePanel
+        open={showCreateManager}
+        onClose={() => setShowCreateManager(false)}
+        onUserCreated={handleManagerCreated}
+      />
+
+      <CompanyCreateSlidePanel
+        open={showCreateCompany}
+        onOpenChange={setShowCreateCompany}
+        onCreate={handleCompanyCreated}
+      />
 
       <Dialog open={customizationModal} onOpenChange={setCustomizationModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

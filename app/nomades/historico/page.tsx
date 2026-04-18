@@ -4,6 +4,7 @@ import {
   CheckCircle2, XCircle, Star, Wallet, TrendingUp, Calendar,
   Filter, Download, ChevronDown,
 } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -55,10 +56,13 @@ function StarRating({ value }: { value: number }) {
 export default function NomadesHistoricoPage() {
   const [month, setMonth]   = useState("Todos")
   const [detail, setDetail] = useState<HistItem | null>(null)
+  const { sortKey, sortDir, handleSort, sortData } = useSorting<HistItem>()
 
   const filtered = month === "Todos"
     ? HISTORY
     : HISTORY.filter((h) => (MONTH_MAP[month] ?? []).includes(h.completedAt))
+
+  const sorted = sortData(filtered)
 
   const totalEarned  = filtered.reduce((s, h) => s + h.finalValue, 0)
   const totalBonus   = filtered.reduce((s, h) => s + h.bonus, 0)
@@ -125,17 +129,27 @@ export default function NomadesHistoricoPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th className="px-4 py-3 text-left font-medium">Tarefa</th>
-                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Concluída em</th>
-                <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Valor</th>
-                <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Bônus</th>
-                <th className="px-4 py-3 text-center font-medium">Avaliação</th>
+                <th className="px-4 py-3 text-left font-medium">
+                  <SortableHeader label="Tarefa" field="title" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                  <SortableHeader label="Concluída em" field="completedAt" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                  <SortableHeader label="Valor" field="value" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                  <SortableHeader label="Bônus" field="bonus" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-center font-medium">
+                  <SortableHeader label="Avaliação" field="rating" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
                 <th className="px-4 py-3 text-center font-medium">Prazo</th>
                 <th className="px-4 py-3 text-center font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.map((h) => (
+              {sorted.map((h) => (
                 <tr key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-44">{h.title}</p>

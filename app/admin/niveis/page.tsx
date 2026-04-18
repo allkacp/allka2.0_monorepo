@@ -1,6 +1,7 @@
 ﻿// @ts-nocheck
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { apiClient } from "@/lib/api-client"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -90,155 +91,54 @@ const DEFAULT_THEME = {
   cardBorder: "border-slate-200 hover:border-blue-300",
 }
 
-const mockPartnerLevels = [
-  {
-    id: 1,
-    name: "Bronze",
-    icon: "🥉",
-    color: "#CD7F32",
-    description: "Nível base do programa. Todas as agências iniciam aqui automaticamente, independente de serem Partner.",
-    gradient: "from-amber-800 to-orange-800",
-    min_mrr: 0,
-    max_mrr: 1000,
-    led_agencies_min: 0,
-    led_agencies_mrr_min: 0,
-    premium_project_limit: 0,
-    commission_rate: 0,
-    extra_discount: 10,
-    receives_leads_premium: false,
-    requires_partner: false,
-    level_up_bonus_credits: 0,
-    benefits: [
-      "10% de desconto adicional em todas as contratações",
-      "Badge Bronze no perfil da agência",
-      "Acesso a treinamentos e capacitações Allka",
-    ],
-  },
-  {
-    id: 2,
-    name: "Silver",
-    icon: "🥈",
-    color: "#94A3B8",
-    description: "Partner com desempenho inicial consistente. Começa a receber leads premium e comissão sobre as agências lideradas.",
-    gradient: "from-slate-600 to-slate-700",
-    min_mrr: 1001,
-    max_mrr: 2000,
-    led_agencies_min: 5,
-    led_agencies_mrr_min: 2500,
-    premium_project_limit: 1500,
-    commission_rate: 5,
-    extra_discount: 10,
-    receives_leads_premium: true,
-    requires_partner: true,
-    level_up_bonus_credits: 200,
-    benefits: [
-      "5% de comissão sobre MRR das agências lideradas",
-      "10% de desconto adicional em todas as contratações",
-      "Leads premium da Allka (projetos até R$ 1.500)",
-      "Bônus de R$ 200 em créditos ao atingir o nível",
-      "Suporte prioritário",
-    ],
-  },
-  {
-    id: 3,
-    name: "Gold",
-    icon: "🥇",
-    color: "#F59E0B",
-    description: "Partner de alto desempenho com rede sólida de agências. Acesso a projetos premium de maior valor e reuniões com fundadores.",
-    gradient: "from-yellow-600 to-amber-600",
-    min_mrr: 2001,
-    max_mrr: 4000,
-    led_agencies_min: 10,
-    led_agencies_mrr_min: 5000,
-    premium_project_limit: 3000,
-    commission_rate: 5,
-    extra_discount: 10,
-    receives_leads_premium: true,
-    requires_partner: true,
-    level_up_bonus_credits: 500,
-    benefits: [
-      "5% de comissão sobre MRR das agências lideradas",
-      "10% de desconto adicional em todas as contratações",
-      "Leads premium da Allka (projetos até R$ 3.000)",
-      "Bônus de R$ 500 em créditos ao atingir o nível",
-      "Reunião trimestral estratégica com fundadores",
-      "Acesso antecipado a novos produtos e funcionalidades",
-    ],
-  },
-  {
-    id: 4,
-    name: "Platinum",
-    icon: "💎",
-    color: "#38BDF8",
-    description: "Partner de excelência com rede expressiva. Recebe projetos premium de alto valor e tem papel representativo no ecossistema.",
-    gradient: "from-sky-600 to-blue-600",
-    min_mrr: 4001,
-    max_mrr: 8000,
-    led_agencies_min: 20,
-    led_agencies_mrr_min: 10000,
-    premium_project_limit: 6000,
-    commission_rate: 5,
-    extra_discount: 10,
-    receives_leads_premium: true,
-    requires_partner: true,
-    level_up_bonus_credits: 1000,
-    benefits: [
-      "5% de comissão sobre MRR das agências lideradas",
-      "10% de desconto adicional em todas as contratações",
-      "Leads premium da Allka (projetos até R$ 6.000)",
-      "Bônus de R$ 1.000 em créditos ao atingir o nível",
-      "Reunião trimestral estratégica com fundadores",
-      "Reconhecimento e destaque no ecossistema Allka",
-    ],
-  },
-  {
-    id: 5,
-    name: "Diamond",
-    icon: "👑",
-    color: "#8B5CF6",
-    description: "O nível máximo do programa. O maior líder do ecossistema, com a maior rede ativa e acesso a projetos premium sem limite de teto.",
-    gradient: "from-violet-600 to-purple-700",
-    min_mrr: 8001,
-    max_mrr: null,
-    led_agencies_min: 40,
-    led_agencies_mrr_min: 20000,
-    premium_project_limit: null,
-    commission_rate: 5,
-    extra_discount: 10,
-    receives_leads_premium: true,
-    requires_partner: true,
-    level_up_bonus_credits: 2000,
-    benefits: [
-      "5% de comissão sobre MRR das agências lideradas",
-      "10% de desconto adicional em todas as contratações",
-      "Leads premium da Allka (projetos acima de R$ 6.000)",
-      "Bônus de R$ 2.000 em créditos ao atingir o nível",
-      "Reunião trimestral estratégica com fundadores",
-      "Prioridade total no recebimento de leads e projetos",
-      "Voz ativa em decisões estratégicas do programa",
-    ],
-  },
-]
+// Levels are loaded from API in the component
 
 export default function NiveisPage() {
   const { sidebarWidth } = useSidebar()
-  const [partnerLevels, setPartnerLevels] = useState(mockPartnerLevels)
+  const [partnerLevels, setPartnerLevels] = useState<any[]>([])
   const [editingLevel, setEditingLevel] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: "" })
 
-  const handleSaveLevel = (levelData: any) => {
-    if (levelData.id) {
-      setPartnerLevels((levels) => levels.map((level) => (level.id === levelData.id ? levelData : level)))
-    } else {
-      const newLevel = { ...levelData, id: Date.now() }
-      setPartnerLevels((levels) => [...levels, newLevel])
+  // Load levels from API
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res: any = await apiClient.getLevels()
+        if (cancelled) return
+        const data = res.data || (Array.isArray(res) ? res : [])
+        setPartnerLevels(data)
+      } catch (err) {
+        console.error("[NiveisPage] Failed to load levels:", err)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const handleSaveLevel = async (levelData: any) => {
+    try {
+      if (levelData.id) {
+        const res: any = await apiClient.updateLevel(levelData.id, levelData)
+        setPartnerLevels((levels) => levels.map((level) => (level.id === levelData.id ? (res || levelData) : level)))
+      } else {
+        const res: any = await apiClient.createLevel(levelData)
+        setPartnerLevels((levels) => [...levels, res || { ...levelData, id: Date.now() }])
+      }
+    } catch (err) {
+      console.error("[NiveisPage] Failed to save level:", err)
     }
     setEditingLevel(null)
     setIsDialogOpen(false)
   }
 
-  const handleDeleteLevel = (id: number) => {
+  const handleDeleteLevel = async (id: number) => {
+    try {
+      await apiClient.deleteLevel(id)
+    } catch (err) {
+      console.error("[NiveisPage] Failed to delete level:", err)
+    }
     setPartnerLevels((levels) => levels.filter((level) => level.id !== id))
   }
 
@@ -446,11 +346,8 @@ export default function NiveisPage() {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="w-auto! max-w-none! p-0 border-0"
-          style={{
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
-          }}
+          className="p-0 border-0"
+          style={{ left: `${sidebarWidth}px`, width: `calc(100vw - ${sidebarWidth}px)` }}
         >
           <div className="h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-linear-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20">

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { FileText, CheckCircle2, Clock, AlertCircle, XCircle } from "lucide-react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -26,10 +27,13 @@ const STATUS_CONFIG = {
 export default function EmpresaFaturas() {
   const { invoices } = useEmpresa();
   const [statusFilter, setStatusFilter] = useState("all");
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
 
   const filtered = invoices.filter(
     (i) => statusFilter === "all" || i.status === statusFilter
   );
+
+  const sorted = sortData(filtered);
 
   const pending = invoices.filter((i) => i.status === "pending");
   const pendingTotal = pending.reduce((s, i) => s + i.amount, 0);
@@ -100,11 +104,21 @@ export default function EmpresaFaturas() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nº Fatura</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Emissão</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Vencimento</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Descrição" field="description" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Valor" field="amount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Emissão" field="issuedAt" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Vencimento" field="dueDate" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={[...new Set(filtered.map((r) => r.status).filter(Boolean))]} />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -115,7 +129,7 @@ export default function EmpresaFaturas() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((invoice) => {
+                sorted.map((invoice) => {
                   const cfg = STATUS_CONFIG[invoice.status];
                   const StatusIcon = cfg.icon;
                   return (

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState } from "react"
 import { Wallet, TrendingUp, Target, Star, Download } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
 
@@ -54,6 +55,8 @@ export default function NomadesGanhosPage() {
   const monthEarned = monthPaid.reduce((s, p) => s + p.value + p.bonus, 0)
   const totalBonus  = paid.reduce((s, p) => s + p.bonus, 0)
   const avgPerTask  = paid.length ? Math.round(totalEarned / paid.length) : 0
+  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting()
+  const sortedPayments = sortData(PAYMENTS)
 
   const maxBar = Math.max(...MONTHLY.map((m) => m.value), 1)
 
@@ -155,15 +158,25 @@ export default function NomadesGanhosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50">
-                  <th className="px-4 py-2.5 text-left font-medium">Tarefa</th>
-                  <th className="px-4 py-2.5 text-left font-medium whitespace-nowrap">Data</th>
-                  <th className="px-4 py-2.5 text-right font-medium whitespace-nowrap">Valor</th>
-                  <th className="px-4 py-2.5 text-right font-medium whitespace-nowrap">Bônus</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Status</th>
+                  <th className="px-4 py-2.5 text-left font-medium">
+                    <SortableHeader label="Tarefa" field="task" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+                    <SortableHeader label="Data" field="date" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
+                    <SortableHeader label="Valor" field="value" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
+                    <SortableHeader label="Bônus" field="bonus" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-2.5 text-center font-medium">
+                    <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={[...new Set(PAYMENTS.map((p) => p.status).filter(Boolean))]} />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {PAYMENTS.map((p) => {
+                {sortedPayments.map((p) => {
                   const s = STATUS_CFG[p.status]
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">

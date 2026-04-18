@@ -1,10 +1,12 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from "react"
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog, Award } from "lucide-react"
+import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { ExportButton } from "@/components/export-button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -975,6 +977,15 @@ export default function EmpresasPage() {
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([])
+  const { sortKey: companySortKey, sortDir: companySortDir, handleSort: handleCompanySort, sortData: sortCompanies, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting<Company>()
+
+  // Mapping from ColKey to Company field for sortable columns
+  const sortableColMap: Partial<Record<string, keyof Company>> = {
+    empresa: "name",
+    status: "status",
+    plano: "plan",
+    tipo: "type",
+  }
   const [searchQuery, setSearchQuery] = useState("")
   const [createPanelOpen, setCreatePanelOpen] = useState(false)
   const [editPanelOpen, setEditPanelOpen] = useState(false)
@@ -1160,7 +1171,7 @@ export default function EmpresasPage() {
     setCurrentPage(1)
   }, [searchQuery, companies, advancedFilters])
 
-  const paginatedCompanies = filteredCompanies.slice(
+  const paginatedCompanies = sortCompanies(filteredCompanies).slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   )
@@ -1415,6 +1426,14 @@ export default function EmpresasPage() {
 
   // avatar helpers are module-scope (companyInitials / avatarColor / CompanyAvatar)
 
+  if (companiesLoading) {
+    return (
+      <div className="space-y-5">
+        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={6} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5" ref={pageRef}>
       {/* Header */}
@@ -1635,7 +1654,27 @@ export default function EmpresasPage() {
                       ...(col.key === "acoes" ? { position: "sticky", right: 0, zIndex: 2, background: "white" } : {}),
                     }}
                   >
-                    {col.label}
+                    {sortableColMap[col.key] ? (
+                      <SortableHeader
+                        label={col.label}
+                        field={String(sortableColMap[col.key]!)}
+                        type={col.key === "status" || col.key === "plano" || col.key === "tipo" ? "status" : "text"}
+                        sortKey={companySortKey ? String(companySortKey) : null}
+                        sortDir={companySortDir}
+                        onSort={(f, d) => handleCompanySort(f as any, d)}
+                        columnFilters={columnFilters}
+                        onFilter={toggleColumnFilter}
+                        onClearFilter={clearColumnFilter}
+                        filterValues={
+                          col.key === "status" ? [...new Set(filteredCompanies.map(c => String(c.status)))]
+                          : col.key === "plano" ? [...new Set(filteredCompanies.map(c => String(c.plan)))]
+                          : col.key === "tipo" ? [...new Set(filteredCompanies.map(c => String(c.type)))]
+                          : undefined
+                        }
+                      />
+                    ) : (
+                      col.label
+                    )}
                     {col.key !== "acoes" && (
                       <span
                         onMouseDown={(e) => onResizeMouseDown(e, i)}

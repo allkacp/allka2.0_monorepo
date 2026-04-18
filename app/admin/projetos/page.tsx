@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1499,6 +1500,14 @@ export default function AdminProjetosPage() {
         );
     }
   };
+
+  if (projectsLoading) {
+    return (
+      <div className="space-y-5">
+        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={7} />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5" ref={pageRef}>

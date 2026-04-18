@@ -40,151 +40,33 @@ import {
   XCircle,
   UserCheck,
 } from "lucide-react";
-import { useState } from "react";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useState, useEffect } from "react";
+import { useFinancial } from "@/hooks/useFinancial";
+import { useBilling } from "@/hooks/useBilling";
 
-const mockFinancialData = {
+// Default empty data structure — overridden once API responds
+const emptyFinancialData = {
   summary: {
-    totalRevenue: 485000,
-    totalExpenses: 312000,
-    taxes: 48500, // 10% tax rate
-    grossProfit: 124500, // Revenue - Expenses - Taxes
-    netProfit: 173000,
-    pendingPayments: 45000,
-    monthlyGrowth: 12.5,
+    totalRevenue: 0,
+    totalExpenses: 0,
+    taxes: 0,
+    grossProfit: 0,
+    netProfit: 0,
+    pendingPayments: 0,
+    monthlyGrowth: 0,
   },
   wallet: {
-    totalBalance: 285000,
-    pendingRevenue: 125000,
-    pendingExpenses: 78000,
-    availableBalance: 207000,
+    totalBalance: 0,
+    pendingRevenue: 0,
+    pendingExpenses: 0,
+    availableBalance: 0,
   },
-  postPaidClients: [
-    {
-      id: 1,
-      name: "TechCorp Squad",
-      overdraftLimit: 50000,
-      currentBalance: -32000,
-      invoiceDate: "2024-03-31",
-      paymentDue: "2024-04-10",
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "StartupXYZ Squad",
-      overdraftLimit: 30000,
-      currentBalance: -18500,
-      invoiceDate: "2024-03-31",
-      paymentDue: "2024-04-10",
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "DesignHub Squad",
-      overdraftLimit: 40000,
-      currentBalance: -25000,
-      invoiceDate: "2024-03-31",
-      paymentDue: "2024-04-10",
-      status: "pending",
-    },
-  ],
-  bankReconciliation: [
-    {
-      id: 1,
-      date: "2024-03-15",
-      description: "Transferência TechStore",
-      amount: 15000,
-      paymentMethod: "Transferência Bancária",
-      status: "reconciled",
-      category: "Receita",
-    },
-    {
-      id: 2,
-      date: "2024-03-14",
-      description: "Pagamento Nômades",
-      amount: -45000,
-      paymentMethod: "PIX",
-      status: "reconciled",
-      category: "Despesa",
-    },
-    {
-      id: 3,
-      date: "2024-03-13",
-      description: "Entrada não identificada",
-      amount: 8500,
-      paymentMethod: "Transferência Bancária",
-      status: "pending",
-      category: "Não identificado",
-    },
-    {
-      id: 4,
-      date: "2024-03-12",
-      description: "Comissões Líderes",
-      amount: -12000,
-      paymentMethod: "Transferência Bancária",
-      status: "reconciled",
-      category: "Despesa",
-    },
-  ],
-  walletTransactions: [
-    {
-      id: 1,
-      type: "income",
-      description: "Pagamento Projeto - TechStore",
-      amount: 15000,
-      date: "2024-03-15",
-      status: "completed",
-      category: "Projetos",
-    },
-    {
-      id: 2,
-      type: "expense",
-      description: "Pagamento Nômades - Março",
-      amount: 45000,
-      date: "2024-03-14",
-      status: "completed",
-      category: "Salários",
-    },
-    {
-      id: 3,
-      type: "income",
-      description: "Assinatura Mensal - Startup ABC",
-      amount: 8500,
-      date: "2024-03-13",
-      status: "completed",
-      category: "Assinaturas",
-    },
-    {
-      id: 4,
-      type: "expense",
-      description: "Comissões Líderes",
-      amount: 12000,
-      date: "2024-03-12",
-      status: "completed",
-      category: "Comissões",
-    },
-    {
-      id: 5,
-      type: "income",
-      description: "Projeto Concluído - FoodCorp",
-      amount: 7800,
-      date: "2024-03-11",
-      status: "pending",
-      category: "Projetos",
-    },
-  ],
-  revenueBySource: [
-    { source: "Projetos Empresas", amount: 285000, percentage: 58.8 },
-    { source: "Projetos Agências", amount: 145000, percentage: 29.9 },
-    { source: "Produtos Catálogo", amount: 55000, percentage: 11.3 },
-  ],
-  expenses: [
-    { category: "Salários Nômades", amount: 185000, percentage: 59.3 },
-    { category: "Comissões Líderes", amount: 45000, percentage: 14.4 },
-    { category: "Impostos", amount: 48500, percentage: 15.5 }, // Added taxes as expense
-    { category: "Infraestrutura", amount: 35000, percentage: 11.2 },
-    { category: "Marketing", amount: 28000, percentage: 9.0 },
-    { category: "Operacional", amount: 19000, percentage: 6.1 },
-  ],
+  postPaidClients: [] as any[],
+  bankReconciliation: [] as any[],
+  walletTransactions: [] as any[],
+  revenueBySource: [] as any[],
+  expenses: [] as any[],
 };
 
 type AdminPartnerWithdrawalStatus = "pending" | "paid" | "rejected"
@@ -205,22 +87,59 @@ interface AdminPartnerWithdrawal {
 export default function AdminFinanceiroPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const { withdrawals: apiWithdrawals, stats: financialStats, loading: fLoading, updateWithdrawal } = useFinancial();
+  const { invoices, stats: billingStats, loading: bLoading } = useBilling();
 
-  const MOCK_PENDING_WITHDRAWALS: AdminPartnerWithdrawal[] = [
-    { id: "w1", partnerName: "Carlos Mendonça", partnerEmail: "carlos@exemplo.com", amount: 800, pixKey: "carlos@exemplo.com", pixKeyType: "email", requestedAt: "2025-06-01T14:30:00Z", status: "pending", notes: "" },
-    { id: "w2", partnerName: "Ana Beatriz", partnerEmail: "ana.beatriz@nomade.io", amount: 450, pixKey: "123.456.789-00", pixKeyType: "cpf", requestedAt: "2025-06-02T09:15:00Z", status: "pending", notes: "" },
-    { id: "w3", partnerName: "Pedro Alves", partnerEmail: "pedro@agencia.com", amount: 1200, pixKey: "11987654321", pixKeyType: "phone", requestedAt: "2025-05-30T16:00:00Z", status: "pending", notes: "" },
-  ]
+  // Build display data from API stats or fallback to empty
+  const mockFinancialData = financialStats
+    ? {
+        summary: {
+          totalRevenue: financialStats.totalRevenue ?? 0,
+          totalExpenses: financialStats.totalExpenses ?? 0,
+          taxes: financialStats.taxes ?? 0,
+          grossProfit: financialStats.grossProfit ?? 0,
+          netProfit: financialStats.netProfit ?? 0,
+          pendingPayments: financialStats.pendingPayments ?? 0,
+          monthlyGrowth: financialStats.monthlyGrowth ?? 0,
+        },
+        wallet: financialStats.wallet ?? emptyFinancialData.wallet,
+        postPaidClients: financialStats.postPaidClients ?? [],
+        bankReconciliation: financialStats.bankReconciliation ?? [],
+        walletTransactions: financialStats.walletTransactions ?? [],
+        revenueBySource: financialStats.revenueBySource ?? [],
+        expenses: financialStats.expenses ?? [],
+      }
+    : emptyFinancialData;
 
-  const [withdrawals, setWithdrawals] = useState<AdminPartnerWithdrawal[]>(MOCK_PENDING_WITHDRAWALS)
+  const [withdrawals, setWithdrawals] = useState<AdminPartnerWithdrawal[]>([]);
+
+  // Sync API withdrawals into local state
+  useEffect(() => {
+    if (apiWithdrawals.length > 0) {
+      setWithdrawals(apiWithdrawals.map((w: any) => ({
+        id: String(w.id),
+        partnerName: w.nomade?.user?.name || w.partner_name || "—",
+        partnerEmail: w.nomade?.user?.email || w.partner_email || "",
+        amount: w.amount || 0,
+        pixKey: w.pix_key || "",
+        pixKeyType: w.pix_key_type || "email",
+        requestedAt: w.created_at || w.requestedAt || "",
+        status: w.status || "pending",
+        notes: w.notes || "",
+      })));
+    }
+  }, [apiWithdrawals]);
+  const { sortKey: wSortKey, sortDir: wSortDir, handleSort: handleWSort, sortData: sortWithdrawals, columnFilters: wColumnFilters, toggleColumnFilter: toggleWFilter, clearColumnFilter: clearWFilter } = useSorting<AdminPartnerWithdrawal>();
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
   const [rejectingId, setRejectingId] = useState<string | null>(null)
 
   function approveWithdrawal(id: string) {
+    updateWithdrawal(id, { status: "paid", notes: "Aprovado e pago" }).catch(() => {})
     setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "paid", notes: "Aprovado e pago" } : w)))
   }
 
   function rejectWithdrawal(id: string) {
+    updateWithdrawal(id, { status: "rejected", notes: rejectNotes[id] ?? "" }).catch(() => {})
     setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "rejected", notes: rejectNotes[id] ?? "" } : w)))
     setRejectingId(null)
   }
@@ -229,7 +148,7 @@ export default function AdminFinanceiroPage() {
     <div className="container mx-auto space-y-6 px-0 py-0">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
+          <h1 className="font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
             Gestão Financeira
           </h1>
           <p className="text-gray-600 mt-1">
@@ -249,7 +168,7 @@ export default function AdminFinanceiroPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white border-0">
+        <Card className="bg-linear-to-br from-green-500 to-green-600 text-white border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -270,7 +189,7 @@ export default function AdminFinanceiroPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0">
+        <Card className="bg-linear-to-br from-red-500 to-red-600 text-white border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -288,7 +207,7 @@ export default function AdminFinanceiroPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
+        <Card className="bg-linear-to-br from-purple-500 to-purple-600 text-white border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -305,7 +224,7 @@ export default function AdminFinanceiroPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 ring-4 ring-amber-200">
+        <Card className="bg-linear-to-br from-amber-500 to-amber-600 text-white border-0 ring-4 ring-amber-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -330,7 +249,7 @@ export default function AdminFinanceiroPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
+        <Card className="bg-linear-to-br from-blue-500 to-blue-600 text-white border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -398,7 +317,7 @@ export default function AdminFinanceiroPage() {
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2.5">
                         <div
-                          className="bg-gradient-to-r from-green-500 to-green-600 h-2.5 rounded-full transition-all"
+                          className="bg-linear-to-r from-green-500 to-green-600 h-2.5 rounded-full transition-all"
                           style={{ width: `${source.percentage}%` }}
                         />
                       </div>
@@ -432,7 +351,7 @@ export default function AdminFinanceiroPage() {
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2.5">
                         <div
-                          className="bg-gradient-to-r from-red-500 to-red-600 h-2.5 rounded-full transition-all"
+                          className="bg-linear-to-r from-red-500 to-red-600 h-2.5 rounded-full transition-all"
                           style={{ width: `${expense.percentage}%` }}
                         />
                       </div>
@@ -1009,19 +928,17 @@ export default function AdminFinanceiroPage() {
                 <thead>
                   <tr className="border-b bg-slate-50">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Parceiro
+                      <SortableHeader label="Parceiro" field="partnerName" type="text" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Chave PIX
-                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Valor
+                      <SortableHeader label="Valor" field="amount" type="number" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Solicitado em
+                      <SortableHeader label="Solicitado em" field="requestedAt" type="date" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Status
+                      <SortableHeader label="Status" field="status" type="status" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} columnFilters={wColumnFilters} onFilter={toggleWFilter} onClearFilter={clearWFilter} filterValues={["pending","approved","rejected","paid"]} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       Ações
@@ -1029,7 +946,7 @@ export default function AdminFinanceiroPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {withdrawals.map((w) => (
+                  {sortWithdrawals(withdrawals).map((w) => (
                     <tr
                       key={w.id}
                       className="hover:bg-slate-50/50 transition-colors"
