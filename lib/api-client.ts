@@ -1,9 +1,28 @@
 // Allka MVP - API Client utility functions
 
-// Toggle: quando VITE_USE_MOCKS=true, usa dados locais em memória (pasta dev-mocks/).
-// Em produção (build pro cPanel) essa variável não existe → usa API real.
-// Vite faz tree-shake: se VITE_USE_MOCKS !== "true", o import do mock nem entra no bundle.
-import { mockApiClient } from "@/dev-mocks/mock-api-client";
+// Mock inline: quando VITE_USE_MOCKS=true, usa um Proxy que retorna dados vazios.
+// Mantido inline para evitar dependência da pasta dev-mocks/ (ignorada no build).
+const mockApiClient: any = new Proxy(
+  {
+    setToken() {},
+    clearToken() {},
+    async login(email: string) {
+      return { token: "mock-token", user: { id: "mock", email, name: "Mock" } };
+    },
+    async logout() {
+      return { ok: true };
+    },
+    async getCurrentUser() {
+      return { id: "mock", email: "mock@allka.dev", name: "Mock" };
+    },
+  },
+  {
+    get(target: any, prop: string) {
+      if (prop in target) return target[prop];
+      return async () => [];
+    },
+  },
+);
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "https://api-dev.allka.com.vc/api";
