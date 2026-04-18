@@ -413,9 +413,9 @@ class ApiClient {
   }
 
   async checkTerms() {
-    const terms: any[] = await this.getTerms();
+    const terms = await this.getTerms();
     const activeTerms = Array.isArray(terms)
-      ? terms.filter((term) => term?.is_active !== false)
+      ? (terms as any[]).filter((term) => term?.is_active !== false)
       : [];
 
     const pending = await Promise.all(
