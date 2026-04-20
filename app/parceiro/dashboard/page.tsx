@@ -29,8 +29,24 @@ function fmtDate(s: string) {
 }
 
 export default function PartnerDashboard() {
-  const { profile, stats, commissions, withdrawals } = usePartner();
+  const { profile, stats, commissions, withdrawals, loading } = usePartner();
   const [copied, setCopied] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!profile || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-2">
+        <p className="text-sm">Nenhum perfil de parceiro encontrado.</p>
+      </div>
+    );
+  }
 
   const pendingCommissions = commissions.filter(
     (c) => c.status === "pending" || c.status === "confirmed",

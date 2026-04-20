@@ -1,12 +1,162 @@
 ﻿# ALLKA 2026 — Plataforma
 
-## Sobre
-
-Plataforma ALLKA em desenvolvimento modular com **React 19**, **Vite 7**, **TypeScript 5.9** e **Tailwind CSS 4**.
-
-SPA (Single Page Application) com React Router v6, Context API para estado global, componentes shadcn/ui customizados e sistema de temas dinâmico na sidebar.
+> Plataforma de gestão para empresas, nômades digitais, agências e parceiros.
+> React 18 + Vite 7 + TypeScript 5 + Tailwind CSS 4 | Backend: Express 5 + Prisma + SQLite/PostgreSQL
 
 ---
+
+## Modos de Desenvolvimento
+
+A plataforma opera em **três modos** independentes, separados por arquivos `.env.*` e flags Vite:
+
+| Comando           | Modo        | Backend necessário? | Dados              |
+|-------------------|-------------|---------------------|--------------------|
+| `npm run dev:mock`| mock        | ❌ Não              | Mock em memória    |
+| `npm run dev`     | development | ✅ Sim (porta 3001) | Banco local (SQLite)|
+| `npm run build`   | production  | ✅ Sim (cPanel API) | Banco PostgreSQL    |
+
+### Como funciona a troca de modo
+
+Vite carrega o arquivo `.env.<mode>` correspondente:
+
+- `.env.mock` → `VITE_USE_MOCKS=true` — nenhuma chamada real é feita
+- `.env.development` → `VITE_USE_MOCKS=false` + `VITE_API_URL=http://localhost:3001/api`
+- `.env.production` → `VITE_USE_MOCKS=false` + `VITE_API_URL=https://api-dev.allka.com.vc/api`
+
+O `lib/api-client-factory.ts` verifica `import.meta.env.VITE_USE_MOCKS` e retorna o cliente correto.
+**Mocks nunca entram no bundle de produção** — Vite faz tree-shaking automático.
+
+---
+
+## Setup Local — Passo a Passo
+
+### 1. Frontend
+
+```bash
+# Instalar dependências
+npm install
+
+# Rodar com dados mock (não precisa de backend)
+npm run dev:mock
+
+# Rodar com backend local (precisa do passo 2 primeiro)
+npm run dev
+```
+
+### 2. Backend (opcional — apenas para modo `dev`)
+
+```bash
+cd backend
+npm install
+
+# Criar banco e rodar migrações
+npx prisma db push
+
+# Popular banco com dados de exemplo
+npx tsx prisma/seed.ts
+
+# Iniciar servidor (porta 3001)
+npm run dev
+```
+
+O backend usa o arquivo `backend/.env` (gitignored). Um arquivo `backend/.env.example` serve de template.
+
+---
+
+## Credenciais de Teste
+
+| E-mail                  | Senha      | Perfil         |
+|-------------------------|------------|----------------|
+| admin@allka.com         | admin123   | Admin          |
+| empresa@allka.com       | empresa123 | Empresa        |
+| nomade@allka.com        | nomade123  | Nômade         |
+| agencia@allka.com       | agencia123 | Agência        |
+| parceiro@allka.com      | parceiro123| Parceiro       |
+
+> No modo mock, qualquer e-mail/senha faz login como **admin** (mock sempre retorna o mesmo usuário).
+
+---
+
+## Fluxo Tela a Tela
+
+O desenvolvimento segue um processo de validação progressiva:
+
+```
+1. dev:mock  →  valida UI, dados, fluxos localmente
+2. dev       →  valida integração real com o backend local
+3. build     →  deploy no cPanel com API de produção
+```
+
+**Regra**: uma tela só vai para cPanel depois de estar **aprovada nos dois modos locais**.
+
+---
+
+## Estrutura de Pastas
+
+```
+/app              — Páginas por tipo de usuário (admin, empresa, nomades, agencia, parceiro)
+/components       — Componentes reutilizáveis compartilhados
+/contexts         — Contextos React (estado global)
+/hooks            — Hooks customizados (chamadas de API, utilitários)
+/lib              — Clientes de API, utilitários
+/dev-mocks        — Dados e cliente mock (gitignored, apenas dev)
+  /data           — Arrays de dados simulados por módulo
+  mock-api-client.ts — Cliente mock com mesma interface da API real
+/backend          — API Express + Prisma
+  /src            — Rotas, controllers, middlewares
+  /prisma         — Schema, seed, migrações
+```
+
+---
+
+## Stack Técnica
+
+**Frontend**
+- React 18 + TypeScript 5
+- Vite 7 (build tool)
+- Tailwind CSS 4
+- React Router v6
+- shadcn/ui + Radix UI
+- Context API (estado global)
+- TipTap (editor rich text)
+
+**Backend**
+- Express 5
+- Prisma ORM
+- SQLite (dev) / PostgreSQL (prod)
+- JWT (autenticação)
+- Node.js 20+
+
+---
+
+## Deploy (cPanel)
+
+```bash
+# 1. Build de produção
+npm run build
+
+# 2. Enviar a pasta /dist para o cPanel via FTP ou Git
+# 3. Configurar rewrite para SPA (nginx/htaccess)
+```
+
+A variável `VITE_API_URL` em `.env.production` aponta para `https://api-dev.allka.com.vc/api`.
+
+---
+
+## Arquivos de Ambiente
+
+| Arquivo                | Finalidade                            | Commitado? |
+|------------------------|---------------------------------------|------------|
+| `.env.mock`            | Modo mock local                       | ✅ Sim     |
+| `.env.development`     | Modo dev com backend local            | ✅ Sim     |
+| `.env.production`      | Modo build/cPanel                     | ✅ Sim     |
+| `.env.example`         | Template documentado                  | ✅ Sim     |
+| `backend/.env`         | Credenciais do backend local          | ❌ Não     |
+| `dev-mocks/`           | Toda a pasta de mocks                 | ❌ Não     |
+
+---
+
+## Sobre
 
 ## Portais da Plataforma
 

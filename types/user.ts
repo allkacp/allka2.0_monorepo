@@ -33,14 +33,14 @@ export interface CompanyLGPD {
 }
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
   name: string;
   phone?: string;
   account_type: AccountType;
   account_sub_type: AccountSubType | null;
-  company_id?: number;
-  agency_id?: number;
+  company_id?: string;
+  agency_id?: string;
   role: UserRole;
   permissions: Permission[];
   is_admin: boolean;
@@ -63,8 +63,8 @@ export interface User {
   };
   company_associations?: CompanyAssociation[];
   agency_associations?: AgencyAssociation[];
-  active_company_id?: number;
-  active_agency_id?: number;
+  active_company_id?: string;
+  active_agency_id?: string;
   company?: Company;
   agency?: Agency;
   lgpd?: UserLGPD;
@@ -225,45 +225,11 @@ export interface CompanyLink {
   joined_at: string;
 }
 
-/** Mock project list per company for UI dropdowns — IDs match admin/empresas companies */
+/** Project list per company - populated from API */
 export const MOCK_COMPANY_PROJECTS: Record<
   number,
   { id: number; name: string; status: string }[]
-> = {
-  // Coca-Cola Brasil (id: 1)
-  1: [
-    { id: 101, name: "Campanha Verão 2026", status: "active" },
-    { id: 102, name: "Rebranding Embalagens", status: "active" },
-    { id: 103, name: "Ativação Ponto de Venda", status: "paused" },
-  ],
-  // Starbucks Coffee (id: 2)
-  2: [
-    { id: 201, name: "Campanha Sazonal Inverno", status: "active" },
-    { id: 202, name: "Lançamento Nova Linha Fria", status: "active" },
-  ],
-  // Fundação Wikimedia (id: 3)
-  3: [
-    { id: 301, name: "Campanha de Arrecadação 2026", status: "active" },
-    { id: 302, name: "Vídeo Institucional", status: "completed" },
-  ],
-  // Agência Criativa Hub (id: 4)
-  4: [
-    { id: 401, name: "Identidade Visual Cliente A", status: "active" },
-    { id: 402, name: "Social Media Management", status: "active" },
-  ],
-  // Spotify Brasil (id: 8)
-  8: [
-    { id: 801, name: "Campanha Wrapped 2026", status: "active" },
-    { id: 802, name: "Parcerias com Artistas", status: "active" },
-    { id: 803, name: "Podcast Originals BR", status: "paused" },
-  ],
-  // Meta Business (id: 10)
-  10: [
-    { id: 1001, name: "Ads Creative Studio Q1", status: "active" },
-    { id: 1002, name: "Reels Strategy 2026", status: "active" },
-    { id: 1003, name: "Marketplace Growth", status: "active" },
-  ],
-};
+> = {};
 
 export interface AgencyAssociation {
   id: number;

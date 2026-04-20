@@ -291,8 +291,12 @@ export function MobileMenuSheet({ open, onClose }: MobileMenuSheetProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{userProfile.name}</p>
-                <p className="text-xs text-white/70 truncate">{userProfile.role}</p>
+                {accountType === "admin" && (
+                  <p className="text-sm font-medium text-white truncate">{userProfile.name}</p>
+                )}
+                <p className="text-xs text-white/70 truncate">
+                  {accountType === "admin" ? (userProfile.job_title || userProfile.role) : userProfile.role}
+                </p>
               </div>
             </div>
           </div>

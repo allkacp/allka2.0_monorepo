@@ -188,88 +188,10 @@ export function CompanyEditSlidePanel({
   const [currentPlan, setCurrentPlan] = useState("basic");
 
   // Dummy data and functions for export
-  const [users, setUsers] = useState<UserForExport[]>([
-    {
-      id: 1,
-      name: "João Silva",
-      email: "joao@empresa.com",
-      role: "Admin",
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "Maria Santos",
-      email: "maria@empresa.com",
-      role: "User",
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "Pedro Costa",
-      email: "pedro@empresa.com",
-      role: "User",
-      status: "inactive",
-    },
-  ]);
-  const [acceptedTerms, setAcceptedTerms] = useState<AcceptedTermForExport[]>([
-    {
-      name: "Termos de Uso",
-      version: "1.0",
-      acceptedAt: "2024-06-15",
-      acceptedBy: "Admin",
-    },
-    {
-      name: "Política de Privacidade",
-      version: "1.2",
-      acceptedAt: "2024-06-15",
-      acceptedBy: "Admin",
-    },
-  ]);
-  const [relatedProjects, setRelatedProjects] = useState<
-    RelatedProjectForExport[]
-  >([
-    {
-      id: 1,
-      name: "Redesign Website",
-      status: "active",
-      progress: 75,
-      startDate: "2025-02-15",
-    },
-    {
-      id: 2,
-      name: "Mobile App Development",
-      status: "active",
-      progress: 45,
-      startDate: "2025-03-20",
-    },
-    {
-      id: 3,
-      name: "Marketing Campaign",
-      status: "completed",
-      progress: 100,
-      startDate: "2024-12-30",
-    },
-  ]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLogForExport[]>([
-    {
-      user: "João Silva",
-      action: "Login realizado",
-      timestamp: "2025-01-07 14:30",
-      ip: "192.168.1.1",
-    },
-    {
-      user: "Maria Santos",
-      action: "Projeto criado",
-      timestamp: "2025-01-07 13:15",
-      ip: "192.168.1.5",
-    },
-    {
-      user: "João Silva",
-      action: "Usuário convidado",
-      timestamp: "2025-01-07 11:20",
-      ip: "192.168.1.1",
-    },
-  ]);
+  const [users, setUsers] = useState<UserForExport[]>([]);
+  const [acceptedTerms, setAcceptedTerms] = useState<AcceptedTermForExport[]>([]);
+  const [relatedProjects, setRelatedProjects] = useState<RelatedProjectForExport[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogForExport[]>([]);
 
   const handleExportCompanyData = () => {
     if (!editedCompany) return; // Ensure editedCompany is available
@@ -398,137 +320,13 @@ export function CompanyEditSlidePanel({
     }
   }, [company, open]);
 
-  const [companyUsers, setCompanyUsers] = useState([
-    {
-      id: 1,
-      name: "João Silva",
-      email: "joao@empresa.com",
-      role: "Admin",
-      status: "active",
-      last_login: "2025-01-05",
-      isMaster: true,
-    },
-    {
-      id: 2,
-      name: "Maria Santos",
-      email: "maria@empresa.com",
-      role: "User",
-      status: "active",
-      last_login: "2025-01-06",
-      isMaster: false,
-    },
-    {
-      id: 3,
-      name: "Pedro Costa",
-      email: "pedro@empresa.com",
-      role: "User",
-      status: "inactive",
-      last_login: "2024-12-20",
-      isMaster: false,
-    },
-  ]);
+  const [companyUsers, setCompanyUsers] = useState<any[]>([]);
 
-  const [terms] = useState([
-    {
-      id: 1,
-      term: "Termos de Uso",
-      accepted: true,
-      date: "2024-06-15",
-      version: "1.0",
-    },
-    {
-      id: 2,
-      term: "Política de Privacidade",
-      accepted: true,
-      date: "2024-06-15",
-      version: "1.2",
-    },
-    {
-      id: 3,
-      term: "Termos de Serviço Premium",
-      accepted: false,
-      date: null,
-      version: "2.0",
-    },
-  ]);
+  const [terms] = useState<any[]>([]);
 
-  const [projects] = useState([
-    {
-      id: 1,
-      name: "Redesign Website",
-      status: "active",
-      progress: 75,
-      nomads: 3,
-      deadline: "2025-02-15",
-    },
-    {
-      id: 2,
-      name: "Mobile App Development",
-      status: "active",
-      progress: 45,
-      nomads: 5,
-      deadline: "2025-03-20",
-    },
-    {
-      id: 3,
-      name: "Marketing Campaign",
-      status: "completed",
-      progress: 100,
-      nomads: 2,
-      deadline: "2024-12-30",
-    },
-    {
-      id: 4,
-      name: "SEO Optimization",
-      status: "paused",
-      progress: 30,
-      nomads: 1,
-      deadline: "2025-04-10",
-    },
-  ]);
+  const [projects] = useState<any[]>([]);
 
-  const [logs] = useState([
-    {
-      id: 1,
-      user: "João Silva",
-      action: "Login realizado",
-      category: "auth",
-      timestamp: "2025-01-07 14:30",
-      ip: "192.168.1.1",
-    },
-    {
-      id: 2,
-      user: "Maria Santos",
-      action: "Projeto criado",
-      category: "project",
-      timestamp: "2025-01-07 13:15",
-      ip: "192.168.1.5",
-    },
-    {
-      id: 3,
-      user: "João Silva",
-      action: "Usuário convidado",
-      category: "user",
-      timestamp: "2025-01-07 11:20",
-      ip: "192.168.1.1",
-    },
-    {
-      id: 4,
-      user: "Pedro Costa",
-      action: "Configurações alteradas",
-      category: "settings",
-      timestamp: "2025-01-06 16:45",
-      ip: "192.168.1.8",
-    },
-    {
-      id: 5,
-      user: "Maria Santos",
-      action: "Logout",
-      category: "auth",
-      timestamp: "2025-01-06 15:30",
-      ip: "192.168.1.5",
-    },
-  ]);
+  const [logs] = useState<any[]>([]);
 
   const [showTransferMasterModal, setShowTransferMasterModal] = useState(false);
   const [selectedUserForMaster, setSelectedUserForMaster] = useState<

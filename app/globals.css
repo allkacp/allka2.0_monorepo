@@ -502,8 +502,24 @@
 
   /* App brand header - unified header style for company modals */
   .app-brand-header {
-    background: var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+    background: var(--app-brand-header, var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)));
     color: white;
+    min-height: 100px;
+  }
+
+  /* Font size customization via CSS vars (set by sidebar-context) */
+  [data-sidebar-root] nav span,
+  [data-sidebar-root] a span,
+  [data-sidebar-root] button span:not(.sr-only) {
+    font-size: var(--app-font-sidebar, 0.8125rem) !important;
+  }
+
+  h1, .text-heading-1 { font-size: var(--app-font-heading, 1rem) !important; }
+
+  table th, table td,
+  [role="columnheader"], [role="cell"],
+  .data-table th, .data-table td {
+    font-size: var(--app-font-table, 0.7rem) !important;
   }
 
   /* Superfície principal do sistema */
@@ -607,11 +623,10 @@
 }
 
 /* ── Brand gradient button ─────────────────────────────────────── */
-/* Follows the sidebar theme: CSS vars are updated by sidebar.tsx  */
+/* Follows the sidebar theme via --app-brand-gradient (sidebar-context.tsx) */
 .btn-brand,
 .btn-brand:not([disabled]) {
-  background-color: var(--btn-g-from) !important;
-  background-image: linear-gradient(135deg, var(--btn-g-from) 0%, var(--btn-g-mid) 45%, var(--btn-g-to) 100%) !important;
+  background: var(--app-brand-button, var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))) !important;
   color: #fff !important;
   border: none !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;

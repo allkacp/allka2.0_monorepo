@@ -170,16 +170,19 @@ const AgenciaCatalogoPage = React.lazy(
   () => import("@/app/agencia/catalogo/page"),
 );
 
-// ─── Login Page ──────────────────────────────────────────────────────────
+// ─── Login Pages ─────────────────────────────────────────────────────────
 const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
+const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
+const EmpresaLoginPage = React.lazy(() => import("@/app/empresa/login/page"));
+const AgenciaLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
+const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
-// TEMPORARIAMENTE DESATIVADO — reativar antes de subir pro cPanel
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  // const token = localStorage.getItem("allka_token")
-  // if (!token) {
-  //   return <Navigate to="/login" replace />
-  // }
+  const token = localStorage.getItem("allka_token")
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
   return <>{children}</>;
 }
 
@@ -253,7 +256,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       try {
         const res: any = await apiClient.checkTerms();
         if (cancelled) return;
-        const pending = res.pending || res.data || (Array.isArray(res) ? res : []);
+        const pending =
+          res.pending || res.data || (Array.isArray(res) ? res : []);
         if (pending.length > 0) {
           setPendingTerms(pending);
           setTermsAccepted(false);
@@ -264,7 +268,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
     checkTerms();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAllAccepted = async (ids: string[]) => {
@@ -305,7 +311,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 <Sidebar />
                               </div>
                               <div className="flex-1 flex flex-col overflow-visible min-w-0">
-                                <Header />
+                                <PageErrorBoundary>
+                                  <Header />
+                                </PageErrorBoundary>
                                 <main className="flex-1 overflow-auto bg-slate-200 mx-0 py-12 px-14 pb-mobile-nav">
                                   <PageErrorBoundary>
                                     <Suspense fallback={<PageLoader />}>
@@ -349,15 +357,12 @@ export default function App() {
   return (
     <AccountTypeProvider>
       <Routes>
-        {/* ─── Login (fora do AppLayout) ─── */}
-        <Route
-          path="/login"
-          element={
-            <Suspense fallback={<PageLoader />}>
-              <LoginPage />
-            </Suspense>
-          }
-        />
+        {/* ─── Login pages (fora do AppLayout, públicas) ─── */}
+        <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
+        <Route path="/nomades/login" element={<Suspense fallback={<PageLoader />}><NomadeLoginPage /></Suspense>} />
+        <Route path="/empresa/login" element={<Suspense fallback={<PageLoader />}><EmpresaLoginPage /></Suspense>} />
+        <Route path="/agencia/login" element={<Suspense fallback={<PageLoader />}><AgenciaLoginPage /></Suspense>} />
+        <Route path="/parceiro/login" element={<Suspense fallback={<PageLoader />}><ParceiroLoginPage /></Suspense>} />
 
         {/* ─── Todas as rotas protegidas passam pelo AppLayout ── */}
         <Route

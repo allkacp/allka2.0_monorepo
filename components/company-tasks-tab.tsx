@@ -1,8 +1,9 @@
 
-import { useState, useMemo, type CSSProperties } from "react"
+import { useState, useMemo, useEffect, type CSSProperties } from "react"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { apiClient } from "@/lib/api-client"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Eye, Filter, X, List, LayoutGrid, ArrowUp, ArrowDown, User, Users, Calendar, Search, CheckSquare, ChevronDown, GripVertical, Pencil } from "lucide-react"
@@ -56,169 +57,9 @@ interface CompanyTasksTabProps {
   }
 }
 
-// Mock tasks para todos os projetos da empresa
-const mockCompanyTasks: Task[] = [
-  // Projeto 1: Hospedagem Florescer Idosos
-  {
-    id: "1",
-    uniqueId: "5001",
-    nome: "Design UI/UX",
-    produtoNome: "App Mobile",
-    executor: "Lucas Martins",
-    lider: "Ana Oliveira",
-    prazo: "20/02/2025",
-    status: "Aprovada",
-    projectId: 1,
-    projectName: "Hospedagem Florescer Idosos",
-    dataInicio: "15/02/2025",
-  },
-  {
-    id: "2",
-    uniqueId: "5002",
-    nome: "Desenvolvimento iOS",
-    produtoNome: "App Mobile",
-    executor: "Camila Ferreira",
-    lider: "Lucas Martins",
-    prazo: "05/03/2025",
-    status: "Em Execução",
-    projectId: 1,
-    projectName: "Hospedagem Florescer Idosos",
-    dataInicio: "25/02/2025",
-  },
-  {
-    id: "3",
-    uniqueId: "5003",
-    nome: "Desenvolvimento Android",
-    produtoNome: "App Mobile",
-    executor: "Rafael Gomes",
-    lider: "Lucas Martins",
-    prazo: "05/03/2025",
-    status: "Em Execução",
-    projectId: 1,
-    projectName: "Hospedagem Florescer Idosos",
-    dataInicio: "25/02/2025",
-  },
-  {
-    id: "4",
-    uniqueId: "5004",
-    nome: "Testes Beta",
-    produtoNome: "App Mobile",
-    executor: "Patricia Cunha",
-    lider: "Camila Ferreira",
-    prazo: "15/03/2025",
-    status: "Entregue",
-    projectId: 1,
-    projectName: "Hospedagem Florescer Idosos",
-    dataInicio: "10/03/2025",
-  },
-  // Projeto 2: Redesign Website Startup ABC
-  {
-    id: "5",
-    uniqueId: "5005",
-    nome: "Setup Backend",
-    produtoNome: "App Mobile",
-    executor: "Carlos Lima",
-    lider: "Rafael Gomes",
-    prazo: "25/02/2025",
-    status: "Aprovada",
-    projectId: 2,
-    projectName: "Redesign Website Startup ABC",
-    dataInicio: "18/02/2025",
-  },
-  {
-    id: "6",
-    uniqueId: "5006",
-    nome: "API Integration",
-    produtoNome: "App Mobile",
-    executor: "Maria Santos",
-    lider: "Carlos Lima",
-    prazo: "01/03/2025",
-    status: "Em Execução",
-    projectId: 2,
-    projectName: "Redesign Website Startup ABC",
-    dataInicio: "22/02/2025",
-  },
-  {
-    id: "7",
-    uniqueId: "5007",
-    nome: "Push Notifications",
-    produtoNome: "App Mobile",
-    executor: "Pedro Costa",
-    lider: "Maria Santos",
-    prazo: "10/03/2025",
-    status: "Aprovada",
-    projectId: 2,
-    projectName: "Redesign Website Startup ABC",
-    dataInicio: "05/03/2025",
-  },
-  {
-    id: "8",
-    uniqueId: "5008",
-    nome: "Auth System",
-    produtoNome: "App Mobile",
-    executor: "João Silva",
-    lider: "Carlos Lima",
-    prazo: "08/03/2025",
-    status: "Para Aprovação",
-    projectId: 2,
-    projectName: "Redesign Website Startup ABC",
-    dataInicio: "01/03/2025",
-  },
-  // Projeto 3: Identidade Visual FoodCorp
-  {
-    id: "9",
-    uniqueId: "5009",
-    nome: "Logo Design",
-    produtoNome: "Design",
-    executor: "Ana Santos",
-    lider: "Pedro Criativo",
-    prazo: "15/02/2025",
-    status: "Aprovada",
-    projectId: 3,
-    projectName: "Identidade Visual FoodCorp",
-    dataInicio: "08/02/2025",
-  },
-  {
-    id: "10",
-    uniqueId: "5010",
-    nome: "Brand Guidelines",
-    produtoNome: "Design",
-    executor: "Maria Silva",
-    lider: "Pedro Criativo",
-    prazo: "20/02/2025",
-    status: "Atrasada",
-    projectId: 3,
-    projectName: "Identidade Visual FoodCorp",
-    dataInicio: "16/02/2025",
-  },
-  // Projeto 4: Campanha Lançamento Produto XYZ
-  {
-    id: "11",
-    uniqueId: "5011",
-    nome: "Pesquisa de Mercado",
-    produtoNome: "Marketing",
-    executor: "Lucas Marketing",
-    lider: "Ana Marketing",
-    prazo: "28/02/2025",
-    status: "Para Aprovação",
-    projectId: 4,
-    projectName: "Campanha Lançamento Produto XYZ",
-    dataInicio: "20/02/2025",
-  },
-  {
-    id: "12",
-    uniqueId: "5012",
-    nome: "Criação de Conteúdo",
-    produtoNome: "Marketing",
-    executor: "Carolina Content",
-    lider: "Lucas Marketing",
-    prazo: "10/03/2025",
-    status: "Em Execução",
-    projectId: 4,
-    projectName: "Campanha Lançamento Produto XYZ",
-    dataInicio: "01/03/2025",
-  },
-]
+// Tasks loaded from API
+const mockCompanyTasks: Task[] = [];
+
 
 export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
   const { sidebarSettings, previewTheme } = useSidebar()

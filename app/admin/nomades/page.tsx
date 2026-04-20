@@ -1,40 +1,104 @@
-
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, Eye, Edit, Star, ChevronDown, ChevronUp, X, Phone, MessageCircle, Mail, Loader2 } from "lucide-react"
-import { NomadMetricsWidgets } from "@/components/admin/nomad-metrics-widgets"
-import { NomadViewModal } from "@/components/admin/nomad-view-modal"
-import { NomadEditModal } from "@/components/admin/nomad-edit-modal"
-import { PageHeader } from "@/components/page-header"
-import { useNomades } from "@/hooks/useNomades"
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Search,
+  Eye,
+  Edit,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Phone,
+  MessageCircle,
+  Mail,
+  Loader2,
+} from "lucide-react";
+import { NomadMetricsWidgets } from "@/components/admin/nomad-metrics-widgets";
+import { NomadViewModal } from "@/components/admin/nomad-view-modal";
+import { NomadEditModal } from "@/components/admin/nomad-edit-modal";
+import { PageHeader } from "@/components/page-header";
+import { useNomades } from "@/hooks/useNomades";
 
 const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
-  Bronze:   { icon: "🥉", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  Silver:   { icon: "🥈", className: "bg-slate-100 text-slate-600 border-slate-300" },
-  Gold:     { icon: "🥇", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  Bronze: {
+    icon: "🥉",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  Silver: {
+    icon: "🥈",
+    className: "bg-slate-100 text-slate-600 border-slate-300",
+  },
+  Gold: {
+    icon: "🥇",
+    className: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  },
   Platinum: { icon: "💎", className: "bg-sky-50 text-sky-700 border-sky-200" },
-  Diamond:  { icon: "👑", className: "bg-violet-50 text-violet-700 border-violet-200" },
-  Leader:   { icon: "🔥", className: "bg-rose-50 text-rose-700 border-rose-200" },
-}
+  Diamond: {
+    icon: "👑",
+    className: "bg-violet-50 text-violet-700 border-violet-200",
+  },
+  Leader: { icon: "🔥", className: "bg-rose-50 text-rose-700 border-rose-200" },
+};
 
-const NOMAD_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  cadastrado:    { label: "Cadastrado",    className: "bg-slate-100 text-slate-700 border-slate-300" },
-  teste_pendente:{ label: "Teste Pendente",className: "bg-amber-100 text-amber-800 border-amber-300" },
-  ativo:         { label: "Ativo",         className: "bg-green-100 text-green-800 border-green-300" },
-  active:        { label: "Ativo",         className: "bg-green-100 text-green-800 border-green-300" },
-  atencao:       { label: "Atenção",       className: "bg-orange-100 text-orange-800 border-orange-300" },
-  sem_tarefas:   { label: "Sem Tarefas",   className: "bg-sky-100 text-sky-800 border-sky-300" },
-  inativo:       { label: "Inativo",       className: "bg-gray-100 text-gray-600 border-gray-300" },
-  inactive:      { label: "Inativo",       className: "bg-gray-100 text-gray-600 border-gray-300" },
-  reprovado:     { label: "Reprovado",     className: "bg-red-100 text-red-700 border-red-300" },
-}
+const NOMAD_STATUS_CONFIG: Record<
+  string,
+  { label: string; className: string }
+> = {
+  cadastrado: {
+    label: "Cadastrado",
+    className: "bg-slate-100 text-slate-700 border-slate-300",
+  },
+  teste_pendente: {
+    label: "Teste Pendente",
+    className: "bg-amber-100 text-amber-800 border-amber-300",
+  },
+  ativo: {
+    label: "Ativo",
+    className: "bg-green-100 text-green-800 border-green-300",
+  },
+  active: {
+    label: "Ativo",
+    className: "bg-green-100 text-green-800 border-green-300",
+  },
+  atencao: {
+    label: "Atenção",
+    className: "bg-orange-100 text-orange-800 border-orange-300",
+  },
+  sem_tarefas: {
+    label: "Sem Tarefas",
+    className: "bg-sky-100 text-sky-800 border-sky-300",
+  },
+  inativo: {
+    label: "Inativo",
+    className: "bg-gray-100 text-gray-600 border-gray-300",
+  },
+  inactive: {
+    label: "Inativo",
+    className: "bg-gray-100 text-gray-600 border-gray-300",
+  },
+  reprovado: {
+    label: "Reprovado",
+    className: "bg-red-100 text-red-700 border-red-300",
+  },
+};
 
-const availableProducts = ["Marketing Digital", "Branding", "Desenvolvimento", "SEO", "Conteúdo"]
-const availableCategories = ["Design", "Marketing", "Tecnologia", "Comunicação"]
+const availableProducts = [
+  "Marketing Digital",
+  "Branding",
+  "Desenvolvimento",
+  "SEO",
+  "Conteúdo",
+];
+const availableCategories = [
+  "Design",
+  "Marketing",
+  "Tecnologia",
+  "Comunicação",
+];
 const availableTaskTypes = [
   "Criação de Posts",
   "Design de Logos",
@@ -42,53 +106,66 @@ const availableTaskTypes = [
   "Otimização SEO",
   "Redação de Artigos",
   "Criação de Textos",
-]
+];
 
 export default function AdminNomadesPage() {
-  const { nomades: apiNomades, loading, error, updateNomade } = useNomades()
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterLevel, setFilterLevel] = useState("all")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
-  const [filterOnlineStatus, setFilterOnlineStatus] = useState("all")
-  const [filterDateFrom, setFilterDateFrom] = useState("")
-  const [filterDateTo, setFilterDateTo] = useState("")
-  const [filterLastAccessFrom, setFilterLastAccessFrom] = useState("")
-  const [filterLastAccessTo, setFilterLastAccessTo] = useState("")
-  const [filterProducts, setFilterProducts] = useState<string[]>([])
-  const [filterCategories, setFilterCategories] = useState<string[]>([])
-  const [filterTaskTypes, setFilterTaskTypes] = useState<string[]>([])
-  const [selectedNomad, setSelectedNomad] = useState<any | null>(null)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [invitedNomads, setInvitedNomads] = useState<Set<number>>(new Set())
+  const { nomades: apiNomades, loading, error, updateNomade } = useNomades();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterLevel, setFilterLevel] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterOnlineStatus, setFilterOnlineStatus] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterLastAccessFrom, setFilterLastAccessFrom] = useState("");
+  const [filterLastAccessTo, setFilterLastAccessTo] = useState("");
+  const [filterProducts, setFilterProducts] = useState<string[]>([]);
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [filterTaskTypes, setFilterTaskTypes] = useState<string[]>([]);
+  const [selectedNomad, setSelectedNomad] = useState<any | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [invitedNomads, setInvitedNomads] = useState<Set<number>>(new Set());
 
   const handleInvite = (nomadId: number) => {
-    setInvitedNomads((prev) => new Set([...prev, nomadId]))
-  }
+    setInvitedNomads((prev) => new Set([...prev, nomadId]));
+  };
 
   const filteredNomades = apiNomades.filter((nomade: any) => {
     const matchesSearch =
       nomade.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      nomade.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesLevel = filterLevel === "all" || nomade.level === filterLevel
-    const matchesStatus = filterStatus === "all" || nomade.status === filterStatus
-    const matchesOnlineStatus = filterOnlineStatus === "all" || nomade.online_status === filterOnlineStatus
+      nomade.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesLevel = filterLevel === "all" || nomade.level === filterLevel;
+    const matchesStatus =
+      filterStatus === "all" || nomade.status === filterStatus;
+    const matchesOnlineStatus =
+      filterOnlineStatus === "all" ||
+      nomade.online_status === filterOnlineStatus;
 
     // Filter by registration date range
-    const matchesDateFrom = !filterDateFrom || new Date(nomade.joinedDate) >= new Date(filterDateFrom)
-    const matchesDateTo = !filterDateTo || new Date(nomade.joinedDate) <= new Date(filterDateTo)
+    const matchesDateFrom =
+      !filterDateFrom ||
+      new Date(nomade.joinedDate) >= new Date(filterDateFrom);
+    const matchesDateTo =
+      !filterDateTo || new Date(nomade.joinedDate) <= new Date(filterDateTo);
 
     // Filter by last access date range
-    const matchesLastAccessFrom = !filterLastAccessFrom || new Date(nomade.last_login) >= new Date(filterLastAccessFrom)
-    const matchesLastAccessTo = !filterLastAccessTo || new Date(nomade.last_login) <= new Date(filterLastAccessTo)
+    const matchesLastAccessFrom =
+      !filterLastAccessFrom ||
+      new Date(nomade.last_login) >= new Date(filterLastAccessFrom);
+    const matchesLastAccessTo =
+      !filterLastAccessTo ||
+      new Date(nomade.last_login) <= new Date(filterLastAccessTo);
 
     const matchesProducts =
-      filterProducts.length === 0 || filterProducts.some((product) => nomade.products.includes(product))
+      filterProducts.length === 0 ||
+      filterProducts.some((product) => nomade.products.includes(product));
     const matchesCategories =
-      filterCategories.length === 0 || filterCategories.some((category) => nomade.categories.includes(category))
+      filterCategories.length === 0 ||
+      filterCategories.some((category) => nomade.categories.includes(category));
     const matchesTaskTypes =
-      filterTaskTypes.length === 0 || filterTaskTypes.some((taskType) => nomade.taskTypes.includes(taskType))
+      filterTaskTypes.length === 0 ||
+      filterTaskTypes.some((taskType) => nomade.taskTypes.includes(taskType));
 
     return (
       matchesSearch &&
@@ -102,59 +179,72 @@ export default function AdminNomadesPage() {
       matchesProducts &&
       matchesCategories &&
       matchesTaskTypes
-    )
-  })
+    );
+  });
 
   const clearAdvancedFilters = () => {
-    setFilterOnlineStatus("all")
-    setFilterDateFrom("")
-    setFilterDateTo("")
-    setFilterLastAccessFrom("")
-    setFilterLastAccessTo("")
-    setFilterProducts([])
-    setFilterCategories([])
-    setFilterTaskTypes([])
-  }
+    setFilterOnlineStatus("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterLastAccessFrom("");
+    setFilterLastAccessTo("");
+    setFilterProducts([]);
+    setFilterCategories([]);
+    setFilterTaskTypes([]);
+  };
 
   const toggleProduct = (product: string) => {
-    setFilterProducts((prev) => (prev.includes(product) ? prev.filter((p) => p !== product) : [...prev, product]))
-  }
+    setFilterProducts((prev) =>
+      prev.includes(product)
+        ? prev.filter((p) => p !== product)
+        : [...prev, product],
+    );
+  };
 
   const toggleCategory = (category: string) => {
-    setFilterCategories((prev) => (prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]))
-  }
+    setFilterCategories((prev) =>
+      prev.includes(category)
+        ? prev.filter((c) => c !== category)
+        : [...prev, category],
+    );
+  };
 
   const toggleTaskType = (taskType: string) => {
-    setFilterTaskTypes((prev) => (prev.includes(taskType) ? prev.filter((t) => t !== taskType) : [...prev, taskType]))
-  }
+    setFilterTaskTypes((prev) =>
+      prev.includes(taskType)
+        ? prev.filter((t) => t !== taskType)
+        : [...prev, taskType],
+    );
+  };
 
   const handleView = (nomad: any) => {
-    setSelectedNomad(nomad)
-    setIsViewModalOpen(true)
-  }
+    setSelectedNomad(nomad);
+    setIsViewModalOpen(true);
+  };
 
   const handleEdit = (nomad: any) => {
-    setSelectedNomad(nomad)
-    setIsEditModalOpen(true)
-  }
+    setSelectedNomad(nomad);
+    setIsEditModalOpen(true);
+  };
 
   const handleSave = async (updatedNomad: any) => {
-    if (updatedNomad.id) await updateNomade(String(updatedNomad.id), updatedNomad)
-  }
+    if (updatedNomad.id)
+      await updateNomade(String(updatedNomad.id), updatedNomad);
+  };
 
   const handlePhoneCall = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, "")
-    window.open(`tel:${cleanPhone}`, "_self")
-  }
+    const cleanPhone = phone.replace(/\D/g, "");
+    window.open(`tel:${cleanPhone}`, "_self");
+  };
 
   const handleWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, "")
-    window.open(`https://wa.me/${cleanPhone}`, "_blank")
-  }
+    const cleanPhone = phone.replace(/\D/g, "");
+    window.open(`https://wa.me/${cleanPhone}`, "_blank");
+  };
 
   const handleEmail = (email: string) => {
-    window.open(`mailto:${email}`, "_self")
-  }
+    window.open(`mailto:${email}`, "_self");
+  };
 
   const getOnlineStatusIndicator = (status: string) => {
     switch (status) {
@@ -164,48 +254,61 @@ export default function AdminNomadesPage() {
             <div className="h-3 w-3 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900"></div>
             <div className="absolute inset-0 h-3 w-3 rounded-full bg-green-500 animate-ping opacity-75"></div>
           </div>
-        )
+        );
       case "offline":
-        return <div className="h-3 w-3 rounded-full bg-gray-400 ring-2 ring-white dark:ring-gray-900"></div>
+        return (
+          <div className="h-3 w-3 rounded-full bg-gray-400 ring-2 ring-white dark:ring-gray-900"></div>
+        );
       case "busy":
-        return <div className="h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900"></div>
+        return (
+          <div className="h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900"></div>
+        );
       case "away":
-        return <div className="h-3 w-3 rounded-full bg-yellow-500 ring-2 ring-white dark:ring-gray-900"></div>
+        return (
+          <div className="h-3 w-3 rounded-full bg-yellow-500 ring-2 ring-white dark:ring-gray-900"></div>
+        );
       default:
-        return <div className="h-3 w-3 rounded-full bg-gray-400 ring-2 ring-white dark:ring-gray-900"></div>
+        return (
+          <div className="h-3 w-3 rounded-full bg-gray-400 ring-2 ring-white dark:ring-gray-900"></div>
+        );
     }
-  }
+  };
 
   const getOnlineStatusLabel = (status: string) => {
     switch (status) {
       case "online":
-        return "Online"
+        return "Online";
       case "offline":
-        return "Offline"
+        return "Offline";
       case "busy":
-        return "Ocupado"
+        return "Ocupado";
       case "away":
-        return "Ausente"
+        return "Ausente";
       default:
-        return "Desconhecido"
+        return "Desconhecido";
     }
-  }
+  };
 
-  if (loading) return (
-    <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
 
-  if (error) return (
-    <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
-      <p className="text-destructive">Erro ao carregar nômades: {error}</p>
-    </div>
-  )
+  if (error)
+    return (
+      <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
+        <p className="text-destructive">Erro ao carregar nômades: {error}</p>
+      </div>
+    );
 
   return (
     <div className="container mx-auto px-0 py-0 space-y-5">
-      <PageHeader title="Gestão de Nômades" description="Gerencie todos os nômades da plataforma" />
+      <PageHeader
+        title="Gestão de Nômades"
+        description="Gerencie todos os nômades da plataforma"
+      />
 
       <NomadMetricsWidgets />
 
@@ -257,7 +360,11 @@ export default function AdminNomadesPage() {
                   className="flex items-center space-x-2"
                 >
                   <span>Filtros Avançados</span>
-                  {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {showAdvancedFilters ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>
@@ -266,7 +373,12 @@ export default function AdminNomadesPage() {
               <div className="border-t pt-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Filtros Avançados</h3>
-                  <Button variant="ghost" size="sm" onClick={clearAdvancedFilters} className="text-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAdvancedFilters}
+                    className="text-xs"
+                  >
                     <X className="h-3 w-3 mr-1" />
                     Limpar Filtros
                   </Button>
@@ -275,7 +387,9 @@ export default function AdminNomadesPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Online Status Filter */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Status Online</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Status Online
+                    </label>
                     <select
                       value={filterOnlineStatus}
                       onChange={(e) => setFilterOnlineStatus(e.target.value)}
@@ -291,7 +405,9 @@ export default function AdminNomadesPage() {
 
                   {/* Registration Date From */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Cadastro De</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Cadastro De
+                    </label>
                     <Input
                       type="date"
                       value={filterDateFrom}
@@ -302,7 +418,9 @@ export default function AdminNomadesPage() {
 
                   {/* Registration Date To */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Cadastro Até</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Cadastro Até
+                    </label>
                     <Input
                       type="date"
                       value={filterDateTo}
@@ -313,7 +431,9 @@ export default function AdminNomadesPage() {
 
                   {/* Last Access From */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Último Acesso De</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Último Acesso De
+                    </label>
                     <Input
                       type="date"
                       value={filterLastAccessFrom}
@@ -324,7 +444,9 @@ export default function AdminNomadesPage() {
 
                   {/* Last Access To */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Último Acesso Até</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Último Acesso Até
+                    </label>
                     <Input
                       type="date"
                       value={filterLastAccessTo}
@@ -337,12 +459,18 @@ export default function AdminNomadesPage() {
                 <div className="space-y-4 pt-4 border-t">
                   {/* Products Filter */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Produtos</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Produtos
+                    </label>
                     <div className="flex flex-wrap gap-2">
                       {availableProducts.map((product) => (
                         <Badge
                           key={product}
-                          variant={filterProducts.includes(product) ? "default" : "outline"}
+                          variant={
+                            filterProducts.includes(product)
+                              ? "default"
+                              : "outline"
+                          }
                           className="cursor-pointer hover:bg-blue-100 transition-colors"
                           onClick={() => toggleProduct(product)}
                         >
@@ -354,12 +482,18 @@ export default function AdminNomadesPage() {
 
                   {/* Categories Filter */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Categorias</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Categorias
+                    </label>
                     <div className="flex flex-wrap gap-2">
                       {availableCategories.map((category) => (
                         <Badge
                           key={category}
-                          variant={filterCategories.includes(category) ? "default" : "outline"}
+                          variant={
+                            filterCategories.includes(category)
+                              ? "default"
+                              : "outline"
+                          }
                           className="cursor-pointer hover:bg-purple-100 transition-colors"
                           onClick={() => toggleCategory(category)}
                         >
@@ -371,12 +505,18 @@ export default function AdminNomadesPage() {
 
                   {/* Task Types Filter */}
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Tipos de Tarefa</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Tipos de Tarefa
+                    </label>
                     <div className="flex flex-wrap gap-2">
                       {availableTaskTypes.map((taskType) => (
                         <Badge
                           key={taskType}
-                          variant={filterTaskTypes.includes(taskType) ? "default" : "outline"}
+                          variant={
+                            filterTaskTypes.includes(taskType)
+                              ? "default"
+                              : "outline"
+                          }
                           className="cursor-pointer hover:bg-green-100 transition-colors"
                           onClick={() => toggleTaskType(taskType)}
                         >
@@ -388,7 +528,9 @@ export default function AdminNomadesPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t">
-                  <p className="text-xs text-muted-foreground">{filteredNomades.length} nômade(s) encontrado(s)</p>
+                  <p className="text-xs text-muted-foreground">
+                    {filteredNomades.length} nômade(s) encontrado(s)
+                  </p>
                 </div>
               </div>
             )}
@@ -409,26 +551,44 @@ export default function AdminNomadesPage() {
                         {nomade.name.substring(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="absolute -bottom-0.5 -right-0.5" title={getOnlineStatusLabel(nomade.online_status)}>
+                    <div
+                      className="absolute -bottom-0.5 -right-0.5"
+                      title={getOnlineStatusLabel(nomade.online_status)}
+                    >
                       {getOnlineStatusIndicator(nomade.online_status)}
                     </div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-semibold text-base leading-none">{nomade.name}</h3>
+                      <h3 className="font-semibold text-base leading-none">
+                        {nomade.name}
+                      </h3>
                       <Badge
                         variant="outline"
                         className={`text-xs py-0 ${(NOMAD_LEVEL_BADGE[nomade.level] ?? NOMAD_LEVEL_BADGE["Bronze"]).className}`}
                       >
-                        {(NOMAD_LEVEL_BADGE[nomade.level] ?? NOMAD_LEVEL_BADGE["Bronze"]).icon} {nomade.level}
+                        {
+                          (
+                            NOMAD_LEVEL_BADGE[nomade.level] ??
+                            NOMAD_LEVEL_BADGE["Bronze"]
+                          ).icon
+                        }{" "}
+                        {nomade.level}
                       </Badge>
                       {(() => {
-                        const sc = NOMAD_STATUS_CONFIG[nomade.status] || { label: nomade.status, className: "bg-gray-100 text-gray-600 border-gray-300" }
+                        const sc = NOMAD_STATUS_CONFIG[nomade.status] || {
+                          label: nomade.status,
+                          className:
+                            "bg-gray-100 text-gray-600 border-gray-300",
+                        };
                         return (
-                          <Badge variant="outline" className={`text-xs py-0 ${sc.className}`}>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs py-0 ${sc.className}`}
+                          >
                             {sc.label}
                           </Badge>
-                        )
+                        );
                       })()}
                       {invitedNomads.has(nomade.id) && (
                         <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-xs py-0">
@@ -436,9 +596,13 @@ export default function AdminNomadesPage() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-gray-600 leading-none">{nomade.email}</p>
+                    <p className="text-xs text-gray-600 leading-none">
+                      {nomade.email}
+                    </p>
                     <div className="flex gap-4 mt-1 text-xs text-gray-600">
-                      <span>Especialidades: {nomade.specialties.join(", ")}</span>
+                      <span>
+                        Especialidades: {nomade.specialties.join(", ")}
+                      </span>
                     </div>
                     {nomade.phone && (
                       <div className="flex items-center gap-1 mt-1">
@@ -470,14 +634,22 @@ export default function AdminNomadesPage() {
 
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-xs text-gray-600 leading-none">Tarefas Concluídas</p>
-                    <p className="text-lg font-bold leading-tight">{nomade.tasksCompleted}</p>
+                    <p className="text-xs text-gray-600 leading-none">
+                      Tarefas Concluídas
+                    </p>
+                    <p className="text-lg font-bold leading-tight">
+                      {nomade.tasksCompleted}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-600 leading-none">Avaliação</p>
+                    <p className="text-xs text-gray-600 leading-none">
+                      Avaliação
+                    </p>
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <p className="text-lg font-bold leading-tight">{nomade.rating}</p>
+                      <p className="text-lg font-bold leading-tight">
+                        {nomade.rating}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -519,8 +691,8 @@ export default function AdminNomadesPage() {
             open={isViewModalOpen}
             onOpenChange={setIsViewModalOpen}
             onEdit={() => {
-              setIsViewModalOpen(false)
-              setIsEditModalOpen(true)
+              setIsViewModalOpen(false);
+              setIsEditModalOpen(true);
             }}
             onInvite={handleInvite}
           />
@@ -533,5 +705,5 @@ export default function AdminNomadesPage() {
         </>
       )}
     </div>
-  )
+  );
 }

@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { apiClient } from "@/lib/api-client";
 import type {
   PartnerProfile,
@@ -69,36 +75,41 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const requestWithdrawal = useCallback(async (
-    amount: number,
-    pixKey: string,
-    pixKeyType: PartnerWithdrawal["pixKeyType"],
-  ) => {
-    try {
-      const res: any = await apiClient.createWithdrawal({
-        amount,
-        pixKey,
-        pixKeyType,
-      });
-      setWithdrawals((prev) => [res, ...prev]);
-    } catch (err) {
-      console.error("[PartnerProvider] Failed to request withdrawal:", err);
-      // Fallback local add
-      const newWithdrawal: PartnerWithdrawal = {
-        id: `w${Date.now()}`,
-        partnerId: profile?.id || "",
-        amount,
-        pixKey,
-        pixKeyType,
-        status: "pending",
-        requestedAt: new Date().toISOString().split("T")[0],
-      };
-      setWithdrawals((prev) => [newWithdrawal, ...prev]);
-    }
-  }, [profile]);
+  const requestWithdrawal = useCallback(
+    async (
+      amount: number,
+      pixKey: string,
+      pixKeyType: PartnerWithdrawal["pixKeyType"],
+    ) => {
+      try {
+        const res: any = await apiClient.createWithdrawal({
+          amount,
+          pixKey,
+          pixKeyType,
+        });
+        setWithdrawals((prev) => [res, ...prev]);
+      } catch (err) {
+        console.error("[PartnerProvider] Failed to request withdrawal:", err);
+        // Fallback local add
+        const newWithdrawal: PartnerWithdrawal = {
+          id: `w${Date.now()}`,
+          partnerId: profile?.id || "",
+          amount,
+          pixKey,
+          pixKeyType,
+          status: "pending",
+          requestedAt: new Date().toISOString().split("T")[0],
+        };
+        setWithdrawals((prev) => [newWithdrawal, ...prev]);
+      }
+    },
+    [profile],
+  );
 
   return (
     <PartnerContext.Provider

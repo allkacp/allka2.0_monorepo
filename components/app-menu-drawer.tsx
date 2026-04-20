@@ -249,8 +249,12 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-white font-semibold text-lg">{userProfile.name}</p>
-                  <p className="text-white/80 text-sm">{userProfile.role}</p>
+                  {accountType === "admin" && (
+                    <p className="text-white font-semibold text-lg">{userProfile.name}</p>
+                  )}
+                  <p className="text-white/80 text-sm">
+                    {accountType === "admin" ? (userProfile.job_title || userProfile.role) : userProfile.role}
+                  </p>
                 </div>
               </div>
               <Button

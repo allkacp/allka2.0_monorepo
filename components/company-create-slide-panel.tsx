@@ -26,6 +26,11 @@ import {
   ZoomIn,
   Trash2,
   Crosshair,
+  ImagePlus,
+  Pencil,
+  Building,
+  Users,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -131,9 +136,7 @@ export function CompanyCreateSlidePanel({
     "pagamento",
     "admin",
   ];
-  const [createOpenAccordions, setCreateOpenAccordions] = useState<string[]>([
-    "cadastrais",
-  ]);
+  const [createOpenAccordions, setCreateOpenAccordions] = useState<string[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -148,6 +151,7 @@ export function CompanyCreateSlidePanel({
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isDragOverUpload, setIsDragOverUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cropImgRef = useRef<HTMLImageElement>(null);
   const CROP_SIZE = 192;
@@ -238,7 +242,11 @@ export function CompanyCreateSlidePanel({
       newErrors.razaoSocial = "Razão Social é obrigatória";
     if (!formData.nomeFantasia.trim())
       newErrors.nomeFantasia = "Nome Fantasia é obrigatório";
-    if (!formData.cnpj.trim()) newErrors.cnpj = "CNPJ é obrigatório";
+    if (!formData.cnpj.trim()) {
+      newErrors.cnpj = "CNPJ é obrigatório";
+    } else if (formData.cnpj.replace(/\D/g, "").length !== 14) {
+      newErrors.cnpj = "CNPJ inválido — informe os 14 dígitos";
+    }
     if (!formData.emailPrincipal.trim()) {
       newErrors.emailPrincipal = "Email é obrigatório";
     } else if (!/\S+@\S+\.\S+/.test(formData.emailPrincipal)) {
@@ -324,6 +332,20 @@ export function CompanyCreateSlidePanel({
   };
 
   // Avatar handlers
+  const processImageFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      setRawImageSrc(src);
+      setOriginalRawSrc(src);
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
+      setCropOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAvatarClick = () => {
     if (avatarPreview) {
       setShowAvatarMenu((p) => !p);
@@ -335,16 +357,13 @@ export function CompanyCreateSlidePanel({
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const src = ev.target?.result as string;
-      setRawImageSrc(src);
-      setOriginalRawSrc(src);
-      setCropZoom(1);
-      setCropOffset({ x: 0, y: 0 });
-      setCropOpen(true);
-    };
-    reader.readAsDataURL(file);
+    processImageFile(file);
+  };
+  const handleDropUpload = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverUpload(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(file);
   };
   const handleCropConfirm = () => {
     const img = cropImgRef.current;
@@ -369,6 +388,19 @@ export function CompanyCreateSlidePanel({
     setAvatarPreview(canvas.toDataURL("image/jpeg", 0.92));
     setCropOpen(false);
     setRawImageSrc(null);
+  };
+
+  const formatCnpj = (value: string): string => {
+    const d = value.replace(/\D/g, "").slice(0, 14);
+    return d
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d)/, ".$1/$2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  };
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    updateField("cnpj", formatCnpj(e.target.value));
   };
 
   // Error counts per accordion section
@@ -622,28 +654,86 @@ export function CompanyCreateSlidePanel({
 
           {/* Conteúdo com Abas em Accordions */}
           <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
-            {/* STATUS HEADER - Prominently displayed at the top */}
-            <div className="mb-4 w-fit px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
-              <CompanyStatusSelector
-                value={formData.status}
-                onChange={(status) => updateField("status", status)}
-              />
-            </div>
-
-            {/* Validation warning banner */}
-            {submitAttempted && totalErrors > 0 && (
-              <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                <p className="text-xs text-red-700 font-medium">
-                  {totalErrors === 1
-                    ? "Falta 1 campo obrigatório para preencher"
-                    : `Faltam ${totalErrors} campos obrigatórios para preencher`}
-                </p>
+            {/* ── Logo upload zone ── */}
+            {avatarPreview ? (
+              <div className="relative mb-5 rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex items-center gap-4">
+                <div className="relative h-16 w-16 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-blue-100 shadow">
+                  <img src={avatarPreview} alt="logo" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-700">Logo cadastrada</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Imagem do perfil da empresa</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {originalRawSrc && (
+                    <button
+                      type="button"
+                      onClick={() => { setRawImageSrc(originalRawSrc); setCropZoom(1); setCropOffset({ x: 0, y: 0 }); setCropOpen(true); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar foto
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-xs font-medium text-blue-600 hover:bg-blue-100 transition-colors"
+                  >
+                    <Camera className="h-3.5 w-3.5" /> Trocar foto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAvatarPreview(null); setOriginalRawSrc(null); }}
+                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  "relative mb-5 rounded-xl border-2 border-dashed transition-all duration-200 p-6 flex flex-col items-center justify-center gap-3 cursor-pointer select-none",
+                  isDragOverUpload
+                    ? "border-blue-400 bg-blue-50 scale-[1.005]"
+                    : "border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40",
+                )}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOverUpload(true); }}
+                onDragLeave={() => setIsDragOverUpload(false)}
+                onDrop={handleDropUpload}
+              >
+                <div className={cn(
+                  "h-14 w-14 rounded-full flex items-center justify-center transition-colors",
+                  isDragOverUpload ? "bg-blue-100" : "bg-slate-100",
+                )}>
+                  <ImagePlus className={cn("h-7 w-7 transition-colors", isDragOverUpload ? "text-blue-500" : "text-slate-400")} />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-slate-600">
+                    {isDragOverUpload ? "Solte para adicionar!" : "Logo da empresa"}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Arraste aqui ou{" "}
+                    <span className="text-blue-500 font-medium underline underline-offset-2">
+                      selecione um arquivo
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1.5">PNG, JPG ou WEBP · Máx. 5MB</p>
+                </div>
               </div>
             )}
 
-            <div className="flex items-center justify-end pb-3">
+            {/* ── Status + Expand row ── */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
+                <CompanyStatusSelector
+                  value={formData.status}
+                  onChange={(status) => updateField("status", status)}
+                />
+              </div>
               <button
+                type="button"
                 onClick={() => {
                   const allOpen = CREATE_ALL_ACCORDIONS.every((a) =>
                     createOpenAccordions.includes(a),
@@ -687,6 +777,18 @@ export function CompanyCreateSlidePanel({
                 </div>
               </button>
             </div>
+
+            {/* Validation warning banner */}
+            {submitAttempted && totalErrors > 0 && (
+              <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                <p className="text-xs text-red-700 font-medium">
+                  {totalErrors === 1
+                    ? "Falta 1 campo obrigatório para preencher"
+                    : `Faltam ${totalErrors} campos obrigatórios para preencher`}
+                </p>
+              </div>
+            )}
             <Accordion
               type="multiple"
               value={createOpenAccordions}
@@ -773,9 +875,10 @@ export function CompanyCreateSlidePanel({
                         <Input
                           placeholder="12.345.678/0001-90"
                           value={formData.cnpj}
-                          onChange={(e) => updateField("cnpj", e.target.value)}
+                          onChange={handleCnpjChange}
+                          maxLength={18}
                           className={cn(
-                            "h-8 text-xs",
+                            "h-8 text-xs font-mono tracking-wide",
                             errors.cnpj && "border-red-400",
                           )}
                         />
@@ -1093,78 +1196,88 @@ export function CompanyCreateSlidePanel({
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3">
-                    <RadioGroup
-                      value={formData.tipoContato}
-                      onValueChange={(value) =>
-                        updateField("tipoContato", value)
-                      }
-                      className="grid grid-cols-2 gap-2"
-                    >
+                  <div className="border-t bg-white px-3 py-4">
+                    <div className="grid grid-cols-2 gap-2">
                       {[
                         {
                           value: "dependent",
                           label: "Dependente",
-                          desc: "Gerenciada por outra company",
-                          color:
-                            "border-blue-200 hover:border-blue-400 hover:bg-blue-50",
-                          dot: "bg-blue-500",
+                          desc: "Gerenciada por outra empresa",
+                          Icon: Building,
+                          gradient: "from-blue-50",
+                          border: "border-blue-200",
+                          ring: "ring-blue-400",
+                          activeText: "text-blue-700",
+                          activeBg: "bg-blue-100",
                         },
                         {
                           value: "independent",
                           label: "Independente",
                           desc: "Autonomia total",
-                          color:
-                            "border-green-200 hover:border-green-400 hover:bg-green-50",
-                          dot: "bg-green-500",
+                          Icon: Building2,
+                          gradient: "from-green-50",
+                          border: "border-green-200",
+                          ring: "ring-green-400",
+                          activeText: "text-green-700",
+                          activeBg: "bg-green-100",
                         },
                         {
                           value: "agency",
-                          label: "Agency",
+                          label: "Agência",
                           desc: "Gestora de projetos",
-                          color:
-                            "border-purple-200 hover:border-purple-400 hover:bg-purple-50",
-                          dot: "bg-purple-500",
+                          Icon: Layers,
+                          gradient: "from-purple-50",
+                          border: "border-purple-200",
+                          ring: "ring-purple-400",
+                          activeText: "text-purple-700",
+                          activeBg: "bg-purple-100",
                         },
                         {
                           value: "partner",
                           label: "Partner",
                           desc: "Parceiro de plataforma",
-                          color:
-                            "border-red-200 hover:border-red-400 hover:bg-red-50",
-                          dot: "bg-red-500",
+                          Icon: Users,
+                          gradient: "from-amber-50",
+                          border: "border-amber-200",
+                          ring: "ring-amber-400",
+                          activeText: "text-amber-700",
+                          activeBg: "bg-amber-100",
                         },
-                      ].map((opt) => (
-                        <label
-                          key={opt.value}
-                          className={cn(
-                            "flex items-start gap-2 p-2.5 rounded-lg border bg-white cursor-pointer transition-all",
-                            opt.color,
-                            formData.tipoContato === opt.value &&
-                              "ring-2 ring-offset-1 ring-blue-400",
-                          )}
-                        >
-                          <RadioGroupItem
-                            value={opt.value}
-                            className="mt-0.5 flex-shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "h-2 w-2 rounded-full flex-shrink-0",
-                                  opt.dot,
-                                )}
-                              />
-                              {opt.label}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              {opt.desc}
-                            </p>
-                          </div>
-                        </label>
-                      ))}
-                    </RadioGroup>
+                      ].map((opt) => {
+                        const isSelected = formData.tipoContato === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => updateField("tipoContato", opt.value)}
+                            className={cn(
+                              "flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all duration-150 bg-gradient-to-br to-white",
+                              opt.gradient,
+                              opt.border,
+                              isSelected
+                                ? `ring-2 ring-offset-1 ${opt.ring} border-transparent shadow-md`
+                                : "hover:shadow-sm",
+                            )}
+                          >
+                            <div className={cn(
+                              "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                              isSelected ? opt.activeBg : "bg-white/80",
+                            )}>
+                              <opt.Icon className={cn("h-4 w-4", isSelected ? opt.activeText : "text-slate-400")} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-xs font-semibold", isSelected ? opt.activeText : "text-slate-700")}>
+                                {opt.label}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
+                            </div>
+                            {isSelected && (
+                              <Check className={cn("h-4 w-4 flex-shrink-0 mt-0.5", opt.activeText)} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -1181,44 +1294,46 @@ export function CompanyCreateSlidePanel({
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3 space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        Plano
-                      </Label>
-                      <Select
-                        value={formData.planoCreditoId}
-                        onValueChange={(value) =>
-                          updateField("planoCreditoId", value)
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="lite">
-                            Lite — R$ 300/mês (ativa conta agency)
-                          </SelectItem>
-                          <SelectItem value="start">
-                            Start — R$ 500/mês (5% desconto)
-                          </SelectItem>
-                          <SelectItem value="standard">
-                            Standard — R$ 1.000/mês (10% desconto)
-                          </SelectItem>
-                          <SelectItem value="growth">
-                            Growth — R$ 1.500/mês (15% desconto)
-                          </SelectItem>
-                          <SelectItem value="scale">
-                            Scale — R$ 3.000/mês (20% desconto)
-                          </SelectItem>
-                          <SelectItem value="squad">
-                            Squad — R$ 5.000/mês (agências — 20% + pós pago)
-                          </SelectItem>
-                          <SelectItem value="enterprise">
-                            Enterprise — R$ 5.000/mês (empresas — pós pago)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="border-t bg-white px-3 py-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "lite",       label: "Lite",       price: "R$ 300/mês",   desc: "Ativa conta agency",          from: "from-slate-50",  border: "border-slate-200",  ring: "ring-slate-400",  badge: "bg-slate-100 text-slate-600",   check: "text-slate-600" },
+                        { id: "start",      label: "Start",      price: "R$ 500/mês",   desc: "5% desconto",                 from: "from-sky-50",    border: "border-sky-200",    ring: "ring-sky-400",    badge: "bg-sky-100 text-sky-700",       check: "text-sky-600" },
+                        { id: "standard",   label: "Standard",   price: "R$ 1.000/mês", desc: "10% desconto",                from: "from-blue-50",   border: "border-blue-200",   ring: "ring-blue-400",   badge: "bg-blue-100 text-blue-700",     check: "text-blue-600" },
+                        { id: "growth",     label: "Growth",     price: "R$ 1.500/mês", desc: "15% desconto",                from: "from-violet-50", border: "border-violet-200", ring: "ring-violet-400", badge: "bg-violet-100 text-violet-700", check: "text-violet-600" },
+                        { id: "scale",      label: "Scale",      price: "R$ 3.000/mês", desc: "20% desconto",                from: "from-purple-50", border: "border-purple-200", ring: "ring-purple-400", badge: "bg-purple-100 text-purple-700", check: "text-purple-600" },
+                        { id: "squad",      label: "Squad",      price: "R$ 5.000/mês", desc: "Agências · 20% + pós pago",   from: "from-pink-50",   border: "border-pink-200",   ring: "ring-pink-400",   badge: "bg-pink-100 text-pink-700",     check: "text-pink-600" },
+                        { id: "enterprise", label: "Enterprise", price: "R$ 5.000/mês", desc: "Empresas · pós pago",         from: "from-rose-50",   border: "border-rose-200",   ring: "ring-rose-400",   badge: "bg-rose-100 text-rose-700",     check: "text-rose-600" },
+                      ].map((plan) => {
+                        const isSelected = formData.planoCreditoId === plan.id;
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            onClick={() => updateField("planoCreditoId", plan.id)}
+                            className={cn(
+                              "flex flex-col items-start gap-1 p-3 rounded-xl border-2 bg-gradient-to-br to-white text-left transition-all duration-150",
+                              plan.from,
+                              plan.border,
+                              isSelected
+                                ? `ring-2 ring-offset-1 ${plan.ring} border-transparent shadow-md`
+                                : "hover:shadow-sm",
+                              plan.id === "enterprise" && "col-span-2",
+                            )}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-md", plan.badge)}>
+                                {plan.label}
+                              </span>
+                              {isSelected && (
+                                <Check className={cn("h-4 w-4 flex-shrink-0", plan.check)} />
+                              )}
+                            </div>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{plan.price}</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">{plan.desc}</p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </AccordionContent>
@@ -1386,7 +1501,7 @@ export function CompanyCreateSlidePanel({
           </div>
 
           {/* Rodapé Fixo */}
-          <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-slate-50 flex-shrink-0">
+          <div className="flex items-center gap-3 px-[25px] py-[15px] border-t bg-slate-50 flex-shrink-0">
             <Button
               variant="outline"
               onClick={() => handleClose()}

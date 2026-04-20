@@ -69,25 +69,30 @@ const emptyFinancialData = {
   expenses: [] as any[],
 };
 
-type AdminPartnerWithdrawalStatus = "pending" | "paid" | "rejected"
-type AdminPartnerPixKeyType = "cpf" | "email" | "phone" | "random"
+type AdminPartnerWithdrawalStatus = "pending" | "paid" | "rejected";
+type AdminPartnerPixKeyType = "cpf" | "email" | "phone" | "random";
 
 interface AdminPartnerWithdrawal {
-  id: string
-  partnerName: string
-  partnerEmail: string
-  amount: number
-  pixKey: string
-  pixKeyType: AdminPartnerPixKeyType
-  requestedAt: string
-  status: AdminPartnerWithdrawalStatus
-  notes: string
+  id: string;
+  partnerName: string;
+  partnerEmail: string;
+  amount: number;
+  pixKey: string;
+  pixKeyType: AdminPartnerPixKeyType;
+  requestedAt: string;
+  status: AdminPartnerWithdrawalStatus;
+  notes: string;
 }
 
 export default function AdminFinanceiroPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const { withdrawals: apiWithdrawals, stats: financialStats, loading: fLoading, updateWithdrawal } = useFinancial();
+  const {
+    withdrawals: apiWithdrawals,
+    stats: financialStats,
+    loading: fLoading,
+    updateWithdrawal,
+  } = useFinancial();
   const { invoices, stats: billingStats, loading: bLoading } = useBilling();
 
   // Build display data from API stats or fallback to empty
@@ -116,32 +121,57 @@ export default function AdminFinanceiroPage() {
   // Sync API withdrawals into local state
   useEffect(() => {
     if (apiWithdrawals.length > 0) {
-      setWithdrawals(apiWithdrawals.map((w: any) => ({
-        id: String(w.id),
-        partnerName: w.nomade?.user?.name || w.partner_name || "—",
-        partnerEmail: w.nomade?.user?.email || w.partner_email || "",
-        amount: w.amount || 0,
-        pixKey: w.pix_key || "",
-        pixKeyType: w.pix_key_type || "email",
-        requestedAt: w.created_at || w.requestedAt || "",
-        status: w.status || "pending",
-        notes: w.notes || "",
-      })));
+      setWithdrawals(
+        apiWithdrawals.map((w: any) => ({
+          id: String(w.id),
+          partnerName: w.nomade?.user?.name || w.partner_name || "—",
+          partnerEmail: w.nomade?.user?.email || w.partner_email || "",
+          amount: w.amount || 0,
+          pixKey: w.pix_key || "",
+          pixKeyType: w.pix_key_type || "email",
+          requestedAt: w.created_at || w.requestedAt || "",
+          status: w.status || "pending",
+          notes: w.notes || "",
+        })),
+      );
     }
   }, [apiWithdrawals]);
-  const { sortKey: wSortKey, sortDir: wSortDir, handleSort: handleWSort, sortData: sortWithdrawals, columnFilters: wColumnFilters, toggleColumnFilter: toggleWFilter, clearColumnFilter: clearWFilter } = useSorting<AdminPartnerWithdrawal>();
-  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const {
+    sortKey: wSortKey,
+    sortDir: wSortDir,
+    handleSort: handleWSort,
+    sortData: sortWithdrawals,
+    columnFilters: wColumnFilters,
+    toggleColumnFilter: toggleWFilter,
+    clearColumnFilter: clearWFilter,
+  } = useSorting<AdminPartnerWithdrawal>();
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   function approveWithdrawal(id: string) {
-    updateWithdrawal(id, { status: "paid", notes: "Aprovado e pago" }).catch(() => {})
-    setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "paid", notes: "Aprovado e pago" } : w)))
+    updateWithdrawal(id, { status: "paid", notes: "Aprovado e pago" }).catch(
+      () => {},
+    );
+    setWithdrawals((ws) =>
+      ws.map((w) =>
+        w.id === id ? { ...w, status: "paid", notes: "Aprovado e pago" } : w,
+      ),
+    );
   }
 
   function rejectWithdrawal(id: string) {
-    updateWithdrawal(id, { status: "rejected", notes: rejectNotes[id] ?? "" }).catch(() => {})
-    setWithdrawals((ws) => ws.map((w) => (w.id === id ? { ...w, status: "rejected", notes: rejectNotes[id] ?? "" } : w)))
-    setRejectingId(null)
+    updateWithdrawal(id, {
+      status: "rejected",
+      notes: rejectNotes[id] ?? "",
+    }).catch(() => {});
+    setWithdrawals((ws) =>
+      ws.map((w) =>
+        w.id === id
+          ? { ...w, status: "rejected", notes: rejectNotes[id] ?? "" }
+          : w,
+      ),
+    );
+    setRejectingId(null);
   }
 
   return (
@@ -928,17 +958,56 @@ export default function AdminFinanceiroPage() {
                 <thead>
                   <tr className="border-b bg-slate-50">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader label="Parceiro" field="partnerName" type="text" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                      <SortableHeader
+                        label="Parceiro"
+                        field="partnerName"
+                        type="text"
+                        sortKey={wSortKey ? String(wSortKey) : null}
+                        sortDir={wSortDir}
+                        onSort={handleWSort}
+                      />
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      Chave PIX
+                    </th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader label="Valor" field="amount" type="number" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                      <SortableHeader
+                        label="Valor"
+                        field="amount"
+                        type="number"
+                        sortKey={wSortKey ? String(wSortKey) : null}
+                        sortDir={wSortDir}
+                        onSort={handleWSort}
+                      />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader label="Solicitado em" field="requestedAt" type="date" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                      <SortableHeader
+                        label="Solicitado em"
+                        field="requestedAt"
+                        type="date"
+                        sortKey={wSortKey ? String(wSortKey) : null}
+                        sortDir={wSortDir}
+                        onSort={handleWSort}
+                      />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader label="Status" field="status" type="status" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} columnFilters={wColumnFilters} onFilter={toggleWFilter} onClearFilter={clearWFilter} filterValues={["pending","approved","rejected","paid"]} />
+                      <SortableHeader
+                        label="Status"
+                        field="status"
+                        type="status"
+                        sortKey={wSortKey ? String(wSortKey) : null}
+                        sortDir={wSortDir}
+                        onSort={handleWSort}
+                        columnFilters={wColumnFilters}
+                        onFilter={toggleWFilter}
+                        onClearFilter={clearWFilter}
+                        filterValues={[
+                          "pending",
+                          "approved",
+                          "rejected",
+                          "paid",
+                        ]}
+                      />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       Ações

@@ -15,60 +15,8 @@ interface TermAcceptanceHistoryProps {
   acceptances?: TermAcceptance[]
 }
 
-// Mock data para demonstração
-const MOCK_ACCEPTANCES: TermAcceptance[] = [
-  {
-    id: "acc-1",
-    term_id: "term-demo-1",
-    term_name: "Termo de Uso da Plataforma (Empresa)",
-    term_version: "2.1",
-    user_id: "user-1",
-    user_name: "João Silva",
-    user_email: "joao@empresa.com.br",
-    account_id: "acc-1",
-    account_type: "empresas",
-    acceptance_level: "empresa",
-    accepted_at: "2026-03-05T09:15:00Z",
-    ip_address: "189.40.22.100",
-    user_agent: "Mozilla/5.0",
-    acceptance_method: "web",
-    is_current: true,
-  },
-  {
-    id: "acc-2",
-    term_id: "term-demo-2",
-    term_name: "Política de Privacidade",
-    term_version: "1.5",
-    user_id: "user-1",
-    user_name: "João Silva",
-    user_email: "joao@empresa.com.br",
-    account_id: "acc-1",
-    account_type: "empresas",
-    acceptance_level: "usuario",
-    accepted_at: "2026-03-05T09:15:10Z",
-    ip_address: "189.40.22.100",
-    user_agent: "Mozilla/5.0",
-    acceptance_method: "web",
-    is_current: true,
-  },
-  {
-    id: "acc-3",
-    term_id: "term-demo-2",
-    term_name: "Política de Privacidade",
-    term_version: "1.4",
-    user_id: "user-2",
-    user_name: "Maria Souza",
-    user_email: "maria@agencia.com",
-    account_id: "acc-2",
-    account_type: "agencias",
-    acceptance_level: "usuario",
-    accepted_at: "2026-02-10T14:30:00Z",
-    ip_address: "200.155.44.80",
-    user_agent: "Mozilla/5.0",
-    acceptance_method: "web",
-    is_current: false,
-  },
-]
+// Acceptances loaded from API via parent component
+const MOCK_ACCEPTANCES: TermAcceptance[] = []
 
 export function TermAcceptanceHistory({ open, onOpenChange, acceptances = MOCK_ACCEPTANCES }: TermAcceptanceHistoryProps) {
   const [searchTerm, setSearchTerm] = useState("")

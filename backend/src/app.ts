@@ -30,18 +30,23 @@ const app = express();
 
 app.use(
   cors({
-    origin: [
-      "https://dev.allka.com.vc",
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:3000",
-      "http://localhost:8080",
-      process.env.FRONTEND_URL ?? "",
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      const allowed = [
+        "https://dev.allka.com.vc",
+        process.env.FRONTEND_URL ?? "",
+      ].filter(Boolean);
+      // Allow any localhost port in development
+      if (/^http:\/\/localhost:\d+$/.test(origin) || allowed.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 
 app.use(express.json({ limit: "10mb" }));

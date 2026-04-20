@@ -936,12 +936,12 @@ export function UserCreateSlidePanel({
         </ScrollArea>
 
         {/* Footer - FIXO */}
-        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 p-4 flex items-center justify-between">
+        <div className={`flex-shrink-0 border-t border-slate-200 bg-slate-50 p-4 flex items-center ${currentStep === 1 ? "justify-start" : "justify-between"}`}>
           <Button
             variant="outline"
             onClick={handlePrevStep}
             disabled={currentStep === 1}
-            className={currentStep === 1 ? "invisible" : ""}
+            className={currentStep === 1 ? "hidden" : ""}
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Voltar

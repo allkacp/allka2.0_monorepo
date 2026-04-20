@@ -1,11 +1,11 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog, Award } from "lucide-react"
+import { Building2, Users, Search, Plus, Eye, Trash2, ChevronLeft, ChevronRight, Filter, X, Copy, Activity, FolderOpen, Mail, Hash, TrendingUp, TrendingDown, Info, Pencil, GripVertical, CheckCircle, PauseCircle, Clock, Cog, Award, AlertTriangle, ShieldCheck } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { ExportButton } from "@/components/export-button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -95,763 +95,8 @@ type Company = {
   lgpd?: { dpo_name?: string; dpo_email?: string; dpo_phone?: string; privacy_policy_accepted: boolean; policy_accepted_at?: string; policy_version?: string; data_processing_purposes?: string[]; security_incidents?: { date: string; description: string; resolved: boolean }[] }
 }
 
-const mockCompanies: Company[] = [
-  {
-    id: 1,
-    name: "Coca-Cola Brasil",
-    legal_name: "Coca-Cola Indústrias LTDA",
-    type: "company",
-    email: "contact@cocacola.com.br",
-    phone: "+55 11 98412-7630",
-    phone_secondary: "+55 11 3294-5000",
-    whatsapp: "+55 11 98412-7630",
-    website: "https://www.cocacola.com.br",
-    document: "12.345.678/0001-90",
-    ie: "123.456.789.000",
-    location: "São Paulo, SP",
-    account_type: "Premium",
-    partner_level: "growth",
-    status: "active",
-    users_count: 45,
-    users_online: 12,
-    projects_count: 23,
-    created_at: "2023-01-15",
-    mau: 1340,
-    dau: 310,
-    bitrix_id: "BT-82741",
-    asaas_id: "AS-114903",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Coca-Cola_logo.svg/200px-Coca-Cola_logo.svg.png",
-    zip_code: "01310-200",
-    street: "Avenida Paulista",
-    number: "1374",
-    complement: "Bloco A, 12º andar",
-    neighborhood: "Bela Vista",
-    city: "São Paulo",
-    state: "SP",
-    country: "Brasil",
-    pix_key: "12.345.678/0001-90",
-    pix_type: "cnpj",
-    bank_name: "Itaú Unibanco",
-    bank_agency: "0042",
-    bank_account: "123456-7",
-    bank_account_type: "corrente",
-    admin_notes: "Cliente estratégico. Negociação de contrato anual em andamento.",
-    internal_notes: "Revisar SLA em março/2026. Contato direto: Carlos Mendes (diretoria).",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/cocacolabrasil" },
-      { id: "sl2", platform: "LinkedIn", url: "https://linkedin.com/company/coca-cola-brasil" },
-    ],
-    lgpd: { dpo_name: "Ana Figueiredo", dpo_email: "dpo@cocacola.com.br", dpo_phone: "+55 11 3000-0001", privacy_policy_accepted: true, policy_accepted_at: "2023-01-10", policy_version: "2.1", data_processing_purposes: ["Gestão de projetos", "Comunicação interna", "Analytics"], security_incidents: [] },
-  },
-  {
-    id: 2,
-    name: "Starbucks Coffee",
-    legal_name: "Starbucks Cafés do Brasil S.A.",
-    type: "agency",
-    email: "info@starbucks.com.br",
-    phone: "+55 21 97203-5581",
-    phone_secondary: "+55 21 3521-8900",
-    whatsapp: "+55 21 97203-5581",
-    website: "https://www.starbucks.com.br",
-    document: "98.765.432/0001-10",
-    ie: "98.765.432-1",
-    location: "Rio de Janeiro, RJ",
-    account_type: "Standard",
-    partner_level: "standard",
-    program_level: "silver",
-    is_partner: true,
-    status: "active",
-    users_count: 14,
-    users_online: 3,
-    projects_count: 38,
-    created_at: "2023-02-20",
-    mau: 290,
-    dau: 74,
-    avatar: "https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/200px-Starbucks_Corporation_Logo_2011.svg.png",
-    zip_code: "22290-040",
-    street: "Rua Visconde de Pirajá",
-    number: "580",
-    complement: "Sala 301",
-    neighborhood: "Ipanema",
-    city: "Rio de Janeiro",
-    state: "RJ",
-    country: "Brasil",
-    pix_key: "info@starbucks.com.br",
-    pix_type: "email",
-    bank_name: "Bradesco",
-    bank_agency: "1822",
-    bank_account: "654321-0",
-    bank_account_type: "corrente",
-    admin_notes: "Agência parceira com foco em campanhas sazonais.",
-    internal_notes: "Renovação de plano prevista para abril/2026.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/starbucksbrasil" },
-    ],
-  },
-  {
-    id: 3,
-    name: "Fundação Wikimedia",
-    legal_name: "Wikimedia Foundation Brasil",
-    type: "company",
-    email: "contato@wikimedia.org.br",
-    phone: "+55 31 96554-0218",
-    phone_secondary: "+55 31 3215-6700",
-    whatsapp: "+55 31 96554-0218",
-    website: "https://www.wikimedia.org.br",
-    document: "23.456.789/0001-01",
-    ie: "Isento",
-    location: "Belo Horizonte, MG",
-    account_type: "Premium",
-    partner_level: "enterprise",
-    status: "active",
-    users_count: 167,
-    users_online: 41,
-    projects_count: 72,
-    created_at: "2022-03-17",
-    mau: 3820,
-    dau: 940,
-    bitrix_id: "BT-33019",
-    asaas_id: "AS-556781",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Wikimedia-logo.svg/200px-Wikimedia-logo.svg.png",
-    zip_code: "30130-110",
-    street: "Rua Espírito Santo",
-    number: "1000",
-    complement: "5º andar",
-    neighborhood: "Centro",
-    city: "Belo Horizonte",
-    state: "MG",
-    country: "Brasil",
-    pix_key: "+55 31 96554-0218",
-    pix_type: "phone",
-    bank_name: "Banco do Brasil",
-    bank_agency: "4501",
-    bank_account: "987654-3",
-    bank_account_type: "corrente",
-    admin_notes: "Organização sem fins lucrativos. Contrato especial ONG.",
-    internal_notes: "Desconto de 40% aplicado. Verificar renovação anual em março.",
-    social_links: [
-      { id: "sl1", platform: "Twitter/X", url: "https://twitter.com/wikimediabr" },
-      { id: "sl2", platform: "Facebook", url: "https://facebook.com/WikimediaBrasil" },
-    ],
-  },
-  {
-    id: 4,
-    name: "Agência Criativa Hub",
-    legal_name: "Criativa Hub Comunicação EIRELI",
-    type: "agency",
-    email: "hello@criativahub.com.br",
-    phone: "+55 41 99061-3477",
-    phone_secondary: "+55 41 3362-4500",
-    whatsapp: "+55 41 99061-3477",
-    website: "https://www.criativahub.com.br",
-    document: "34.567.890/0001-22",
-    ie: "34.567.890-0",
-    location: "Curitiba, PR",
-    account_type: "Standard",
-    partner_level: "start",
-    program_level: "bronze",
-    is_partner: false,
-    status: "active",
-    users_count: 8,
-    users_online: 2,
-    projects_count: 54,
-    created_at: "2023-07-28",
-    mau: 185,
-    dau: 53,
-    zip_code: "80020-010",
-    street: "Rua XV de Novembro",
-    number: "700",
-    complement: "Conjunto 82",
-    neighborhood: "Centro",
-    city: "Curitiba",
-    state: "PR",
-    country: "Brasil",
-    pix_key: "hello@criativahub.com.br",
-    pix_type: "email",
-    bank_name: "Sicoob",
-    bank_agency: "0301",
-    bank_account: "112233-4",
-    bank_account_type: "corrente",
-    admin_notes: "Agência crescendo rápido. Acompanhar upsell para plano Growth.",
-    internal_notes: "Último contato: Jan/2026. Cliente satisfeito.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/criativahub" },
-      { id: "sl2", platform: "LinkedIn", url: "https://linkedin.com/company/criativa-hub" },
-    ],
-  },
-  {
-    id: 5,
-    name: "Nomade Freelancer Co",
-    legal_name: "Nomade Freelancer Serviços ME",
-    type: "nomad",
-    email: "oi@nomadefreelancer.io",
-    phone: "+55 85 98274-1650",
-    whatsapp: "+55 85 98274-1650",
-    website: "https://nomadefreelancer.io",
-    document: "45.678.901/0001-33",
-    ie: "Não contribuinte",
-    location: "Fortaleza, CE",
-    account_type: "Basic",
-    partner_level: "lite",
-    status: "active",
-    users_count: 1,
-    users_online: 1,
-    projects_count: 7,
-    created_at: "2024-04-11",
-    mau: 47,
-    dau: 18,
-    zip_code: "60140-120",
-    street: "Avenida Beira Mar",
-    number: "3212",
-    complement: "Apto 204",
-    neighborhood: "Meireles",
-    city: "Fortaleza",
-    state: "CE",
-    country: "Brasil",
-    pix_key: "oi@nomadefreelancer.io",
-    pix_type: "email",
-    bank_name: "Nubank",
-    bank_agency: "0001",
-    bank_account: "445566-7",
-    bank_account_type: "corrente",
-    admin_notes: "Nômade digital. Opera 100% remoto.",
-    internal_notes: "Verificar se deseja upgrar plano em breve.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/nomadefreelancer" },
-    ],
-  },
-  {
-    id: 6,
-    name: "Notion Workspace",
-    legal_name: "Notion Workspace Tecnologia LTDA",
-    type: "company",
-    email: "comercial@notionworkspace.com.br",
-    phone: "+55 51 93708-2946",
-    phone_secondary: "+55 51 3214-7700",
-    whatsapp: "+55 51 93708-2946",
-    website: "https://www.notionworkspace.com.br",
-    document: "56.789.012/0001-44",
-    ie: "056/7890120",
-    location: "Porto Alegre, RS",
-    account_type: "Enterprise",
-    partner_level: "enterprise",
-    status: "inactive",
-    users_count: 93,
-    users_online: 0,
-    projects_count: 61,
-    created_at: "2021-11-02",
-    mau: 0,
-    dau: 0,
-    bitrix_id: "BT-10582",
-    asaas_id: "AS-223047",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png",
-    zip_code: "90010-272",
-    street: "Rua dos Andradas",
-    number: "1234",
-    complement: "10º andar",
-    neighborhood: "Centro Histórico",
-    city: "Porto Alegre",
-    state: "RS",
-    country: "Brasil",
-    pix_key: "56.789.012/0001-44",
-    pix_type: "cnpj",
-    bank_name: "Banrisul",
-    bank_agency: "2010",
-    bank_account: "778899-0",
-    bank_account_type: "corrente",
-    admin_notes: "Contrato suspenso por inadimplência. Aguardando regularização.",
-    internal_notes: "Débito de R$4.500 em aberto desde out/2025. Cobrar jurídico.",
-    social_links: [
-      { id: "sl1", platform: "LinkedIn", url: "https://linkedin.com/company/notion-workspace-br" },
-    ],
-  },
-  {
-    id: 7,
-    name: "Studio Mídias Sociais",
-    legal_name: "Studio MS Comunicação Digital ME",
-    type: "agency",
-    email: "studio@midiassociais.net",
-    phone: "+55 71 94190-8823",
-    whatsapp: "+55 71 94190-8823",
-    website: "https://www.studiomidiassociais.net",
-    document: "67.890.123/0001-55",
-    ie: "Não contribuinte",
-    location: "Salvador, BA",
-    account_type: "Standard",
-    partner_level: "start",
-    program_level: "bronze",
-    is_partner: false,
-    status: "pending",
-    users_count: 5,
-    users_online: 0,
-    projects_count: 0,
-    created_at: "2025-12-03",
-    mau: 0,
-    dau: 0,
-    zip_code: "40020-020",
-    street: "Rua da Ajuda",
-    number: "89",
-    complement: "Sala 05",
-    neighborhood: "Comércio",
-    city: "Salvador",
-    state: "BA",
-    country: "Brasil",
-    pix_key: "+55 71 94190-8823",
-    pix_type: "phone",
-    bank_name: "Caixa Econômica Federal",
-    bank_agency: "0527",
-    bank_account: "001122-3",
-    bank_account_type: "corrente",
-    admin_notes: "Novo cliente. Aguardando confirmação de pagamento para ativação.",
-    internal_notes: "Onboarding agendado para 05/03/2026.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/studiomidiassociais" },
-      { id: "sl2", platform: "TikTok", url: "https://tiktok.com/@studiomidias" },
-    ],
-  },
-  {
-    id: 8,
-    name: "Spotify Brasil",
-    legal_name: "Spotify Tecnologia e Entretenimento LTDA",
-    type: "company",
-    email: "ops@spotify.com.br",
-    phone: "+55 62 98830-4712",
-    phone_secondary: "+55 62 3091-5500",
-    whatsapp: "+55 62 98830-4712",
-    website: "https://www.spotify.com.br",
-    document: "78.901.234/0001-66",
-    ie: "789.012.345.100",
-    location: "Goiânia, GO",
-    account_type: "Premium",
-    partner_level: "scale",
-    status: "active",
-    users_count: 249,
-    users_online: 88,
-    projects_count: 137,
-    created_at: "2020-07-19",
-    mau: 6470,
-    dau: 1820,
-    bitrix_id: "BT-74039",
-    asaas_id: "AS-389120",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Spotify_logo_without_text.svg/200px-Spotify_logo_without_text.svg.png",
-    zip_code: "74010-010",
-    street: "Avenida Goiás",
-    number: "812",
-    complement: "Torre Sul, 15º andar",
-    neighborhood: "Setor Central",
-    city: "Goiânia",
-    state: "GO",
-    country: "Brasil",
-    pix_key: "78.901.234/0001-66",
-    pix_type: "cnpj",
-    bank_name: "Santander",
-    bank_agency: "3901",
-    bank_account: "556677-8",
-    bank_account_type: "corrente",
-    admin_notes: "Grande conta. Negociação de expansão de licenças em andamento.",
-    internal_notes: "Reunião trimestral prevista para fev/2026.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/spotifybrasil" },
-      { id: "sl2", platform: "Twitter/X", url: "https://twitter.com/spotify_br" },
-      { id: "sl3", platform: "LinkedIn", url: "https://linkedin.com/company/spotify" },
-    ],
-  },
-  {
-    id: 9,
-    name: "FreelanceFlow",
-    legal_name: "FreelanceFlow Serviços Digitais ME",
-    type: "nomad",
-    email: "ola@freelanceflow.dev",
-    phone: "+55 11 95047-3196",
-    whatsapp: "+55 11 95047-3196",
-    website: "https://freelanceflow.dev",
-    document: "89.012.345/0001-77",
-    ie: "Não contribuinte",
-    location: "São Paulo, SP",
-    account_type: "Basic",
-    partner_level: "lite",
-    status: "inactive",
-    users_count: 1,
-    users_online: 0,
-    projects_count: 3,
-    created_at: "2024-09-05",
-    mau: 0,
-    dau: 0,
-    zip_code: "04101-300",
-    street: "Rua Domingos de Morais",
-    number: "2187",
-    complement: "Apto 112",
-    neighborhood: "Vila Mariana",
-    city: "São Paulo",
-    state: "SP",
-    country: "Brasil",
-    pix_key: "ola@freelanceflow.dev",
-    pix_type: "email",
-    bank_name: "Inter",
-    bank_agency: "0001",
-    bank_account: "334455-6",
-    bank_account_type: "corrente",
-    admin_notes: "Conta inativa por falta de uso. Verificar reativação.",
-    internal_notes: "Plano vencido há 3 meses. Enviar e-mail de recuperação.",
-    social_links: [],
-  },
-  {
-    id: 10,
-    name: "Meta Business",
-    legal_name: "Meta Platforms Brasil Tecnologia LTDA",
-    type: "company",
-    email: "rh@metabusiness.com.br",
-    phone: "+55 81 97362-0854",
-    phone_secondary: "+55 81 3425-9900",
-    whatsapp: "+55 81 97362-0854",
-    website: "https://www.metabusiness.com.br",
-    document: "90.123.456/0001-88",
-    ie: "901.234.567.200",
-    location: "Recife, PE",
-    account_type: "Enterprise",
-    partner_level: "squad",
-    status: "active",
-    users_count: 412,
-    users_online: 97,
-    projects_count: 214,
-    created_at: "2019-05-30",
-    mau: 11300,
-    dau: 3190,
-    bitrix_id: "BT-92013",
-    asaas_id: "AS-667452",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Meta_Platforms_Inc._logo.svg/200px-Meta_Platforms_Inc._logo.svg.png",
-    zip_code: "50020-050",
-    street: "Avenida Conde da Boa Vista",
-    number: "1462",
-    complement: "8º andar",
-    neighborhood: "Boa Vista",
-    city: "Recife",
-    state: "PE",
-    country: "Brasil",
-    pix_key: "90.123.456/0001-88",
-    pix_type: "cnpj",
-    bank_name: "Bradesco",
-    bank_agency: "2210",
-    bank_account: "889900-1",
-    bank_account_type: "corrente",
-    admin_notes: "Cliente VIP. Atendimento dedicado com CS especializado.",
-    internal_notes: "Contato principal: Ana Rodrigues (VP Latam). Tel direto disponível no CRM.",
-    social_links: [
-      { id: "sl1", platform: "LinkedIn", url: "https://linkedin.com/company/meta" },
-      { id: "sl2", platform: "Instagram", url: "https://instagram.com/metaforbusiness" },
-      { id: "sl3", platform: "Facebook", url: "https://facebook.com/metabusiness" },
-    ],
-  },
-  {
-    id: 11,
-    name: "Pixel & Cia Design",
-    legal_name: "Pixel e Cia Estúdio Criativo EIRELI",
-    type: "agency",
-    email: "arte@pixelecia.design",
-    phone: "+55 48 96615-8043",
-    whatsapp: "+55 48 96615-8043",
-    website: "https://pixelecia.design",
-    document: "01.234.567/0001-99",
-    ie: "Não contribuinte",
-    location: "Florianópolis, SC",
-    account_type: "Standard",
-    partner_level: "start",
-    program_level: "bronze",
-    is_partner: false,
-    status: "pending",
-    users_count: 4,
-    users_online: 0,
-    projects_count: 0,
-    created_at: "2026-01-22",
-    mau: 0,
-    dau: 0,
-    zip_code: "88010-000",
-    street: "Rua Tenente Silveira",
-    number: "210",
-    complement: "Sala 14",
-    neighborhood: "Centro",
-    city: "Florianópolis",
-    state: "SC",
-    country: "Brasil",
-    pix_key: "+55 48 96615-8043",
-    pix_type: "phone",
-    bank_name: "Sicredi",
-    bank_agency: "0092",
-    bank_account: "221133-4",
-    bank_account_type: "corrente",
-    admin_notes: "Novo cadastro. Aguardando documentação para ativação.",
-    internal_notes: "Portfólio interessante. Potencial para network de agências.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/pixelecia.design" },
-      { id: "sl2", platform: "Behance", url: "https://behance.net/pixelecia" },
-    ],
-  },
-  {
-    id: 12,
-    name: "Nômade Criativo 360",
-    legal_name: "Nômade Criativo Serviços ME",
-    type: "nomad",
-    email: "eu@nomadecriativo.me",
-    phone: "+55 92 98103-7265",
-    whatsapp: "+55 92 98103-7265",
-    website: "https://nomadecriativo.me",
-    document: "11.222.333/0001-44",
-    ie: "Não contribuinte",
-    location: "Manaus, AM",
-    account_type: "Basic",
-    partner_level: "lite",
-    status: "active",
-    users_count: 1,
-    users_online: 1,
-    projects_count: 4,
-    created_at: "2025-05-14",
-    mau: 29,
-    dau: 9,
-    zip_code: "69010-040",
-    street: "Rua Marcílio Dias",
-    number: "495",
-    complement: "Apto 302",
-    neighborhood: "Praça 14 de Janeiro",
-    city: "Manaus",
-    state: "AM",
-    country: "Brasil",
-    pix_key: "eu@nomadecriativo.me",
-    pix_type: "email",
-    bank_name: "Nubank",
-    bank_agency: "0001",
-    bank_account: "667788-9",
-    bank_account_type: "corrente",
-    admin_notes: "Freelancer criativo com foco em vídeo e motion.",
-    internal_notes: "Interesse demonstrado em plano Start. Fazer follow-up.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/nomadecriativo360" },
-      { id: "sl2", platform: "YouTube", url: "https://youtube.com/@nomadecriativo" },
-    ],
-  },
-  {
-    id: 13,
-    name: "Google Brasil",
-    legal_name: "Google Brasil Internet LTDA",
-    type: "company",
-    email: "negocios@google.com.br",
-    phone: "+55 61 99480-6127",
-    phone_secondary: "+55 61 3030-4000",
-    whatsapp: "+55 61 99480-6127",
-    website: "https://www.google.com.br",
-    document: "22.333.444/0001-55",
-    ie: "223.334.445.300",
-    location: "Brasília, DF",
-    account_type: "Premium",
-    partner_level: "growth",
-    status: "active",
-    users_count: 61,
-    users_online: 19,
-    projects_count: 33,
-    created_at: "2023-10-08",
-    mau: 970,
-    dau: 268,
-    bitrix_id: "BT-40871",
-    asaas_id: "AS-781936",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Google_2015_logo.svg/200px-Google_2015_logo.svg.png",
-    zip_code: "70070-912",
-    street: "SHS Quadra 6 Conjunto A",
-    number: "12",
-    complement: "Torre Brasil, 14º andar",
-    neighborhood: "Setor Hoteleiro Sul",
-    city: "Brasília",
-    state: "DF",
-    country: "Brasil",
-    pix_key: "22.333.444/0001-55",
-    pix_type: "cnpj",
-    bank_name: "Citibank",
-    bank_agency: "0010",
-    bank_account: "990011-2",
-    bank_account_type: "corrente",
-    admin_notes: "Conta gerenciada pelo time enterprise.",
-    internal_notes: "Reunião de Q1/2026 agendada para 20/fev. Preparar relatório de performance.",
-    social_links: [
-      { id: "sl1", platform: "LinkedIn", url: "https://linkedin.com/company/google" },
-      { id: "sl2", platform: "Twitter/X", url: "https://twitter.com/googlebrasil" },
-    ],
-  },
-  {
-    id: 14,
-    name: "MarcaForte Agência",
-    legal_name: "MarcaForte Comunicação e Marketing LTDA",
-    type: "agency",
-    email: "ola@marcaforteagencia.com.br",
-    phone: "+55 27 93872-5104",
-    phone_secondary: "+55 27 3340-8800",
-    whatsapp: "+55 27 93872-5104",
-    website: "https://www.marcaforte.com.br",
-    document: "33.444.555/0001-66",
-    ie: "334.445.556.000",
-    location: "Vitória, ES",
-    account_type: "Standard",
-    partner_level: "start",
-    program_level: "bronze",
-    is_partner: false,
-    status: "inactive",
-    users_count: 7,
-    users_online: 0,
-    projects_count: 11,
-    created_at: "2022-08-30",
-    mau: 0,
-    dau: 0,
-    zip_code: "29010-100",
-    street: "Avenida Jeronimo Monteiro",
-    number: "600",
-    complement: "Sala 203",
-    neighborhood: "Centro",
-    city: "Vitória",
-    state: "ES",
-    country: "Brasil",
-    pix_key: "33.444.555/0001-66",
-    pix_type: "cnpj",
-    bank_name: "Banco Espirito Santo",
-    bank_agency: "0081",
-    bank_account: "113344-5",
-    bank_account_type: "corrente",
-    admin_notes: "Contrato encerrado. Aguardando possível retorno.",
-    internal_notes: "Saíram por redução de budget. Manter contato para reativação em 2026.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/marcaforteagencia" },
-      { id: "sl2", platform: "Facebook", url: "https://facebook.com/marcaforteagencia" },
-    ],
-  },
-  {
-    id: 15,
-    name: "Slack do Brasil",
-    legal_name: "Slack Technologies Brasil LTDA",
-    type: "company",
-    email: "ti@slack.com.br",
-    phone: "+55 19 98527-3041",
-    phone_secondary: "+55 19 3200-9500",
-    whatsapp: "+55 19 98527-3041",
-    website: "https://slack.com/intl/pt-br",
-    document: "44.555.666/0001-77",
-    ie: "445.556.667.400",
-    location: "Campinas, SP",
-    account_type: "Enterprise",
-    partner_level: "squad",
-    status: "active",
-    users_count: 538,
-    users_online: 214,
-    projects_count: 291,
-    created_at: "2018-09-14",
-    mau: 17600,
-    dau: 5430,
-    bitrix_id: "BT-61248",
-    asaas_id: "AS-904567",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Slack_icon_2019.svg/200px-Slack_icon_2019.svg.png",
-    zip_code: "13013-001",
-    street: "Rua Regente Feijó",
-    number: "1195",
-    complement: "Torre Inovação, 20º andar",
-    neighborhood: "Centro",
-    city: "Campinas",
-    state: "SP",
-    country: "Brasil",
-    pix_key: "44.555.666/0001-77",
-    pix_type: "cnpj",
-    bank_name: "JPMorgan",
-    bank_agency: "0001",
-    bank_account: "556600-9",
-    bank_account_type: "corrente",
-    admin_notes: "Cliente platinum. Atendimento VIP exclusivo.",
-    internal_notes: "Interessados em solução white-label. Direcionar para produto enterprise.",
-    social_links: [
-      { id: "sl1", platform: "LinkedIn", url: "https://linkedin.com/company/slack" },
-      { id: "sl2", platform: "Twitter/X", url: "https://twitter.com/slack" },
-    ],
-  },
-  {
-    id: 16,
-    name: "Minha Startup SaaS",
-    legal_name: "Minha Startup SaaS Tecnologia ME",
-    type: "company",
-    email: "founder@minhasaas.io",
-    phone: "+55 11 94361-8720",
-    whatsapp: "+55 11 94361-8720",
-    website: "https://minhasaas.io",
-    document: "55.666.777/0001-88",
-    ie: "Não contribuinte",
-    location: "São Paulo, SP",
-    account_type: "Basic",
-    partner_level: "lite",
-    status: "pending",
-    users_count: 2,
-    users_online: 0,
-    projects_count: 0,
-    created_at: "2026-02-01",
-    mau: 0,
-    dau: 0,
-    zip_code: "01406-002",
-    street: "Rua Augusta",
-    number: "2338",
-    complement: "Apto 51",
-    neighborhood: "Consolação",
-    city: "São Paulo",
-    state: "SP",
-    country: "Brasil",
-    pix_key: "founder@minhasaas.io",
-    pix_type: "email",
-    bank_name: "Nubank",
-    bank_agency: "0001",
-    bank_account: "778800-2",
-    bank_account_type: "corrente",
-    admin_notes: "Startup em estágio inicial. Acompanhar crescimento.",
-    internal_notes: "Fundador interessado em parceria. Apresentar plano Start em reunião.",
-    social_links: [
-      { id: "sl1", platform: "LinkedIn", url: "https://linkedin.com/company/minha-startup-saas" },
-    ],
-  },
-  {
-    id: 17,
-    name: "Conecta Agências",
-    legal_name: "Conecta Agências e Parcerias LTDA",
-    type: "agency",
-    email: "parcerias@conectaagencias.com",
-    phone: "+55 84 97014-5392",
-    phone_secondary: "+55 84 3232-7100",
-    whatsapp: "+55 84 97014-5392",
-    website: "https://www.conectaagencias.com",
-    document: "66.777.888/0001-99",
-    ie: "667.778.889.500",
-    location: "Natal, RN",
-    account_type: "Standard",
-    partner_level: "standard",
-    program_level: "gold",
-    is_partner: true,
-    status: "active",
-    users_count: 11,
-    users_online: 4,
-    projects_count: 28,
-    created_at: "2024-11-17",
-    mau: 324,
-    dau: 87,
-    zip_code: "59020-001",
-    street: "Avenida Rio Branco",
-    number: "954",
-    complement: "Sala 410",
-    neighborhood: "Petrópolis",
-    city: "Natal",
-    state: "RN",
-    country: "Brasil",
-    pix_key: "parcerias@conectaagencias.com",
-    pix_type: "email",
-    bank_name: "Banco do Nordeste",
-    bank_agency: "0144",
-    bank_account: "990022-3",
-    bank_account_type: "corrente",
-    admin_notes: "Rede de agências parceiras do Nordeste. Potencial de expansão.",
-    internal_notes: "Reunião de parceria trimestral em março/2026.",
-    social_links: [
-      { id: "sl1", platform: "Instagram", url: "https://instagram.com/conectaagencias" },
-      { id: "sl2", platform: "LinkedIn", url: "https://linkedin.com/company/conecta-agencias" },
-    ],
-  },
-]
+// Companies loaded from API via useCompanies hook
+
 
 const PARTNER_LEVEL_CONFIG = {
   bronze:   { label: "Bronze",   icon: "🥉", badge: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -976,7 +221,6 @@ export default function EmpresasPage() {
   }, [])
 
   const [companies, setCompanies] = useState<Company[]>([])
-  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([])
   const { sortKey: companySortKey, sortDir: companySortDir, handleSort: handleCompanySort, sortData: sortCompanies, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting<Company>()
 
   // Mapping from ColKey to Company field for sortable columns
@@ -1040,6 +284,14 @@ export default function EmpresasPage() {
   const [visibleFields, setVisibleFields] = useState<string[]>(["nome","status","tipo","plano","parceiro","data_cadastro"])
   const [showFieldPicker, setShowFieldPicker] = useState(false)
 
+  // Demo data injected for real-API companies so the UI can be previewed
+  const DEMO_DPO = [
+    { dpo_name: "Roberta Mendes",  dpo_email: "dpo@empresa1.com.br", dpo_phone: "(11) 98765-0001", privacy_policy_accepted: true,  policy_accepted_at: "2026-01-10T09:00:00Z", policy_version: "v2.1" },
+    { dpo_name: "Carlos Drummond", dpo_email: "dpo@empresa2.com.br", dpo_phone: "(11) 97654-0002", privacy_policy_accepted: false },
+    { dpo_name: "Luciana Farias",  dpo_email: "dpo@empresa3.com.br",                               privacy_policy_accepted: true,  policy_accepted_at: "2026-02-20T14:00:00Z", policy_version: "v3.0" },
+  ]
+  const DEMO_PLANS = ["enterprise", "scale", "squad", "growth", "standard", "start", "lite", "enterprise", "scale", "growth"]
+
   // Sync API companies into local state
   useEffect(() => {
     const mapped = apiCompanies.map((c: any, idx: number) => ({
@@ -1061,23 +313,44 @@ export default function EmpresasPage() {
       projects_count: 0,
       created_at: c.created_at || new Date().toISOString(),
       logo_gradient: "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900",
+      lgpd: c.lgpd ?? (idx < 3 ? DEMO_DPO[idx] : undefined),
+      // partner_level drives the plan display; use API value or fall back to demo rotation
+      partner_level: c.plan || c.partner_level || DEMO_PLANS[idx % DEMO_PLANS.length],
     })) as Company[]
     setCompanies(mapped)
   }, [apiCompanies])
 
-  useEffect(() => {
+  // ── Filtered companies (derived — useMemo ensures instant reactive updates) ──
+  const filteredCompanies = useMemo(() => {
     let filtered = companies
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (company) =>
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      const rawDigits = searchQuery.replace(/\D/g, "")
+      filtered = filtered.filter((company) => {
+        const statusLabel =
+          company.status === "active" ? "ativo" :
+          company.status === "inactive" ? "inativo" : "pendente"
+        // Word-prefix match: any word in the name that starts with the query
+        const nameWords = (company.name || "").toLowerCase().split(/\s+/)
+        const nameWordMatch = nameWords.some(w => w.startsWith(q))
+        // Digit-only fields — ONLY activate when the query contains digits
+        const digitMatch = rawDigits.length > 0 && (
+          (company.document?.replace(/\D/g, "") ?? "").includes(rawDigits) ||
+          (company.phone ? company.phone.replace(/\D/g, "").includes(rawDigits) : false)
+        )
+        return (
+          nameWordMatch ||
           company.name?.toLowerCase().includes(q) ||
+          company.legal_name?.toLowerCase().includes(q) ||
           company.email?.toLowerCase().includes(q) ||
-          company.document?.includes(searchQuery) ||
-          (company.phone && company.phone.replace(/\D/g, "").includes(searchQuery.replace(/\D/g, ""))) ||
-          company.location?.toLowerCase().includes(q),
-      )
+          digitMatch ||
+          company.document?.toLowerCase().includes(q) ||
+          company.location?.toLowerCase().includes(q) ||
+          statusLabel.includes(q) ||
+          company.account_type?.toLowerCase().includes(q)
+        )
+      })
     }
 
     // Aplicar filtros avançados
@@ -1167,9 +440,13 @@ export default function EmpresasPage() {
       )
     }
 
-    setFilteredCompanies(filtered)
-    setCurrentPage(1)
+    return filtered
   }, [searchQuery, companies, advancedFilters])
+
+  // Reset to page 1 whenever filter criteria change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, advancedFilters])
 
   const paginatedCompanies = sortCompanies(filteredCompanies).slice(
     (currentPage - 1) * pageSize,
@@ -1704,9 +981,47 @@ export default function EmpresasPage() {
                         <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">{company.name}</p>
                         <p className="text-xs text-slate-400 dark:text-slate-500">{company.location}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
+                          {/* DPO ausente: badge clicável que abre edição */}
                           {!company.lgpd?.dpo_name && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium">Sem DPO</span>
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium hover:bg-orange-200 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); handleEditCompany(company) }}
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Sem DPO
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[220px] p-3 space-y-1.5">
+                                  <p className="font-semibold text-sm">DPO não cadastrado</p>
+                                  <p className="text-xs leading-relaxed text-slate-400">O DPO (Encarregado de Proteção de Dados) é exigido pela LGPD para empresas que tratam dados pessoais.</p>
+                                  <p className="text-xs text-blue-400 font-medium">Clique para completar o cadastro →</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           )}
+                          {/* DPO cadastrado: indicador verde com detalhes no tooltip */}
+                          {company.lgpd?.dpo_name && (
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-200 cursor-default">
+                                    <ShieldCheck className="h-3 w-3" />
+                                    DPO cadastrado
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[220px] p-3 space-y-1">
+                                  <p className="font-semibold text-sm">DPO cadastrado</p>
+                                  <p className="text-xs text-slate-300">{company.lgpd.dpo_name}</p>
+                                  {company.lgpd.dpo_email && <p className="text-xs text-slate-400">{company.lgpd.dpo_email}</p>}
+                                  {company.lgpd.dpo_phone && <p className="text-xs text-slate-400">{company.lgpd.dpo_phone}</p>}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {/* Política de privacidade ainda não aceita */}
                           {company.lgpd && !company.lgpd.privacy_policy_accepted && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">Política pendente</span>
                           )}

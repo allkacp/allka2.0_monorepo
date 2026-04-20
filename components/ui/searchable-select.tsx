@@ -1,8 +1,12 @@
-import * as React from "react"
-import { Check, ChevronsUpDown, Plus } from "lucide-react"
+import * as React from "react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Command,
   CommandInput,
@@ -10,24 +14,24 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-} from "@/components/ui/command"
+} from "@/components/ui/command";
 
 export interface SearchableSelectItem {
-  value: string
-  label: string
-  sublabel?: string
+  value: string;
+  label: string;
+  sublabel?: string;
 }
 
 interface SearchableSelectProps {
-  items: SearchableSelectItem[]
-  value: string
-  onValueChange: (value: string) => void
-  placeholder?: string
-  searchPlaceholder?: string
-  emptyMessage?: string
-  className?: string
-  onAddNew?: () => void
-  addNewLabel?: string
+  items: SearchableSelectItem[];
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  className?: string;
+  onAddNew?: () => void;
+  addNewLabel?: string;
 }
 
 export function SearchableSelect({
@@ -41,9 +45,9 @@ export function SearchableSelect({
   onAddNew,
   addNewLabel = "Adicionar novo",
 }: SearchableSelectProps) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(false);
 
-  const selectedItem = items.find((item) => item.value === value)
+  const selectedItem = items.find((item) => item.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -66,7 +70,10 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0"
+        align="start"
+      >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -77,8 +84,8 @@ export function SearchableSelect({
                   key={item.value}
                   value={item.label}
                   onSelect={() => {
-                    onValueChange(item.value === value ? "" : item.value)
-                    setOpen(false)
+                    onValueChange(item.value === value ? "" : item.value);
+                    setOpen(false);
                   }}
                   className="cursor-pointer"
                 >
@@ -103,8 +110,8 @@ export function SearchableSelect({
               <CommandGroup forceMount>
                 <CommandItem
                   onSelect={() => {
-                    onAddNew()
-                    setOpen(false)
+                    onAddNew();
+                    setOpen(false);
                   }}
                   className="cursor-pointer text-violet-600 font-semibold"
                 >
@@ -117,5 +124,5 @@ export function SearchableSelect({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

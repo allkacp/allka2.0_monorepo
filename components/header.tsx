@@ -3,7 +3,7 @@ import {
   Search, Bell, Menu, X, Wallet, Star, TrendingUp,
   ChevronDown, LogOut, Settings, User, CreditCard,
   FolderOpen, Award, Shield, DollarSign, CheckSquare,
-  Building2,
+  Building2, Users, Briefcase, Zap, Target, Activity,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,14 +15,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { AlertsHeaderIcon } from "@/components/alerts-header-icon"
+import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel"
+import { UserViewSlidePanel } from "@/components/user-view-slide-panel"
 import { usePartner } from "@/contexts/partner-context"
 import { useEmpresa } from "@/contexts/empresa-context"
 import { useAgencia } from "@/contexts/agencia-context"
+import { apiClient } from "@/lib/api-client"
 
 const LEVEL_CONFIG = {
   bronze:   { label: "Bronze",   bg: "bg-amber-100",  text: "text-amber-700"  },
@@ -50,11 +53,19 @@ function getInitials(name) {
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [selfUser, setSelfUser] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<{type:string; label:string; sub:string; path:string; icon:any}[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const navigate = useNavigate()
   const { accountType, unlockAccountType } = useAccountType()
-  const { userProfile } = useSidebar()
+  const { userProfile, updateUserProfile } = useSidebar()
   const partner = usePartner()
   const empresa = useEmpresa()
   const agencia = useAgencia()
@@ -76,43 +87,177 @@ export function Header() {
 
   useEffect(() => {
     const overlay = document.getElementById("sidebar-overlay")
-    if (overlay) {
-      overlay.addEventListener("click", toggleMobileSidebar)
-    }
+    if (overlay) overlay.addEventListener("click", toggleMobileSidebar)
   }, [])
+
+  // Fetch authenticated user to show real name in greeting
+  useEffect(() => {
+    apiClient.getCurrentUser()
+      .then((u: any) => {
+        if (u?.name) updateUserProfile({ name: u.name, email: u.email || "", job_title: u.job_title || "" })
+      })
+      .catch(() => { /* no token or API unavailable — keep fallback */ })
+  }, [])
+
+  // Close search on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+        setSearchQuery("")
+        setSearchResults([])
+      }
+    }
+    if (searchOpen) {
+      document.addEventListener("mousedown", onClickOutside)
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [searchOpen])
+
+  // Close search on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSearchOpen(false)
+        setSearchQuery("")
+        setSearchResults([])
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [])
+
+  // Search scope per account type
+  const searchScope = (() => {
+    const base = (at: string) => `/${at}`
+    if (accountType === "admin") return {
+      users: true, companies: true, projects: true,
+      usersPath: "/admin/usuarios", companiesPath: "/admin/empresas", projectsPath: "/admin/projetos",
+    }
+    if (accountType === "parceiro") return {
+      users: false, companies: true, projects: false,
+      usersPath: "", companiesPath: `${base("parceiro")}/agencias`, projectsPath: "",
+    }
+    if (accountType === "empresas") return {
+      users: false, companies: false, projects: true,
+      usersPath: "", companiesPath: "", projectsPath: `${base("empresa")}/projetos`,
+    }
+    if (accountType === "agencias") return {
+      users: false, companies: true, projects: true,
+      usersPath: "", companiesPath: `${base("agencia")}/empresas`, projectsPath: `${base("agencia")}/projetos`,
+    }
+    if (accountType === "nomades") return {
+      users: false, companies: false, projects: false,
+      usersPath: "", companiesPath: "", projectsPath: "",
+    }
+    return { users: false, companies: false, projects: false, usersPath: "", companiesPath: "", projectsPath: "" }
+  })()
+
+  // Debounced live search
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) { setSearchResults([]); return }
+    setSearchLoading(true)
+    try {
+      const promises: Promise<any>[] = []
+      const keys: string[] = []
+      if (searchScope.users)     { promises.push(apiClient.getUsers({ search: q }));     keys.push("users") }
+      if (searchScope.companies) { promises.push(apiClient.getCompanies({ search: q })); keys.push("companies") }
+      if (searchScope.projects)  { promises.push(apiClient.getProjects({ search: q }));  keys.push("projects") }
+
+      const settled = await Promise.allSettled(promises)
+      const results: {type:string; label:string; sub:string; path:string; icon:any}[] = []
+
+      settled.forEach((res, i) => {
+        if (res.status !== "fulfilled") return
+        const list = Array.isArray(res.value) ? res.value : (res.value as any)?.data ?? []
+        const key = keys[i]
+        if (key === "users") {
+          list.slice(0, 5).forEach((u: any) => results.push({
+            type: "Usuário", label: u.name, sub: u.email ?? u.role ?? "",
+            path: searchScope.usersPath, icon: User,
+          }))
+        } else if (key === "companies") {
+          list.slice(0, 5).forEach((c: any) => results.push({
+            type: "Empresa", label: c.name ?? c.nomeFantasia, sub: c.email ?? c.cnpj ?? "",
+            path: searchScope.companiesPath, icon: Building2,
+          }))
+        } else if (key === "projects") {
+          list.slice(0, 5).forEach((p: any) => results.push({
+            type: "Projeto", label: p.name ?? p.titulo, sub: p.client ?? p.status ?? "",
+            path: searchScope.projectsPath, icon: Briefcase,
+          }))
+        }
+      })
+      setSearchResults(results)
+    } catch {
+      setSearchResults([])
+    } finally {
+      setSearchLoading(false)
+    }
+  }, [accountType])
+
+  useEffect(() => {
+    const t = setTimeout(() => doSearch(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery, doSearch])
+
+  const openProfile = async () => {
+    setProfileOpen(true)
+    if (!selfUser) {
+      try {
+        const u = await apiClient.getCurrentUser()
+        setSelfUser(u)
+      } catch { /* use fallback */ }
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("simulatedUser")
     unlockAccountType()
-    window.location.reload()
+    apiClient.clearToken()
+    window.location.href = "/login"
   }
+
+  const PLACEHOLDER = (role, path) => ({
+    name: "Carregando...", email: "", initials: "..",
+    roleLabel: role, levelBadge: null,
+    wallet: null, stat: null, points: null, level: null, nextLevel: null, tasks: null,
+    settingsPath: path, menuItems: [],
+  })
 
   const ctx = (() => {
     if (accountType === "parceiro") {
       const p = partner.profile
+      if (!p) return PLACEHOLDER("Parceiro", "/parceiro/dashboard")
       const lvl = LEVEL_CONFIG[p.level ?? "bronze"]
       return {
         name: p.name, email: p.email, initials: getInitials(p.name),
         roleLabel: "Parceiro", levelBadge: lvl,
-        wallet: { label: "Saldo disponivel", value: fmtBRL(p.balance), icon: Wallet, color: "text-blue-600" },
+        wallet: { label: "Saldo disponível", value: fmtBRL(p.balance), icon: Wallet, color: "text-blue-600" },
         stat: { label: "Total ganho", value: fmtBRL(p.totalEarned), icon: TrendingUp },
+        points: "1.450 pts", level: lvl.label, nextLevel: "Prata",
+        tasks: "3 tarefas abertas",
         settingsPath: "/parceiro/dashboard",
         menuItems: [
           { label: "Meu Perfil",  icon: User,       path: "/parceiro/dashboard" },
-          { label: "Comissoes",   icon: DollarSign, path: "/parceiro/comissoes" },
+          { label: "Comissões",   icon: DollarSign, path: "/parceiro/comissoes" },
           { label: "Saques",      icon: Wallet,     path: "/parceiro/saques"    },
-          { label: "Agencias",    icon: Building2,  path: "/parceiro/agencias"  },
+          { label: "Agências",    icon: Building2,  path: "/parceiro/agencias"  },
         ],
       }
     }
     if (accountType === "empresas") {
       const p = empresa.profile
+      if (!p) return PLACEHOLDER("Empresa", "/empresa/dashboard")
       const activeCount = empresa.projects.filter((x) => !["entregue","cancelado"].includes(x.status)).length
       return {
         name: p.name, email: p.email, initials: getInitials(p.name),
         roleLabel: "Empresa", levelBadge: null,
         wallet: { label: "Total investido", value: fmtBRL(p.totalInvested), icon: CreditCard, color: "text-violet-600" },
         stat: { label: "Projetos ativos", value: String(activeCount), icon: FolderOpen },
+        points: null, level: null, nextLevel: null,
+        tasks: `${activeCount} projetos ativos`,
         settingsPath: "/empresa/dashboard",
         menuItems: [
           { label: "Minha Empresa", icon: Building2,   path: "/empresa/dashboard" },
@@ -124,14 +269,17 @@ export function Header() {
     }
     if (accountType === "agencias") {
       const p = agencia.profile
+      if (!p) return PLACEHOLDER("Agência", "/agencia/dashboard")
       return {
         name: p.name, email: p.email, initials: getInitials(p.name),
-        roleLabel: "Agencia", levelBadge: null,
-        wallet: { label: "MRR mensal", value: fmtBRL(p.currentMrr) + "/mes", icon: TrendingUp, color: "text-indigo-600" },
+        roleLabel: "Agência", levelBadge: null,
+        wallet: { label: "MRR mensal", value: fmtBRL(p.currentMrr) + "/mês", icon: TrendingUp, color: "text-indigo-600" },
         stat: { label: "Projetos", value: String(p.totalProjects), icon: FolderOpen },
+        points: null, level: null, nextLevel: null,
+        tasks: `${p.totalProjects} projetos no total`,
         settingsPath: "/agencia/dashboard",
         menuItems: [
-          { label: "Minha Agencia", icon: Building2,   path: "/agencia/dashboard"  },
+          { label: "Minha Agência", icon: Building2,   path: "/agencia/dashboard"  },
           { label: "Projetos",      icon: FolderOpen,  path: "/agencia/projetos"   },
           { label: "Tarefas",       icon: CheckSquare, path: "/agencia/tarefas"    },
           { label: "Financeiro",    icon: Wallet,      path: "/agencia/financeiro" },
@@ -139,18 +287,20 @@ export function Header() {
       }
     }
     if (accountType === "nomades") {
-      const name = userProfile.name || "Nomade"
+      const name = userProfile.name || "Nômade"
       return {
         name, email: userProfile.email || "", initials: getInitials(name),
-        roleLabel: "Nomade", levelBadge: null,
-        wallet: { label: "Ganhos no mes", value: "R$ 3.280", icon: Wallet, color: "text-amber-600" },
+        roleLabel: "Nômade", levelBadge: null,
+        wallet: { label: "Ganhos no mês", value: "R$ 3.280", icon: Wallet, color: "text-amber-600" },
         stat: { label: "Pontos", value: "1.250 pts", icon: Star },
+        points: "1.250 pts", level: "Bronze", nextLevel: "Prata",
+        tasks: "5 tarefas pendentes",
         settingsPath: "/nomades/perfil",
         menuItems: [
           { label: "Meu Perfil",     icon: User,        path: "/nomades/perfil"        },
           { label: "Minhas Tarefas", icon: CheckSquare, path: "/nomades/minhastarefas" },
           { label: "Ganhos",         icon: DollarSign,  path: "/nomades/ganhos"        },
-          { label: "Habilitacoes",   icon: Award,       path: "/nomades/habilitacoes"  },
+          { label: "Habilitações",   icon: Award,       path: "/nomades/habilitacoes"  },
         ],
       }
     }
@@ -159,162 +309,326 @@ export function Header() {
       name, email: userProfile.email || "admin@allka.com.br", initials: getInitials(name),
       roleLabel: "Administrador", levelBadge: null,
       wallet: null, stat: null,
+      points: null, level: "Master", nextLevel: null,
+      tasks: null,
       settingsPath: "/admin/configuracoes",
       menuItems: [
-        { label: "Meu Perfil",    icon: User,     path: "/admin/dashboard"     },
-        { label: "Usuarios",      icon: Shield,   path: "/admin/usuarios"      },
-        { label: "Permissoes",    icon: Shield,   path: "/admin/permissoes"    },
-        { label: "Configuracoes", icon: Settings, path: "/admin/configuracoes" },
+        { label: "Meu Perfil",      icon: User,     path: "/admin/dashboard"      },
+        { label: "Usuários",        icon: Shield,   path: "/admin/usuarios"       },
+        { label: "Permissões",      icon: Shield,   path: "/admin/permissoes"     },
+        { label: "Configurações",   icon: Settings, path: "/admin/configuracoes"  },
       ],
     }
   })()
 
   const cfg = ACCOUNT_CONFIG[accountType] ?? ACCOUNT_CONFIG.admin
 
-  return (
-    <header className="border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 relative z-40 bg-white dark:bg-slate-950 transition-colors duration-200 overflow-visible shadow-sm">
-      <div className="flex items-center justify-between h-14 gap-3 overflow-visible">
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"
+  const firstName = ctx.name.split(" ")[0]
+  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Button variant="ghost" size="sm" className="lg:hidden p-2 shrink-0" onClick={toggleMobileSidebar}>
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
-          <div className={`transition-all duration-200 ${searchFocused ? "flex-1" : "w-56 sm:w-72"}`}>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-3.5 w-3.5 pointer-events-none" />
-              <Input
+  return (
+    <>
+      {/* Global search overlay */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
+          <div ref={searchRef} className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Search input */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <Search className="h-5 w-5 text-gray-400 shrink-0" />
+              <input
+                ref={inputRef}
                 type="text"
-                placeholder="Buscar..."
-                className="pl-9 h-8 text-sm bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-slate-800 rounded-full"
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={accountType === "admin" ? "Buscar usuários, empresas, projetos..." : "Buscar na plataforma..."}
+                className="flex-1 text-sm outline-none bg-transparent text-gray-900 dark:text-white placeholder:text-gray-400"
               />
+              {searchLoading && (
+                <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
+              )}
+              <button onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]) }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+                <X className="h-4 w-4 text-gray-400" />
+              </button>
+            </div>
+            {/* Results */}
+            <div className="max-h-96 overflow-y-auto">
+              {!searchQuery && (
+                <div className="px-4 py-8 text-center text-sm text-gray-400">
+                  <Search className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+                  Digite para buscar na plataforma
+                </div>
+              )}
+              {searchQuery && !searchLoading && searchResults.length === 0 && (
+                <div className="px-4 py-8 text-center text-sm text-gray-400">
+                  Nenhum resultado encontrado para "{searchQuery}"
+                </div>
+              )}
+              {searchResults.length > 0 && (
+                <div className="py-2">
+                  {["Usuário","Empresa","Projeto"].map((type) => {
+                    const group = searchResults.filter((r) => r.type === type)
+                    if (!group.length) return null
+                    const GroupIcon = type === "Usuário" ? User : type === "Empresa" ? Building2 : Briefcase
+                    return (
+                      <div key={type}>
+                        <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{type}s</p>
+                        {group.map((result, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { window.open(result.path, "_blank"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]) }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                          >
+                            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+                              <GroupIcon className="h-4 w-4 text-gray-500" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{result.label}</p>
+                              {result.sub && <p className="text-xs text-gray-400 truncate">{result.sub}</p>}
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">{result.type}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
+              <span>ESC para fechar</span>
+              <span>↵ para navegar</span>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-1.5 shrink-0">
+      <header
+        className="border-b border-white/10 px-4 sm:px-8 relative z-40 shadow-xl overflow-visible"
+        style={{ background: "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))" }}
+      >
+        {/* === TOP ROW: greeting + right actions === */}
+        <div className="flex items-center h-16 gap-4 border-b border-white/8">
 
-          {ctx.stat && (
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-xs">
-              <ctx.stat.icon className="h-3.5 w-3.5 text-gray-400" />
-              <span className="font-semibold text-gray-800 dark:text-gray-200">{ctx.stat.value}</span>
-              <span className="text-gray-400 hidden lg:inline">{ctx.stat.label}</span>
-            </div>
-          )}
+          {/* Mobile hamburger */}
+          <Button variant="ghost" size="sm" className="lg:hidden p-2 text-white/80 hover:bg-white/10 hover:text-white rounded-xl shrink-0" onClick={toggleMobileSidebar}>
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
 
-          {ctx.wallet && (
-            <button
-              onClick={() => navigate(ctx.menuItems[0]?.path ?? "/")}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition-all hover:opacity-80 active:scale-95 ${cfg.badgeBg} ${cfg.badgeBorder} ${ctx.wallet.color}`}
-            >
-              <ctx.wallet.icon className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden md:inline">{ctx.wallet.value}</span>
-            </button>
-          )}
-
-          <AlertsHeaderIcon />
-
-          <div className="relative">
-            <Button variant="ghost" size="sm" className="p-2 relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none pointer-events-none">
-                2
-              </span>
-            </Button>
+          {/* Greeting + date */}
+          <div className="hidden lg:block shrink-0">
+            <p className="text-lg font-bold text-white leading-tight tracking-tight">{greeting}, {firstName}! 👋</p>
+            <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">{today}</p>
+          </div>
+          <div className="lg:hidden min-w-0">
+            <p className="text-sm font-bold text-white truncate">{greeting}, {firstName}!</p>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group outline-none">
-                <Avatar className="h-8 w-8 shrink-0 ring-2 ring-white dark:ring-slate-900 shadow-sm">
-                  <AvatarImage src={undefined} />
-                  <AvatarFallback className="bg-linear-to-br from-blue-600 to-purple-600 text-white text-xs font-bold">
-                    {ctx.initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="hidden sm:block text-left max-w-36">
-                  <p className="text-sm font-semibold leading-tight text-gray-900 dark:text-white truncate">{ctx.name}</p>
-                  <div className="flex items-center gap-1">
-                    <p className={`text-[10px] leading-tight font-medium ${cfg.color}`}>{ctx.roleLabel}</p>
-                    {ctx.levelBadge && (
-                      <span className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}>
-                        {ctx.levelBadge.label}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <ChevronDown className="h-3.5 w-3.5 text-gray-400 hidden sm:block group-hover:text-gray-600 transition-colors shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
+          <div className="flex-1" />
 
-            <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-slate-900">
+          {/* Right actions */}
+          <div className="flex items-center gap-2 shrink-0">
 
-              <div className={`px-3 py-2.5 rounded-xl mb-1 border ${cfg.badgeBg} ${cfg.badgeBorder}`}>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 shrink-0">
-                    <AvatarFallback className="bg-linear-to-br from-blue-600 to-purple-600 text-white text-xs font-bold">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group"
+            >
+              <Search className="h-4 w-4" />
+              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors">Buscar...</span>
+              <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">⌘K</span>
+            </button>
+
+            <AlertsHeaderIcon />
+
+            <div className="relative">
+              <Button variant="ghost" size="sm" onClick={() => setNotifOpen(true)} className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/10 hover:text-white rounded-xl">
+                <Bell className="h-4 w-4" />
+                <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
+                  2
+                </span>
+              </Button>
+            </div>
+
+            {/* User card */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 pl-2.5 pr-3 py-2 rounded-xl hover:bg-white/10 transition-all group outline-none border border-white/15 hover:border-white/30">
+                  <Avatar className="h-9 w-9 shrink-0 ring-2 ring-white/30 ring-offset-1 ring-offset-transparent">
+                    <AvatarImage src={undefined} />
+                    <AvatarFallback className="bg-linear-to-br from-blue-500 to-purple-600 text-white text-sm font-bold">
                       {ctx.initials}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{ctx.name}</p>
-                    <div className="flex items-center gap-1">
-                      <p className={`text-[11px] font-medium ${cfg.color}`}>{ctx.roleLabel}</p>
+                  <div className="hidden sm:block text-left">
+                    {accountType === "admin" && (
+                      <p className="text-sm font-bold leading-tight text-white truncate max-w-[130px]">{ctx.name}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${cfg.badgeBg} ${cfg.color} leading-tight`}>
+                        {accountType === "admin" ? (userProfile.job_title || ctx.roleLabel) : ctx.roleLabel}
+                      </span>
                       {ctx.levelBadge && (
                         <span className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}>
                           {ctx.levelBadge.label}
                         </span>
                       )}
+                      {ctx.level && !ctx.levelBadge && (
+                        <span className="text-[9px] text-white/40">{ctx.level}</span>
+                      )}
                     </div>
-                    {ctx.email && <p className="text-[10px] text-gray-400 truncate mt-0.5">{ctx.email}</p>}
                   </div>
+                  <ChevronDown className="h-3.5 w-3.5 text-white/40 hidden sm:block group-hover:text-white/70 transition-colors shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" sideOffset={10} className="w-72 p-2 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-slate-900">
+                <div className={`px-3 py-3 rounded-xl mb-2 border ${cfg.badgeBg} ${cfg.badgeBorder}`}>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12 shrink-0 ring-2 ring-white shadow-md">
+                      <AvatarFallback className="bg-linear-to-br from-blue-600 to-purple-600 text-white text-sm font-bold">
+                        {ctx.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      {accountType === "admin" && (
+                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{ctx.name}</p>
+                      )}
+                      <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                        <p className={`text-[11px] font-semibold ${cfg.color}`}>
+                          {accountType === "admin" ? (userProfile.job_title || ctx.roleLabel) : ctx.roleLabel}
+                        </p>
+                        {ctx.levelBadge && (
+                          <span className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}>
+                            {ctx.levelBadge.label}
+                          </span>
+                        )}
+                        {ctx.level && !ctx.levelBadge && (
+                          <span className="text-[10px] text-gray-400">• {ctx.level}</span>
+                        )}
+                      </div>
+                      {ctx.email && <p className="text-[10px] text-gray-400 truncate mt-0.5">{ctx.email}</p>}
+                    </div>
+                  </div>
+                  {(ctx.wallet || ctx.points || ctx.tasks) && (
+                    <div className="mt-3 pt-2.5 border-t border-black/8 dark:border-white/10 grid grid-cols-2 gap-2">
+                      {ctx.wallet && (
+                        <div className="flex items-center gap-1.5">
+                          <ctx.wallet.icon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          <div>
+                            <p className="text-[9px] text-gray-400 leading-none">{ctx.wallet.label}</p>
+                            <p className={`text-xs font-bold ${ctx.wallet.color} leading-tight`}>{ctx.wallet.value}</p>
+                          </div>
+                        </div>
+                      )}
+                      {ctx.points && (
+                        <div className="flex items-center gap-1.5">
+                          <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          <div>
+                            <p className="text-[9px] text-gray-400 leading-none">Pontos</p>
+                            <p className="text-xs font-bold text-amber-600 leading-tight">{ctx.points}</p>
+                          </div>
+                        </div>
+                      )}
+                      {ctx.tasks && (
+                        <div className="flex items-center gap-1.5 col-span-2">
+                          <Activity className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                          <p className="text-[10px] text-gray-500">{ctx.tasks}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {ctx.wallet && (
-                  <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/10 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                      <ctx.wallet.icon className="h-3.5 w-3.5" />
-                      {ctx.wallet.label}
-                    </div>
-                    <span className={`text-sm font-bold ${ctx.wallet.color}`}>{ctx.wallet.value}</span>
-                  </div>
-                )}
-              </div>
 
-              {ctx.menuItems.map((item) => (
-                <DropdownMenuItem
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
-                >
-                  <item.icon className="h-4 w-4 text-gray-400 shrink-0" />
-                  {item.label}
+                <DropdownMenuItem onClick={openProfile} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                  <User className="h-4 w-4 text-gray-400 shrink-0" />
+                  Meu Perfil
                 </DropdownMenuItem>
-              ))}
-
-              <DropdownMenuSeparator className="my-1" />
-
-              <DropdownMenuItem
-                onClick={() => navigate(ctx.settingsPath)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
-              >
-                <Settings className="h-4 w-4 text-gray-400 shrink-0" />
-                Configuracoes
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator className="my-1" />
-
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-red-600 dark:text-red-400 hover:bg-red-50 focus:bg-red-50 focus:text-red-600"
-              >
-                <LogOut className="h-4 w-4 shrink-0" />
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={() => setNotifOpen(true)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                  <Settings className="h-4 w-4 text-gray-400 shrink-0" />
+                  Configurações
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1" />
+                <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-red-600 dark:text-red-400 hover:bg-red-50 focus:bg-red-50 focus:text-red-600">
+                  <LogOut className="h-4 w-4 shrink-0" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
-    </header>
+
+        {/* === BOTTOM ROW: quick stats pills === */}
+        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto">
+          {ctx.level && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+              <div className="h-6 w-6 rounded-lg bg-yellow-400/20 flex items-center justify-center shrink-0">
+                <Zap className="h-3.5 w-3.5 text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-[10px] text-white/45 leading-none">Nível</p>
+                <p className="text-xs font-bold text-white leading-tight">{ctx.level}</p>
+              </div>
+            </div>
+          )}
+          {ctx.points && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+              <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
+                <Star className="h-3.5 w-3.5 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-[10px] text-white/45 leading-none">Pontos</p>
+                <p className="text-xs font-bold text-white leading-tight">{ctx.points}</p>
+              </div>
+            </div>
+          )}
+          {ctx.stat && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+              <div className="h-6 w-6 rounded-lg bg-emerald-400/20 flex items-center justify-center shrink-0">
+                <ctx.stat.icon className="h-3.5 w-3.5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-[10px] text-white/45 leading-none">{ctx.stat.label}</p>
+                <p className="text-xs font-bold text-white leading-tight">{ctx.stat.value}</p>
+              </div>
+            </div>
+          )}
+          {ctx.tasks && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+              <div className="h-6 w-6 rounded-lg bg-blue-400/20 flex items-center justify-center shrink-0">
+                <Activity className="h-3.5 w-3.5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-[10px] text-white/45 leading-none">Status</p>
+                <p className="text-xs font-bold text-white leading-tight">{ctx.tasks}</p>
+              </div>
+            </div>
+          )}
+          {ctx.wallet && (
+            <button
+              onClick={() => navigate(ctx.settingsPath)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/20 transition-all active:scale-95 shrink-0"
+            >
+              <div className="h-6 w-6 rounded-lg bg-green-400/20 flex items-center justify-center shrink-0">
+                <ctx.wallet.icon className="h-3.5 w-3.5 text-green-400" />
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] text-white/45 leading-none">{ctx.wallet.label}</p>
+                <p className="text-xs font-bold text-white leading-tight">{ctx.wallet.value}</p>
+              </div>
+            </button>
+          )}
+
+
+        </div>
+      </header>
+
+      <NotificationPreferencesPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <UserViewSlidePanel
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={selfUser ?? { id: 0, name: ctx.name, email: ctx.email, role: accountType, account_type: accountType, is_active: true, is_admin: accountType === "admin", permissions: [], created_at: "", updated_at: "" }}
+      />
+    </>
   )
 }

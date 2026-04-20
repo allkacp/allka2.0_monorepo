@@ -145,11 +145,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     lastFour: string
     expiry: string
     holderName: string
-  }>>([
-    { id: "1", brand: "Visa", lastFour: "4242", expiry: "12/27", holderName: "João da Silva" },
-    { id: "2", brand: "Mastercard", lastFour: "8831", expiry: "09/28", holderName: "Maria Santos" },
-    { id: "3", brand: "Elo", lastFour: "5590", expiry: "03/24", holderName: "Carlos Oliveira" },
-  ])
+  }>>([])
   const [showAddCardModal, setShowAddCardModal] = useState(false)
   const [newCardData, setNewCardData] = useState({
     number: "",
@@ -168,19 +164,11 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
     dueDate: "",
   })
   const [showAdminConfirmDialog, setShowAdminConfirmDialog] = useState(false)
-  const [paymentHistory, setPaymentHistory] = useState([
-    { id: "1", date: "2024-01-15", amount: 1500, method: "pix", status: "Pago", type: "nf" },
-    { id: "2", date: "2024-01-10", amount: 2000, method: "boleto", status: "Pago", type: "nf" },
-    { id: "3", date: "2024-01-05", amount: 500, method: "allkoins", status: "Pago", type: "comprovante" },
-    { id: "4", date: "2023-12-20", amount: 1500, method: "cartao", status: "Pendente", type: "nf" },
-  ])
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([])
 
   // Company Wallet state
-  const [companyWalletBalance, setCompanyWalletBalance] = useState(5000)
-  const [companyWalletStatements, setCompanyWalletStatements] = useState([
-    { id: "stmt_1", date: new Date().toISOString(), type: "credit" as const, amount: 1000, reason: "Recarga inicial", balanceAfter: 5000 },
-    { id: "stmt_2", date: new Date(Date.now() - 7*24*60*60*1000).toISOString(), type: "debit" as const, amount: 200, reason: "Pagamento de serviço", balanceAfter: 4000 },
-  ])
+  const [companyWalletBalance, setCompanyWalletBalance] = useState(0)
+  const [companyWalletStatements, setCompanyWalletStatements] = useState<any[]>([])
   const [showCompanyWalletModal, setShowCompanyWalletModal] = useState(false)
   const [companyWalletType, setCompanyWalletType] = useState<"add" | "remove">("add")
   const [companyWalletAmount, setCompanyWalletAmount] = useState("")

@@ -15,6 +15,14 @@ export interface ApiCompany {
   website: string | null
   created_at: string
   updated_at: string
+  lgpd?: {
+    dpo_name?: string
+    dpo_email?: string
+    dpo_phone?: string
+    privacy_policy_accepted: boolean
+    policy_accepted_at?: string
+    policy_version?: string
+  } | null
 }
 
 interface UseCompaniesReturn {

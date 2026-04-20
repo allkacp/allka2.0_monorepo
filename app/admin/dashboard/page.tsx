@@ -1,7 +1,7 @@
 ﻿// @ts-nocheck
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +101,7 @@ import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
+import { generateDashboardData } from "@/dev-mocks/data/dashboard";
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -212,39 +213,7 @@ interface SystemAlert {
   icon: typeof AlertTriangle;
 }
 
-const mockAlerts: SystemAlert[] = [
-  {
-    id: "tarefas_atrasadas",
-    type: "tarefas",
-    severity: "high",
-    title: "Tarefas atrasadas",
-    description:
-      "12 tarefas estão com prazo vencido e precisam de atenção imediata.",
-    count: 12,
-    link: "/admin/tasks?filter=atrasadas",
-    icon: AlertTriangle,
-  },
-  {
-    id: "mensagens_sem_resposta",
-    type: "mensagens",
-    severity: "medium",
-    title: "Mensagens sem resposta",
-    description: "7 mensagens aguardando resposta há mais de 24 horas.",
-    count: 7,
-    link: "/admin/messages?filter=sem_resposta",
-    icon: MessageSquare,
-  },
-  {
-    id: "projetos_inadimplentes",
-    type: "financeiro",
-    severity: "high",
-    title: "Projetos inadimplentes",
-    description: "3 projetos com pagamento atrasado.",
-    count: 3,
-    link: "/admin/projects?filter=inadimplentes",
-    icon: XCircle,
-  },
-];
+// Alerts loaded from API below
 
 const AlertsCenter = ({ alerts }: { alerts: SystemAlert[] }) => {
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -497,6 +466,35 @@ export default function AdminDashboardPage() {
         return { from: thirtyDaysAgo, to: today };
     }
   };
+
+  // Period-aware dashboard data — recomputed whenever the selected period changes
+  const dashboardData = useMemo(() => {
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
+    );
+    return generateDashboardData(from, to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to]);
+
+  // Convenience aliases used throughout widget JSX
+  const rv = dashboardData.revenue;
+  const apW = dashboardData.activeProjects;
+  const cpW = dashboardData.creditPlans;
+  const mrrW = dashboardData.mrr;
+  const churnW = dashboardData.churn;
+  const atW = dashboardData.averageTicket;
+  const ltvW = dashboardData.ltv;
+  const paW = dashboardData.platformActivities;
+  const nmW = dashboardData.nomads;
+  const agRankW = dashboardData.agenciesRanking;
+  const soW = dashboardData.statusOverview;
+  const arW = dashboardData.accountsReceivable;
+  const tasksW = dashboardData.tasks;
+  const niW = dashboardData.nomadsIndicators;
+  const auW = dashboardData.activeUsers;
+  const ppW = dashboardData.partnerProgram;
 
   const periodOptions = [
     { type: "today" as const, label: "Hoje" },
@@ -1709,7 +1707,17 @@ export default function AdminDashboardPage() {
       },
     };
     // @ts-ignore
-    return baseMetrics[timeRange as keyof typeof baseMetrics];
+    const key =
+      globalPeriod.type === "last_7_days" ||
+      globalPeriod.type === "today" ||
+      globalPeriod.type === "yesterday"
+        ? "7d"
+        : globalPeriod.type === "this_quarter"
+          ? "90d"
+          : globalPeriod.type === "custom"
+            ? "custom"
+            : "30d";
+    return baseMetrics[key as keyof typeof baseMetrics];
   };
 
   const metrics = (() => {
@@ -1830,49 +1838,11 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  // Mock data for top performers
-  const topPerformers = [
-    { id: 1, name: "Ana Santos", rating: 4.9, projects: 45, badge: "gold" },
-    { id: 2, name: "Pedro Costa", rating: 4.8, projects: 38, badge: "silver" },
-    {
-      id: 3,
-      name: "Maria Oliveira",
-      rating: 4.7,
-      projects: 32,
-      badge: "bronze",
-    },
-  ];
+  // Period-aware top performers
+  const topPerformers = dashboardData.performers;
 
-  const usersByType = [
-    {
-      type: "Empresas",
-      count: 847,
-      percentage: 29.8,
-      growth: "+15%",
-      color: "from-info to-info-foreground",
-    },
-    {
-      type: "Agências",
-      count: 623,
-      percentage: 21.9,
-      growth: "+22%",
-      color: "from-success to-success-foreground",
-    },
-    {
-      type: "Nômades",
-      count: 1247,
-      percentage: 43.8,
-      growth: "+8%",
-      color: "from-chart-4 to-chart-4",
-    },
-    {
-      type: "Admins",
-      count: 130,
-      percentage: 4.5,
-      growth: "+3%",
-      color: "from-warning to-warning-foreground",
-    },
-  ];
+  // Period-aware user distribution
+  const usersByType = dashboardData.userDistribution;
 
   const systemAlertsData = [
     {
@@ -3771,10 +3741,10 @@ export default function AdminDashboardPage() {
               {/* Revenue Total */}
               <div className="pb-4 border-b">
                 <div className="flex items-baseline gap-2">
-                  <h3 className="text-3xl font-bold">R$ 284.7k</h3>
+                  <h3 className="text-3xl font-bold">R$ {(rv.total / 1000).toFixed(1)}k</h3>
                   <span className="flex items-center gap-1 text-sm text-success font-semibold">
                     <TrendingUp className="h-3.5 w-3.5" />
-                    +15.2%
+                    +{rv.totalGrowth}%
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -3795,10 +3765,10 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-lg font-semibold text-info-foreground">
-                        R$ 119.1k
+                        R$ {(rv.creditPlan / 1000).toFixed(1)}k
                       </span>
                       <span className="text-xs font-medium text-success">
-                        +18.7%
+                        +{rv.creditPlanGrowth}%
                       </span>
                     </div>
                   </div>
@@ -3834,10 +3804,10 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-lg font-semibold text-chart-4">
-                        R$ 99.1k
+                        R$ {(rv.recurring / 1000).toFixed(1)}k
                       </span>
                       <span className="text-xs font-medium text-success">
-                        +13.4%
+                        +{rv.recurringGrowth}%
                       </span>
                     </div>
                   </div>
@@ -3871,10 +3841,10 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-lg font-semibold text-success-foreground">
-                        R$ 66.5k
+                        R$ {(rv.oneTime / 1000).toFixed(1)}k
                       </span>
                       <span className="text-xs font-medium text-success">
-                        +10.9%
+                        +{rv.oneTimeGrowth}%
                       </span>
                     </div>
                   </div>
@@ -3951,10 +3921,10 @@ export default function AdminDashboardPage() {
                 {/* Total Active Projects */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">312</h3>
+                    <h3 className="text-3xl font-bold">{apW.total}</h3>
                     <span className="text-sm font-medium flex items-center gap-1 text-success">
                       <TrendingUp className="h-3.5 w-3.5" />
-                      10%
+                      {apW.growth}%
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -3973,10 +3943,10 @@ export default function AdminDashboardPage() {
                       </div>
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg font-semibold text-indigo-700 dark:text-indigo-300">
-                          210
+                          {apW.agencies}
                         </span>
                         <span className="text-xs font-medium text-success">
-                          +8%
+                          +{apW.agenciesGrowth}%
                         </span>
                       </div>
                     </div>
@@ -4012,10 +3982,10 @@ export default function AdminDashboardPage() {
                       </div>
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg font-semibold text-amber-700 dark:text-amber-300">
-                          102
+                          {apW.leadPremium}
                         </span>
                         <span className="text-xs font-medium text-success">
-                          +15%
+                          +{apW.leadPremiumGrowth}%
                         </span>
                       </div>
                     </div>
@@ -4046,7 +4016,7 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <Plus className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     <span className="text-sm font-semibold text-teal-900 dark:text-teal-100">
-                      Novos no período: 47
+                      Novos no período: {apW.newTotal}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -4054,14 +4024,14 @@ export default function AdminDashboardPage() {
                       <span className="text-indigo-600 dark:text-indigo-400 font-medium">
                         Agências:
                       </span>{" "}
-                      32
+                      {apW.newAgencies}
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <span className="text-amber-600 dark:text-amber-400 font-medium">
                         Lead Premium:
                       </span>{" "}
-                      15
+                      {apW.newLeadPremium}
                     </span>
                   </div>
                 </div>
@@ -4138,10 +4108,10 @@ export default function AdminDashboardPage() {
                 {/* Total Revenue from Credit Plans */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">R$ 123.450</h3>
+                    <h3 className="text-3xl font-bold">R$ {cpW.total.toLocaleString('pt-BR')}</h3>
                     <span className="text-sm font-medium flex items-center gap-1 text-success">
                       <TrendingUp className="h-3.5 w-3.5" />
-                      12%
+                      {cpW.growth}%
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -4161,18 +4131,18 @@ export default function AdminDashboardPage() {
                           variant="outline"
                           className="text-xs ml-auto mr-2"
                         >
-                          Novos: 12
+                          Novos: {cpW.basic.newContracts}
                         </Badge>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-bold text-foreground">
-                        R$ 32.000
+                        R$ {cpW.basic.revenue.toLocaleString('pt-BR')}
                       </div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingUp className="h-3 w-3 text-success" />
                         <span className="text-xs font-medium text-success">
-                          +5%
+                          +{cpW.basic.growth}%
                         </span>
                       </div>
                     </div>
@@ -4188,16 +4158,16 @@ export default function AdminDashboardPage() {
                           variant="outline"
                           className="text-xs ml-auto mr-2"
                         >
-                          Novos: 24
+                          Novos: {cpW.partner.newContracts}
                         </Badge>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">R$ 45.500</div>
+                      <div className="text-lg font-bold">R$ {cpW.partner.revenue.toLocaleString('pt-BR')}</div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingUp className="h-3 w-3 text-success" />
                         <span className="text-xs font-medium text-success">
-                          +18%
+                          +{cpW.partner.growth}%
                         </span>
                       </div>
                     </div>
@@ -4213,16 +4183,16 @@ export default function AdminDashboardPage() {
                           variant="outline"
                           className="text-xs ml-auto mr-2"
                         >
-                          Novos: 8
+                          Novos: {cpW.premium.newContracts}
                         </Badge>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">R$ 45.950</div>
+                      <div className="text-lg font-bold">R$ {cpW.premium.revenue.toLocaleString('pt-BR')}</div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingDown className="h-3 w-3 text-destructive" />
                         <span className="text-xs font-medium text-destructive">
-                          -2%
+                          {cpW.premium.growth}%
                         </span>
                       </div>
                     </div>
@@ -4319,10 +4289,10 @@ export default function AdminDashboardPage() {
                 {/* MRR Total */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">R$ 78.420</h3>
+                    <h3 className="text-3xl font-bold">R$ {mrrW.total.toLocaleString('pt-BR')}</h3>
                     <div className="flex items-center gap-2 text-sm font-medium text-success">
                       <ArrowUpRight className="w-4 h-4" />
-                      +8%
+                      +{mrrW.growth}%
                     </div>
                     <span className="text-sm text-muted-foreground">
                       vs período anterior
@@ -4347,7 +4317,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-success">
-                      +R$ 9.000
+                      +R$ {mrrW.newMrr.toLocaleString('pt-BR')}
                     </div>
                   </div>
 
@@ -4366,7 +4336,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-info">
-                      +R$ 4.200
+                      +R$ {mrrW.expansion.toLocaleString('pt-BR')}
                     </div>
                   </div>
 
@@ -4385,7 +4355,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-warning">
-                      -R$ 1.500
+                      -R$ {mrrW.contraction.toLocaleString('pt-BR')}
                     </div>
                   </div>
 
@@ -4404,7 +4374,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-destructive">
-                      -R$ 3.800
+                      -R$ {mrrW.churnRevenue.toLocaleString('pt-BR')}
                     </div>
                   </div>
                 </div>
@@ -4417,7 +4387,7 @@ export default function AdminDashboardPage() {
                     </span>
                     <div className="flex items-center gap-2">
                       <div className="text-base font-semibold text-destructive">
-                        4.5%
+                        {mrrW.churnRate}%
                       </div>
                       <div className="text-xs text-muted-foreground">
                         (revenue churn)
@@ -4432,7 +4402,7 @@ export default function AdminDashboardPage() {
                     <div className="text-sm text-muted-foreground">
                       Contratações recorrentes
                     </div>
-                    <div className="text-xl font-bold">48</div>
+                    <div className="text-xl font-bold">{mrrW.newContracts}</div>
                     <div className="text-xs text-muted-foreground">
                       (novas no período)
                     </div>
@@ -4442,7 +4412,7 @@ export default function AdminDashboardPage() {
                     <div className="text-sm text-muted-foreground">
                       ARR estimado
                     </div>
-                    <div className="text-xl font-bold">R$ 940.040</div>
+                    <div className="text-xl font-bold">R$ {(mrrW.total * 12).toLocaleString('pt-BR')}</div>
                     <div className="text-xs text-muted-foreground">
                       (MRR × 12)
                     </div>
@@ -4482,8 +4452,8 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                    <span>Base: R$ 61.520</span>
-                    <span>Net Change: +R$ 7.920</span>
+                    <span>Base: R$ {mrrW.baseMrr.toLocaleString('pt-BR')}</span>
+                    <span>Net Change: {mrrW.netChange >= 0 ? '+' : ''}R$ {mrrW.netChange.toLocaleString('pt-BR')}</span>
                   </div>
                 </div>
 
@@ -4504,22 +4474,15 @@ export default function AdminDashboardPage() {
                         className="bg-green-50 text-green-700 border-green-200 text-xs"
                       >
                         <TrendingUp className="h-3 w-3 mr-1" />
-                        +20%
+                        +{mrrW.trendGrowth}%
                       </Badge>
                     </div>
 
                     {/* Enhanced Bar Chart */}
                     <div className="flex items-end justify-between gap-1.5 h-20 bg-gradient-to-b from-blue-50 to-transparent p-3 rounded-lg border border-blue-100">
-                      {[
-                        { value: 65000, month: "Jun" },
-                        { value: 68000, month: "Jul" },
-                        { value: 70000, month: "Ago" },
-                        { value: 72500, month: "Set" },
-                        { value: 75000, month: "Out" },
-                        { value: 78420, month: "Nov" },
-                      ].map((data, idx) => {
-                        const maxValue = 78420;
-                        const height = (data.value / maxValue) * 100;
+                      {mrrW.trendData.map((data, idx) => {
+                        const maxValue = mrrW.trendData[mrrW.trendData.length - 1];
+                        const height = (data / Math.max(1, maxValue)) * 100;
                         const isLast = idx === 5;
                         return (
                           <div
@@ -4536,10 +4499,10 @@ export default function AdminDashboardPage() {
                               style={{ height: `${height}%` }}
                             />
                             <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                              {data.month}
+                              {["Jun","Jul","Ago","Set","Out","Nov"][idx]}
                             </span>
                             <span className="text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6">
-                              R$ {(data.value / 1000).toFixed(0)}k
+                              R$ {(data / 1000).toFixed(0)}k
                             </span>
                           </div>
                         );
@@ -4550,15 +4513,15 @@ export default function AdminDashboardPage() {
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="bg-green-50 border border-green-200 rounded p-2">
                         <p className="text-muted-foreground">Menor</p>
-                        <p className="font-semibold">R$ 65k</p>
+                        <p className="font-semibold">R$ {(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k</p>
                       </div>
                       <div className="bg-blue-50 border border-blue-200 rounded p-2">
                         <p className="text-muted-foreground">Médio</p>
-                        <p className="font-semibold">R$ 71.5k</p>
+                        <p className="font-semibold">R$ {(mrrW.trendData.reduce((a, b) => a + b, 0) / mrrW.trendData.length / 1000).toFixed(1)}k</p>
                       </div>
                       <div className="bg-blue-50 border border-blue-200 rounded p-2">
                         <p className="text-muted-foreground">Atual</p>
-                        <p className="font-semibold text-blue-600">R$ 78.4k</p>
+                        <p className="font-semibold text-blue-600">R$ {(mrrW.total / 1000).toFixed(1)}k</p>
                       </div>
                     </div>
                   </div>
@@ -4603,10 +4566,10 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">24</span>
+                    <span className="text-2xl font-bold">{churnW.inactiveAccounts}</span>
                     <Badge variant="destructive" className="gap-1">
                       <TrendingUp className="h-3 w-3" />
-                      +5%
+                      +{churnW.inactiveGrowth}%
                     </Badge>
                   </div>
                 </div>
@@ -4617,23 +4580,23 @@ export default function AdminDashboardPage() {
                     <span className="text-sm text-muted-foreground">
                       Agências
                     </span>
-                    <span className="font-semibold">6</span>
+                    <span className="font-semibold">{churnW.agencies}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 rounded bg-muted/50">
                     <span className="text-sm text-muted-foreground">
                       Lead Premium
                     </span>
-                    <span className="font-semibold">3</span>
+                    <span className="font-semibold">{churnW.leadPremium}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 rounded bg-muted/50">
                     <span className="text-sm text-muted-foreground">
                       Nômades
                     </span>
-                    <span className="font-semibold">8</span>
+                    <span className="font-semibold">{churnW.nomades}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 rounded bg-muted/50">
                     <span className="text-sm text-muted-foreground">Free</span>
-                    <span className="font-semibold">7</span>
+                    <span className="font-semibold">{churnW.free}</span>
                   </div>
                 </div>
               </div>
@@ -4648,10 +4611,10 @@ export default function AdminDashboardPage() {
                     <span className="font-semibold">Projetos Cancelados</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">11</span>
+                    <span className="text-xl font-bold">{churnW.cancelledProjects}</span>
                     <Badge variant="destructive" className="gap-1">
                       <TrendingUp className="h-3 w-3" />
-                      +10%
+                      +{churnW.cancelledGrowth}%
                     </Badge>
                   </div>
                 </div>
@@ -4668,12 +4631,12 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-xl font-bold text-destructive">
-                      R$ 14.200
+                      R$ {churnW.revenueChurn.toLocaleString('pt-BR')}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       Churn Rate:{" "}
                       <span className="font-semibold text-destructive">
-                        3.2%
+                        {churnW.revenueChurnRate}%
                       </span>
                     </div>
                   </div>
@@ -4683,12 +4646,12 @@ export default function AdminDashboardPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Perda de MRR</span>
-                    <span>3.2% do total</span>
+                    <span>{churnW.revenueChurnRate}% do total</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-destructive"
-                      style={{ width: "3.2%" }}
+                      style={{ width: `${churnW.revenueChurnRate}%` }}
                     />
                   </div>
                 </div>
@@ -4764,11 +4727,11 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-muted-foreground mb-1">
                       Ticket Médio Geral
                     </p>
-                    <p className="text-3xl font-bold text-success">R$ 1.280</p>
+                    <p className="text-3xl font-bold text-success">R$ {atW.general.toLocaleString('pt-BR')}</p>
                   </div>
                   <div className="flex items-center gap-2 text-success">
                     <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">+4%</span>
+                    <span className="text-lg font-semibold">+{atW.generalGrowth}%</span>
                   </div>
                 </div>
               </div>
@@ -4858,11 +4821,11 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-muted-foreground mb-1">
                       Ticket Médio por Projeto
                     </p>
-                    <p className="text-2xl font-bold text-success">R$ 940</p>
+                    <p className="text-2xl font-bold text-success">R$ {atW.perProject.toLocaleString('pt-BR')}</p>
                   </div>
                   <div className="flex items-center gap-2 text-success">
                     <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">+3%</span>
+                    <span className="text-lg font-semibold">+{atW.perProjectGrowth}%</span>
                   </div>
                 </div>
               </div>
@@ -4873,8 +4836,8 @@ export default function AdminDashboardPage() {
                   Tendência (últimos 6 meses)
                 </p>
                 <div className="flex items-end justify-between gap-1 h-16">
-                  {[920, 980, 1050, 1120, 1210, 1280].map((val, idx) => {
-                    const maxVal = 1280;
+                  {atW.trendData.map((val, idx) => {
+                    const maxVal = Math.max(...atW.trendData);
                     const height = (val / maxVal) * 100;
                     return (
                       <div
@@ -4886,9 +4849,6 @@ export default function AdminDashboardPage() {
                           style={{ height: `${height}%` }}
                           title={`R$ ${val}`}
                         />
-                        <span className="text-[10px] text-muted-foreground">
-                          {val}
-                        </span>
                       </div>
                     );
                   })}
@@ -4924,7 +4884,7 @@ export default function AdminDashboardPage() {
               {/* LTV Geral */}
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-3xl font-bold">R$ 10.080</div>
+                  <div className="text-3xl font-bold">R$ {ltvW.value.toLocaleString('pt-BR')}</div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                     <span>Tempo médio: 24 meses</span>
                     <span>•</span>
@@ -4933,7 +4893,7 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="flex items-center gap-1 text-sm">
                   <ArrowUp className="h-4 w-4 text-success" />
-                  <span className="text-success font-semibold">+6%</span>
+                  <span className="text-success font-semibold">+{ltvW.growth}%</span>
                 </div>
               </div>
 
@@ -4969,10 +4929,10 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ 14.200</div>
+                    <div className="text-lg font-bold">R$ {ltvW.agencies.toLocaleString('pt-BR')}</div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">+8%</span>
+                      <span className="text-success font-semibold">+{ltvW.agenciesGrowth}%</span>
                     </div>
                   </div>
                 </div>
@@ -4989,10 +4949,10 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ 9.100</div>
+                    <div className="text-lg font-bold">R$ {ltvW.leadPremium.toLocaleString('pt-BR')}</div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">+4%</span>
+                      <span className="text-success font-semibold">+{ltvW.leadPremiumGrowth}%</span>
                     </div>
                   </div>
                 </div>
@@ -5009,10 +4969,10 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ 4.200</div>
+                    <div className="text-lg font-bold">R$ {ltvW.nomades.toLocaleString('pt-BR')}</div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowDown className="h-3 w-3 text-warning" />
-                      <span className="text-warning">-1%</span>
+                      <span className="text-warning">{ltvW.nomadesGrowth}%</span>
                     </div>
                   </div>
                 </div>
@@ -5049,11 +5009,11 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-muted-foreground h-full"
-                        style={{ width: "34%" }}
+                        style={{ width: `${Math.min(100, (ltvW.hist0to1k / 400) * 100)}%` }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
-                      342
+                      {ltvW.hist0to1k}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -5063,11 +5023,11 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-info h-full"
-                        style={{ width: "21%" }}
+                        style={{ width: `${Math.min(100, (ltvW.hist1kto5k / 400) * 100)}%` }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
-                      210
+                      {ltvW.hist1kto5k}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -5077,11 +5037,11 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-chart-4 h-full"
-                        style={{ width: "8%" }}
+                        style={{ width: `${Math.min(100, (ltvW.hist5kto15k / 400) * 100)}%` }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
-                      83
+                      {ltvW.hist5kto15k}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -5091,11 +5051,11 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-success h-full"
-                        style={{ width: "3%" }}
+                        style={{ width: `${Math.min(100, (ltvW.hist15kplus / 400) * 100)}%` }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
-                      28
+                      {ltvW.hist15kplus}
                     </div>
                   </div>
                 </div>
@@ -5106,20 +5066,17 @@ export default function AdminDashboardPage() {
 
       case "cmv":
         const cmvData = {
-          totalCosts: 124320,
-          revenue: 482400,
-          cmvPercent: 25.8,
-          previousCmvPercent: 26.8,
+          totalCosts: dashboardData.cmv.totalCosts,
+          revenue: dashboardData.cmv.revenue,
+          cmvPercent: dashboardData.cmv.cmvPercent,
+          previousCmvPercent: dashboardData.cmv.prevCmvPercent,
           breakdown: {
-            nomades: { value: 62000, percent: 49.9 },
-            impostos: { value: 28320, percent: 22.8 },
-            comissoes: { value: 24000, percent: 19.3 },
-            outros: { value: 10000, percent: 8.0 },
+            nomades: dashboardData.cmv.nomades,
+            impostos: dashboardData.cmv.impostos,
+            comissoes: dashboardData.cmv.comissoes,
+            outros: dashboardData.cmv.outros,
           },
-          variation: {
-            totalCosts: 4, // +4%
-            cmvPercent: -1.0, // -1.0 pp (percentage points)
-          },
+          variation: dashboardData.cmv.variation,
         };
 
         return (
@@ -5328,7 +5285,7 @@ export default function AdminDashboardPage() {
                       Agências Ativas
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">182</span>
+                      <span className="text-2xl font-bold">{paW.activeAgencies}</span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
                         +7%
@@ -5340,7 +5297,7 @@ export default function AdminDashboardPage() {
                       Tempo médio/dia
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">42 min</span>
+                      <span className="text-2xl font-bold">{paW.avgSessionMinutes} min</span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
                         +4%
@@ -5353,12 +5310,12 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                   <div>
                     <p className="text-xs text-muted-foreground">MAU</p>
-                    <span className="text-lg font-semibold">528</span>
+                    <span className="text-lg font-semibold">{paW.mau}</span>
                     <span className="text-xs text-success">+5%</span>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">DAU</p>
-                    <span className="text-lg font-semibold">128</span>
+                    <span className="text-lg font-semibold">{paW.dau}</span>
                     <span className="text-xs text-success">+3%</span>
                   </div>
                 </div>
@@ -5366,13 +5323,13 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Sessões</p>
-                    <span className="text-lg font-semibold">3.820</span>
+                    <span className="text-lg font-semibold">{paW.sessions.toLocaleString('pt-BR')}</span>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">
                       Ações executadas
                     </p>
-                    <span className="text-lg font-semibold">14.200</span>
+                    <span className="text-lg font-semibold">{paW.actionsExecuted.toLocaleString('pt-BR')}</span>
                   </div>
                 </div>
 
@@ -5382,11 +5339,11 @@ export default function AdminDashboardPage() {
                     Atividade (últimos 7 dias)
                   </p>
                   <div className="flex items-end gap-1 h-16">
-                    {[120, 135, 128, 142, 156, 138, 165].map((value, idx) => (
+                    {paW.trendData.map((value, idx) => (
                       <div
                         key={idx}
                         className="flex-1 bg-info rounded-t"
-                        style={{ height: `${(value / 165) * 100}%` }}
+                        style={{ height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%` }}
                         title={`Dia ${idx + 1}: ${value} ações`}
                       />
                     ))}
@@ -5482,10 +5439,10 @@ export default function AdminDashboardPage() {
                   TOTAL DE NÔMADES
                 </p>
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-4xl font-bold text-chart-2">316</span>
+                  <span className="text-4xl font-bold text-chart-2">{nmW.total}</span>
                   <span className="flex items-center gap-1 text-base text-success font-semibold">
                     <TrendingUp className="h-4 w-4" />
-                    +4%
+                    +{nmW.growth}%
                   </span>
                 </div>
               </div>
@@ -5502,11 +5459,11 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-success-foreground">
-                      248
+                      {nmW.active}
                     </span>
                     <span className="flex items-center text-sm text-success font-semibold">
                       <TrendingUp className="h-3 w-3" />
-                      +6%
+                      +{nmW.activeGrowth}%
                     </span>
                   </div>
                   <p className="text-xs text-success mt-1">
@@ -5524,11 +5481,11 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-foreground">
-                      68
+                      {nmW.inactive}
                     </span>
                     <span className="flex items-center text-sm text-destructive font-semibold">
                       <TrendingDown className="h-3 w-3" />
-                      -2%
+                      {nmW.inactiveChange}%
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -5544,19 +5501,19 @@ export default function AdminDashboardPage() {
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Novos no período
                     </p>
-                    <p className="text-xl font-bold text-info">24</p>
+                    <p className="text-xl font-bold text-info">{nmW.newInPeriod}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Churn
                     </p>
-                    <p className="text-xl font-bold text-destructive">8</p>
+                    <p className="text-xl font-bold text-destructive">{nmW.churn}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Retenção 30d
                     </p>
-                    <p className="text-xl font-bold text-success">78%</p>
+                    <p className="text-xl font-bold text-success">{nmW.retention30d}%</p>
                   </div>
                 </div>
               </div>
@@ -5567,8 +5524,8 @@ export default function AdminDashboardPage() {
                   Evolução de nômades ativos
                 </p>
                 <div className="flex items-end justify-between gap-1 h-16">
-                  {[220, 225, 230, 235, 238, 242, 248].map((value, idx) => {
-                    const percentage = (value / 250) * 100;
+                  {nmW.trendData.map((value, idx) => {
+                    const percentage = (value / Math.max(1, Math.max(...nmW.trendData))) * 100;
                     return (
                       <div
                         key={idx}
@@ -5741,29 +5698,7 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                  {[
-                    {
-                      id: 1,
-                      name: "Alpha Solutions",
-                      projects: 55,
-                      rating: 4.8,
-                      contribution: "R$ 150k",
-                    },
-                    {
-                      id: 2,
-                      name: "Beta Innovations",
-                      projects: 48,
-                      rating: 4.7,
-                      contribution: "R$ 120k",
-                    },
-                    {
-                      id: 3,
-                      name: "Gamma Marketing",
-                      projects: 42,
-                      rating: 4.6,
-                      contribution: "R$ 100k",
-                    },
-                  ].map((agency, index) => (
+                  {agRankW.map((agency, index) => (
                     <div
                       key={agency.id}
                       className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
@@ -5853,31 +5788,31 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Em andamento",
-                        count: 45,
+                        count: soW.projects.ongoing,
                         status: "ongoing",
                         color: "blue",
                       },
                       {
                         label: "Aprovados",
-                        count: 18,
+                        count: soW.projects.approved,
                         status: "approved",
                         color: "green",
                       },
                       {
                         label: "Concluídos",
-                        count: 73,
+                        count: soW.projects.completed,
                         status: "completed",
                         color: "emerald",
                       },
                       {
                         label: "Cancelados",
-                        count: 5,
+                        count: soW.projects.cancelled,
                         status: "cancelled",
                         color: "red",
                       },
                       {
                         label: "Em atraso",
-                        count: 8,
+                        count: soW.projects.delayed,
                         status: "delayed",
                         color: "amber",
                       },
@@ -5912,25 +5847,25 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Contratadas",
-                        count: 87,
+                        count: soW.tasks.contracted,
                         status: "contracted",
                         color: "purple",
                       },
                       {
                         label: "Em execução",
-                        count: 34,
+                        count: soW.tasks.inProgress,
                         status: "inprogress",
                         color: "blue",
                       },
                       {
                         label: "Concluídas",
-                        count: 456,
+                        count: soW.tasks.completed,
                         status: "completed",
                         color: "green",
                       },
                       {
                         label: "Arquivadas",
-                        count: 23,
+                        count: soW.tasks.archived,
                         status: "archived",
                         color: "gray",
                       },
@@ -5965,31 +5900,31 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Novos",
-                        count: 56,
+                        count: soW.leads.new,
                         status: "new",
                         color: "cyan",
                       },
                       {
                         label: "Em contato",
-                        count: 32,
+                        count: soW.leads.contacted,
                         status: "contacted",
                         color: "blue",
                       },
                       {
                         label: "Proposta enviada",
-                        count: 15,
+                        count: soW.leads.proposal,
                         status: "proposal",
                         color: "purple",
                       },
                       {
                         label: "Fechado",
-                        count: 9,
+                        count: soW.leads.won,
                         status: "won",
                         color: "green",
                       },
                       {
                         label: "Perdido",
-                        count: 21,
+                        count: soW.leads.lost,
                         status: "lost",
                         color: "red",
                       },
@@ -6061,11 +5996,11 @@ export default function AdminDashboardPage() {
                       Total a Receber
                     </span>
                     <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-                      +6%
+                      +{arW.growth}%
                     </Badge>
                   </div>
                   <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                    R$ 182.450,00
+                    R$ {arW.total.toLocaleString('pt-BR')},00
                   </div>
                 </div>
 
@@ -6084,7 +6019,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                      R$ 98.200,00
+                      R$ {arW.creditPlans.toLocaleString('pt-BR')},00
                     </span>
                   </div>
 
@@ -6097,7 +6032,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                      R$ 72.600,00
+                      R$ {arW.postPaid.toLocaleString('pt-BR')},00
                     </span>
                   </div>
 
@@ -6110,7 +6045,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                      R$ 11.650,00
+                      R$ {arW.others.toLocaleString('pt-BR')},00
                     </span>
                   </div>
                 </div>
@@ -6122,7 +6057,7 @@ export default function AdminDashboardPage() {
                       Recebido no período
                     </span>
                     <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                      R$ 167.000,00
+                      R$ {arW.received.toLocaleString('pt-BR')},00
                     </span>
                   </div>
                 </div>
@@ -6161,26 +6096,26 @@ export default function AdminDashboardPage() {
               {[
                 {
                   label: "Concluídas",
-                  value: 1248,
-                  change: 12,
+                  value: tasksW.completed,
+                  change: tasksW.completedGrowth,
                   color: "text-success",
                 },
                 {
                   label: "Em Execução",
-                  value: 87,
-                  change: 5,
+                  value: tasksW.inProgress,
+                  change: tasksW.inProgressGrowth,
                   color: "text-info",
                 },
                 {
                   label: "Contratadas",
-                  value: 234,
-                  change: 8,
+                  value: tasksW.contracted,
+                  change: tasksW.contractedGrowth,
                   color: "text-warning",
                 },
                 {
                   label: "Canceladas",
-                  value: 19,
-                  change: -3,
+                  value: tasksW.cancelled,
+                  change: tasksW.cancelledChange,
                   color: "text-destructive",
                 },
               ].map((item) => (
@@ -6209,7 +6144,7 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-muted-foreground">
                     SLA — dentro do prazo
                   </p>
-                  <span className="text-sm font-bold text-success">94,2%</span>
+                  <span className="text-sm font-bold text-success">{tasksW.slaCompliance.toFixed(1).replace('.', ',')}%</span>
                 </div>
               </div>
             </CardContent>
@@ -6238,31 +6173,31 @@ export default function AdminDashboardPage() {
               {[
                 {
                   label: "Taxa de Entrega",
-                  value: "97,3%",
+                  value: `${niW.deliveryRate.toFixed(1).replace('.', ',')}%`,
                   icon: CheckSquare,
                   color: "text-success",
                 },
                 {
                   label: "Avaliação Média",
-                  value: "4,7 ★",
+                  value: `${niW.avgRating.toFixed(1).replace('.', ',')} ★`,
                   icon: Star,
                   color: "text-warning",
                 },
                 {
                   label: "Tempo Médio / Tarefa",
-                  value: "2,4 dias",
+                  value: `${niW.avgTimePerTask.toFixed(1).replace('.', ',')} dias`,
                   icon: Clock,
                   color: "text-info",
                 },
                 {
                   label: "Nômades Certificados",
-                  value: "68%",
+                  value: `${niW.certified}%`,
                   icon: Award,
                   color: "text-chart-4",
                 },
                 {
                   label: "Retenção 90 dias",
-                  value: "81%",
+                  value: `${niW.retention90d}%`,
                   icon: TrendingUp,
                   color: "text-success",
                 },
@@ -6308,26 +6243,26 @@ export default function AdminDashboardPage() {
               {[
                 {
                   type: "Empresas",
-                  count: 632,
-                  growth: "+15%",
+                  count: auW.empresas,
+                  growth: `+${auW.empresasGrowth}%`,
                   color: "text-info",
                 },
                 {
                   type: "Agências",
-                  count: 418,
-                  growth: "+22%",
+                  count: auW.agencias,
+                  growth: `+${auW.agenciasGrowth}%`,
                   color: "text-success",
                 },
                 {
                   type: "Nômades",
-                  count: 1124,
-                  growth: "+8%",
+                  count: auW.nomades,
+                  growth: `+${auW.nomadesGrowth}%`,
                   color: "text-chart-4",
                 },
                 {
                   type: "Admins",
-                  count: 28,
-                  growth: "+3%",
+                  count: auW.admins,
+                  growth: `+${auW.adminsGrowth}%`,
                   color: "text-warning",
                 },
               ].map((item) => (
@@ -6352,7 +6287,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-muted-foreground">
                   Total ativo hoje
                 </p>
-                <p className="text-sm font-bold">2.202</p>
+                <p className="text-sm font-bold">{auW.total.toLocaleString('pt-BR')}</p>
               </div>
             </CardContent>
           </Card>
@@ -6403,11 +6338,11 @@ export default function AdminDashboardPage() {
                 {[
                   {
                     label: "Convites Enviados",
-                    value: 5,
+                    value: ppW.invitesSent,
                     color: "text-foreground",
                   },
-                  { label: "Pendentes", value: 2, color: "text-warning" },
-                  { label: "Aceitos", value: 2, color: "text-success" },
+                  { label: "Pendentes", value: ppW.pending, color: "text-warning" },
+                  { label: "Aceitos", value: ppW.accepted, color: "text-success" },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -6431,32 +6366,32 @@ export default function AdminDashboardPage() {
                   {[
                     {
                       level: "Diamond",
-                      count: 1,
-                      total: 2,
+                      count: ppW.diamond,
+                      total: Math.max(ppW.diamond, 1),
                       color: "bg-sky-500",
                     },
                     {
                       level: "Platinum",
-                      count: 1,
-                      total: 2,
+                      count: ppW.platinum,
+                      total: Math.max(ppW.platinum, 1),
                       color: "bg-violet-500",
                     },
                     {
                       level: "Gold",
-                      count: 0,
-                      total: 2,
+                      count: ppW.gold,
+                      total: Math.max(ppW.gold, 1),
                       color: "bg-yellow-500",
                     },
                     {
                       level: "Silver",
-                      count: 0,
-                      total: 2,
+                      count: ppW.silver,
+                      total: Math.max(ppW.silver, 1),
                       color: "bg-slate-400",
                     },
                     {
                       level: "Bronze",
-                      count: 0,
-                      total: 2,
+                      count: ppW.bronze,
+                      total: Math.max(ppW.bronze, 1),
                       color: "bg-orange-500",
                     },
                   ].map((item) => (
@@ -6488,7 +6423,7 @@ export default function AdminDashboardPage() {
                   MRR gerado por Partners
                 </p>
                 <span className="text-sm font-bold text-success">
-                  R$ 89.400
+                  R$ {ppW.mrrGenerated.toLocaleString('pt-BR')}
                 </span>
               </div>
             </CardContent>
@@ -7509,7 +7444,17 @@ export default function AdminDashboardPage() {
                         </p>
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* Section header */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground/60" />
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Widgets do dashboard
+                      </p>
+                      <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                        {draftWidgets.length}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
                       {draftWidgets.map((widget) => {
                         const libItem = widgetLibrary.find(
                           (l) => l.id === widget.type,
@@ -7570,7 +7515,7 @@ export default function AdminDashboardPage() {
                               setModalDragOverId(null);
                             }}
                             className={cn(
-                              "group relative rounded-xl border-2 overflow-hidden select-none transition-all duration-150",
+                              "group relative rounded-xl border overflow-hidden select-none transition-all duration-150",
                               widgetColSpan === 3
                                 ? "col-span-3"
                                 : widgetColSpan === 2
@@ -7579,27 +7524,36 @@ export default function AdminDashboardPage() {
                               editModalMode !== "remover" &&
                                 "cursor-grab active:cursor-grabbing",
                               widget.visible
-                                ? "border-transparent shadow-sm hover:shadow-md"
-                                : "opacity-50",
+                                ? "border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600"
+                                : "border-dashed border-slate-200 dark:border-slate-700 opacity-50",
                               isDraggingThis && "opacity-30 scale-95",
                               isDragOver &&
                                 "ring-2 ring-blue-500 ring-offset-2 scale-[1.02]",
                             )}
                           >
-                            {/* Top gradient strip with position badge */}
+                            {/* Top gradient band with prominent position number */}
                             <div
                               className={cn(
-                                "h-1 w-full bg-gradient-to-r relative",
+                                "h-10 w-full bg-gradient-to-r flex items-center gap-2.5 px-3",
                                 gradient,
                               )}
                             >
-                              <span className="absolute -top-0.5 left-1.5 bg-black/30 text-white text-[9px] font-bold rounded-sm px-1 leading-tight">
-                                #{posNum}
+                              {/* Number badge */}
+                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-md text-[11px] font-extrabold text-slate-800 shrink-0 leading-none">
+                                {posNum}
+                              </div>
+                              {/* Widget title in band */}
+                              <span className="flex-1 min-w-0 text-white text-[11px] font-semibold leading-tight truncate">
+                                {title}
                               </span>
+                              {/* Drag handle */}
+                              {editModalMode !== "remover" && (
+                                <GripVertical className="h-4 w-4 text-white/50 group-hover:text-white/90 transition-colors shrink-0" />
+                              )}
                             </div>
 
-                            <div className="px-4 py-3 bg-card">
-                              <div className="flex items-center gap-2.5">
+                            <div className="px-3 py-2.5 bg-card">
+                              <div className="flex items-center gap-2 mb-2.5">
                                 {/* Icon */}
                                 <div
                                   className={cn(
@@ -7609,29 +7563,20 @@ export default function AdminDashboardPage() {
                                 >
                                   <WIcon className="h-3.5 w-3.5" />
                                 </div>
-                                {/* Title + col indicator */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-foreground leading-snug truncate">
-                                    {title}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    {widgetColSpan === 1
-                                      ? "1/3 da largura"
-                                      : widgetColSpan === 2
-                                        ? "2/3 da largura"
-                                        : "Largura total"}
-                                  </p>
-                                </div>
-                                {/* Drag hint */}
-                                {editModalMode !== "remover" && (
-                                  <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors shrink-0" />
-                                )}
+                                {/* Width indicator */}
+                                <p className="text-[10px] text-muted-foreground font-medium leading-snug">
+                                  {widgetColSpan === 1
+                                    ? "1/3 da largura"
+                                    : widgetColSpan === 2
+                                      ? "2/3 da largura"
+                                      : "Largura total"}
+                                </p>
                               </div>
 
                               {/* Col-span selector */}
-                              <div className="flex items-center gap-1.5 mt-2.5">
+                              <div className="flex items-center gap-1.5 mb-2">
                                 <span className="text-[10px] text-muted-foreground font-medium shrink-0">
-                                  Colunas:
+                                  Largura:
                                 </span>
                                 {([1, 2, 3] as const).map((n) => (
                                   <button
@@ -7667,7 +7612,7 @@ export default function AdminDashboardPage() {
                               </div>
 
                               {/* Action row */}
-                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/60">
+                              <div className="flex items-center justify-between pt-2 border-t border-border/60">
                                 {/* Visibility toggle */}
                                 <button
                                   onMouseDown={(e) => e.stopPropagation()}
@@ -7723,13 +7668,17 @@ export default function AdminDashboardPage() {
                   {/* Right panel: available widgets to add */}
                   {editModalMode === "adicionar" && (
                     <div className="w-80 shrink-0 overflow-y-auto bg-muted/30 border-l border-border flex flex-col">
-                      <div className="sticky top-0 bg-background/90 backdrop-blur-sm border-b border-border px-5 py-4">
-                        <h3 className="text-sm font-semibold text-foreground">
-                          Widgets disponíveis
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {availableWidgets.length} widget
-                          {availableWidgets.length !== 1 && "s"} para adicionar
+                      <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                            Widgets disponíveis
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          {availableWidgets.length === 0
+                            ? "Todos os widgets já estão no dashboard"
+                            : `${availableWidgets.length} widget${availableWidgets.length !== 1 ? "s" : ""} para adicionar`}
                         </p>
                       </div>
                       <div className="p-4 flex flex-col gap-2.5">

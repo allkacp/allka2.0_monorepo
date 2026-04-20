@@ -1,9 +1,10 @@
 ﻿
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, CheckCircle2, Clock, Eye, FileText, AlertTriangle, ShieldCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 
 interface Term {
   id: number
@@ -20,59 +21,25 @@ interface TermsManagementTabProps {
   company: any
 }
 
-// Mock data de termos
-const MOCK_TERMS: Term[] = [
-  {
-    id: 1,
-    name: "Termos de Serviço",
-    version: "v2.1",
-    publishedAt: "2024-01-15",
-    signedAt: "2024-01-20",
-    expiresAt: "2025-01-20",
-    content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "Política de Privacidade",
-    version: "v3.0",
-    publishedAt: "2024-02-01",
-    signedAt: "2024-02-05",
-    expiresAt: "2025-02-05",
-    content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Política de Conformidade LGPD",
-    version: "v2.0",
-    publishedAt: "2024-03-01",
-    content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    status: "pending",
-  },
-  {
-    id: 4,
-    name: "Código de Conduta",
-    version: "v1.5",
-    publishedAt: "2024-03-10",
-    content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    status: "pending",
-  },
-  {
-    id: 5,
-    name: "Termo Antigo de Serviço",
-    version: "v1.0",
-    publishedAt: "2023-01-01",
-    signedAt: "2023-01-10",
-    expiresAt: "2024-01-10",
-    content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    status: "expired",
-  },
-]
-
 export function TermsManagementTab({ company }: TermsManagementTabProps) {
   const { toast } = useToast()
-  const [terms, setTerms] = useState<Term[]>(MOCK_TERMS)
+  const [terms, setTerms] = useState<Term[]>([])
+
+  useEffect(() => {
+    apiClient.getTerms().then((res: any) => {
+      const list = Array.isArray(res) ? res : res?.data ?? [];
+      setTerms(list.map((t: any) => ({
+        id: t.id,
+        name: t.name ?? t.title ?? '',
+        version: t.version ?? 'v1.0',
+        publishedAt: t.publishedAt ?? t.createdAt ?? '',
+        signedAt: t.signedAt,
+        expiresAt: t.expiresAt,
+        content: t.content ?? '',
+        status: t.status ?? 'pending',
+      })));
+    }).catch(() => {});
+  }, [])
   const [showTermModal, setShowTermModal] = useState(false)
   const [selectedTerm, setSelectedTerm] = useState<Term | null>(null)
   const [showSignConfirm, setShowSignConfirm] = useState(false)

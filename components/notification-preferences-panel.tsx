@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { useState } from "react"
 import {
-  X,
   Bell,
   Mail,
   MessageSquare,
@@ -15,6 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
@@ -696,21 +696,12 @@ export function NotificationPreferencesPanel({
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-50 to-purple-50">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <Bell className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Preferências de Notificação</h2>
-                <p className="text-sm text-gray-600">Configure as notificações e destinatários</p>
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
+          <ModalBrandHeader
+            title="Preferências de Notificação"
+            subtitle="Configure as notificações e destinatários"
+            icon={<Bell />}
+            onClose={onClose}
+          />
 
           {/* Success Message */}
           {showSuccess && (

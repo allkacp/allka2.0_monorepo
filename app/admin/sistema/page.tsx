@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,39 +8,25 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Server, Database, Activity, AlertTriangle, CheckCircle, HardDrive, Cpu, Zap, RefreshCw } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
+import { apiClient } from "@/lib/api-client"
 
-const mockSystemData = {
-  status: {
-    api: "operational",
-    database: "operational",
-    storage: "operational",
-    email: "operational",
-  },
-  performance: {
-    cpuUsage: 45,
-    memoryUsage: 62,
-    diskUsage: 38,
-    apiResponseTime: 125,
-  },
-  services: [
-    { name: "API Principal", status: "running", uptime: "99.9%", lastRestart: "2024-01-15" },
-    { name: "Banco de Dados", status: "running", uptime: "99.8%", lastRestart: "2024-01-10" },
-    { name: "Serviço de Email", status: "running", uptime: "99.7%", lastRestart: "2024-02-01" },
-    { name: "Processamento de Tarefas", status: "running", uptime: "99.6%", lastRestart: "2024-02-15" },
-    { name: "Sistema de Notificações", status: "running", uptime: "99.5%", lastRestart: "2024-03-01" },
-  ],
-  logs: [
-    { id: 1, level: "info", message: "Sistema iniciado com sucesso", timestamp: "2024-03-15 10:30:00" },
-    { id: 2, level: "warning", message: "Alto uso de memória detectado", timestamp: "2024-03-15 09:15:00" },
-    { id: 3, level: "info", message: "Backup automático concluído", timestamp: "2024-03-15 03:00:00" },
-    { id: 4, level: "error", message: "Falha temporária na conexão com email", timestamp: "2024-03-14 18:45:00" },
-    { id: 5, level: "info", message: "Atualização de segurança aplicada", timestamp: "2024-03-14 12:00:00" },
-  ],
+const defaultSystemData = {
+  status: { api: "operational", database: "operational", storage: "operational", email: "operational" },
+  performance: { cpuUsage: 0, memoryUsage: 0, diskUsage: 0, apiResponseTime: 0 },
+  services: [] as any[],
+  logs: [] as any[],
 }
 
 export default function AdminSistemaPage() {
+  const [mockSystemData, setSystemData] = useState(defaultSystemData)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
+
+  useEffect(() => {
+    apiClient.getReportSummary().then((data: any) => {
+      if (data) setSystemData(prev => ({ ...prev, ...data }))
+    }).catch(() => {})
+  }, [])
 
   return (
     <div className="container mx-auto space-y-6 px-0 py-0">

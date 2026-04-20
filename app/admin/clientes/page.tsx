@@ -1,11 +1,10 @@
-
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PageHeader } from "@/components/page-header"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/page-header";
 import {
   Building2,
   Search,
@@ -22,41 +21,61 @@ import {
   Trash2,
   Eye,
   Loader2,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useClients } from "@/hooks/useClients"
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useClients } from "@/hooks/useClients";
 
 export default function ClientesPage() {
-  const { clients: allApiClients, loading, error } = useClients()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState("all")
+  const { clients: allApiClients, loading, error } = useClients();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
 
   // Group by type (segment or type field from API)
-  const companyClients = allApiClients.filter((c: any) => (c.segment || c.type || "company").toLowerCase().includes("company") || (c.segment || c.type || "company").toLowerCase().includes("empresa"))
-  const agencyClients = allApiClients.filter((c: any) => (c.segment || c.type || "").toLowerCase().includes("agenc"))
-  const partnerClients = allApiClients.filter((c: any) => (c.segment || c.type || "").toLowerCase().includes("partner") || (c.segment || c.type || "").toLowerCase().includes("parceiro"))
+  const companyClients = allApiClients.filter(
+    (c: any) =>
+      (c.segment || c.type || "company").toLowerCase().includes("company") ||
+      (c.segment || c.type || "company").toLowerCase().includes("empresa"),
+  );
+  const agencyClients = allApiClients.filter((c: any) =>
+    (c.segment || c.type || "").toLowerCase().includes("agenc"),
+  );
+  const partnerClients = allApiClients.filter(
+    (c: any) =>
+      (c.segment || c.type || "").toLowerCase().includes("partner") ||
+      (c.segment || c.type || "").toLowerCase().includes("parceiro"),
+  );
   // Anything not matching goes into company bucket
-  const unmatchedClients = allApiClients.filter((c: any) => !agencyClients.includes(c) && !partnerClients.includes(c) && !companyClients.includes(c))
-  const allCompanyClients = [...companyClients, ...unmatchedClients]
+  const unmatchedClients = allApiClients.filter(
+    (c: any) =>
+      !agencyClients.includes(c) &&
+      !partnerClients.includes(c) &&
+      !companyClients.includes(c),
+  );
+  const allCompanyClients = [...companyClients, ...unmatchedClients];
 
   const getFilteredClients = () => {
-    let clients: any[] = allApiClients
-    if (activeTab === "company") clients = allCompanyClients
-    if (activeTab === "agency") clients = agencyClients
-    if (activeTab === "partner") clients = partnerClients
+    let clients: any[] = allApiClients;
+    if (activeTab === "company") clients = allCompanyClients;
+    if (activeTab === "agency") clients = agencyClients;
+    if (activeTab === "partner") clients = partnerClients;
 
     if (searchQuery) {
       clients = clients.filter(
         (client) =>
           client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           client.email.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
+      );
     }
 
-    return clients
-  }
+    return clients;
+  };
 
-  const filteredClients = getFilteredClients()
+  const filteredClients = getFilteredClients();
 
   const stats = [
     {
@@ -83,13 +102,14 @@ export default function ClientesPage() {
       icon: TrendingUp,
       color: "from-orange-500 to-amber-500",
     },
-  ]
+  ];
 
-  if (loading) return (
-    <div className="min-h-screen p-6 flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="min-h-screen p-6 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
 
   return (
     <div className="min-h-screen p-6 px-0 py-0 bg-slate-200">
@@ -108,11 +128,16 @@ export default function ClientesPage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-4">
           {stats.map((stat, index) => (
-            <Card key={index} className="p-4 border border-gray-200 hover:shadow-lg transition-all duration-300 group">
+            <Card
+              key={index}
+              className="p-4 border border-gray-200 hover:shadow-lg transition-all duration-300 group"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">
+                    {stat.value}
+                  </p>
                 </div>
                 <div
                   className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} group-hover:scale-110 transition-transform duration-300`}
@@ -140,20 +165,36 @@ export default function ClientesPage() {
         </Card>
 
         {/* Tabs and Client List */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-4"
+        >
           <TabsList className="bg-gray-100">
-            <TabsTrigger value="all">Todos ({allApiClients.length})</TabsTrigger>
-            <TabsTrigger value="company">Companies ({allCompanyClients.length})</TabsTrigger>
-            <TabsTrigger value="agency">Agencies ({agencyClients.length})</TabsTrigger>
-            <TabsTrigger value="partner">Partners ({partnerClients.length})</TabsTrigger>
+            <TabsTrigger value="all">
+              Todos ({allApiClients.length})
+            </TabsTrigger>
+            <TabsTrigger value="company">
+              Companies ({allCompanyClients.length})
+            </TabsTrigger>
+            <TabsTrigger value="agency">
+              Agencies ({agencyClients.length})
+            </TabsTrigger>
+            <TabsTrigger value="partner">
+              Partners ({partnerClients.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-4">
             {filteredClients.length === 0 ? (
               <Card className="p-12 text-center border border-gray-200">
                 <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum cliente encontrado</h3>
-                <p className="text-gray-600">Tente ajustar seus filtros ou adicione um novo cliente</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Nenhum cliente encontrado
+                </h3>
+                <p className="text-gray-600">
+                  Tente ajustar seus filtros ou adicione um novo cliente
+                </p>
               </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -168,7 +209,9 @@ export default function ClientesPage() {
                           <Building2 className="h-6 w-6 text-white" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{client.name}</h3>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {client.name}
+                          </h3>
                           <Badge variant="secondary" className="mt-1">
                             {client.type}
                           </Badge>
@@ -176,7 +219,11 @@ export default function ClientesPage() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -212,18 +259,23 @@ export default function ClientesPage() {
                       </div>
                       <div className="flex items-center text-gray-600">
                         <Calendar className="h-4 w-4 mr-2" />
-                        Desde {new Date(client.joinDate).toLocaleDateString("pt-BR")}
+                        Desde{" "}
+                        {new Date(client.joinDate).toLocaleDateString("pt-BR")}
                       </div>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
                       <div>
                         <p className="text-xs text-gray-600">Projetos Ativos</p>
-                        <p className="text-lg font-semibold text-gray-900">{client.activeProjects}</p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {client.activeProjects}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-600">Total Investido</p>
-                        <p className="text-lg font-semibold text-green-600">{client.totalSpent}</p>
+                        <p className="text-lg font-semibold text-green-600">
+                          {client.totalSpent}
+                        </p>
                       </div>
                     </div>
                   </Card>
@@ -234,5 +286,5 @@ export default function ClientesPage() {
         </Tabs>
       </div>
     </div>
-  )
+  );
 }

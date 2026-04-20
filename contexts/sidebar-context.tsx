@@ -18,6 +18,14 @@ interface SidebarSettings {
   customGradientDirection?: "to right" | "to bottom" | "135deg"
   sidebarLogo?: string | null
   sidebarFavicon?: string | null
+  dominantImageColor?: string | null
+  headerBg?: string | null
+  buttonBg?: string | null
+  fontScale?: "compact" | "normal" | "comfortable" | "large"
+  fontSizeSidebar?: "xs" | "sm" | "base"
+  fontSizeHeading?: "sm" | "base" | "lg" | "xl"
+  fontSizeBody?: "xs" | "sm" | "base"
+  fontSizeTable?: "xs" | "sm" | "base"
 }
 
 interface AgencyProfile {
@@ -34,6 +42,7 @@ interface AgencyProfile {
 interface UserProfile {
   name: string
   role: string
+  job_title: string
   email: string
   phone: string
   avatar: string
@@ -49,6 +58,7 @@ interface SidebarContextType {
   sidebarWidth: number
   previewTheme: SidebarSettings | null
   previewEnabled: boolean
+  projectColor: string | null
   updateSidebarSettings: (settings: Partial<SidebarSettings>) => void
   updateAgencyProfile: (profile: Partial<AgencyProfile>) => void
   updateUserProfile: (profile: Partial<UserProfile>) => void
@@ -56,10 +66,33 @@ interface SidebarContextType {
   setSidebarWidth: (width: number) => void
   setPreviewTheme: (theme: SidebarSettings | null) => void
   setPreviewEnabled: (enabled: boolean) => void
+  setProjectColor: (color: string | null) => void
   applyFullTheme: (theme: Partial<SidebarSettings>) => void
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
+
+// Lookup: Tailwind bg-* class names → valid CSS color values
+const BG_TO_CSS: Record<string, string> = {
+  "bg-slate-900":   "#0f172a",
+  "bg-blue-900":    "#1e3a8a",
+  "bg-blue-800":    "#1e40af",
+  "bg-slate-800":   "#1e293b",
+  "bg-indigo-900":  "#312e81",
+  "bg-green-900":   "#14532d",
+  "bg-emerald-900": "#064e3b",
+  "bg-purple-900":  "#581c87",
+  "bg-violet-900":  "#4c1d95",
+  "bg-red-900":     "#7f1d1d",
+  "bg-gray-900":    "#111827",
+}
+
+function bgToCSS(bg: string): string {
+  if (!bg) return "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)"
+  if (bg.startsWith("custom-gradient:")) return bg.replace("custom-gradient:", "")
+  if (BG_TO_CSS[bg]) return BG_TO_CSS[bg]
+  return bg // raw hex / rgb / any valid CSS value
+}
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const defaultSettings: SidebarSettings = {
@@ -78,6 +111,13 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     customGradientDirection: "to right",
     sidebarLogo: null,
     sidebarFavicon: null,
+    headerBg: null,
+    buttonBg: null,
+    fontScale: "normal",
+    fontSizeSidebar: "sm",
+    fontSizeHeading: "lg",
+    fontSizeBody: "sm",
+    fontSizeTable: "xs",
   }
 
   const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(defaultSettings)
@@ -97,15 +137,17 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   })
 
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: "Admin Sistema",
+    name: "Vinicius Guardia",
     role: "Admin",
-    email: "admin@allka.digital",
-    phone: "(11) 99999-0001",
-    avatar: "AS",
+    job_title: "Coordenador de Processos",
+    email: "cp@lamego.com.vc",
+    phone: "",
+    avatar: "VG",
     department: "Administração",
     joinDate: "2023-01-01",
   })
 
+  const [projectColor, setProjectColor] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {
     try {
@@ -147,27 +189,35 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   // Aplicar tema como CSS variables globais
   useEffect(() => {
-    const themeToApply = previewTheme || sidebarSettings
-    
     const root = document.documentElement
-    
-    // Extrair gradiente do backgroundColor
-    let gradientValue = "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)"
-    let solidValue = "#1e293b"
-    
-    if (themeToApply.backgroundColor.startsWith("custom-gradient:")) {
-      gradientValue = themeToApply.backgroundColor.replace("custom-gradient:", "")
-    } else if (themeToApply.backgroundColor.startsWith("bg-")) {
-      // Handle Tailwind class names by extracting the solid color
-      solidValue = themeToApply.backgroundColor
-    } else {
-      // Assume it's a hex color
-      solidValue = themeToApply.backgroundColor
+
+    if (projectColor) {
+      root.style.setProperty("--app-brand-gradient", projectColor)
+      root.style.setProperty("--app-brand-solid", projectColor)
+      root.style.setProperty("--brand-gradient", projectColor)
+      return
     }
-    
-    root.style.setProperty("--app-brand-gradient", gradientValue)
-    root.style.setProperty("--app-brand-solid", solidValue)
-  }, [sidebarSettings, previewTheme, previewEnabled])
+
+    const s = previewTheme || sidebarSettings
+    const isImageMode = s.backgroundMode === "image" || s.backgroundMode === "image+gradient"
+    const cssValue = (isImageMode && s.dominantImageColor) ? bgToCSS(s.dominantImageColor) : bgToCSS(s.backgroundColor)
+    const headerCss = s.headerBg ? bgToCSS(s.headerBg) : cssValue
+    root.style.setProperty("--app-brand-gradient", cssValue)
+    root.style.setProperty("--app-brand-header", headerCss)
+    root.style.setProperty("--app-brand-solid", cssValue)
+    root.style.setProperty("--brand-gradient", cssValue)
+    const buttonCss = s.buttonBg ? bgToCSS(s.buttonBg) : cssValue
+    root.style.setProperty("--app-brand-button", buttonCss)
+    // Font scale: changes html font-size so all rem-based Tailwind classes scale proportionally
+    const fontScaleMap = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
+    document.documentElement.style.fontSize = fontScaleMap[s.fontScale || "normal"]
+    // Per-context font sizes
+    const fsMap = { xs: "0.7rem", sm: "0.8125rem", base: "0.875rem", lg: "1rem", xl: "1.125rem" } as const
+    root.style.setProperty("--app-font-sidebar", fsMap[s.fontSizeSidebar || "sm"])
+    root.style.setProperty("--app-font-heading", fsMap[s.fontSizeHeading || "lg"])
+    root.style.setProperty("--app-font-body", fsMap[s.fontSizeBody || "sm"])
+    root.style.setProperty("--app-font-table", fsMap[s.fontSizeTable || "xs"])
+  }, [sidebarSettings, previewTheme, previewEnabled, projectColor])
 
   const updateSidebarSettings = (settings: Partial<SidebarSettings>) => {
     setSidebarSettings((prev) => {
@@ -184,23 +234,26 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     // Salvar no localStorage
     try {
       localStorage.setItem("allka_sidebar_theme", JSON.stringify(newSettings))
-    } catch (error) {
-      // Silenciosamente ignorar erros
-    }
-    
+    } catch {}
+
     // Aplicar CSS variables
     const root = document.documentElement
-    let gradientValue = "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)"
-    let solidValue = "#1e293b"
-    
-    if (newSettings.backgroundColor.startsWith("custom-gradient:")) {
-      gradientValue = newSettings.backgroundColor.replace("custom-gradient:", "")
-    } else {
-      solidValue = newSettings.backgroundColor
-    }
-    
-    root.style.setProperty("--app-brand-gradient", gradientValue)
-    root.style.setProperty("--app-brand-solid", solidValue)
+    const isImageMode = newSettings.backgroundMode === "image" || newSettings.backgroundMode === "image+gradient"
+    const cssValue = (isImageMode && newSettings.dominantImageColor) ? bgToCSS(newSettings.dominantImageColor) : bgToCSS(newSettings.backgroundColor)
+    const headerCss = newSettings.headerBg ? bgToCSS(newSettings.headerBg) : cssValue
+    const buttonCss = newSettings.buttonBg ? bgToCSS(newSettings.buttonBg) : cssValue
+    root.style.setProperty("--app-brand-gradient", cssValue)
+    root.style.setProperty("--app-brand-header", headerCss)
+    root.style.setProperty("--app-brand-solid", cssValue)
+    root.style.setProperty("--brand-gradient", cssValue)
+    root.style.setProperty("--app-brand-button", buttonCss)
+    const fontScaleMap2 = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
+    document.documentElement.style.fontSize = fontScaleMap2[newSettings.fontScale || "normal"]
+    const fsMap2 = { xs: "0.7rem", sm: "0.8125rem", base: "0.875rem", lg: "1rem", xl: "1.125rem" } as const
+    root.style.setProperty("--app-font-sidebar", fsMap2[newSettings.fontSizeSidebar || "sm"])
+    root.style.setProperty("--app-font-heading", fsMap2[newSettings.fontSizeHeading || "lg"])
+    root.style.setProperty("--app-font-body", fsMap2[newSettings.fontSizeBody || "sm"])
+    root.style.setProperty("--app-font-table", fsMap2[newSettings.fontSizeTable || "xs"])
   }
 
   const updateAgencyProfile = (profile: Partial<AgencyProfile>) => {
@@ -229,12 +282,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         setSidebarWidth,
         previewTheme,
         previewEnabled,
+        projectColor,
         updateSidebarSettings,
         updateAgencyProfile,
         updateUserProfile,
         setSidebarCollapsed,
         setPreviewTheme,
         setPreviewEnabled,
+        setProjectColor,
         applyFullTheme,
       }}
     >

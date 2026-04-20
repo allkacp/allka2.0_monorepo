@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { apiClient } from "@/lib/api-client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -23,7 +29,13 @@ export interface EmpresaProject {
   id: string;
   name: string;
   category: string;
-  status: "briefing" | "producao" | "revisao" | "entregue" | "cancelado" | "aguardando_pagamento";
+  status:
+    | "briefing"
+    | "producao"
+    | "revisao"
+    | "entregue"
+    | "cancelado"
+    | "aguardando_pagamento";
   value: number;
   startDate: string;
   deliveryDate?: string;
@@ -99,45 +111,49 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const [companiesRes, projectsRes, invoicesRes] = await Promise.allSettled([
-          apiClient.getCompanies({ limit: "1" }),
-          apiClient.getProjects({ limit: "100" }),
-          apiClient.getInvoices({ limit: "100" }),
-        ]);
+        const [companiesRes, projectsRes, invoicesRes] =
+          await Promise.allSettled([
+            apiClient.getCompanies({ limit: "1" }),
+            apiClient.getProjects({ limit: "100" }),
+            apiClient.getInvoices({ limit: "100" }),
+          ]);
         if (cancelled) return;
         if (companiesRes.status === "fulfilled") {
           const data: any = companiesRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
-          if (list[0]) setProfile({
-            id: String(list[0].id),
-            name: list[0].name || "",
-            cnpj: list[0].document || "",
-            email: list[0].email || "",
-            phone: list[0].phone || "",
-            address: list[0].address || "",
-            plan: list[0].plan || "",
-            status: list[0].status || "active",
-            createdAt: list[0].created_at || list[0].createdAt || "",
-            totalInvested: list[0].totalInvested || 0,
-            activeProjects: list[0].activeProjects || 0,
-          });
+          if (list[0])
+            setProfile({
+              id: String(list[0].id),
+              name: list[0].name || "",
+              cnpj: list[0].document || "",
+              email: list[0].email || "",
+              phone: list[0].phone || "",
+              address: list[0].address || "",
+              plan: list[0].plan || "",
+              status: list[0].status || "active",
+              createdAt: list[0].created_at || list[0].createdAt || "",
+              totalInvested: list[0].totalInvested || 0,
+              activeProjects: list[0].activeProjects || 0,
+            });
         }
         if (projectsRes.status === "fulfilled") {
           const data: any = projectsRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
-          setProjects(list.map((p: any) => ({
-            id: String(p.id),
-            name: p.name || "",
-            category: p.type || p.category || "",
-            status: p.status || "briefing",
-            value: p.budget || p.value || 0,
-            startDate: p.startDate || p.start_date || "",
-            deliveryDate: p.deliveryDate || p.delivery_date || "",
-            completedDate: p.completedDate || "",
-            tasksDone: p.tasksDone || 0,
-            tasksTotal: p.tasksTotal || 0,
-            nomadeCount: p.nomadeCount || 0,
-          })));
+          setProjects(
+            list.map((p: any) => ({
+              id: String(p.id),
+              name: p.name || "",
+              category: p.type || p.category || "",
+              status: p.status || "briefing",
+              value: p.budget || p.value || 0,
+              startDate: p.startDate || p.start_date || "",
+              deliveryDate: p.deliveryDate || p.delivery_date || "",
+              completedDate: p.completedDate || "",
+              tasksDone: p.tasksDone || 0,
+              tasksTotal: p.tasksTotal || 0,
+              nomadeCount: p.nomadeCount || 0,
+            })),
+          );
         }
         if (invoicesRes.status === "fulfilled") {
           const data: any = invoicesRes.value;
@@ -151,7 +167,9 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const addProject = useCallback((project: EmpresaProject) => {
@@ -175,12 +193,22 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
           tasksTotal: p.products?.length ?? 0,
           products: p.products?.map((prod) => ({ ...prod, stages })),
         };
-      })
+      }),
     );
   }, []);
 
   return (
-    <EmpresaContext.Provider value={{ profile, projects, tasks, invoices, loading, addProject, confirmProjectPayment }}>
+    <EmpresaContext.Provider
+      value={{
+        profile,
+        projects,
+        tasks,
+        invoices,
+        loading,
+        addProject,
+        confirmProjectPayment,
+      }}
+    >
       {children}
     </EmpresaContext.Provider>
   );

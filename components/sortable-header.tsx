@@ -81,6 +81,14 @@ const VALUE_LABELS: Record<string, string> = {
   starter:      "Starter",
   growth:       "Growth",
   scale:        "Scale",
+  // Inactivity buckets
+  never:        "Nunca acessou",
+  today:        "Acessou hoje",
+  "7days":      "Últimos 7 dias",
+  "30days":     "Últimos 30 dias",
+  inactive_30:  "Sem acesso há 30+ dias",
+  inactive_60:  "Sem acesso há 60+ dias",
+  inactive_90:  "Sem acesso há 90+ dias",
 }
 
 function humanize(value: string): string {

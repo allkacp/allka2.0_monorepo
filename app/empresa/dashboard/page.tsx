@@ -41,7 +41,23 @@ const TASK_STATUS_CONFIG = {
 } as const;
 
 export default function EmpresaDashboard() {
-  const { profile, projects, tasks, invoices } = useEmpresa();
+  const { profile, projects, tasks, invoices, loading } = useEmpresa();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin h-8 w-8 border-4 border-violet-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-2">
+        <p className="text-sm">Nenhum perfil de empresa encontrado.</p>
+      </div>
+    );
+  }
 
   const activeProjects = projects.filter((p) => !["entregue", "cancelado"].includes(p.status));
   const pendingInvoices = invoices.filter((i) => i.status === "pending");

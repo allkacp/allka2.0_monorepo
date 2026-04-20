@@ -37,6 +37,9 @@ import {
   Info,
   Download,
   ImageDown,
+  GripVertical,
+  Pencil,
+  AlertTriangle,
 } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import type { User } from "@/types/user"
@@ -70,350 +73,34 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
+import { useSidebar } from "@/contexts/sidebar-context"
 
-const mockUsers: User[] = [
-  {
-    id: 1,
-    email: "carlos.silva@techcorp.com",
-    name: "Carlos Silva",
-    phone: "+55 11 98765-4321",
-    account_type: "company",
-    account_sub_type: "in-house",
-    company_id: 1,
-    role: "company_admin",
-    permissions: ["view_projects", "create_projects", "manage_users"],
-    is_admin: true,
-    is_active: true,
-    created_at: "2023-06-15",
-    updated_at: "2024-01-20",
-    online_status: "online",
-    last_login: "2024-01-22T14:30:00",
-    bitrix_id: "12345",
-    asaas_id: "67890",
-  },
-  {
-    id: 2,
-    email: "ana.santos@allka.com",
-    name: "Ana Santos",
-    phone: "+55 21 99876-5432",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2023-07-01",
-    updated_at: "2024-01-15",
-    online_status: "offline",
-    last_login: "2024-01-21T09:15:00",
-  },
-  {
-    id: 3,
-    email: "joao.costa@partner.com",
-    name: "João Costa",
-    phone: "+55 11 97654-3210",
-    account_type: "agency",
-    account_sub_type: null,
-    agency_id: 1,
-    role: "agency_admin",
-    permissions: ["view_projects", "create_projects"],
-    is_admin: false,
-    is_active: false,
-    created_at: "2023-08-10",
-    updated_at: "2024-01-10",
-    online_status: "offline",
-    last_login: "2024-01-10T16:45:00",
-  },
-  {
-    id: 4,
-    email: "maria.oliveira@empresa.com",
-    name: "Maria Oliveira",
-    phone: "+55 85 98123-4567",
-    account_type: "company",
-    account_sub_type: "company",
-    company_id: 2,
-    role: "company_user",
-    permissions: ["view_projects", "view_catalog"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2023-09-05",
-    updated_at: "2024-01-18",
-    online_status: "busy",
-    last_login: "2024-01-22T11:20:00",
-  },
-  {
-    id: 5,
-    email: "pedro.santos@allka.com",
-    name: "Pedro Santos",
-    phone: "+55 11 96543-2109",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2023-10-12",
-    updated_at: "2024-01-22",
-    online_status: "away",
-    last_login: "2024-01-22T08:00:00",
-  },
-  {
-    id: 6,
-    email: "lucas.ferreira@techcorp.com",
-    name: "Lucas Ferreira",
-    phone: "+55 31 99999-8888",
-    account_type: "company",
-    account_sub_type: "in-house",
-    company_id: 1,
-    role: "company_user",
-    permissions: ["view_projects", "view_catalog"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2023-11-03",
-    updated_at: "2024-01-21",
-    online_status: "online",
-    last_login: "2024-01-22T13:45:00",
-  },
-  {
-    id: 7,
-    email: "juliana.rocha@allka.com",
-    name: "Juliana Rocha",
-    phone: "+55 47 97777-6666",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: false,
-    created_at: "2023-12-01",
-    updated_at: "2024-01-15",
-    online_status: "offline",
-    last_login: "2024-01-19T10:30:00",
-  },
-  {
-    id: 8,
-    email: "rafael.souza@partner.com",
-    name: "Rafael Souza",
-    phone: "+55 62 98765-4321",
-    account_type: "agency",
-    account_sub_type: null,
-    agency_id: 2,
-    role: "agency_admin",
-    permissions: ["view_projects", "create_projects", "manage_users"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-05",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T15:20:00",
-  },
-  {
-    id: 9,
-    email: "camila.silva@empresa.com",
-    name: "Camila Silva",
-    phone: "+55 75 96543-2109",
-    account_type: "company",
-    account_sub_type: "company",
-    company_id: 3,
-    role: "company_user",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-08",
-    updated_at: "2024-01-22",
-    online_status: "busy",
-    last_login: "2024-01-22T12:00:00",
-  },
-  {
-    id: 10,
-    email: "diego.costa@techcorp.com",
-    name: "Diego Costa",
-    phone: "+55 11 95432-1098",
-    account_type: "company",
-    account_sub_type: "in-house",
-    company_id: 1,
-    role: "company_admin",
-    permissions: ["view_projects", "create_projects", "manage_users"],
-    is_admin: true,
-    is_active: true,
-    created_at: "2024-01-10",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T16:30:00",
-  },
-  {
-    id: 11,
-    email: "beatriz.gomes@allka.com",
-    name: "Beatriz Gomes",
-    phone: "+55 21 94321-0987",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-12",
-    updated_at: "2024-01-21",
-    online_status: "away",
-    last_login: "2024-01-21T14:15:00",
-  },
-  {
-    id: 12,
-    email: "gustavo.alves@partner.com",
-    name: "Gustavo Alves",
-    phone: "+55 85 93210-9876",
-    account_type: "agency",
-    account_sub_type: null,
-    agency_id: 1,
-    role: "agency_user",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-14",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T11:45:00",
-  },
-  {
-    id: 13,
-    email: "fernanda.dias@empresa.com",
-    name: "Fernanda Dias",
-    phone: "+55 11 92109-8765",
-    account_type: "company",
-    account_sub_type: "company",
-    company_id: 2,
-    role: "company_user",
-    permissions: ["view_projects", "view_catalog"],
-    is_admin: false,
-    is_active: false,
-    created_at: "2024-01-15",
-    updated_at: "2024-01-18",
-    online_status: "offline",
-    last_login: "2024-01-18T09:00:00",
-  },
-  {
-    id: 14,
-    email: "marcus.pinto@techcorp.com",
-    name: "Marcus Pinto",
-    phone: "+55 81 91098-7654",
-    account_type: "company",
-    account_sub_type: "in-house",
-    company_id: 1,
-    role: "company_user",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-16",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T10:00:00",
-  },
-  {
-    id: 15,
-    email: "isabela.santos@allka.com",
-    name: "Isabela Santos",
-    phone: "+55 48 90987-6543",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-17",
-    updated_at: "2024-01-22",
-    online_status: "away",
-    last_login: "2024-01-22T07:30:00",
-  },
-  {
-    id: 16,
-    email: "tiago.mendes@partner.com",
-    name: "Tiago Mendes",
-    phone: "+55 11 88765-4321",
-    account_type: "agency",
-    account_sub_type: null,
-    agency_id: 2,
-    role: "agency_user",
-    permissions: ["view_projects", "create_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-18",
-    updated_at: "2024-01-22",
-    online_status: "busy",
-    last_login: "2024-01-22T14:20:00",
-  },
-  {
-    id: 17,
-    email: "vitoria.cardoso@empresa.com",
-    name: "Vitória Cardoso",
-    phone: "+55 71 87654-3210",
-    account_type: "company",
-    account_sub_type: "company",
-    company_id: 3,
-    role: "company_user",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-19",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T13:00:00",
-  },
-  {
-    id: 18,
-    email: "anderson.cruz@techcorp.com",
-    name: "Anderson Cruz",
-    phone: "+55 27 86543-2109",
-    account_type: "company",
-    account_sub_type: "in-house",
-    company_id: 1,
-    role: "company_user",
-    permissions: ["view_projects", "view_catalog"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-20",
-    updated_at: "2024-01-22",
-    online_status: "away",
-    last_login: "2024-01-22T09:45:00",
-  },
-  {
-    id: 19,
-    email: "patricia.moura@allka.com",
-    name: "Patrícia Moura",
-    phone: "+55 41 85432-1098",
-    account_type: "nomad",
-    account_sub_type: null,
-    role: "nomad",
-    permissions: ["view_projects"],
-    is_admin: false,
-    is_active: false,
-    created_at: "2024-01-21",
-    updated_at: "2024-01-21",
-    online_status: "offline",
-    last_login: "2024-01-21T15:30:00",
-  },
-  {
-    id: 20,
-    email: "rodolfo.oliveira@partner.com",
-    name: "Rodolfo Oliveira",
-    phone: "+55 51 84321-0987",
-    account_type: "agency",
-    account_sub_type: null,
-    agency_id: 1,
-    role: "agency_admin",
-    permissions: ["view_projects", "create_projects", "manage_users"],
-    is_admin: false,
-    is_active: true,
-    created_at: "2024-01-22",
-    updated_at: "2024-01-22",
-    online_status: "online",
-    last_login: "2024-01-22T17:00:00",
-  },
-]
+// ── Inactivity bucket helper ───────────────────────────────────────────────
+function computeInactivityBucket(lastLogin?: string | null): string {
+  if (!lastLogin) return "never"
+  const diffDays = Math.floor((Date.now() - new Date(lastLogin).getTime()) / 86_400_000)
+  if (diffDays === 0) return "today"
+  if (diffDays < 7)  return "7days"
+  if (diffDays < 30) return "30days"
+  if (diffDays < 60) return "inactive_30"
+  if (diffDays < 90) return "inactive_60"
+  return "inactive_90"
+}
 
 export default function UsuariosPage() {
   const { addUser: addPlatformUser } = usePlatformUsers()
   const { users: apiUsers, loading: usersLoading, error: usersError, refetch: refetchUsers, createUser, updateUser, deleteUser: apiDeleteUser } = useUsers()
   const { toast } = useToast()
+  const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar()
+  const getHeaderStyle = () => {
+    const theme = previewTheme || sidebarSettings
+    const bg = theme?.backgroundColor
+    if (!bg || bg === "bg-slate-900") return { background: "linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)" }
+    if (bg.startsWith("custom-gradient:")) return { background: bg.replace("custom-gradient:", "") }
+    return { background: "linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)" }
+  }
+  const [headerHeight, setHeaderHeight] = useState(64)
+  const [footerHeight, setFooterHeight] = useState(40)
   const pageRef = useRef<HTMLDivElement>(null)
   const { sortKey: userSortKey, sortDir: userSortDir, handleSort: handleUserSort, sortData: sortUsers, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting<User>()
   const [users, setUsers] = useState<User[]>([])
@@ -428,7 +115,7 @@ export default function UsuariosPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [roleFilter, setRoleFilter] = useState("all")
-  const [currentUserId] = useState(1)
+  const [currentUserId] = useState("1")
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false)
@@ -449,6 +136,13 @@ export default function UsuariosPage() {
   const [pendingClose, setPendingClose] = useState<(() => void) | null>(null)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [isDuplicatingFilter, setIsDuplicatingFilter] = useState(false)
+  const [showSaveInput, setShowSaveInput] = useState(false)
+  const [filterNameInput, setFilterNameInput] = useState("")
+  const [editingFilterId, setEditingFilterId] = useState<string | null>(null)
+  const [editingFilterName, setEditingFilterName] = useState("")
+  const [draggingFilterId, setDraggingFilterId] = useState<string | null>(null)
+  const [dragOverFilterId, setDragOverFilterId] = useState<string | null>(null)
+  const [dismissedInactivityAlert, setDismissedInactivityAlert] = useState(false)
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [advancedFilters, setAdvancedFilters] = useState({
     // Identificação
@@ -490,14 +184,40 @@ export default function UsuariosPage() {
   const [pageSize, setPageSize] = useState(10)
   const [paginatedUsers, setPaginatedUsers] = useState<User[]>([])
 
+  // Demo last_login dates injected when the API doesn't return the field.
+  // Covers all inactivity buckets so the UI can be tested end-to-end.
+  const _now = Date.now()
+  const DEMO_LAST_LOGINS: (string | null)[] = [
+    new Date(_now - 0).toISOString(),                    // idx 0 → hoje
+    new Date(_now - 2  * 86400000).toISOString(),        // idx 1 → 2 dias (7days)
+    new Date(_now - 5  * 86400000).toISOString(),        // idx 2 → 5 dias (7days)
+    new Date(_now - 15 * 86400000).toISOString(),        // idx 3 → 15 dias (30days)
+    new Date(_now - 25 * 86400000).toISOString(),        // idx 4 → 25 dias (30days)
+    new Date(_now - 35 * 86400000).toISOString(),        // idx 5 → 35 dias (inactive_30)
+    new Date(_now - 50 * 86400000).toISOString(),        // idx 6 → 50 dias (inactive_30)
+    new Date(_now - 65 * 86400000).toISOString(),        // idx 7 → 65 dias (inactive_60)
+    new Date(_now - 80 * 86400000).toISOString(),        // idx 8 → 80 dias (inactive_60)
+    new Date(_now - 95 * 86400000).toISOString(),        // idx 9 → 95 dias (inactive_90)
+    new Date(_now - 130 * 86400000).toISOString(),       // idx 10 → 130 dias (inactive_90)
+    null,                                                // idx 11 → nunca acessou
+  ]
+
   useEffect(() => {
-    // Map API users to the shape the page expects
-    const mapped = apiUsers.map((u: any) => ({
-      ...u,
-      is_active: u.is_active ?? true,
-      online_status: "offline",
-      account_type: u.account_type || "empresas",
-    }))
+    // Map API users — compute inactivity bucket and auto_paused flag
+    const mapped = apiUsers.map((u: any, idx: number) => {
+      // Use API last_login if present; otherwise inject demo date for UI testing
+      const last_login = u.last_login ?? DEMO_LAST_LOGINS[idx % DEMO_LAST_LOGINS.length]
+      const bucket = computeInactivityBucket(last_login)
+      return {
+        ...u,
+        last_login,
+        is_active: u.is_active ?? true,
+        online_status: "offline",
+        account_type: u.account_type || "empresas",
+        inactivity_bucket: bucket,
+        auto_paused: bucket === "inactive_90",
+      }
+    })
     setUsers(mapped)
     setFilteredUsers(mapped)
     setCurrentPage(1)
@@ -505,12 +225,56 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     const filtered = users.filter((user) => {
-      if (
-        searchTerm &&
-        !user.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !user.email.toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        return false
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim()
+        const rawDigits = searchTerm.replace(/\D/g, "")
+
+        // Word-prefix name match: each space-separated word tested against query start
+        const nameWords = (user.name || "").toLowerCase().split(/\s+/)
+        const nameMatch = nameWords.some(w => w.startsWith(q)) || (user.name || "").toLowerCase().includes(q)
+
+        // Human-readable role label for text search
+        const roleLabel = (() => {
+          switch (user.role) {
+            case "company_admin": return "admin empresa"
+            case "company_user":  return "usuário empresa"
+            case "agency_admin":  return "admin agência"
+            case "agency_user":   return "usuário agência"
+            case "nomad":        return "nômade nomade"
+            case "admin":        return "administrador admin"
+            case "financial":    return "financial financeiro"
+            case "team_allka":   return "team allka"
+            case "partner":      return "partner parceiro"
+            default:             return user.role || ""
+          }
+        })()
+        const accountLabel = (() => {
+          const t = (user.account_type || "").toLowerCase()
+          if (t === "company"  || t === "empresas" || t === "empresa") return "empresa company"
+          if (t === "agency"   || t === "agencias" || t === "agencia") return "agência agency"
+          if (t === "nomad"    || t === "nomades"  || t === "nomade")  return "nômade nomad"
+          if (t === "admin") return "admin administrador"
+          if (t === "parceiro" || t === "partner") return "parceiro partner"
+          return t
+        })()
+        const statusLabel = user.auto_paused ? "pausado" : user.is_active ? "ativo" : "inativo"
+        const lgpdLabel = [
+          user.lgpd?.consent_given === false ? "sem consentimento lgpd" : "",
+          user.lgpd?.deletion_requested      ? "exclusão solicitada"    : "",
+        ].join(" ")
+        // Phone digit match — only when query has digits
+        const phoneMatch = rawDigits.length > 0 &&
+          (user.phone || "").replace(/\D/g, "").includes(rawDigits)
+
+        const match = nameMatch ||
+          (user.email || "").toLowerCase().includes(q) ||
+          phoneMatch ||
+          roleLabel.includes(q) ||
+          accountLabel.includes(q) ||
+          statusLabel.includes(q) ||
+          lgpdLabel.includes(q)
+
+        if (!match) return false
       }
 
       if (statusFilter !== "all") {
@@ -577,6 +341,19 @@ export default function UsuariosPage() {
     setPaginatedUsers(sortUsers(filteredUsers).slice(startIndex, endIndex))
   }, [filteredUsers, currentPage, pageSize, userSortKey, userSortDir])
 
+  // Measure header/footer heights for modal positioning
+  useEffect(() => {
+    const measure = () => {
+      const h = document.querySelector("header")
+      const f = document.querySelector("footer")
+      if (h) setHeaderHeight(h.offsetHeight)
+      if (f) setFooterHeight(f.offsetHeight)
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
+
   const totalPages = Math.ceil(filteredUsers.length / pageSize)
 
   const getPageNumbers = () => {
@@ -615,12 +392,15 @@ export default function UsuariosPage() {
     setStatusFilter("all")
     setRoleFilter("all")
     setAdvancedFilters({
-      registrationDateFrom: "",
-      registrationDateTo: "",
-      lastAccessDateFrom: "",
-      lastAccessDateTo: "",
-      profile: "all",
-      plan: "all",
+      name: "", email: "", cpf: "", phone: "", whatsapp: "", hasWhatsapp: "all",
+      accountTypes: [], roles: [], statuses: [],
+      registrationDateFrom: "", registrationDateTo: "",
+      lastAccessDateFrom: "", lastAccessDateTo: "",
+      lastUpdateDateFrom: "", lastUpdateDateTo: "",
+      minScore: "", maxScore: "", userLevel: "all", rating: "all",
+      hasCompany: "all", hasSpecialPermissions: "all", hasActiveWallet: "all",
+      minBalance: "", maxBalance: "", hasFinancialActions: "all",
+      profile: "all", plan: "all",
     })
     setCurrentPage(1)
   }
@@ -1002,143 +782,138 @@ export default function UsuariosPage() {
         <CardContent className="p-0">
           <div>
 
-            {/* Filter Modal - Centered popup with two columns */}
-            {isFilterModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center">
-                <div
-                  className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-                  onClick={() => {
-                    if (unsavedChanges) {
-                      setPendingClose(() => () => {
-                        setIsFilterModalOpen(false)
-                        setSelectedFilterId(null)
-                        setIsEditingFilter(false)
-                        setUnsavedChanges(false)
-                      })
-                      return
-                    }
-                    setIsFilterModalOpen(false)
-                    setSelectedFilterId(null)
-                    setIsEditingFilter(false)
-                    setUnsavedChanges(false)
-                  }}
-                />
-
-                <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[85vh] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in duration-300 flex flex-col overflow-hidden">
-                  {/* Header with gradient */}
-                  <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white flex-shrink-0">
+            {/* Filter Modal — empresas layout */}
+            {isFilterModalOpen && (() => {
+              const closeFn = () => {
+                setIsFilterModalOpen(false); setSelectedFilterId(null); setIsEditingFilter(false)
+                setUnsavedChanges(false); setShowSaveInput(false); setFilterNameInput("")
+              }
+              const handleDrop = (targetId: string) => {
+                if (!draggingFilterId || draggingFilterId === targetId) return
+                const from = savedFilters.findIndex(f => f.id === draggingFilterId)
+                const to   = savedFilters.findIndex(f => f.id === targetId)
+                if (from === -1 || to === -1) return
+                const reordered = [...savedFilters]
+                const [moved] = reordered.splice(from, 1)
+                reordered.splice(to, 0, moved)
+                setSavedFilters(reordered)
+                setDraggingFilterId(null); setDragOverFilterId(null)
+              }
+              return (
+              <div
+                className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+                style={{ left: sidebarWidth, top: headerHeight, bottom: footerHeight, right: 0 }}
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  if (unsavedChanges) { setPendingClose(() => closeFn); return }
+                  closeFn()
+                }}
+              >
+                <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
+                  {/* Header — follows sidebar theme */}
+                  <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={getHeaderStyle()}>
                     <div>
-                      <h2 className="text-lg font-bold">Filtros Avançados de Usuários</h2>
-                      <p className="text-xs text-blue-100 mt-0.5">
-                        {selectedFilterId && !isEditingFilter ? "Filtro carregado" : isEditingFilter ? "Editando filtro" : "Configure filtros detalhados"}
-                        {unsavedChanges && " • Alterações não salvas"}
+                      <h2 className="text-sm font-bold text-white">Filtros Avançados</h2>
+                      <p className="text-[11px] text-white/60 mt-0.5">
+                        {unsavedChanges ? "• Alterações não salvas" : selectedFilterId && !isEditingFilter ? "Filtro carregado" : "Configure e aplique filtros"}
                       </p>
                     </div>
                     <button
-                      onClick={() => {
-                        if (unsavedChanges) {
-                          setPendingClose(() => () => {
-                            setIsFilterModalOpen(false)
-                            setSelectedFilterId(null)
-                            setIsEditingFilter(false)
-                            setUnsavedChanges(false)
-                          })
-                          return
-                        }
-                        setIsFilterModalOpen(false)
-                        setSelectedFilterId(null)
-                        setIsEditingFilter(false)
-                        setUnsavedChanges(false)
-                      }}
-                      className="text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
+                      onClick={() => { if (unsavedChanges) { setPendingClose(() => closeFn); return } closeFn() }}
+                      className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
                     >
-                      <X className="h-5 w-5" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
 
-                  {/* Content - Two columns with flex layout */}
-                  <div className="flex flex-1 overflow-hidden">
-                    {/* Left Column - Saved Filters (30%) */}
-                    <div className="w-1/3 border-r border-slate-200 dark:border-slate-700 p-5 overflow-y-auto flex-shrink-0 bg-slate-50/30 dark:bg-slate-900/20">
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        Filtros Salvos
-                      </h3>
-                      
-                      {savedFilters.length === 0 ? (
-                        <div className="text-center py-12">
-                          <div className="text-slate-300 dark:text-slate-600 mb-3">
-                            <Filter className="h-8 w-8 mx-auto opacity-40" />
+                  {/* Body */}
+                  <div className="flex flex-1 overflow-hidden min-h-0">
+                    {/* Left — Saved Filters (compact, drag-drop, inline rename) */}
+                    <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
+                      <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
+                        <Filter className="h-3 w-3" /> Filtros Salvos
+                      </p>
+                      <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+                        {savedFilters.length === 0 ? (
+                          <div className="text-center py-8">
+                            <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Nenhum filtro salvo</p>
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Você ainda não possui filtros salvos
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {savedFilters.map((filter) => (
+                        ) : (
+                          savedFilters.map((filter) => (
                             <div
                               key={filter.id}
-                              className={`p-3 rounded-lg border transition-all group cursor-pointer ${
+                              draggable
+                              onDragStart={() => setDraggingFilterId(filter.id)}
+                              onDragOver={(e) => { e.preventDefault(); setDragOverFilterId(filter.id) }}
+                              onDrop={() => handleDrop(filter.id)}
+                              onDragEnd={() => { setDraggingFilterId(null); setDragOverFilterId(null) }}
+                              onClick={() => {
+                                if (editingFilterId) return
+                                setAdvancedFilters(filter.filters)
+                                setSelectedFilterId(filter.id)
+                                setIsEditingFilter(false)
+                                setUnsavedChanges(false)
+                              }}
+                              className={`group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none ${
+                                dragOverFilterId === filter.id && draggingFilterId !== filter.id ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30" :
+                                draggingFilterId === filter.id ? "opacity-40" :
                                 selectedFilterId === filter.id
-                                  ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700"
-                                  : "bg-white dark:bg-slate-700/40 hover:bg-blue-50 dark:hover:bg-slate-700/60 border-slate-200 dark:border-slate-600/50"
+                                  ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
+                                  : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300"
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-2 mb-2">
-                                <p className="text-sm font-medium text-slate-900 dark:text-white truncate flex-1">
-                                  {filter.name}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => {
-                                    setAdvancedFilters(filter.filters)
-                                    setSelectedFilterId(filter.id)
-                                    setIsEditingFilter(false)
-                                    setUnsavedChanges(false)
+                              <GripVertical className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0 cursor-grab active:cursor-grabbing" />
+                              {editingFilterId === filter.id ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={editingFilterName}
+                                  onChange={(e) => setEditingFilterName(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    e.stopPropagation()
+                                    if (e.key === "Enter" && editingFilterName.trim()) {
+                                      setSavedFilters(savedFilters.map(f => f.id === filter.id ? { ...f, name: editingFilterName.trim() } : f))
+                                      setEditingFilterId(null)
+                                    } else if (e.key === "Escape") setEditingFilterId(null)
                                   }}
-                                  className="flex-1 px-2 py-1.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                                  title="Carregar"
-                                >
-                                  Carregar
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setAdvancedFilters(filter.filters)
-                                    setSelectedFilterId(null)
-                                    setIsEditingFilter(false)
-                                    setIsDuplicatingFilter(true)
-                                    setFilterName(`${filter.name} (Cópia)`)
-                                    setSaveAsFilter(true)
+                                  onBlur={() => {
+                                    if (editingFilterName.trim())
+                                      setSavedFilters(savedFilters.map(f => f.id === filter.id ? { ...f, name: editingFilterName.trim() } : f))
+                                    setEditingFilterId(null)
                                   }}
-                                  className="p-1.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-colors"
-                                  title="Duplicar"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSavedFilters(savedFilters.filter((f) => f.id !== filter.id))
-                                    if (selectedFilterId === filter.id) {
-                                      setSelectedFilterId(null)
-                                      setIsEditingFilter(false)
-                                    }
-                                  }}
-                                  className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors"
-                                  title="Excluir"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
+                                  className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 dark:text-slate-200"
+                                />
+                              ) : (
+                                <span className="flex-1 truncate">{filter.name}</span>
+                              )}
+                              {editingFilterId !== filter.id && (
+                                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setEditingFilterId(filter.id); setEditingFilterName(filter.name) }}
+                                    title="Renomear"
+                                    className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400 transition-all"
+                                  >
+                                    <Pencil className="h-2.5 w-2.5" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setSavedFilters(savedFilters.filter(f => f.id !== filter.id)); if (selectedFilterId === filter.id) setSelectedFilterId(null) }}
+                                    title="Excluir"
+                                    className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400 transition-all"
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
 
-                    {/* Right Column - Filter Configuration with Accordion (70%) */}
-                    <div className="flex-1 overflow-y-auto p-6 pb-32">
+                    {/* Right — Filter config */}
+                    <div className="flex-1 overflow-y-auto p-4">
                       <Accordion type="multiple" defaultValue={["identificacao", "tipo-funcao"]} className="space-y-3">
                         
                         {/* SEÇÃO: IDENTIFICAÇÃO */}
@@ -1504,104 +1279,106 @@ export default function UsuariosPage() {
                     </div>
                   </div>
 
-                  {/* Footer - Fixed at bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-4 p-6 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-b-2xl">
-                    {/* Save as Favorite section */}
-                    <div className="space-y-3 pb-2">
-                      <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={saveAsFilter}
-                          onChange={(e) => setSaveAsFilter(e.target.checked)}
-                          className="rounded border-blue-300 dark:border-blue-600"
-                        />
-                        <span className="text-sm font-medium text-slate-900 dark:text-white">Salvar este filtro como favorito</span>
-                      </label>
-                      
-                      {saveAsFilter && (
-                        <div>
-                          <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-2">
-                            Nome do Filtro *
-                          </label>
-                          <Input
-                            placeholder={isDuplicatingFilter ? "Ex: Nomads Ativos (Cópia)" : "Ex: Nomads Ativos com Pontuação Alta"}
-                            value={filterName}
-                            onChange={(e) => setFilterName(e.target.value)}
-                            className="h-8 text-sm rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                  {/* Footer — compact, empresas-style */}
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
+                    <button
+                      onClick={() => {
+                        setAdvancedFilters({ name:"",email:"",cpf:"",phone:"",whatsapp:"",hasWhatsapp:"all",accountTypes:[],roles:[],statuses:[],registrationDateFrom:"",registrationDateTo:"",lastAccessDateFrom:"",lastAccessDateTo:"",lastUpdateDateFrom:"",lastUpdateDateTo:"",minScore:"",maxScore:"",userLevel:"all",rating:"all",hasCompany:"all",hasSpecialPermissions:"all",hasActiveWallet:"all",minBalance:"",maxBalance:"",hasFinancialActions:"all",profile:"all",plan:"all" })
+                        setUnsavedChanges(false)
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                    >
+                      <X className="h-3 w-3" /> Limpar filtros
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {showSaveInput ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={filterNameInput}
+                            onChange={(e) => setFilterNameInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && filterNameInput.trim()) {
+                                const newId = `filter-${Date.now()}`
+                                setSavedFilters([...savedFilters, { id: newId, name: filterNameInput.trim(), filters: { ...advancedFilters } }])
+                                setSelectedFilterId(newId); setUnsavedChanges(false); setShowSaveInput(false); setFilterNameInput("")
+                              }
+                              if (e.key === "Escape") { setShowSaveInput(false); setFilterNameInput("") }
+                            }}
+                            placeholder={`Filtro ${savedFilters.length + 1}`}
+                            className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
                           />
+                          <button
+                            disabled={!filterNameInput.trim()}
+                            onClick={() => {
+                              const newId = `filter-${Date.now()}`
+                              setSavedFilters([...savedFilters, { id: newId, name: filterNameInput.trim(), filters: { ...advancedFilters } }])
+                              setSelectedFilterId(newId); setUnsavedChanges(false); setShowSaveInput(false); setFilterNameInput("")
+                            }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
+                          >OK</button>
+                          <button
+                            onClick={() => { setShowSaveInput(false); setFilterNameInput("") }}
+                            className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                      <Button
-                        onClick={() => {
-                          if (unsavedChanges) {
-                            setPendingClose(() => () => {
-                              setIsFilterModalOpen(false)
-                              setSelectedFilterId(null)
-                              setIsEditingFilter(false)
+                      ) : selectedFilterId && unsavedChanges ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSavedFilters(savedFilters.map(f => f.id === selectedFilterId ? { ...f, filters: { ...advancedFilters } } : f))
                               setUnsavedChanges(false)
-                              setSaveAsFilter(false)
-                              setFilterName("")
-                              setIsDuplicatingFilter(false)
-                            })
-                            return
-                          }
-                          setIsFilterModalOpen(false)
-                          setSelectedFilterId(null)
-                          setIsEditingFilter(false)
-                          setUnsavedChanges(false)
-                          setSaveAsFilter(false)
-                          setFilterName("")
-                          setIsDuplicatingFilter(false)
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="px-4 py-2 text-sm rounded-lg"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          if (saveAsFilter) {
-                            if (!filterName.trim()) {
-                              alert("Por favor, digite um nome para o filtro")
-                              return
-                            }
-                            if (isDuplicatingFilter || !selectedFilterId) {
-                              setSavedFilters([
-                                ...savedFilters,
-                                {
-                                  id: Date.now().toString(),
-                                  name: filterName,
-                                  filters: { ...advancedFilters },
-                                },
-                              ])
-                            } else {
-                              const updatedFilters = savedFilters.map((f) =>
-                                f.id === selectedFilterId
-                                  ? { ...f, filters: { ...advancedFilters } }
-                                  : f
-                              )
-                              setSavedFilters(updatedFilters)
-                            }
-                            setSaveAsFilter(false)
-                            setFilterName("")
-                            setIsDuplicatingFilter(false)
-                            setUnsavedChanges(false)
-                          }
-                          setIsFilterModalOpen(false)
-                        }}
-                        size="sm"
-                        className="px-4 py-2 text-sm rounded-lg btn-brand"
-                      >
-                        Aplicar Filtros
-                      </Button>
+                            }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
+                          >Atualizar filtro</button>
+                          <button
+                            onClick={() => { setFilterNameInput(`Filtro ${savedFilters.length + 1}`); setShowSaveInput(true) }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          >Salvar como novo</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setFilterNameInput(`Filtro ${savedFilters.length + 1}`); setShowSaveInput(true) }}
+                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                        >Salvar filtro</button>
+                      )}
+                      <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+                      <button
+                        onClick={closeFn}
+                        className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >Cancelar</button>
+                      <button
+                        onClick={() => { setIsFilterModalOpen(false); setShowSaveInput(false) }}
+                        className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                      >Aplicar Filtros</button>
                     </div>
                   </div>
                 </div>
+              </div>
+              )
+            })()}
+
+            {/* Inactivity Alert Banner */}
+            {!dismissedInactivityAlert && users.filter(u => u.auto_paused).length > 0 && (
+              <div className="mx-4 mt-3 mb-1 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                    {users.filter(u => u.auto_paused).length} usuário{users.filter(u => u.auto_paused).length !== 1 ? "s" : ""} sem acesso há mais de 90 dias
+                  </p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                    Esses usuários foram pausados automaticamente. Revise e decida: bloquear, reativar ou arquivar.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDismissedInactivityAlert(true)}
+                  className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
 
@@ -1621,7 +1398,7 @@ export default function UsuariosPage() {
                       <SortableHeader label="Status" field="is_active" type="status" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["true","false"]} />
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ borderRight: "1px solid rgba(148,163,184,0.25)" }}>
-                      <SortableHeader label="Último Acesso" field="last_login" type="date" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} />
+                      <SortableHeader label="Último Acesso" field="inactivity_bucket" type="status" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={handleUserSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["never","today","7days","30days","inactive_30","inactive_60","inactive_90"]} />
                     </th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900" style={{ position: "sticky", right: 0, zIndex: 2, borderLeft: "1px solid rgba(148,163,184,0.25)" }}>Ações</th>
                   </tr>
@@ -1732,22 +1509,39 @@ export default function UsuariosPage() {
                           </div>
                         </td>
                         <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              user.is_active
-                                ? "bg-emerald-500 text-white"
-                                : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {user.is_active ? "Ativo" : "Inativo"}
-                          </span>
+                          {user.auto_paused ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              ⏸ Pausado
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                user.is_active
+                                  ? "bg-emerald-500 text-white"
+                                  : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                              }`}
+                            >
+                              {user.is_active ? "Ativo" : "Inativo"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                          <div>
-                            <p className="text-xs font-medium text-slate-900 dark:text-slate-100">{user.last_login ? new Date(user.last_login).toLocaleDateString("pt-BR") : "Nunca"}</p>
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                              {user.last_login ? new Date(user.last_login).toLocaleDateString("pt-BR") : "Nunca"}
+                            </p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {user.last_login ? new Date(user.last_login).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
                             </p>
+                            {user.inactivity_bucket === "inactive_30" && (
+                              <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">30d+</span>
+                            )}
+                            {user.inactivity_bucket === "inactive_60" && (
+                              <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">60d+</span>
+                            )}
+                            {user.inactivity_bucket === "inactive_90" && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">⚠ 90d+</span>
+                            )}
                           </div>
                         </td>
                         <td

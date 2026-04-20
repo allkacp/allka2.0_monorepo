@@ -58,6 +58,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import ProductSelectionModal from "./product-selection-modal" // Added import
 import { Sheet, SheetContent } from "@/components/ui/sheet" // Added Sheet import
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { ClientCreateSlidePanel } from "@/components/client-create-slide-panel"
 import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel"
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel"
@@ -817,25 +818,12 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
           >
             {showCheckout ? (
               <>
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-green-50/50 via-emerald-50/30 to-teal-50/50 dark:from-green-950/20 dark:via-emerald-950/10 dark:to-teal-950/20">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg shadow-lg">
-                      <Check className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Finalizar Contratação</h2>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">Complete o pedido dos produtos</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                <ModalBrandHeader
+                  title="Finalizar Contratação"
+                  subtitle="Complete o pedido dos produtos"
+                  icon={<Check />}
+                  onClose={onClose}
+                />
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   <CheckoutFlow
@@ -851,22 +839,12 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
             ) : showCatalog ? (
               <>
                 {/* Catalog Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-purple-50/50 via-blue-50/30 to-pink-50/50 dark:from-purple-950/20 dark:via-blue-950/10 dark:to-pink-950/20">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg shadow-lg">
-                      <ShoppingCart className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Selecionar Produtos</h2>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} selecionado{selectedProducts.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => setShowCatalog(false)} className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                <ModalBrandHeader
+                  title="Selecionar Produtos"
+                  subtitle={`${selectedProducts.length} produto${selectedProducts.length !== 1 ? "s" : ""} selecionado${selectedProducts.length !== 1 ? "s" : ""}`}
+                  icon={<ShoppingCart />}
+                  onClose={() => setShowCatalog(false)}
+                />
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="p-4 space-y-4">
@@ -1030,37 +1008,22 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
             ) : showCart ? (
               <>
                 {/* Cart View Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-violet-50/60 via-purple-50/40 to-blue-50/60">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg shadow-lg">
-                      <ShoppingCart className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Carrinho do Projeto</h2>
-                      <p className="text-xs text-gray-500">
-                        {selectedProducts.length} produto{selectedProducts.length !== 1 ? "s" : ""} · {formData.name}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
+                <ModalBrandHeader
+                  title="Carrinho do Projeto"
+                  subtitle={`${selectedProducts.length} produto${selectedProducts.length !== 1 ? "s" : ""} · ${formData.name}`}
+                  icon={<ShoppingCart />}
+                  right={
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => { setShowCart(false); setShowCatalog(true); }}
-                      className="text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                      className="text-xs text-white hover:bg-white/20"
                     >
                       ← Adicionar mais
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={onClose}
-                      className="shrink-0 h-8 w-8"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                  }
+                  onClose={onClose}
+                />
 
                 {/* Cart Content */}
                 <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
@@ -1221,25 +1184,12 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
             ) : (
               <>
                 {/* Main Form - Made header compact */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-lg">
-                      <Briefcase className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Criar Novo Projeto</h2>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">Preencha as informações do projeto</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                <ModalBrandHeader
+                  title="Criar Novo Projeto"
+                  subtitle="Preencha as informações do projeto"
+                  icon={<Briefcase />}
+                  onClose={onClose}
+                />
 
                 {/* Tabs - Made compact */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">

@@ -1,5 +1,5 @@
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AlertTriangle, ArrowRight, X, MessageSquare, XCircle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,38 +17,7 @@ interface SystemAlert {
   icon: React.ElementType
 }
 
-const mockAlerts: SystemAlert[] = [
-  {
-    id: "tarefas_atrasadas",
-    type: "tarefas",
-    severity: "high",
-    title: "Tarefas atrasadas",
-    description: "12 tarefas estão com prazo vencido e precisam de atenção imediata.",
-    count: 12,
-    link: "/admin/tasks?filter=atrasadas",
-    icon: AlertTriangle,
-  },
-  {
-    id: "mensagens_sem_resposta",
-    type: "mensagens",
-    severity: "medium",
-    title: "Mensagens sem resposta",
-    description: "7 mensagens aguardando resposta há mais de 24 horas.",
-    count: 7,
-    link: "/admin/messages?filter=sem_resposta",
-    icon: MessageSquare,
-  },
-  {
-    id: "projetos_inadimplentes",
-    type: "financeiro",
-    severity: "high",
-    title: "Projetos inadimplentes",
-    description: "3 projetos com pagamento atrasado.",
-    count: 3,
-    link: "/admin/projects?filter=inadimplentes",
-    icon: XCircle,
-  },
-]
+const mockAlerts: SystemAlert[] = [];
 
 const severityColor: Record<SystemAlert["severity"], string> = {
   high: "text-red-700 bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300",
@@ -87,8 +56,8 @@ export function AlertsHeaderIcon() {
             "relative flex items-center justify-center rounded-md transition-all duration-200",
             "h-8 w-8 sm:h-9 sm:w-9",
             hasAlerts
-              ? "cursor-pointer text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-              : "cursor-default text-gray-400 dark:text-gray-600",
+              ? "cursor-pointer text-red-400 hover:bg-white/10"
+              : "cursor-default text-white/50",
           )}
           aria-label="Alertas do sistema"
         >

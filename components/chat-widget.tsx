@@ -471,7 +471,7 @@ export function ChatWidget() {
         >
           {/* Top bar */}
           <div className="flex items-center justify-between px-3 py-2.5 shrink-0"
-               style={{ background: "linear-gradient(90deg, #0f172a 0%, #1a3a8f 100%)" }}>
+               style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #0f172a 0%, #1a3a8f 100%))" }}>
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-blue-300" />
               <span className="text-sm font-semibold text-white">Mensagens</span>
@@ -532,7 +532,7 @@ export function ChatWidget() {
           width     : FAB_SIZE,
           height    : FAB_SIZE,
           cursor    : dragging.current ? "grabbing" : "grab",
-          background: "linear-gradient(135deg, #0f172a 0%, #1a2a6f 55%, #c81a7f 100%)",
+          background: "var(--app-brand-gradient, linear-gradient(135deg, #0f172a 0%, #1a2a6f 55%, #c81a7f 100%))",
           touchAction: "none",
         }}
       >

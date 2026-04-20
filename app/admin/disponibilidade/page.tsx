@@ -1,65 +1,43 @@
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/page-header"
 import { Users, Target, CheckCircle, AlertCircle } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
-const mockAvailability = {
-  categories: [
-    {
-      id: 1,
-      name: "Design Gráfico",
-      totalNomades: 25,
-      availableNomades: 18,
-      activeTasks: 45,
-      pendingTasks: 12,
-      avgResponseTime: "2.5h",
-      utilizationRate: 72,
-    },
-    {
-      id: 2,
-      name: "Copywriting",
-      totalNomades: 15,
-      availableNomades: 12,
-      activeTasks: 28,
-      pendingTasks: 8,
-      avgResponseTime: "1.8h",
-      utilizationRate: 80,
-    },
-    {
-      id: 3,
-      name: "Desenvolvimento Web",
-      totalNomades: 18,
-      availableNomades: 8,
-      activeTasks: 52,
-      pendingTasks: 15,
-      avgResponseTime: "4.2h",
-      utilizationRate: 89,
-    },
-    {
-      id: 4,
-      name: "Social Media",
-      totalNomades: 30,
-      availableNomades: 22,
-      activeTasks: 38,
-      pendingTasks: 6,
-      avgResponseTime: "1.5h",
-      utilizationRate: 63,
-    },
-  ],
-  weeklySchedule: [
-    { day: "Segunda", available: 45, busy: 15, total: 60 },
-    { day: "Terça", available: 42, busy: 18, total: 60 },
-    { day: "Quarta", available: 48, busy: 12, total: 60 },
-    { day: "Quinta", available: 40, busy: 20, total: 60 },
-    { day: "Sexta", available: 38, busy: 22, total: 60 },
-    { day: "Sábado", available: 25, busy: 10, total: 35 },
-    { day: "Domingo", available: 15, busy: 5, total: 20 },
-  ],
+const defaultAvailability = {
+  categories: [] as any[],
+  weeklySchedule: [] as any[],
 }
 
 export default function AdminDisponibilidadePage() {
+  const [mockAvailability, setAvailability] = useState(defaultAvailability)
+
+  useEffect(() => {
+    apiClient.getNomades({ limit: "500" }).then((data: any) => {
+      const nomades = Array.isArray(data) ? data : data?.data || []
+      const specialtyMap: Record<string, any[]> = {}
+      nomades.forEach((n: any) => {
+        const spec = n.specialty || "Geral"
+        if (!specialtyMap[spec]) specialtyMap[spec] = []
+        specialtyMap[spec].push(n)
+      })
+      const categories = Object.entries(specialtyMap).map(([name, list], i) => ({
+        id: i + 1,
+        name,
+        totalNomades: list.length,
+        availableNomades: list.filter((n: any) => n.is_active !== false).length,
+        activeTasks: 0,
+        pendingTasks: 0,
+        avgResponseTime: "-",
+        utilizationRate: list.length > 0 ? Math.round(((list.length - list.filter((n: any) => n.is_active !== false).length) / list.length) * 100) : 0,
+      }))
+      setAvailability({ categories, weeklySchedule: [] })
+    }).catch(() => {})
+  }, [])
+
   const totalAvailable = mockAvailability.categories.reduce((sum, cat) => sum + cat.availableNomades, 0)
   const totalNomades = mockAvailability.categories.reduce((sum, cat) => sum + cat.totalNomades, 0)
   const totalActiveTasks = mockAvailability.categories.reduce((sum, cat) => sum + cat.activeTasks, 0)

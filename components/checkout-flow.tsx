@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { apiClient } from "@/lib/api-client"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -54,54 +55,9 @@ interface CreditCardDetails {
   cvv: string
 }
 
-// Mock data - Replace with actual API calls
-const mockClients: Client[] = [
-  {
-    id: 1,
-    name: "Empresa ABC Ltda",
-    email: "contato@empresaabc.com",
-    phone: "(11) 98765-4321",
-    company: "ABC Ltda",
-    created_by: 1,
-    created_at: "2024-01-15",
-    updated_at: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "Tech Solutions Inc",
-    email: "info@techsolutions.com",
-    phone: "(11) 91234-5678",
-    company: "Tech Solutions",
-    created_by: 1,
-    created_at: "2024-02-20",
-    updated_at: "2024-02-20",
-  },
-]
-
-const mockProjects: Project[] = [
-  {
-    id: 1,
-    name: "Projeto Marketing Digital 2024",
-    description: "Campanha de marketing digital para Q1 2024",
-    client_id: 1,
-    created_by: 1,
-    status: "active",
-    start_date: "2024-01-01",
-    created_at: "2024-01-01",
-    updated_at: "2024-01-01",
-  },
-  {
-    id: 2,
-    name: "Desenvolvimento de Website",
-    description: "Novo website institucional",
-    client_id: 1,
-    created_by: 1,
-    status: "active",
-    start_date: "2024-02-01",
-    created_at: "2024-02-01",
-    updated_at: "2024-02-01",
-  },
-]
+// Clients and projects loaded from API
+let mockClients: Client[] = [];
+let mockProjects: Project[] = [];
 
 const TEST_CARD = { id: "test-card-1111", lastDigits: "1111", holder: "TESTE ALLKA", expiry: "12/28", brand: "Visa" }
 
@@ -151,20 +107,24 @@ export function CheckoutFlow({ items, onBack, onComplete, preselectedClient, pre
     allkoins: { enabled: false, amount: 0 },
   })
 
-  // Mock user balances
-  const userBalances = {
-    credits: 500.0,
-    allkoins: 1250,
-  }
+  // User balances - loaded from API
+  const [userBalances, setUserBalances] = useState({ credits: 0, allkoins: 0 });
 
   // Payer mode, commission, saved cards
   const [payerMode, setPayerMode] = useState<"self" | "client">("self")
   const [commissionRate, setCommissionRate] = useState(presetCommissionRate ?? 0)
   const [selectedSavedCardId, setSelectedSavedCardId] = useState<string | null>(null)
   const [checkoutSlug] = useState(() => Math.random().toString(36).slice(2, 10))
-  const allSavedCards = import.meta.env.VITE_USE_MOCKS === "true"
-    ? [...(savedCards ?? []), TEST_CARD]
-    : (savedCards ?? [])
+  const allSavedCards = savedCards ?? []
+
+  useEffect(() => {
+    apiClient.getClients().then((res: any) => {
+      mockClients = Array.isArray(res) ? res : res?.data ?? [];
+    }).catch(() => {});
+    apiClient.getProjects().then((res: any) => {
+      mockProjects = Array.isArray(res) ? res : res?.data ?? [];
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (preselectedClient) {

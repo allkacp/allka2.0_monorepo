@@ -1,5 +1,5 @@
 export interface Agency {
-  id: number
+  id: string
   name: string
   cnpj: string
   email: string
@@ -23,7 +23,7 @@ export interface Agency {
   is_partner: boolean
   created_at: string
   approved_at?: string
-  approved_by?: number
+  approved_by?: string
 
   // Wallet information
   wallet: {
@@ -56,20 +56,20 @@ export interface Agency {
 }
 
 export interface AgencyFile {
-  id: number
-  agency_id: number
+  id: string
+  agency_id: string
   name: string
   type: "presentation" | "certificate" | "contract" | "pdf" | "image" | "other" // Adicionados tipos pdf e image
   file_url: string
   file_size: number
   uploaded_at: string
-  uploaded_by: number
+  uploaded_by: string
   can_delete: boolean // Only admin can delete
 }
 
 export interface WalletTransaction {
-  id: number
-  agency_id: number
+  id: string
+  agency_id: string
   type: "credit" | "debit" | "withdrawal" | "bonus" | "commission"
   amount: number
   description: string
@@ -79,25 +79,25 @@ export interface WalletTransaction {
   processed_at?: string
   receipt_url?: string
   notes?: string
-  created_by?: number // Admin who made the adjustment
+  created_by?: string // Admin who made the adjustment
 }
 
 export interface WithdrawalRequest {
-  id: number
-  agency_id: number
+  id: string
+  agency_id: string
   amount: number
   status: "pending" | "approved" | "rejected" | "completed"
   requested_at: string
   invoice_url?: string
   notes?: string
-  processed_by?: number
+  processed_by?: string
   processed_at?: string
 }
 
 export interface PartnerPromotion {
-  id: number
-  agency_id: number
-  promoted_by: number
+  id: string
+  agency_id: string
+  promoted_by: string
   promoted_at: string
   terms_accepted: boolean
   terms_accepted_at?: string

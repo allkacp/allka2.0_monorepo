@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, Sparkles, Send, SkipForward, CheckCircle2 } from "lucide-react";
+import { Sparkles, Send, SkipForward, CheckCircle2 } from "lucide-react";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 
 interface ProjectWizardSlidePanelProps {
   open: boolean;
@@ -100,23 +101,11 @@ export default function ProjectWizardSlidePanel({
         width: `calc(100vw - ${sidebarWidth}px)`,
       }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-purple-600 to-blue-600">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-5 w-5 text-white" />
-          <h2 className="text-lg font-semibold text-white">
-            {started ? "Criando seu Projeto" : "Novo Projeto"}
-          </h2>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleClose}
-          className="text-white hover:bg-white/20"
-        >
-          <X className="h-5 w-5" />
-        </Button>
-      </div>
+      <ModalBrandHeader
+        title={started ? "Criando seu Projeto" : "Novo Projeto"}
+        icon={<Sparkles />}
+        onClose={handleClose}
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">

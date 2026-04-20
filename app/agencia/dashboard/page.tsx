@@ -48,7 +48,23 @@ const TASK_STATUS_CONFIG = {
 } as const;
 
 export default function AgenciaDashboard() {
-  const { profile, projects, tasks } = useAgencia();
+  const { profile, projects, tasks, loading } = useAgencia();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-2">
+        <p className="text-sm">Nenhum perfil de agência encontrado.</p>
+      </div>
+    );
+  }
 
   const planInfo = PLAN_DISCOUNTS[profile.plan] ?? { label: `Plano ${profile.plan}`, discount: profile.planDiscount };
   const activeProjects = projects.filter((p) => !["entregue", "cancelado"].includes(p.status));

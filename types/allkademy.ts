@@ -1,5 +1,5 @@
 export interface Course {
-  id: number
+  id: string
   title: string
   description: string
   thumbnail_url: string
@@ -31,8 +31,8 @@ export interface Course {
 }
 
 export interface CourseModule {
-  id: number
-  course_id: number
+  id: string
+  course_id: string
   title: string
   description: string
   order: number
@@ -42,8 +42,8 @@ export interface CourseModule {
 }
 
 export interface Lesson {
-  id: number
-  module_id: number
+  id: string
+  module_id: string
   title: string
   description: string
   type: "video" | "text" | "document" | "interactive"
@@ -55,8 +55,8 @@ export interface Lesson {
 }
 
 export interface LessonResource {
-  id: number
-  lesson_id: number
+  id: string
+  lesson_id: string
   title: string
   type: "pdf" | "link" | "download"
   url: string
@@ -64,8 +64,8 @@ export interface LessonResource {
 }
 
 export interface Quiz {
-  id: number
-  module_id: number
+  id: string
+  module_id: string
   title: string
   description: string
   questions: QuizQuestion[]
@@ -74,8 +74,8 @@ export interface Quiz {
 }
 
 export interface QuizQuestion {
-  id: number
-  quiz_id: number
+  id: string
+  quiz_id: string
   question: string
   type: "multiple_choice" | "true_false" | "text"
   options?: string[]
@@ -85,12 +85,12 @@ export interface QuizQuestion {
 }
 
 export interface CourseCategory {
-  id: number
+  id: string
   name: string
   description: string
   icon: string
   color: string
-  parent_id?: number
+  parent_id?: string
   subcategories?: CourseCategory[]
 }
 
@@ -101,13 +101,13 @@ export interface AccessRequirement {
 }
 
 export interface CourseEnrollment {
-  id: number
-  user_id: number
-  course_id: number
+  id: string
+  user_id: string
+  course_id: string
   enrolled_at: string
   completed_at?: string
   progress: number // 0-100
-  current_lesson_id?: number
+  current_lesson_id?: string
   certificate_url?: string
   payment_status: "free" | "paid" | "pending"
   payment_amount?: number
@@ -119,7 +119,7 @@ export interface CourseEnrollment {
 }
 
 export interface LessonProgress {
-  lesson_id: number
+  lesson_id: string
   completed: boolean
   completed_at?: string
   watch_time: number // in seconds
@@ -127,9 +127,9 @@ export interface LessonProgress {
 }
 
 export interface QuizAttempt {
-  id: number
-  quiz_id: number
-  enrollment_id: number
+  id: string
+  quiz_id: string
+  enrollment_id: string
   score: number
   max_score: number
   passed: boolean
@@ -138,17 +138,17 @@ export interface QuizAttempt {
 }
 
 export interface QuizAnswer {
-  question_id: number
+  question_id: string
   answer: string | number
   is_correct: boolean
   points_earned: number
 }
 
 export interface Certificate {
-  id: number
-  enrollment_id: number
-  course_id: number
-  user_id: number
+  id: string
+  enrollment_id: string
+  course_id: string
+  user_id: string
   certificate_url: string
   issued_at: string
   verification_code: string
@@ -156,7 +156,7 @@ export interface Certificate {
 }
 
 export interface LearningPath {
-  id: number
+  id: string
   title: string
   description: string
   thumbnail_url: string
@@ -168,7 +168,7 @@ export interface LearningPath {
 }
 
 export interface UserLearningStats {
-  user_id: number
+  user_id: string
   total_courses_enrolled: number
   total_courses_completed: number
   total_certificates: number

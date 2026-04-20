@@ -9,6 +9,7 @@ const ROLES: Array<{
   label: string
   description: string
   path: string
+  loginPath: string
   prefix: string
   color: string
   emoji: string
@@ -20,6 +21,7 @@ const ROLES: Array<{
     label: "Administrador",
     description: "Painel completo da plataforma",
     path: "/admin/dashboard",
+    loginPath: "/login",
     prefix: "/admin",
     color: "bg-rose-500",
     emoji: "🛡️",
@@ -31,6 +33,7 @@ const ROLES: Array<{
     label: "Nômade",
     description: "Tarefas, ganhos e habilitações",
     path: "/nomades/dashboard",
+    loginPath: "/nomades/login",
     prefix: "/nomades",
     color: "bg-amber-500",
     emoji: "🧭",
@@ -42,6 +45,7 @@ const ROLES: Array<{
     label: "Empresa",
     description: "Projetos, tarefas e faturas",
     path: "/empresa/dashboard",
+    loginPath: "/empresa/login",
     prefix: "/empresa",
     color: "bg-violet-500",
     emoji: "🏢",
@@ -53,6 +57,7 @@ const ROLES: Array<{
     label: "Agência",
     description: "Clientes, projetos e financeiro",
     path: "/agencia/dashboard",
+    loginPath: "/agencia/login",
     prefix: "/agencia",
     color: "bg-indigo-500",
     emoji: "💼",
@@ -64,6 +69,7 @@ const ROLES: Array<{
     label: "Parceiro",
     description: "Comissões, agências e saques",
     path: "/parceiro/dashboard",
+    loginPath: "/parceiro/login",
     prefix: "/parceiro",
     color: "bg-blue-500",
     emoji: "🤝",
@@ -73,7 +79,14 @@ const ROLES: Array<{
 ]
 
 function getActiveRole(pathname: string) {
+  // On login pages, match by loginPath
+  const byLogin = ROLES.find((r) => pathname === r.loginPath)
+  if (byLogin) return byLogin
   return ROLES.find((r) => pathname.startsWith(r.prefix)) ?? ROLES[0]
+}
+
+function isOnLoginPage(pathname: string) {
+  return ROLES.some((r) => pathname === r.loginPath)
 }
 
 export function DevRoleSwitcher() {
@@ -123,7 +136,9 @@ export function DevRoleSwitcher() {
                 key={role.id}
                 onClick={() => {
                   setAccountType(role.accountType, role.accountSubType)
-                  navigate(role.path)
+                  // If currently on any login page, navigate to that role's login page
+                  // Otherwise navigate to the role's dashboard
+                  navigate(isOnLoginPage(pathname) ? role.loginPath : role.path)
                   setOpen(false)
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${

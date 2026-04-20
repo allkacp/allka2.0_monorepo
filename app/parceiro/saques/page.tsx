@@ -57,7 +57,7 @@ export default function PartnerSaques() {
     }
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 600));
-    requestWithdrawal(numAmount, profile.pixKey, profile.pixKeyType);
+    requestWithdrawal(numAmount, profile?.pixKey, profile?.pixKeyType);
     setAmount("");
     setPixConfirm("");
     setSuccess(true);

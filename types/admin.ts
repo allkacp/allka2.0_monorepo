@@ -1,14 +1,14 @@
 export interface UserManagement {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   action: "create" | "update" | "activate" | "deactivate" | "password_reset"
   details: string
-  performed_by: number
+  performed_by: string
   performed_at: string
 }
 
 export interface AccountPlan {
-  id: number
+  id: string
   name: string
   type: "lite" | "start" | "standard" | "growth" | "scale" | "squad" | "enterprise"
   monthly_price: number
@@ -17,9 +17,9 @@ export interface AccountPlan {
 }
 
 export interface AccountBilling {
-  id: number
-  account_id: number
-  plan_id: number
+  id: string
+  account_id: string
+  plan_id: string
   status: "active" | "suspended" | "cancelled"
   current_period_start: string
   current_period_end: string
@@ -29,7 +29,7 @@ export interface AccountBilling {
 }
 
 export interface PaymentMethod {
-  id: number
+  id: string
   type: "credit_card" | "bank_transfer" | "pix"
   last_four?: string
   brand?: string
@@ -37,7 +37,7 @@ export interface PaymentMethod {
 }
 
 export interface Invoice {
-  id: number
+  id: string
   number: string
   amount: number
   status: "paid" | "pending" | "overdue" | "cancelled"
@@ -48,11 +48,11 @@ export interface Invoice {
 }
 
 export interface AcceptedTerms {
-  id: number
-  account_id: number
+  id: string
+  account_id: string
   term_type: "privacy_policy" | "terms_of_service" | "data_processing" | "service_agreement"
   term_version: string
-  accepted_by: number
+  accepted_by: string
   accepted_at: string
   ip_address: string
   user_agent: string

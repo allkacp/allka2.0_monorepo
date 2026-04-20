@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { cn } from "@/lib/utils";
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Scope = "none" | "own" | "all";
@@ -290,37 +291,12 @@ export function PermissionProfileSlidePanel({
         className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         {/* ── Header ── */}
-        <div
-          className="flex items-center justify-between px-5 py-3.5 shrink-0"
-          style={{
-            background:
-              "linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #312e81 100%)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
-              <Shield className="h-5 w-5 text-blue-300" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white leading-tight">
-                {profile?.id
-                  ? "Editar Perfil de Acesso"
-                  : "Novo Perfil de Acesso"}
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {summary.active}/{summary.total} permissões ativas
-                {summary.total_all > 0 &&
-                  ` · ${summary.total_all}× acesso total`}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        <ModalBrandHeader
+          title={profile?.id ? "Editar Perfil de Acesso" : "Novo Perfil de Acesso"}
+          subtitle={`${summary.active}/${summary.total} permissões ativas${summary.total_all > 0 ? ` · ${summary.total_all}× acesso total` : ""}`}
+          icon={<Shield />}
+          onClose={handleClose}
+        />
 
         {/* ── Basic Info ── */}
         <div className="px-5 py-3 border-b bg-slate-50 shrink-0">
@@ -515,23 +491,7 @@ export function PermissionProfileSlidePanel({
         </div>
 
         {/* ── Footer ── */}
-        <div className="border-t px-5 py-3 bg-slate-50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="text-xs text-slate-600 font-normal"
-            >
-              {summary.active} permissões ativas
-            </Badge>
-            {summary.total_all > 0 && (
-              <Badge
-                variant="outline"
-                className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50 font-normal"
-              >
-                {summary.total_all}× acesso total
-              </Badge>
-            )}
-          </div>
+        <div className="border-t px-5 py-3 bg-slate-50 flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -555,6 +515,22 @@ export function PermissionProfileSlidePanel({
             >
               Salvar Perfil
             </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className="text-xs text-slate-600 font-normal"
+            >
+              {summary.active} permissões ativas
+            </Badge>
+            {summary.total_all > 0 && (
+              <Badge
+                variant="outline"
+                className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50 font-normal"
+              >
+                {summary.total_all}× acesso total
+              </Badge>
+            )}
           </div>
         </div>
       </div>

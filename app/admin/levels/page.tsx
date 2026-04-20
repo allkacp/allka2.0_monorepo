@@ -1,5 +1,5 @@
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,114 +9,48 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Edit, Plus, Trash2, Trophy } from "lucide-react"
-
-// Mock levels data
-const mockAgencyLevels = [
-  {
-    id: 1,
-    name: "Bronze",
-    min_mrr: 0,
-    max_mrr: 5000,
-    benefits: ["Acesso ao catálogo básico", "Suporte por email", "Relatórios mensais"],
-    commission_bonus: 0,
-    description: "Nível inicial para agências começando na plataforma",
-    color: "#CD7F32",
-  },
-  {
-    id: 2,
-    name: "Silver",
-    min_mrr: 5001,
-    max_mrr: 15000,
-    benefits: ["Catálogo completo", "Suporte prioritário", "Relatórios semanais", "Desconto 5% em projetos"],
-    commission_bonus: 5,
-    description: "Para agências com performance consistente",
-    color: "#C0C0C0",
-  },
-  {
-    id: 3,
-    name: "Gold",
-    min_mrr: 15001,
-    max_mrr: 50000,
-    benefits: ["Projetos premium", "Account manager dedicado", "Desconto 10%", "Acesso antecipado a novos produtos"],
-    commission_bonus: 10,
-    description: "Agências de alto desempenho",
-    color: "#FFD700",
-  },
-]
-
-const mockPartnerLevels = [
-  {
-    id: 1,
-    name: "Partner Basic",
-    min_led_agencies: 1,
-    max_led_agencies: 5,
-    min_led_mrr: 0,
-    max_led_mrr: 25000,
-    benefits: ["Comissão sobre agências lideradas", "Dashboard de gestão", "Relatórios de performance"],
-    commission_rate: 2,
-    description: "Primeiro nível de parceria",
-    color: "#4F46E5",
-  },
-  {
-    id: 2,
-    name: "Partner Premium",
-    min_led_agencies: 6,
-    max_led_agencies: 15,
-    min_led_mrr: 25001,
-    max_led_mrr: 75000,
-    benefits: ["Comissão aumentada", "Suporte dedicado", "Treinamentos exclusivos", "Eventos VIP"],
-    commission_rate: 3,
-    description: "Para partners com boa gestão de agências",
-    color: "#7C3AED",
-  },
-  {
-    id: 3,
-    name: "Partner Elite",
-    min_led_agencies: 16,
-    max_led_agencies: null,
-    min_led_mrr: 75001,
-    max_led_mrr: null,
-    benefits: ["Máxima comissão", "Consultoria estratégica", "Co-marketing", "Participação em lucros"],
-    commission_rate: 5,
-    description: "Nível máximo de parceria",
-    color: "#EC4899",
-  },
-]
+import { apiClient } from "@/lib/api-client"
 
 export default function LevelsManagementPage() {
-  const [agencyLevels, setAgencyLevels] = useState(mockAgencyLevels)
-  const [partnerLevels, setPartnerLevels] = useState(mockPartnerLevels)
+  const [agencyLevels, setAgencyLevels] = useState<any[]>([])
+  const [partnerLevels, setPartnerLevels] = useState<any[]>([])
   const [editingLevel, setEditingLevel] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("agency")
 
-  const handleSaveLevel = (levelData: any) => {
-    if (levelData.id) {
-      // Update existing level
-      if (activeTab === "agency") {
-        setAgencyLevels((levels) => levels.map((level) => (level.id === levelData.id ? levelData : level)))
+  useEffect(() => {
+    apiClient.getLevels().then((data: any) => {
+      const all = Array.isArray(data) ? data : data?.data || []
+      setAgencyLevels(all.filter((l: any) => l.type === "agency" || !l.type))
+      setPartnerLevels(all.filter((l: any) => l.type === "partner"))
+    }).catch(() => {})
+  }, [])
+
+  const handleSaveLevel = async (levelData: any) => {
+    try {
+      if (levelData.id) {
+        await apiClient.updateLevel(String(levelData.id), { ...levelData, type: activeTab })
       } else {
-        setPartnerLevels((levels) => levels.map((level) => (level.id === levelData.id ? levelData : level)))
+        await apiClient.createLevel({ ...levelData, type: activeTab })
       }
-    } else {
-      // Create new level
-      const newLevel = { ...levelData, id: Date.now() }
-      if (activeTab === "agency") {
-        setAgencyLevels((levels) => [...levels, newLevel])
-      } else {
-        setPartnerLevels((levels) => [...levels, newLevel])
-      }
-    }
+      const data = await apiClient.getLevels()
+      const all = Array.isArray(data) ? data : data?.data || []
+      setAgencyLevels(all.filter((l: any) => l.type === "agency" || !l.type))
+      setPartnerLevels(all.filter((l: any) => l.type === "partner"))
+    } catch {}
     setEditingLevel(null)
     setIsDialogOpen(false)
   }
 
-  const handleDeleteLevel = (id: number) => {
-    if (activeTab === "agency") {
-      setAgencyLevels((levels) => levels.filter((level) => level.id !== id))
-    } else {
-      setPartnerLevels((levels) => levels.filter((level) => level.id !== id))
-    }
+  const handleDeleteLevel = async (id: number) => {
+    try {
+      await apiClient.deleteLevel(String(id))
+      if (activeTab === "agency") {
+        setAgencyLevels((levels) => levels.filter((level) => level.id !== id))
+      } else {
+        setPartnerLevels((levels) => levels.filter((level) => level.id !== id))
+      }
+    } catch {}
   }
 
   const openEditDialog = (level?: any) => {

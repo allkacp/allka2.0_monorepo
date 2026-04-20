@@ -22,6 +22,7 @@ model User {
   is_active     Boolean  @default(true)
   avatar        String?
   phone         String?
+  position      String?
   admin_profile_id String?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
