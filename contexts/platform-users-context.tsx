@@ -109,14 +109,14 @@ export function PlatformUsersProvider({
     setUsers((prev) => [user, ...prev]);
   }, []);
 
-  const updateUser = useCallback((id: number, updates: Partial<User>) => {
+  const updateUser = useCallback((id: string, updates: Partial<User>) => {
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, ...updates } : u)),
     );
   }, []);
 
   const updateUserPlatformPermissions = useCallback(
-    (id: number, permissions: Permission[]) => {
+    (id: string, permissions: Permission[]) => {
       setUsers((prev) =>
         prev.map((u) =>
           u.id === id
@@ -133,12 +133,12 @@ export function PlatformUsersProvider({
   );
 
   const getUserById = useCallback(
-    (id: number) => users.find((u) => u.id === id),
+    (id: string) => users.find((u) => u.id === id),
     [users],
   );
 
   const addCompanyLink = useCallback(
-    (userId: number, assoc: CompanyAssociation) => {
+    (userId: string, assoc: CompanyAssociation) => {
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id !== userId) return u;
@@ -151,7 +151,7 @@ export function PlatformUsersProvider({
     [],
   );
 
-  const removeCompanyLink = useCallback((userId: number, companyId: number) => {
+  const removeCompanyLink = useCallback((userId: string, companyId: number) => {
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id !== userId) return u;
@@ -167,7 +167,7 @@ export function PlatformUsersProvider({
 
   const updateCompanyLink = useCallback(
     (
-      userId: number,
+      userId: string,
       companyId: number,
       updates: Partial<CompanyAssociation>,
     ) => {
@@ -187,7 +187,7 @@ export function PlatformUsersProvider({
   );
 
   const upsertProjectMembership = useCallback(
-    (userId: number, companyId: number, membership: ProjectMembership) => {
+    (userId: string, companyId: number, membership: ProjectMembership) => {
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id !== userId) return u;
@@ -208,7 +208,7 @@ export function PlatformUsersProvider({
   );
 
   const removeProjectMembership = useCallback(
-    (userId: number, companyId: number, projectId: number) => {
+    (userId: string, companyId: number, projectId: number) => {
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id !== userId) return u;
