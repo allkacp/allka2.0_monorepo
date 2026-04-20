@@ -1,9 +1,28 @@
 // Allka MVP - API Client utility functions
 
-// Toggle: quando VITE_USE_MOCKS=true, usa dados locais em memória (pasta dev-mocks/).
-// Em produção (build pro cPanel) essa variável não existe → usa API real.
-// Vite faz tree-shake: se VITE_USE_MOCKS !== "true", o import do mock nem entra no bundle.
-import { mockApiClient } from "@/dev-mocks/mock-api-client";
+// Mock inline: quando VITE_USE_MOCKS=true, usa um Proxy que retorna dados vazios.
+// Mantido inline para evitar dependência da pasta dev-mocks/ (ignorada no build).
+const mockApiClient: any = new Proxy(
+  {
+    setToken() {},
+    clearToken() {},
+    async login(email: string) {
+      return { token: "mock-token", user: { id: "mock", email, name: "Mock" } };
+    },
+    async logout() {
+      return { ok: true };
+    },
+    async getCurrentUser() {
+      return { id: "mock", email: "mock@allka.dev", name: "Mock" };
+    },
+  },
+  {
+    get(target: any, prop: string) {
+      if (prop in target) return target[prop];
+      return async () => [];
+    },
+  },
+);
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "https://api-dev.allka.com.vc/api";
@@ -42,10 +61,7 @@ class ApiClient {
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      const message =
-        body?.error ||
-        body?.message ||
-        `API Error: ${response.status} ${response.statusText}`;
+      const message = body?.error || body?.message || `API Error: ${response.status} ${response.statusText}`;
       throw new Error(message);
     }
 
@@ -95,17 +111,11 @@ class ApiClient {
   }
 
   async createUser(data: any) {
-    return this.request("/users", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/users", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateUser(id: string, data: any) {
-    return this.request(`/users/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteUser(id: string) {
@@ -122,17 +132,11 @@ class ApiClient {
   }
 
   async createClient(data: any) {
-    return this.request("/clients", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/clients", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateClient(id: string, data: any) {
-    return this.request(`/clients/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteClient(id: string) {
@@ -166,17 +170,11 @@ class ApiClient {
   }
 
   async createProject(data: any) {
-    return this.request("/projects", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/projects", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateProject(id: string, data: any) {
-    return this.request(`/projects/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteProject(id: string) {
@@ -184,9 +182,7 @@ class ApiClient {
   }
 
   async getProjectTasks(projectId: string, filters?: Record<string, any>) {
-    return this.request(
-      `/projects/${projectId}/tasks${this.buildQuery(filters)}`,
-    );
+    return this.request(`/projects/${projectId}/tasks${this.buildQuery(filters)}`);
   }
 
   // ── Tasks ────────────────────────────────────────────────────────────────────
@@ -199,17 +195,11 @@ class ApiClient {
   }
 
   async createTask(data: any) {
-    return this.request("/tasks", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/tasks", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateTask(id: string, data: any) {
-    return this.request(`/tasks/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteTask(id: string) {
@@ -218,8 +208,7 @@ class ApiClient {
 
   async updateTaskStatus(id: string, status: string, feedback?: string) {
     return this.request(`/tasks/${id}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status, feedback }),
+      method: "PUT", body: JSON.stringify({ status, feedback }),
     });
   }
 
@@ -246,17 +235,11 @@ class ApiClient {
   }
 
   async createNomade(data: any) {
-    return this.request("/nomades", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/nomades", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateNomade(id: string, data: any) {
-    return this.request(`/nomades/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/nomades/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteNomade(id: string) {
@@ -273,8 +256,7 @@ class ApiClient {
 
   async updateNomadeQualification(nomadeId: string, qualId: string, data: any) {
     return this.request(`/nomades/${nomadeId}/qualifications/${qualId}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
+      method: "PUT", body: JSON.stringify(data),
     });
   }
 
@@ -288,35 +270,15 @@ class ApiClient {
   }
 
   async createNomadeLevel(data: any) {
-    return this.request("/nomade-levels", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/nomade-levels", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateNomadeLevel(id: string, data: any) {
-    return this.request(`/nomade-levels/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/nomade-levels/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteNomadeLevel(id: string) {
     return this.request(`/nomade-levels/${id}`, { method: "DELETE" });
-  }
-
-  // ── Levels (aliases for nomade-levels, used by admin/niveis & use-pricing) ──
-  async getLevels(filters?: Record<string, any>) {
-    return this.request(`/nomade-levels${this.buildQuery(filters)}`);
-  }
-  async createLevel(data: any) {
-    return this.createNomadeLevel(data);
-  }
-  async updateLevel(id: string, data: any) {
-    return this.updateNomadeLevel(id, data);
-  }
-  async deleteLevel(id: string) {
-    return this.deleteNomadeLevel(id);
   }
 
   // ── Agencies ─────────────────────────────────────────────────────────────────
@@ -329,17 +291,11 @@ class ApiClient {
   }
 
   async createAgency(data: any) {
-    return this.request("/agencies", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/agencies", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateAgency(id: string, data: any) {
-    return this.request(`/agencies/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/agencies/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteAgency(id: string) {
@@ -356,17 +312,11 @@ class ApiClient {
   }
 
   async createProduct(data: any) {
-    return this.request("/products", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/products", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateProduct(id: string, data: any) {
-    return this.request(`/products/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteProduct(id: string) {
@@ -374,29 +324,19 @@ class ApiClient {
   }
 
   async createProductVariation(productId: string, data: any) {
-    return this.request(`/products/${productId}/variations`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/products/${productId}/variations`, { method: "POST", body: JSON.stringify(data) });
   }
 
   async deleteProductVariation(productId: string, variationId: string) {
-    return this.request(`/products/${productId}/variations/${variationId}`, {
-      method: "DELETE",
-    });
+    return this.request(`/products/${productId}/variations/${variationId}`, { method: "DELETE" });
   }
 
   async createProductAddon(productId: string, data: any) {
-    return this.request(`/products/${productId}/addons`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/products/${productId}/addons`, { method: "POST", body: JSON.stringify(data) });
   }
 
   async deleteProductAddon(productId: string, addonId: string) {
-    return this.request(`/products/${productId}/addons/${addonId}`, {
-      method: "DELETE",
-    });
+    return this.request(`/products/${productId}/addons/${addonId}`, { method: "DELETE" });
   }
 
   // ── Specialties ──────────────────────────────────────────────────────────────
@@ -409,17 +349,11 @@ class ApiClient {
   }
 
   async createSpecialty(data: any) {
-    return this.request("/specialties", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/specialties", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateSpecialty(id: string, data: any) {
-    return this.request(`/specialties/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/specialties/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteSpecialty(id: string) {
@@ -436,17 +370,11 @@ class ApiClient {
   }
 
   async createWithdrawal(data: any) {
-    return this.request("/financial/withdrawals", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/financial/withdrawals", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateWithdrawal(id: string, data: any) {
-    return this.request(`/financial/withdrawals/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/financial/withdrawals/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteWithdrawal(id: string) {
@@ -467,17 +395,11 @@ class ApiClient {
   }
 
   async createInvoice(data: any) {
-    return this.request("/billing/invoices", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/billing/invoices", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateInvoice(id: string, data: any) {
-    return this.request(`/billing/invoices/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/billing/invoices/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteInvoice(id: string) {
@@ -498,21 +420,35 @@ class ApiClient {
   }
 
   async createTerm(data: any) {
-    return this.request("/terms", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/terms", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateTerm(id: string, data: any) {
-    return this.request(`/terms/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/terms/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteTerm(id: string) {
     return this.request(`/terms/${id}`, { method: "DELETE" });
+  }
+
+  async checkTerms() {
+    const terms = await this.getTerms();
+    const activeTerms = Array.isArray(terms)
+      ? (terms as any[]).filter((term) => term?.is_active !== false)
+      : [];
+
+    const pending = await Promise.all(
+      activeTerms.map(async (term) => {
+        try {
+          const result: any = await this.checkTermAccepted(term.id);
+          return result?.accepted ? null : term;
+        } catch {
+          return term;
+        }
+      }),
+    );
+
+    return { pending: pending.filter(Boolean) };
   }
 
   async acceptTerm(termId: string) {
@@ -529,10 +465,7 @@ class ApiClient {
   }
 
   async createConversation(data: any) {
-    return this.request("/chat/conversations", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/chat/conversations", { method: "POST", body: JSON.stringify(data) });
   }
 
   async getMessages(conversationId: string) {
@@ -541,8 +474,7 @@ class ApiClient {
 
   async sendMessage(conversationId: string, content: string) {
     return this.request(`/chat/conversations/${conversationId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ content }),
+      method: "POST", body: JSON.stringify({ content }),
     });
   }
 
@@ -556,17 +488,11 @@ class ApiClient {
   }
 
   async createCourse(data: any) {
-    return this.request("/allkademy/courses", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/allkademy/courses", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateCourse(id: string, data: any) {
-    return this.request(`/allkademy/courses/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/allkademy/courses/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteCourse(id: string) {
@@ -575,22 +501,18 @@ class ApiClient {
 
   async createCourseModule(courseId: string, data: any) {
     return this.request(`/allkademy/courses/${courseId}/modules`, {
-      method: "POST",
-      body: JSON.stringify(data),
+      method: "POST", body: JSON.stringify(data),
     });
   }
 
   async createLesson(moduleId: string, data: any) {
     return this.request(`/allkademy/modules/${moduleId}/lessons`, {
-      method: "POST",
-      body: JSON.stringify(data),
+      method: "POST", body: JSON.stringify(data),
     });
   }
 
   async enrollCourse(courseId: string) {
-    return this.request(`/allkademy/courses/${courseId}/enroll`, {
-      method: "POST",
-    });
+    return this.request(`/allkademy/courses/${courseId}/enroll`, { method: "POST" });
   }
 
   async getMyEnrollments() {
@@ -599,8 +521,7 @@ class ApiClient {
 
   async updateEnrollmentProgress(courseId: string, progress: number) {
     return this.request(`/allkademy/enrollments/${courseId}/progress`, {
-      method: "PUT",
-      body: JSON.stringify({ progress }),
+      method: "PUT", body: JSON.stringify({ progress }),
     });
   }
 
@@ -618,26 +539,15 @@ class ApiClient {
   }
 
   async createPartner(data: any) {
-    return this.request("/partners", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/partners", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updatePartner(id: string, data: any) {
-    return this.request(`/partners/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/partners/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
-  async getPartnerCommissions(
-    partnerId: string,
-    filters?: Record<string, any>,
-  ) {
-    return this.request(
-      `/partners/${partnerId}/commissions${this.buildQuery(filters)}`,
-    );
+  async getPartnerCommissions(partnerId: string, filters?: Record<string, any>) {
+    return this.request(`/partners/${partnerId}/commissions${this.buildQuery(filters)}`);
   }
 
   // ── Campaigns ────────────────────────────────────────────────────────────────
@@ -650,35 +560,15 @@ class ApiClient {
   }
 
   async createCampaign(data: any) {
-    return this.request("/campaigns", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/campaigns", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateCampaign(id: string, data: any) {
-    return this.request(`/campaigns/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/campaigns/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteCampaign(id: string) {
     return this.request(`/campaigns/${id}`, { method: "DELETE" });
-  }
-
-  // ── Coupons (campaigns with type=coupon) ─────────────────────────────────────
-  async getCoupons(filters?: Record<string, any>) {
-    return this.request(`/campaigns${this.buildQuery({ ...filters, type: "coupon" })}`);
-  }
-  async createCoupon(data: any) {
-    return this.createCampaign({ ...data, type: "coupon" });
-  }
-  async updateCoupon(id: string, data: any) {
-    return this.updateCampaign(id, data);
-  }
-  async deleteCoupon(id: string) {
-    return this.deleteCampaign(id);
   }
 
   // ── Permissions ──────────────────────────────────────────────────────────────
@@ -691,17 +581,11 @@ class ApiClient {
   }
 
   async createPermissionProfile(data: any) {
-    return this.request("/permissions/profiles", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/permissions/profiles", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updatePermissionProfile(id: string, data: any) {
-    return this.request(`/permissions/profiles/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/permissions/profiles/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deletePermissionProfile(id: string) {
@@ -710,8 +594,7 @@ class ApiClient {
 
   async updateProfilePermissions(profileId: string, permissions: any[]) {
     return this.request(`/permissions/profiles/${profileId}/permissions`, {
-      method: "PUT",
-      body: JSON.stringify({ permissions }),
+      method: "PUT", body: JSON.stringify({ permissions }),
     });
   }
 

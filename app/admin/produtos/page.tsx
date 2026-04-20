@@ -729,8 +729,6 @@ export default function AdminProdutosPage() {
       tags: productFormData.tags,
       questions: productQuestions,
       additionalImages: additionalImages,
-      // Ensure tasks from form are included
-      tasks: productTasks,
       // Questionnaire should be part of the product data if managed
       questionnaire: {
         title: "Questionário do Produto", // Placeholder title
@@ -1106,8 +1104,6 @@ export default function AdminProdutosPage() {
       additionalImages: additionalImages,
       variations: productVariations,
       addOns: productAddOns,
-      // Ensure draft includes tasks and questionnaire
-      tasks: productTasks,
       questionnaire: {
         title: "Rascunho Questionário",
         description: "Questionário para configurar o produto.",
