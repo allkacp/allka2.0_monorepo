@@ -33,7 +33,7 @@ export default function LevelsManagementPage() {
       } else {
         await apiClient.createLevel({ ...levelData, type: activeTab })
       }
-      const data = await apiClient.getLevels()
+      const data: any = await apiClient.getLevels()
       const all = Array.isArray(data) ? data : data?.data || []
       setAgencyLevels(all.filter((l: any) => l.type === "agency" || !l.type))
       setPartnerLevels(all.filter((l: any) => l.type === "partner"))

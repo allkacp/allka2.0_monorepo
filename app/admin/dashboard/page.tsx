@@ -101,7 +101,25 @@ import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
-import { generateDashboardData } from "@/dev-mocks/data/dashboard";
+// Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
+const generateDashboardData = (_from?: any, _to?: any): any => ({
+  revenue: { total: 0, series: [], growth: 0 },
+  activeProjects: { total: 0, series: [], growth: 0 },
+  creditPlans: { total: 0, series: [], growth: 0 },
+  mrr: { total: 0, series: [], growth: 0 },
+  churn: { total: 0, series: [], growth: 0 },
+  averageTicket: { total: 0, series: [], growth: 0 },
+  metrics: {},
+  activity: [],
+  alerts: [],
+  performers: [],
+  userDistribution: [],
+  activeUsers: { total: 0, series: [] },
+  systemAlerts: [],
+  adminProfiles: [],
+  permissionMatrix: [],
+  managementTools: [],
+});
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";

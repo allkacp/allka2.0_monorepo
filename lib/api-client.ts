@@ -610,6 +610,19 @@ class ApiClient {
   async getReportFinancial() {
     return this.request("/reports/financial");
   }
+
+  async getLevels(filters?: Record<string, any>) {
+    return this.request(`/levels${this.buildQuery(filters)}`);
+  }
+  async createLevel(data: any) {
+    return this.request("/levels", { method: "POST", body: JSON.stringify(data) });
+  }
+  async updateLevel(id: string, data: any) {
+    return this.request(`/levels/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  }
+  async deleteLevel(id: string) {
+    return this.request(`/levels/${id}`, { method: "DELETE" });
+  }
 }
 
 // Toggle: quando VITE_USE_MOCKS=true, usa dados locais em memória (pasta dev-mocks/).
