@@ -31,26 +31,26 @@ export let MOCK_COMPANIES: {
 interface PlatformUsersContextValue {
   users: User[];
   addUser: (user: User) => void;
-  updateUser: (id: number, updates: Partial<User>) => void;
+  updateUser: (id: string, updates: Partial<User>) => void;
   updateUserPlatformPermissions: (
-    id: number,
+    id: string,
     permissions: Permission[],
   ) => void;
-  getUserById: (id: number) => User | undefined;
-  addCompanyLink: (userId: number, assoc: CompanyAssociation) => void;
-  removeCompanyLink: (userId: number, companyId: number) => void;
+  getUserById: (id: string) => User | undefined;
+  addCompanyLink: (userId: string, assoc: CompanyAssociation) => void;
+  removeCompanyLink: (userId: string, companyId: number) => void;
   updateCompanyLink: (
-    userId: number,
+    userId: string,
     companyId: number,
     updates: Partial<CompanyAssociation>,
   ) => void;
   upsertProjectMembership: (
-    userId: number,
+    userId: string,
     companyId: number,
     membership: ProjectMembership,
   ) => void;
   removeProjectMembership: (
-    userId: number,
+    userId: string,
     companyId: number,
     projectId: number,
   ) => void;
