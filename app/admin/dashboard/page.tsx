@@ -103,7 +103,13 @@ import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sid
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (_from?: any, _to?: any): any => ({
-  revenue: { total: 270800, series: [], growth: 18.1, trendData: [180000, 205000, 215000, 230000, 248000, 270800] },
+  revenue: {
+    total: 270800, growth: 18.1, totalGrowth: 18.1, series: [],
+    trendData: [180000, 205000, 215000, 230000, 248000, 270800],
+    creditPlan: 114000, creditPlanGrowth: 18,
+    recurring: 97600, recurringGrowth: 8,
+    oneTime: 59200, oneTimeGrowth: 14,
+  },
   activeProjects: {
     total: 127, growth: 5.2, series: [],
     agencies: 48, agenciesGrowth: 7,
@@ -199,8 +205,11 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
   cmv: {
     totalCosts: 87400, revenue: 270800,
     cmvPercent: 32.3, prevCmvPercent: 34.1,
-    nomades: 42800, impostos: 18200, comissoes: 14900, outros: 11500,
-    variation: -1.8,
+    nomades:   { value: 42800, percent: 49 },
+    impostos:  { value: 18200, percent: 21 },
+    comissoes: { value: 14900, percent: 17 },
+    outros:    { value: 11500, percent: 13 },
+    variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
   },
   metrics: {}, activity: [], alerts: [], performers: [], userDistribution: [],
   systemAlerts: [], adminProfiles: [], permissionMatrix: [], managementTools: [],
