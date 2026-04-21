@@ -1074,7 +1074,7 @@ export function Sidebar() {
                       className={cn(
                         "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                         hasActiveSubitem
-                          ? "bg-white/20 text-white shadow-lg backdrop-blur-sm"
+                          ? "bg-white/15 text-white backdrop-blur-sm"
                           : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                       )}
                     >
@@ -1092,7 +1092,7 @@ export function Sidebar() {
                     </button>
 
                     {isExpanded && (
-                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-white/10 pl-2">
+                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-white/25 pl-2">
                         {item.subitems.map((subitem: any, subIndex: number) => {
                           const isActive = pathname === subitem.href;
                           return (
@@ -1121,7 +1121,7 @@ export function Sidebar() {
                                 className={cn(
                                   "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
                                   isActive
-                                    ? "bg-white/15 text-white shadow-md backdrop-blur-sm"
+                                    ? "bg-white/25 text-white shadow-lg backdrop-blur-sm"
                                     : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                                 )}
                               >
@@ -1133,7 +1133,7 @@ export function Sidebar() {
                                 {subitem.badge && (
                                   <Badge
                                     variant="secondary"
-                                    className="bg-white/20 text-white backdrop-blur-sm text-xs"
+                                    className="bg-white/90 text-gray-800 text-xs font-semibold px-2"
                                   >
                                     {subitem.badge}
                                   </Badge>
@@ -1187,7 +1187,7 @@ export function Sidebar() {
                             {item.badge && (
                               <Badge
                                 variant="secondary"
-                                className="bg-white/20 text-white backdrop-blur-sm text-xs"
+                                className="bg-white/90 text-gray-800 text-xs font-semibold px-2"
                               >
                                 {item.badge}
                               </Badge>
