@@ -921,14 +921,14 @@ export default function EmpresasPage() {
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white"
+                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white dark:bg-[oklch(0.20_0.020_258)]"
                     style={{
                       paddingLeft: 20,
                       paddingRight: 20,
                       textAlign: col.key === "acoes" ? "right" : "left",
                       borderRight: col.key !== "acoes" ? "1px solid rgba(148,163,184,0.25)" : undefined,
                       borderLeft: col.key === "acoes" ? "1px solid rgba(148,163,184,0.25)" : undefined,
-                      ...(col.key === "acoes" ? { position: "sticky", right: 0, zIndex: 2, background: "white" } : {}),
+                      ...(col.key === "acoes" ? { position: "sticky", right: 0, zIndex: 2, background: "var(--table-head)" } : {}),
                     }}
                   >
                     {sortableColMap[col.key] ? (
@@ -970,7 +970,11 @@ export default function EmpresasPage() {
               {paginatedCompanies.map((company, rowIndex) => (
                 <tr
                   key={company.id}
-                  className={`group transition-colors cursor-pointer ${rowIndex % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"} dark:hover:bg-slate-700/50`}
+                  className={`group transition-colors cursor-pointer ${
+                    rowIndex % 2 === 0
+                      ? "bg-white dark:bg-[oklch(0.17_0.016_258)] hover:bg-slate-50 dark:hover:bg-[oklch(0.22_0.022_258)]"
+                      : "bg-slate-100/70 dark:bg-[oklch(0.19_0.018_258)] hover:bg-slate-200/70 dark:hover:bg-[oklch(0.22_0.022_258)]"
+                  }`}
                 >
                   {/* Company */}
                   {visibleCols.has("empresa") && (
@@ -1179,7 +1183,7 @@ export default function EmpresasPage() {
                       position: "sticky",
                       right: 0,
                       zIndex: 1,
-                      background: rowIndex % 2 === 0 ? "#ffffff" : "#f1f4f8",
+                      background: rowIndex % 2 === 0 ? "var(--table-row)" : "var(--table-row-alt)",
                       borderLeft: "1px solid rgba(148,163,184,0.25)",
                     }}
                   >

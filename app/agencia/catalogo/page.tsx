@@ -90,7 +90,7 @@ export default function AgenciaCatalogo() {
   const categoryCount = new Set(products.filter((p) => p.isActive).map((p) => p.category)).size
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-transparent">
       {/* ── Hero Banner ─────────────────────────────────────── */}
       <div className="shrink-0 bg-linear-to-r from-indigo-900 via-blue-900 to-purple-900 px-6 py-10 relative overflow-hidden">
         {/* decorative blobs */}

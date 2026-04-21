@@ -4287,14 +4287,14 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* MRR Explanation Info */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-muted/60 dark:to-muted/40 border border-blue-200 dark:border-border rounded-lg p-3">
                   <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold text-blue-900">
+                      <p className="text-xs font-semibold text-blue-900 dark:text-foreground">
                         O que é MRR?
                       </p>
-                      <p className="text-xs text-blue-800 leading-relaxed">
+                      <p className="text-xs text-blue-800 dark:text-muted-foreground leading-relaxed">
                         MRR (Monthly Recurring Revenue) é a receita previsível
                         gerada mensalmente. Inclui New (novos contratos),
                         Expansion (aumentos), Base (receita existente),
@@ -6775,6 +6775,53 @@ export default function AdminDashboardPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Export dropdown */}
+          <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 gap-1.5 text-xs font-medium bg-transparent dark:border-white/20"
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <>
+                    <Download className="h-3.5 w-3.5 animate-pulse" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" />
+                    Exportar
+                    <ChevronDown className="h-2.5 w-2.5" />
+                  </>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-1.5" align="end">
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  handleExportAs("pdf");
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+              >
+                <FileText className="h-3.5 w-3.5 text-red-500" />
+                Exportar como PDF
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  handleExportAs("png");
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+              >
+                <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                Exportar como PNG
+              </button>
+            </PopoverContent>
+          </Popover>
+
           {/* Editar Dashboard */}
           <Button
             onClick={() => {
@@ -6974,54 +7021,6 @@ export default function AdminDashboardPage() {
           {globalPeriod.label}
         </span>
 
-        <div className="ml-auto flex items-center gap-1.5">
-          {/* Export dropdown */}
-          <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs gap-1.5 bg-transparent"
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <>
-                    <Download className="h-3 w-3 animate-pulse" />
-                    Exportando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-3 w-3" />
-                    Exportar
-                    <ChevronDown className="h-2.5 w-2.5" />
-                  </>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-1.5" align="end">
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  handleExportAs("pdf");
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-              >
-                <FileText className="h-3.5 w-3.5 text-red-500" />
-                Exportar como PDF
-              </button>
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  handleExportAs("png");
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-              >
-                <ImageDown className="h-3.5 w-3.5 text-blue-500" />
-                Exportar como PNG
-              </button>
-            </PopoverContent>
-          </Popover>
-        </div>
       </div>
 
       {/* Export capture area: metrics + widgets */}

@@ -4,6 +4,7 @@ import {
   ChevronDown, LogOut, Settings, User, CreditCard,
   FolderOpen, Award, Shield, DollarSign, CheckSquare,
   Building2, Users, Briefcase, Zap, Target, Activity,
+  Sun, Moon,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,7 @@ import { usePartner } from "@/contexts/partner-context"
 import { useEmpresa } from "@/contexts/empresa-context"
 import { useAgencia } from "@/contexts/agencia-context"
 import { apiClient } from "@/lib/api-client"
+import { useSettings } from "@/contexts/settings-context"
 
 const LEVEL_CONFIG = {
   bronze:   { label: "Bronze",   bg: "bg-amber-100",  text: "text-amber-700"  },
@@ -66,6 +68,7 @@ export function Header() {
   const navigate = useNavigate()
   const { accountType, unlockAccountType } = useAccountType()
   const { userProfile, updateUserProfile } = useSidebar()
+  const { theme, setTheme } = useSettings()
   const partner = usePartner()
   const empresa = useEmpresa()
   const agencia = useAgencia()
@@ -214,6 +217,8 @@ export function Header() {
 
   const handleLogout = () => {
     localStorage.removeItem("simulatedUser")
+    localStorage.removeItem("allka_token")
+    localStorage.setItem("allka_logged_out", "true")
     unlockAccountType()
     apiClient.clearToken()
     window.location.href = "/login"
@@ -333,9 +338,9 @@ export function Header() {
       {/* Global search overlay */}
       {searchOpen && (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
-          <div ref={searchRef} className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div ref={searchRef} className="w-full max-w-2xl bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-2xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden">
             {/* Search input */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-[oklch(0.20_0.022_258)]">
               <Search className="h-5 w-5 text-gray-400 shrink-0" />
               <input
                 ref={inputRef}
@@ -441,6 +446,15 @@ export function Header() {
 
             <AlertsHeaderIcon />
 
+            {/* Dark mode toggle */}
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+              className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+
             <div className="relative">
               <Button variant="ghost" size="sm" onClick={() => setNotifOpen(true)} className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/10 hover:text-white rounded-xl">
                 <Bell className="h-4 w-4" />
@@ -482,8 +496,8 @@ export function Header() {
                 </button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" sideOffset={10} className="w-72 p-2 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-slate-900">
-                <div className={`px-3 py-3 rounded-xl mb-2 border ${cfg.badgeBg} ${cfg.badgeBorder}`}>
+              <DropdownMenuContent align="end" sideOffset={10} className="w-72 p-2 rounded-2xl shadow-2xl border border-gray-100 dark:border-border bg-white dark:bg-background">
+                <div className={`px-3 py-3 rounded-xl mb-2 border ${cfg.badgeBg} ${cfg.badgeBorder} dark:bg-card dark:border-border`}>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-12 w-12 shrink-0 ring-2 ring-white shadow-md">
                       <AvatarFallback className="bg-linear-to-br from-blue-600 to-purple-600 text-white text-sm font-bold">

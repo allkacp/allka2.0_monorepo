@@ -356,21 +356,21 @@ export function NotificationPreferencesPanel({
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="h-5 w-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Canais de Notificação</h3>
+                <h3 className="text-lg font-semibold text-foreground">Canais de Notificação</h3>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Selecione os canais pelos quais os usuários receberão notificações
               </p>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                   <div className="flex items-center space-x-3">
-                    <Mail className="h-5 w-5 text-gray-600" />
+                    <Mail className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <Label htmlFor="channel-email" className="font-medium cursor-pointer">
                         E-mail
                       </Label>
-                      <p className="text-xs text-gray-500">Notificações por e-mail</p>
+                      <p className="text-xs text-muted-foreground">Notificações por e-mail</p>
                     </div>
                   </div>
                   <Switch
@@ -380,14 +380,14 @@ export function NotificationPreferencesPanel({
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                   <div className="flex items-center space-x-3">
-                    <Bell className="h-5 w-5 text-gray-600" />
+                    <Bell className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <Label htmlFor="channel-push" className="font-medium cursor-pointer">
                         Push
                       </Label>
-                      <p className="text-xs text-gray-500">Notificações push</p>
+                      <p className="text-xs text-muted-foreground">Notificações push</p>
                     </div>
                   </div>
                   <Switch
@@ -397,14 +397,14 @@ export function NotificationPreferencesPanel({
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                   <div className="flex items-center space-x-3">
-                    <MessageSquare className="h-5 w-5 text-gray-600" />
+                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <Label htmlFor="channel-inApp" className="font-medium cursor-pointer">
                         In-App
                       </Label>
-                      <p className="text-xs text-gray-500">Notificações no app</p>
+                      <p className="text-xs text-muted-foreground">Notificações no app</p>
                     </div>
                   </div>
                   <Switch
@@ -414,14 +414,14 @@ export function NotificationPreferencesPanel({
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                   <div className="flex items-center space-x-3">
-                    <Smartphone className="h-5 w-5 text-gray-600" />
+                    <Smartphone className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <Label htmlFor="channel-sms" className="font-medium cursor-pointer">
                         SMS
                       </Label>
-                      <p className="text-xs text-gray-500">Notificações por SMS</p>
+                      <p className="text-xs text-muted-foreground">Notificações por SMS</p>
                     </div>
                   </div>
                   <Switch id="channel-sms" checked={channels.sms} onCheckedChange={() => handleToggleChannel("sms")} />
@@ -434,8 +434,8 @@ export function NotificationPreferencesPanel({
             {/* Notification Types with Recipients */}
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Tipos de Notificação e Destinatários</h3>
-                <p className="text-sm text-gray-600">Configure quem receberá cada tipo de notificação</p>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Tipos de Notificação e Destinatários</h3>
+                <p className="text-sm text-muted-foreground">Configure quem receberá cada tipo de notificação</p>
               </div>
 
               {Object.entries(groupedPreferences).map(([category, prefs]) => (
@@ -444,7 +444,7 @@ export function NotificationPreferencesPanel({
                     <Badge className={`${getCategoryColor(category)} text-xs font-medium`}>
                       {getCategoryLabel(category)}
                     </Badge>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {prefs.filter((p) => p.enabled).length} de {prefs.length} ativas
                     </span>
                   </div>
@@ -452,7 +452,7 @@ export function NotificationPreferencesPanel({
                   <div className="space-y-2">
                     {prefs.map((pref) => (
                       <div key={pref.id} className="border rounded-lg overflow-hidden">
-                        <div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors">
                           <div className="flex items-center space-x-3 flex-1">
                             <Button
                               variant="ghost"
@@ -470,7 +470,7 @@ export function NotificationPreferencesPanel({
                               <Label htmlFor={pref.id} className="font-medium cursor-pointer">
                                 {pref.label}
                               </Label>
-                              <p className="text-sm text-gray-500 mt-1">{pref.description}</p>
+                              <p className="text-sm text-muted-foreground mt-1">{pref.description}</p>
                               <div className="flex items-center space-x-2 mt-2">
                                 {pref.recipients.sendToAll ? (
                                   <Badge variant="outline" className="text-xs">
@@ -496,12 +496,12 @@ export function NotificationPreferencesPanel({
                         {expandedPreference === pref.id && (
                           <div className="border-t bg-gray-50 p-4 space-y-4">
                             <div>
-                              <h4 className="text-sm font-semibold text-gray-900 mb-3">Destinatários</h4>
+                              <h4 className="text-sm font-semibold text-foreground mb-3">Destinatários</h4>
 
                               {/* Send to All Toggle */}
                               <div className="flex items-center justify-between p-3 bg-white border rounded-lg mb-3">
                                 <div className="flex items-center space-x-2">
-                                  <Users className="h-4 w-4 text-gray-600" />
+                                  <Users className="h-4 w-4 text-muted-foreground" />
                                   <Label htmlFor={`${pref.id}-all`} className="font-medium cursor-pointer">
                                     Enviar para todos os usuários
                                   </Label>
@@ -516,13 +516,13 @@ export function NotificationPreferencesPanel({
                               {/* Group Selection */}
                               {!pref.recipients.sendToAll && (
                                 <div className="space-y-2">
-                                  <p className="text-xs text-gray-600 mb-2">
+                                  <p className="text-xs text-muted-foreground mb-2">
                                     Selecione os grupos que receberão esta notificação:
                                   </p>
                                   {userGroups.map((group) => (
                                     <div
                                       key={group.id}
-                                      className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors"
+                                      className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-accent/40 transition-colors"
                                     >
                                       <div className="flex items-center space-x-3">
                                         <Checkbox
@@ -537,7 +537,7 @@ export function NotificationPreferencesPanel({
                                           >
                                             {group.name}
                                           </Label>
-                                          <p className="text-xs text-gray-500">{group.description}</p>
+                                          <p className="text-xs text-muted-foreground">{group.description}</p>
                                         </div>
                                       </div>
                                       <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
@@ -560,8 +560,8 @@ export function NotificationPreferencesPanel({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Regras de Distribuição</h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h3 className="text-lg font-semibold text-foreground">Regras de Distribuição</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
                     Crie regras para automatizar a distribuição de notificações
                   </p>
                 </div>
@@ -573,27 +573,27 @@ export function NotificationPreferencesPanel({
 
               <div className="space-y-3">
                 {distributionRules.map((rule) => (
-                  <div key={rule.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div key={rule.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="font-semibold text-gray-900">{rule.name}</h4>
+                          <h4 className="font-semibold text-foreground">{rule.name}</h4>
                           <Badge variant={rule.enabled ? "default" : "secondary"} className="text-xs">
                             {rule.enabled ? "Ativa" : "Inativa"}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-600 mb-3">{rule.description}</p>
+                        <p className="text-sm text-muted-foreground mb-3">{rule.description}</p>
 
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
-                            <Bell className="h-4 w-4 text-gray-500" />
-                            <span className="text-xs text-gray-600">
+                            <Bell className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
                               {rule.notificationTypes.length} tipo(s) de notificação
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Users className="h-4 w-4 text-gray-500" />
-                            <span className="text-xs text-gray-600">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
                               {rule.recipients.groupIds.length} grupo(s) de destinatários
                             </span>
                           </div>
@@ -606,9 +606,9 @@ export function NotificationPreferencesPanel({
               </div>
 
               <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Settings className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <h4 className="font-semibold text-gray-900 mb-2">Crie Regras Personalizadas</h4>
-                <p className="text-sm text-gray-600 mb-4">
+                <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <h4 className="font-semibold text-foreground mb-2">Crie Regras Personalizadas</h4>
+                <p className="text-sm text-muted-foreground mb-4">
                   Configure regras automáticas para distribuir notificações específicas para grupos de usuários
                 </p>
                 <Button variant="outline" size="sm">
@@ -623,8 +623,8 @@ export function NotificationPreferencesPanel({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Grupos de Usuários</h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h3 className="text-lg font-semibold text-foreground">Grupos de Usuários</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
                     Gerencie grupos para facilitar a distribuição de notificações
                   </p>
                 </div>
@@ -636,15 +636,15 @@ export function NotificationPreferencesPanel({
 
               <div className="grid gap-4">
                 {userGroups.map((group) => (
-                  <div key={group.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div key={group.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <Users className="h-5 w-5 text-gray-600" />
-                          <h4 className="font-semibold text-gray-900">{group.name}</h4>
+                          <Users className="h-5 w-5 text-muted-foreground" />
+                          <h4 className="font-semibold text-foreground">{group.name}</h4>
                           <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
                         </div>
-                        <p className="text-sm text-gray-600">{group.description}</p>
+                        <p className="text-sm text-muted-foreground">{group.description}</p>
                       </div>
                       <Button variant="ghost" size="sm">
                         Editar
@@ -655,9 +655,9 @@ export function NotificationPreferencesPanel({
               </div>
 
               <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <h4 className="font-semibold text-gray-900 mb-2">Organize Seus Usuários</h4>
-                <p className="text-sm text-gray-600 mb-4">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <h4 className="font-semibold text-foreground mb-2">Organize Seus Usuários</h4>
+                <p className="text-sm text-muted-foreground mb-4">
                   Crie grupos personalizados para facilitar o gerenciamento de permissões e notificações
                 </p>
                 <Button variant="outline" size="sm">
@@ -670,8 +670,8 @@ export function NotificationPreferencesPanel({
         </Tabs>
 
         {/* Footer for embedded mode */}
-        <div className="flex items-center justify-between pt-6 border-t">
-          <p className="text-sm text-gray-600">
+        <div className="flex items-center justify-between px-6 py-4 border-t shrink-0">
+          <p className="text-sm text-muted-foreground">
             {preferences.filter((p) => p.enabled).length} de {preferences.length} notificações ativas
           </p>
           <Button onClick={handleSave} disabled={saving} className="btn-brand">
@@ -691,7 +691,7 @@ export function NotificationPreferencesPanel({
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-[calc(100vh-32px)] w-[800px] bg-white shadow-2xl z-50 transform transition-all duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-[calc(100vh-32px)] w-200 bg-white dark:bg-background shadow-2xl z-50 transform transition-all duration-300 ease-out ${
           open ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
         }`}
       >
@@ -705,9 +705,9 @@ export function NotificationPreferencesPanel({
 
           {/* Success Message */}
           {showSuccess && (
-            <div className="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-3">
+            <div className="mx-6 mt-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center space-x-3">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-green-900">Preferências salvas com sucesso!</span>
+              <span className="text-sm font-medium text-green-900 dark:text-green-300">Preferências salvas com sucesso!</span>
             </div>
           )}
 
@@ -733,21 +733,21 @@ export function NotificationPreferencesPanel({
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <AlertCircle className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Canais de Notificação</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Canais de Notificação</h3>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Selecione os canais pelos quais os usuários receberão notificações
                 </p>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                     <div className="flex items-center space-x-3">
-                      <Mail className="h-5 w-5 text-gray-600" />
+                      <Mail className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <Label htmlFor="channel-email" className="font-medium cursor-pointer">
                           E-mail
                         </Label>
-                        <p className="text-xs text-gray-500">Notificações por e-mail</p>
+                        <p className="text-xs text-muted-foreground">Notificações por e-mail</p>
                       </div>
                     </div>
                     <Switch
@@ -757,14 +757,14 @@ export function NotificationPreferencesPanel({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                     <div className="flex items-center space-x-3">
-                      <Bell className="h-5 w-5 text-gray-600" />
+                      <Bell className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <Label htmlFor="channel-push" className="font-medium cursor-pointer">
                           Push
                         </Label>
-                        <p className="text-xs text-gray-500">Notificações push</p>
+                        <p className="text-xs text-muted-foreground">Notificações push</p>
                       </div>
                     </div>
                     <Switch
@@ -774,14 +774,14 @@ export function NotificationPreferencesPanel({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                     <div className="flex items-center space-x-3">
-                      <MessageSquare className="h-5 w-5 text-gray-600" />
+                      <MessageSquare className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <Label htmlFor="channel-inApp" className="font-medium cursor-pointer">
                           In-App
                         </Label>
-                        <p className="text-xs text-gray-500">Notificações no app</p>
+                        <p className="text-xs text-muted-foreground">Notificações no app</p>
                       </div>
                     </div>
                     <Switch
@@ -791,14 +791,14 @@ export function NotificationPreferencesPanel({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
                     <div className="flex items-center space-x-3">
-                      <Smartphone className="h-5 w-5 text-gray-600" />
+                      <Smartphone className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <Label htmlFor="channel-sms" className="font-medium cursor-pointer">
                           SMS
                         </Label>
-                        <p className="text-xs text-gray-500">Notificações por SMS</p>
+                        <p className="text-xs text-muted-foreground">Notificações por SMS</p>
                       </div>
                     </div>
                     <Switch
@@ -815,8 +815,8 @@ export function NotificationPreferencesPanel({
               {/* Notification Types with Recipients */}
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Tipos de Notificação e Destinatários</h3>
-                  <p className="text-sm text-gray-600">Configure quem receberá cada tipo de notificação</p>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Tipos de Notificação e Destinatários</h3>
+                  <p className="text-sm text-muted-foreground">Configure quem receberá cada tipo de notificação</p>
                 </div>
 
                 {Object.entries(groupedPreferences).map(([category, prefs]) => (
@@ -825,7 +825,7 @@ export function NotificationPreferencesPanel({
                       <Badge className={`${getCategoryColor(category)} text-xs font-medium`}>
                         {getCategoryLabel(category)}
                       </Badge>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         {prefs.filter((p) => p.enabled).length} de {prefs.length} ativas
                       </span>
                     </div>
@@ -833,7 +833,7 @@ export function NotificationPreferencesPanel({
                     <div className="space-y-2">
                       {prefs.map((pref) => (
                         <div key={pref.id} className="border rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors">
                             <div className="flex items-center space-x-3 flex-1">
                               <Button
                                 variant="ghost"
@@ -851,7 +851,7 @@ export function NotificationPreferencesPanel({
                                 <Label htmlFor={pref.id} className="font-medium cursor-pointer">
                                   {pref.label}
                                 </Label>
-                                <p className="text-sm text-gray-500 mt-1">{pref.description}</p>
+                                <p className="text-sm text-muted-foreground mt-1">{pref.description}</p>
                                 <div className="flex items-center space-x-2 mt-2">
                                   {pref.recipients.sendToAll ? (
                                     <Badge variant="outline" className="text-xs">
@@ -875,14 +875,14 @@ export function NotificationPreferencesPanel({
                           </div>
 
                           {expandedPreference === pref.id && (
-                            <div className="border-t bg-gray-50 p-4 space-y-4">
+                            <div className="border-t bg-muted/30 p-4 space-y-4">
                               <div>
-                                <h4 className="text-sm font-semibold text-gray-900 mb-3">Destinatários</h4>
+                                <h4 className="text-sm font-semibold text-foreground mb-3">Destinatários</h4>
 
                                 {/* Send to All Toggle */}
-                                <div className="flex items-center justify-between p-3 bg-white border rounded-lg mb-3">
+                                <div className="flex items-center justify-between p-3 bg-card border rounded-lg mb-3">
                                   <div className="flex items-center space-x-2">
-                                    <Users className="h-4 w-4 text-gray-600" />
+                                    <Users className="h-4 w-4 text-muted-foreground" />
                                     <Label htmlFor={`${pref.id}-all`} className="font-medium cursor-pointer">
                                       Enviar para todos os usuários
                                     </Label>
@@ -897,13 +897,13 @@ export function NotificationPreferencesPanel({
                                 {/* Group Selection */}
                                 {!pref.recipients.sendToAll && (
                                   <div className="space-y-2">
-                                    <p className="text-xs text-gray-600 mb-2">
+                                    <p className="text-xs text-muted-foreground mb-2">
                                       Selecione os grupos que receberão esta notificação:
                                     </p>
                                     {userGroups.map((group) => (
                                       <div
                                         key={group.id}
-                                        className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors"
+                                        className="flex items-center justify-between p-3 bg-card border rounded-lg hover:bg-accent/40 transition-colors"
                                       >
                                         <div className="flex items-center space-x-3">
                                           <Checkbox
@@ -918,7 +918,7 @@ export function NotificationPreferencesPanel({
                                             >
                                               {group.name}
                                             </Label>
-                                            <p className="text-xs text-gray-500">{group.description}</p>
+                                            <p className="text-xs text-muted-foreground">{group.description}</p>
                                           </div>
                                         </div>
                                         <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
@@ -941,8 +941,8 @@ export function NotificationPreferencesPanel({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Regras de Distribuição</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-lg font-semibold text-foreground">Regras de Distribuição</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
                       Crie regras para automatizar a distribuição de notificações
                     </p>
                   </div>
@@ -954,27 +954,27 @@ export function NotificationPreferencesPanel({
 
                 <div className="space-y-3">
                   {distributionRules.map((rule) => (
-                    <div key={rule.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div key={rule.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <h4 className="font-semibold text-gray-900">{rule.name}</h4>
+                            <h4 className="font-semibold text-foreground">{rule.name}</h4>
                             <Badge variant={rule.enabled ? "default" : "secondary"} className="text-xs">
                               {rule.enabled ? "Ativa" : "Inativa"}
                             </Badge>
                           </div>
-                          <p className="text-sm text-gray-600 mb-3">{rule.description}</p>
+                          <p className="text-sm text-muted-foreground mb-3">{rule.description}</p>
 
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2">
-                              <Bell className="h-4 w-4 text-gray-500" />
-                              <span className="text-xs text-gray-600">
+                              <Bell className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">
                                 {rule.notificationTypes.length} tipo(s) de notificação
                               </span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <Users className="h-4 w-4 text-gray-500" />
-                              <span className="text-xs text-gray-600">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">
                                 {rule.recipients.groupIds.length} grupo(s) de destinatários
                               </span>
                             </div>
@@ -987,9 +987,9 @@ export function NotificationPreferencesPanel({
                 </div>
 
                 <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Settings className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <h4 className="font-semibold text-gray-900 mb-2">Crie Regras Personalizadas</h4>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <h4 className="font-semibold text-foreground mb-2">Crie Regras Personalizadas</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
                     Configure regras automáticas para distribuir notificações específicas para grupos de usuários
                   </p>
                   <Button variant="outline" size="sm">
@@ -1004,8 +1004,8 @@ export function NotificationPreferencesPanel({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Grupos de Usuários</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-lg font-semibold text-foreground">Grupos de Usuários</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
                       Gerencie grupos para facilitar a distribuição de notificações
                     </p>
                   </div>
@@ -1017,15 +1017,15 @@ export function NotificationPreferencesPanel({
 
                 <div className="grid gap-4">
                   {userGroups.map((group) => (
-                    <div key={group.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div key={group.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <Users className="h-5 w-5 text-gray-600" />
-                            <h4 className="font-semibold text-gray-900">{group.name}</h4>
+                            <Users className="h-5 w-5 text-muted-foreground" />
+                            <h4 className="font-semibold text-foreground">{group.name}</h4>
                             <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
                           </div>
-                          <p className="text-sm text-gray-600">{group.description}</p>
+                          <p className="text-sm text-muted-foreground">{group.description}</p>
                         </div>
                         <Button variant="ghost" size="sm">
                           Editar
@@ -1036,9 +1036,9 @@ export function NotificationPreferencesPanel({
                 </div>
 
                 <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <h4 className="font-semibold text-gray-900 mb-2">Organize Seus Usuários</h4>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <h4 className="font-semibold text-foreground mb-2">Organize Seus Usuários</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
                     Crie grupos personalizados para facilitar o gerenciamento de permissões e notificações
                   </p>
                   <Button variant="outline" size="sm">
@@ -1051,19 +1051,17 @@ export function NotificationPreferencesPanel({
           </Tabs>
 
           {/* Footer */}
-          <div className="border-t p-6 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
+          <div className="border-t px-6 py-4 bg-background shrink-0">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={onClose} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={saving} className="btn-brand">
+                {saving ? "Salvando..." : "Salvar Preferências"}
+              </Button>
+              <p className="text-sm text-muted-foreground ml-2">
                 {preferences.filter((p) => p.enabled).length} de {preferences.length} notificações ativas
               </p>
-              <div className="flex space-x-3">
-                <Button variant="outline" onClick={onClose} disabled={saving}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleSave} disabled={saving} className="btn-brand">
-                  {saving ? "Salvando..." : "Salvar Preferências"}
-                </Button>
-              </div>
             </div>
           </div>
         </div>

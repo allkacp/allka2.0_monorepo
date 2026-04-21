@@ -5,12 +5,12 @@ import path from 'path'
 import { componentTagger } from 'lovable-tagger'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), componentTagger()],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, '.') },
+    ],
   },
   server: {
     port: 8080,
@@ -32,4 +32,4 @@ export default defineConfig({
       'date-fns',
     ],
   },
-})
+}))

@@ -369,7 +369,13 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
             <Button
               variant="ghost"
               className="w-full justify-start text-white hover:bg-white/10 rounded-xl p-4"
-              onClick={onClose}
+              onClick={() => {
+                localStorage.removeItem("simulatedUser")
+                localStorage.removeItem("allka_token")
+                localStorage.setItem("allka_logged_out", "true")
+                onClose()
+                window.location.href = "/login"
+              }}
             >
               <LogOut className="h-5 w-5 mr-3" />
               Sair da Conta

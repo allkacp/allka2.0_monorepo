@@ -1,614 +1,529 @@
-// Allka MVP - API Client utility functions
+// ─── Allka API Client ─────────────────────────────────────────────────────────
+// Authenticated HTTP client for the Allka platform backend.
+// Token is stored in localStorage under "allka_token".
 
-// Mock inline: quando VITE_USE_MOCKS=true, usa um Proxy que retorna dados vazios.
-// Mantido inline para evitar dependência da pasta dev-mocks/ (ignorada no build).
-const mockApiClient: any = new Proxy(
-  {
-    setToken() {},
-    clearToken() {},
-    async login(email: string) {
-      return { token: "mock-token", user: { id: "mock", email, name: "Mock" } };
-    },
-    async logout() {
-      return { ok: true };
-    },
-    async getCurrentUser() {
-      return { id: "mock", email: "mock@allka.dev", name: "Mock" };
-    },
-  },
-  {
-    get(target: any, prop: string) {
-      if (prop in target) return target[prop];
-      return async () => [];
-    },
-  },
-);
+import { mockApiClient } from "../dev-mocks/mock-api-client";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://api-dev.allka.com.vc/api";
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
+  "https://api-dev.allka.com.vc/api";
+
 const TOKEN_KEY = "allka_token";
 
 class ApiClient {
-  private getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-  }
-
+  // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
-    localStorage.setItem(TOKEN_KEY, token);
+    try { localStorage.setItem(TOKEN_KEY, token); } catch {}
   }
 
   clearToken() {
-    localStorage.removeItem(TOKEN_KEY);
+    try { localStorage.removeItem(TOKEN_KEY); } catch {}
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
+  private getToken(): string | null {
+    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  }
+
+  // ─── Core Request ──────────────────────────────────────────────────────────
+  private async request<T = any>(
+    method: string,
+    path: string,
+    body?: unknown,
+    params?: Record<string, any>,
   ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    let url = `${API_BASE_URL}${path}`;
+    if (params) {
+      const qs = Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join("&");
+      if (qs) url += `?${qs}`;
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
     const token = this.getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const config: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    };
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
 
-    const response = await fetch(url, config);
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const message = body?.error || body?.message || `API Error: ${response.status} ${response.statusText}`;
-      throw new Error(message);
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); msg = j.error || j.message || msg; } catch {}
+      throw new Error(msg);
     }
 
-    // 204 No Content
-    if (response.status === 204) return undefined as T;
-
-    return response.json();
+    if (res.status === 204) return undefined as T;
+    return res.json();
   }
 
-  private buildQuery(filters?: Record<string, any>): string {
-    if (!filters) return "";
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(filters)) {
-      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
-    }
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
+  private get<T = any>(path: string, params?: Record<string, any>) {
+    return this.request<T>("GET", path, undefined, params);
+  }
+  private post<T = any>(path: string, body?: unknown) {
+    return this.request<T>("POST", path, body);
+  }
+  private put<T = any>(path: string, body?: unknown) {
+    return this.request<T>("PUT", path, body);
+  }
+  private patch<T = any>(path: string, body?: unknown) {
+    return this.request<T>("PATCH", path, body);
+  }
+  private del<T = any>(path: string) {
+    return this.request<T>("DELETE", path);
   }
 
-  // ── Auth ─────────────────────────────────────────────────────────────────────
+  // ─── Auth ──────────────────────────────────────────────────────────────────
   async login(email: string, password: string) {
-    const result = await this.request<{ token: string; user: any }>(
-      "/auth/login",
-      { method: "POST", body: JSON.stringify({ email, password }) },
-    );
-    this.setToken(result.token);
-    return result;
+    const res = await this.post("/auth/login", { email, password });
+    if (res?.token) this.setToken(res.token);
+    return res;
   }
 
   async logout() {
-    const result = await this.request("/auth/logout", { method: "POST" });
+    const res = await this.post("/auth/logout");
     this.clearToken();
-    return result;
+    return res;
   }
 
   async getCurrentUser() {
-    return this.request("/auth/me");
+    return this.get("/auth/me");
   }
 
-  // ── Users ────────────────────────────────────────────────────────────────────
+  // ─── Users ────────────────────────────────────────────────────────────────
   async getUsers(filters?: Record<string, any>) {
-    return this.request(`/users${this.buildQuery(filters)}`);
+    return this.get("/users", filters);
   }
 
-  async getUser(id: string) {
-    return this.request(`/users/${id}`);
+  async getUser(id: string | number) {
+    return this.get(`/users/${id}`);
   }
 
-  async createUser(data: any) {
-    return this.request("/users", { method: "POST", body: JSON.stringify(data) });
+  async createUser(data: Record<string, any>) {
+    return this.post("/users", data);
   }
 
-  async updateUser(id: string, data: any) {
-    return this.request(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateUser(id: string | number, data: Record<string, any>) {
+    return this.put(`/users/${id}`, data);
   }
 
-  async deleteUser(id: string) {
-    return this.request(`/users/${id}`, { method: "DELETE" });
+  async deleteUser(id: string | number) {
+    return this.del(`/users/${id}`);
   }
 
-  // ── Companies / Clients (both map to /clients) ──────────────────────────────
-  async getClients(filters?: Record<string, any>) {
-    return this.request(`/clients${this.buildQuery(filters)}`);
-  }
-
-  async getClient(id: string) {
-    return this.request(`/clients/${id}`);
-  }
-
-  async createClient(data: any) {
-    return this.request("/clients", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateClient(id: string, data: any) {
-    return this.request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteClient(id: string) {
-    return this.request(`/clients/${id}`, { method: "DELETE" });
-  }
-
-  // Aliases used by company-facing pages
+  // ─── Companies ────────────────────────────────────────────────────────────
   async getCompanies(filters?: Record<string, any>) {
-    return this.getClients(filters);
-  }
-  async getCompany(id: string) {
-    return this.getClient(id);
-  }
-  async createCompany(data: any) {
-    return this.createClient(data);
-  }
-  async updateCompany(id: string, data: any) {
-    return this.updateClient(id, data);
-  }
-  async deleteCompany(id: string) {
-    return this.deleteClient(id);
+    return this.get("/clients", filters);
   }
 
-  // ── Projects ─────────────────────────────────────────────────────────────────
+  async getCompany(id: string | number) {
+    return this.get(`/clients/${id}`);
+  }
+
+  async createCompany(data: Record<string, any>) {
+    return this.post("/clients", data);
+  }
+
+  async updateCompany(id: string | number, data: Record<string, any>) {
+    return this.put(`/clients/${id}`, data);
+  }
+
+  async deleteCompany(id: string | number) {
+    return this.del(`/clients/${id}`);
+  }
+
+  // Alias — some components use "client" terminology
+  async getClients(filters?: Record<string, any>) { return this.getCompanies(filters); }
+  async getClient(id: string | number) { return this.getCompany(id); }
+  async createClient(data: Record<string, any>) { return this.createCompany(data); }
+  async updateClient(id: string | number, data: Record<string, any>) { return this.updateCompany(id, data); }
+  async deleteClient(id: string | number) { return this.deleteCompany(id); }
+
+  // ─── Project Clients ──────────────────────────────────────────────────────
+  async getProjectClients(filters?: Record<string, any>) {
+    return this.get("/clients", filters);
+  }
+
+  async getProjectClient(id: string | number) {
+    return this.get(`/clients/${id}`);
+  }
+
+  async createProjectClient(data: Record<string, any>) {
+    return this.post("/clients", data);
+  }
+
+  async updateProjectClient(id: string | number, data: Record<string, any>) {
+    return this.put(`/clients/${id}`, data);
+  }
+
+  async deleteProjectClient(id: string | number) {
+    return this.del(`/clients/${id}`);
+  }
+
+  // ─── Projects ─────────────────────────────────────────────────────────────
   async getProjects(filters?: Record<string, any>) {
-    return this.request(`/projects${this.buildQuery(filters)}`);
+    return this.get("/projects", filters);
   }
 
-  async getProject(id: string) {
-    return this.request(`/projects/${id}`);
+  async getProject(id: string | number) {
+    return this.get(`/projects/${id}`);
   }
 
-  async createProject(data: any) {
-    return this.request("/projects", { method: "POST", body: JSON.stringify(data) });
+  async createProject(data: Record<string, any>) {
+    return this.post("/projects", data);
   }
 
-  async updateProject(id: string, data: any) {
-    return this.request(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateProject(id: string | number, data: Record<string, any>) {
+    return this.put(`/projects/${id}`, data);
   }
 
-  async deleteProject(id: string) {
-    return this.request(`/projects/${id}`, { method: "DELETE" });
+  async deleteProject(id: string | number) {
+    return this.del(`/projects/${id}`);
   }
 
-  async getProjectTasks(projectId: string, filters?: Record<string, any>) {
-    return this.request(`/projects/${projectId}/tasks${this.buildQuery(filters)}`);
+  async getProjectTasks(projectId: string | number) {
+    return this.get(`/projects/${projectId}/tasks`);
   }
 
-  // ── Tasks ────────────────────────────────────────────────────────────────────
+  // ─── Tasks ────────────────────────────────────────────────────────────────
   async getTasks(filters?: Record<string, any>) {
-    return this.request(`/tasks${this.buildQuery(filters)}`);
+    return this.get("/tasks", filters);
   }
 
-  async getTask(id: string) {
-    return this.request(`/tasks/${id}`);
+  async getTask(id: string | number) {
+    return this.get(`/tasks/${id}`);
   }
 
-  async createTask(data: any) {
-    return this.request("/tasks", { method: "POST", body: JSON.stringify(data) });
+  async createTask(data: Record<string, any>) {
+    return this.post("/tasks", data);
   }
 
-  async updateTask(id: string, data: any) {
-    return this.request(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateTask(id: string | number, data: Record<string, any>) {
+    return this.put(`/tasks/${id}`, data);
   }
 
-  async deleteTask(id: string) {
-    return this.request(`/tasks/${id}`, { method: "DELETE" });
+  async updateTaskStatus(id: string | number, status: string) {
+    return this.put(`/tasks/${id}`, { status });
   }
 
-  async updateTaskStatus(id: string, status: string, feedback?: string) {
-    return this.request(`/tasks/${id}/status`, {
-      method: "PUT", body: JSON.stringify({ status, feedback }),
-    });
+  async deleteTask(id: string | number) {
+    return this.del(`/tasks/${id}`);
   }
 
-  // ── Dashboard ────────────────────────────────────────────────────────────────
+  // ─── Dashboard ────────────────────────────────────────────────────────────
   async getDashboardStats() {
-    return this.request("/dashboard/stats");
+    return this.get("/dashboard");
   }
 
   async getRecentActivities() {
-    return this.request("/dashboard/recent-activities");
+    return this.get("/dashboard/activities");
   }
 
   async getMyTasks() {
-    return this.request("/dashboard/my-tasks");
+    return this.get("/tasks", { my: "true", limit: "10" });
   }
 
-  // ── Nomades ──────────────────────────────────────────────────────────────────
+  // ─── Nomades ──────────────────────────────────────────────────────────────
   async getNomades(filters?: Record<string, any>) {
-    return this.request(`/nomades${this.buildQuery(filters)}`);
+    return this.get("/nomades", filters);
   }
 
-  async getNomade(id: string) {
-    return this.request(`/nomades/${id}`);
+  async getNomade(id: string | number) {
+    return this.get(`/nomades/${id}`);
   }
 
-  async createNomade(data: any) {
-    return this.request("/nomades", { method: "POST", body: JSON.stringify(data) });
+  async createNomade(data: Record<string, any>) {
+    return this.post("/nomades", data);
   }
 
-  async updateNomade(id: string, data: any) {
-    return this.request(`/nomades/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateNomade(id: string | number, data: Record<string, any>) {
+    return this.put(`/nomades/${id}`, data);
   }
 
-  async deleteNomade(id: string) {
-    return this.request(`/nomades/${id}`, { method: "DELETE" });
+  async deleteNomade(id: string | number) {
+    return this.del(`/nomades/${id}`);
   }
 
-  async getNomadeWallet(id: string, filters?: Record<string, any>) {
-    return this.request(`/nomades/${id}/wallet${this.buildQuery(filters)}`);
-  }
-
-  async getNomadeQualifications(id: string) {
-    return this.request(`/nomades/${id}/qualifications`);
-  }
-
-  async updateNomadeQualification(nomadeId: string, qualId: string, data: any) {
-    return this.request(`/nomades/${nomadeId}/qualifications/${qualId}`, {
-      method: "PUT", body: JSON.stringify(data),
-    });
-  }
-
-  // ── Nomade Levels ────────────────────────────────────────────────────────────
+  // ─── Nomade Levels ────────────────────────────────────────────────────────
   async getNomadeLevels() {
-    return this.request("/nomade-levels");
+    return this.get("/nomade-levels");
   }
 
-  async getNomadeLevel(id: string) {
-    return this.request(`/nomade-levels/${id}`);
+  async getLevels() {
+    return this.getNomadeLevels();
   }
 
-  async createNomadeLevel(data: any) {
-    return this.request("/nomade-levels", { method: "POST", body: JSON.stringify(data) });
+  async createNomadeLevel(data: Record<string, any>) {
+    return this.post("/nomade-levels", data);
   }
 
-  async updateNomadeLevel(id: string, data: any) {
-    return this.request(`/nomade-levels/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateNomadeLevel(id: string | number, data: Record<string, any>) {
+    return this.put(`/nomade-levels/${id}`, data);
   }
 
-  async deleteNomadeLevel(id: string) {
-    return this.request(`/nomade-levels/${id}`, { method: "DELETE" });
+  async deleteNomadeLevel(id: string | number) {
+    return this.del(`/nomade-levels/${id}`);
   }
 
-  // ── Agencies ─────────────────────────────────────────────────────────────────
+  async createLevel(data: Record<string, any>) { return this.createNomadeLevel(data); }
+  async updateLevel(id: string | number, data: Record<string, any>) { return this.updateNomadeLevel(id, data); }
+  async deleteLevel(id: string | number) { return this.deleteNomadeLevel(id); }
+
+  // ─── Agencies ─────────────────────────────────────────────────────────────
   async getAgencies(filters?: Record<string, any>) {
-    return this.request(`/agencies${this.buildQuery(filters)}`);
+    return this.get("/agencies", filters);
   }
 
-  async getAgency(id: string) {
-    return this.request(`/agencies/${id}`);
+  async getAgency(id: string | number) {
+    return this.get(`/agencies/${id}`);
   }
 
-  async createAgency(data: any) {
-    return this.request("/agencies", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateAgency(id: string, data: any) {
-    return this.request(`/agencies/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteAgency(id: string) {
-    return this.request(`/agencies/${id}`, { method: "DELETE" });
-  }
-
-  // ── Products ─────────────────────────────────────────────────────────────────
-  async getProducts(filters?: Record<string, any>) {
-    return this.request(`/products${this.buildQuery(filters)}`);
-  }
-
-  async getProduct(id: string) {
-    return this.request(`/products/${id}`);
-  }
-
-  async createProduct(data: any) {
-    return this.request("/products", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateProduct(id: string, data: any) {
-    return this.request(`/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteProduct(id: string) {
-    return this.request(`/products/${id}`, { method: "DELETE" });
-  }
-
-  async createProductVariation(productId: string, data: any) {
-    return this.request(`/products/${productId}/variations`, { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async deleteProductVariation(productId: string, variationId: string) {
-    return this.request(`/products/${productId}/variations/${variationId}`, { method: "DELETE" });
-  }
-
-  async createProductAddon(productId: string, data: any) {
-    return this.request(`/products/${productId}/addons`, { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async deleteProductAddon(productId: string, addonId: string) {
-    return this.request(`/products/${productId}/addons/${addonId}`, { method: "DELETE" });
-  }
-
-  // ── Specialties ──────────────────────────────────────────────────────────────
-  async getSpecialties(filters?: Record<string, any>) {
-    return this.request(`/specialties${this.buildQuery(filters)}`);
-  }
-
-  async getSpecialty(id: string) {
-    return this.request(`/specialties/${id}`);
-  }
-
-  async createSpecialty(data: any) {
-    return this.request("/specialties", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateSpecialty(id: string, data: any) {
-    return this.request(`/specialties/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteSpecialty(id: string) {
-    return this.request(`/specialties/${id}`, { method: "DELETE" });
-  }
-
-  // ── Financial (Withdrawals) ──────────────────────────────────────────────────
-  async getWithdrawals(filters?: Record<string, any>) {
-    return this.request(`/financial/withdrawals${this.buildQuery(filters)}`);
-  }
-
-  async getWithdrawal(id: string) {
-    return this.request(`/financial/withdrawals/${id}`);
-  }
-
-  async createWithdrawal(data: any) {
-    return this.request("/financial/withdrawals", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateWithdrawal(id: string, data: any) {
-    return this.request(`/financial/withdrawals/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteWithdrawal(id: string) {
-    return this.request(`/financial/withdrawals/${id}`, { method: "DELETE" });
-  }
-
-  async getFinancialStats() {
-    return this.request("/financial/stats");
-  }
-
-  // ── Billing (Invoices) ───────────────────────────────────────────────────────
-  async getInvoices(filters?: Record<string, any>) {
-    return this.request(`/billing/invoices${this.buildQuery(filters)}`);
-  }
-
-  async getInvoice(id: string) {
-    return this.request(`/billing/invoices/${id}`);
-  }
-
-  async createInvoice(data: any) {
-    return this.request("/billing/invoices", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateInvoice(id: string, data: any) {
-    return this.request(`/billing/invoices/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteInvoice(id: string) {
-    return this.request(`/billing/invoices/${id}`, { method: "DELETE" });
-  }
-
-  async getBillingStats() {
-    return this.request("/billing/stats");
-  }
-
-  // ── Terms ────────────────────────────────────────────────────────────────────
-  async getTerms() {
-    return this.request("/terms");
-  }
-
-  async getTerm(id: string) {
-    return this.request(`/terms/${id}`);
-  }
-
-  async createTerm(data: any) {
-    return this.request("/terms", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateTerm(id: string, data: any) {
-    return this.request(`/terms/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteTerm(id: string) {
-    return this.request(`/terms/${id}`, { method: "DELETE" });
-  }
-
-  async checkTerms() {
-    const terms = await this.getTerms();
-    const activeTerms = Array.isArray(terms)
-      ? (terms as any[]).filter((term) => term?.is_active !== false)
-      : [];
-
-    const pending = await Promise.all(
-      activeTerms.map(async (term) => {
-        try {
-          const result: any = await this.checkTermAccepted(term.id);
-          return result?.accepted ? null : term;
-        } catch {
-          return term;
-        }
-      }),
-    );
-
-    return { pending: pending.filter(Boolean) };
-  }
-
-  async acceptTerm(termId: string) {
-    return this.request(`/terms/${termId}/accept`, { method: "POST" });
-  }
-
-  async checkTermAccepted(termId: string) {
-    return this.request(`/terms/${termId}/accepted`);
-  }
-
-  // ── Chat ─────────────────────────────────────────────────────────────────────
-  async getConversations() {
-    return this.request("/chat/conversations");
-  }
-
-  async createConversation(data: any) {
-    return this.request("/chat/conversations", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async getMessages(conversationId: string) {
-    return this.request(`/chat/conversations/${conversationId}/messages`);
-  }
-
-  async sendMessage(conversationId: string, content: string) {
-    return this.request(`/chat/conversations/${conversationId}/messages`, {
-      method: "POST", body: JSON.stringify({ content }),
-    });
-  }
-
-  // ── Allkademy ────────────────────────────────────────────────────────────────
-  async getCourses(filters?: Record<string, any>) {
-    return this.request(`/allkademy/courses${this.buildQuery(filters)}`);
-  }
-
-  async getCourse(id: string) {
-    return this.request(`/allkademy/courses/${id}`);
-  }
-
-  async createCourse(data: any) {
-    return this.request("/allkademy/courses", { method: "POST", body: JSON.stringify(data) });
-  }
-
-  async updateCourse(id: string, data: any) {
-    return this.request(`/allkademy/courses/${id}`, { method: "PUT", body: JSON.stringify(data) });
-  }
-
-  async deleteCourse(id: string) {
-    return this.request(`/allkademy/courses/${id}`, { method: "DELETE" });
-  }
-
-  async createCourseModule(courseId: string, data: any) {
-    return this.request(`/allkademy/courses/${courseId}/modules`, {
-      method: "POST", body: JSON.stringify(data),
-    });
-  }
-
-  async createLesson(moduleId: string, data: any) {
-    return this.request(`/allkademy/modules/${moduleId}/lessons`, {
-      method: "POST", body: JSON.stringify(data),
-    });
-  }
-
-  async enrollCourse(courseId: string) {
-    return this.request(`/allkademy/courses/${courseId}/enroll`, { method: "POST" });
-  }
-
-  async getMyEnrollments() {
-    return this.request("/allkademy/enrollments");
-  }
-
-  async updateEnrollmentProgress(courseId: string, progress: number) {
-    return this.request(`/allkademy/enrollments/${courseId}/progress`, {
-      method: "PUT", body: JSON.stringify({ progress }),
-    });
-  }
-
-  // ── Partners ─────────────────────────────────────────────────────────────────
+  // ─── Partners ─────────────────────────────────────────────────────────────
   async getPartners(filters?: Record<string, any>) {
-    return this.request(`/partners${this.buildQuery(filters)}`);
+    return this.get("/partners", filters);
   }
 
   async getPartnerMe() {
-    return this.request("/partners/me");
+    return this.get("/partners/me");
   }
 
-  async getPartner(id: string) {
-    return this.request(`/partners/${id}`);
+  async getPartnerCommissions(id: string | number) {
+    const path = String(id) === "me" ? "/partners/me/commissions" : `/partners/${id}/commissions`;
+    return this.get(path);
   }
 
-  async createPartner(data: any) {
-    return this.request("/partners", { method: "POST", body: JSON.stringify(data) });
+  async createPartner(data: Record<string, any>) {
+    return this.post("/partners", data);
   }
 
-  async updatePartner(id: string, data: any) {
-    return this.request(`/partners/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updatePartner(id: string | number, data: Record<string, any>) {
+    return this.put(`/partners/${id}`, data);
   }
 
-  async getPartnerCommissions(partnerId: string, filters?: Record<string, any>) {
-    return this.request(`/partners/${partnerId}/commissions${this.buildQuery(filters)}`);
+  // ─── Products ─────────────────────────────────────────────────────────────
+  async getProducts(filters?: Record<string, any>) {
+    return this.get("/products", filters);
   }
 
-  // ── Campaigns ────────────────────────────────────────────────────────────────
+  async getProduct(id: string | number) {
+    return this.get(`/products/${id}`);
+  }
+
+  async createProduct(data: Record<string, any>) {
+    return this.post("/products", data);
+  }
+
+  async updateProduct(id: string | number, data: Record<string, any>) {
+    return this.put(`/products/${id}`, data);
+  }
+
+  async deleteProduct(id: string | number) {
+    return this.del(`/products/${id}`);
+  }
+
+  // ─── Campaigns ────────────────────────────────────────────────────────────
   async getCampaigns(filters?: Record<string, any>) {
-    return this.request(`/campaigns${this.buildQuery(filters)}`);
+    return this.get("/campaigns", filters);
   }
 
-  async getCampaign(id: string) {
-    return this.request(`/campaigns/${id}`);
+  async getCampaign(id: string | number) {
+    return this.get(`/campaigns/${id}`);
   }
 
-  async createCampaign(data: any) {
-    return this.request("/campaigns", { method: "POST", body: JSON.stringify(data) });
+  async createCampaign(data: Record<string, any>) {
+    return this.post("/campaigns", data);
   }
 
-  async updateCampaign(id: string, data: any) {
-    return this.request(`/campaigns/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async updateCampaign(id: string | number, data: Record<string, any>) {
+    return this.put(`/campaigns/${id}`, data);
   }
 
-  async deleteCampaign(id: string) {
-    return this.request(`/campaigns/${id}`, { method: "DELETE" });
+  async deleteCampaign(id: string | number) {
+    return this.del(`/campaigns/${id}`);
   }
 
-  // ── Permissions ──────────────────────────────────────────────────────────────
+  // Coupons are campaigns of type "coupon"
+  async getCoupons(filters?: Record<string, any>) {
+    return this.getCampaigns({ ...filters, type: "coupon" });
+  }
+
+  async createCoupon(data: Record<string, any>) {
+    return this.createCampaign({ ...data, type: "coupon" });
+  }
+
+  async updateCoupon(id: string | number, data: Record<string, any>) {
+    return this.updateCampaign(id, data);
+  }
+
+  async deleteCoupon(id: string | number) {
+    return this.deleteCampaign(id);
+  }
+
+  // ─── Financial / Invoices ─────────────────────────────────────────────────
+  async getInvoices(filters?: Record<string, any>) {
+    return this.get("/billing", filters);
+  }
+
+  async getInvoice(id: string | number) {
+    return this.get(`/billing/${id}`);
+  }
+
+  async createInvoice(data: Record<string, any>) {
+    return this.post("/billing", data);
+  }
+
+  async updateInvoice(id: string | number, data: Record<string, any>) {
+    return this.put(`/billing/${id}`, data);
+  }
+
+  async getFinancialStats() {
+    return this.get("/financial/stats");
+  }
+
+  // ─── Withdrawals ──────────────────────────────────────────────────────────
+  async getWithdrawals(filters?: Record<string, any>) {
+    return this.get("/financial/withdrawals", filters);
+  }
+
+  async updateWithdrawal(id: string | number, data: Record<string, any>) {
+    return this.put(`/financial/withdrawals/${id}`, data);
+  }
+
+  async requestWithdrawal(data: Record<string, any>) {
+    return this.post("/financial/withdrawals", data);
+  }
+
+  async createWithdrawal(data: Record<string, any>) {
+    return this.requestWithdrawal(data);
+  }
+
+  // ─── Specialties ──────────────────────────────────────────────────────────
+  async getSpecialties(filters?: Record<string, any>) {
+    return this.get("/specialties", filters);
+  }
+
+  async createSpecialty(data: Record<string, any>) {
+    return this.post("/specialties", data);
+  }
+
+  async updateSpecialty(id: string | number, data: Record<string, any>) {
+    return this.put(`/specialties/${id}`, data);
+  }
+
+  async deleteSpecialty(id: string | number) {
+    return this.del(`/specialties/${id}`);
+  }
+
+  // ─── Terms ────────────────────────────────────────────────────────────────
+  async getTerms(filters?: Record<string, any>) {
+    return this.get("/terms", filters);
+  }
+
+  async getTerm(id: string | number) {
+    return this.get(`/terms/${id}`);
+  }
+
+  async createTerm(data: Record<string, any>) {
+    return this.post("/terms", data);
+  }
+
+  async updateTerm(id: string | number, data: Record<string, any>) {
+    return this.put(`/terms/${id}`, data);
+  }
+
+  async deleteTerm(id: string | number) {
+    return this.del(`/terms/${id}`);
+  }
+
+  async checkTerms() {
+    return this.get("/terms/check");
+  }
+
+  async acceptTerm(termId: string | number) {
+    return this.post(`/terms/${termId}/accept`);
+  }
+
+  async getTermAcceptances(filters?: Record<string, any>) {
+    return this.get("/terms/acceptances", filters);
+  }
+
+  // ─── Allkademy / Courses ──────────────────────────────────────────────────
+  async getCourses(filters?: Record<string, any>) {
+    return this.get("/allkademy/courses", filters);
+  }
+
+  async getCourse(id: string | number) {
+    return this.get(`/allkademy/courses/${id}`);
+  }
+
+  async createCourse(data: Record<string, any>) {
+    return this.post("/allkademy/courses", data);
+  }
+
+  async updateCourse(id: string | number, data: Record<string, any>) {
+    return this.put(`/allkademy/courses/${id}`, data);
+  }
+
+  async deleteCourse(id: string | number) {
+    return this.del(`/allkademy/courses/${id}`);
+  }
+
+  async getMyEnrollments(userId?: string | number) {
+    return this.get("/allkademy/enrollments/me");
+  }
+
+  async enrollCourse(courseId: string | number, _userId?: string | number) {
+    return this.post(`/allkademy/courses/${courseId}/enroll`);
+  }
+
+  // ─── Permissions ──────────────────────────────────────────────────────────
   async getPermissionProfiles() {
-    return this.request("/permissions/profiles");
+    return this.get("/permissions/profiles");
   }
 
-  async getPermissionProfile(id: string) {
-    return this.request(`/permissions/profiles/${id}`);
+  async createPermissionProfile(data: Record<string, any>) {
+    return this.post("/permissions/profiles", data);
   }
 
-  async createPermissionProfile(data: any) {
-    return this.request("/permissions/profiles", { method: "POST", body: JSON.stringify(data) });
+  async updatePermissionProfile(id: string | number, data: Record<string, any>) {
+    return this.put(`/permissions/profiles/${id}`, data);
   }
 
-  async updatePermissionProfile(id: string, data: any) {
-    return this.request(`/permissions/profiles/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  async deletePermissionProfile(id: string | number) {
+    return this.del(`/permissions/profiles/${id}`);
   }
 
-  async deletePermissionProfile(id: string) {
-    return this.request(`/permissions/profiles/${id}`, { method: "DELETE" });
+  async updateProfilePermissions(profileId: string | number, permissions: any[]) {
+    return this.post("/permissions", { profile_id: profileId, permissions });
   }
 
-  async updateProfilePermissions(profileId: string, permissions: any[]) {
-    return this.request(`/permissions/profiles/${profileId}/permissions`, {
-      method: "PUT", body: JSON.stringify({ permissions }),
-    });
+  // ─── Chat ─────────────────────────────────────────────────────────────────
+  async getConversations() {
+    return this.get("/chat/conversations");
   }
 
-  // ── Reports ──────────────────────────────────────────────────────────────────
+  async createConversation(data: Record<string, any>) {
+    return this.post("/chat/conversations", data);
+  }
+
+  async getMessages(conversationId: string | number) {
+    return this.get(`/chat/conversations/${conversationId}/messages`);
+  }
+
+  async sendMessage(conversationId: string | number, content: string) {
+    return this.post(`/chat/conversations/${conversationId}/messages`, { content });
+  }
+
+  // ─── Reports ──────────────────────────────────────────────────────────────
   async getReportSummary() {
-    return this.request("/reports/summary");
-  }
-
-  async getReportNomades(filters?: Record<string, any>) {
-    return this.request(`/reports/nomades${this.buildQuery(filters)}`);
+    return this.get("/reports/summary");
   }
 
   async getReportFinancial() {
-    return this.request("/reports/financial");
+    return this.get("/reports/financial");
   }
 
   async getLevels(filters?: Record<string, any>) {
@@ -625,16 +540,8 @@ class ApiClient {
   }
 }
 
-// Toggle: quando VITE_USE_MOCKS=true, usa dados locais em memória (pasta dev-mocks/).
-// Em produção (build pro cPanel) essa variável não existe → usa API real.
-// O Vite faz tree-shake e NÃO inclui os mocks no bundle de produção.
-function createClient() {
-  if (import.meta.env.VITE_USE_MOCKS === "true") {
-    console.info("[Allka] 🟡 Usando MOCK API Client (dados locais em memória)");
-    return mockApiClient;
-  }
-  console.info("[Allka] 🟢 Usando API REAL:", API_BASE_URL);
-  return new ApiClient();
-}
-
-export const apiClient = createClient() as ApiClient;
+// Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.
+// Assim não depende de alias do Vite funcionar corretamente.
+const env = (import.meta as any).env ?? {};
+const useMocks = env.MODE === "mock" || env.VITE_USE_MOCKS === "true";
+export const apiClient: any = useMocks ? mockApiClient : new ApiClient();

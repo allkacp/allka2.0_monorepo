@@ -1076,9 +1076,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
             )}
 
             {/* Tabs + Content */}
-            <div className="flex-1 flex flex-col bg-white overflow-hidden">
+            <div className="flex-1 flex flex-col bg-white dark:bg-background overflow-hidden">
             <Tabs defaultValue="dashboard" className="w-full flex flex-col h-full">
-              <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+              <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
                 <TabsList className="grid w-max grid-cols-7 gap-1 bg-transparent p-0 h-auto">
                   <TabsTrigger value="dashboard" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
                     Dashboard

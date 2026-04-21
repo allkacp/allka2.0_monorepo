@@ -961,7 +961,7 @@ export function ProjectCreateNewPanel({
           )}
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
+          <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-background">
             {/* Validation warning */}
             {submitAttempted && totalErrors > 0 && (
               <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">

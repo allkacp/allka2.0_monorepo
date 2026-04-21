@@ -68,57 +68,83 @@
   --spacing-compact: 0.5rem;
   --spacing-comfortable: 1rem;
   --spacing-spacious: 1.5rem;
+
+  /* Table tokens — light mode */
+  --table-head: #f8fafc;
+  --table-row: #ffffff;
+  --table-row-alt: #f1f5f9;
+  --table-row-hover: #e2e8f0;
+  --table-border: rgba(226,232,240,0.6);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  /* Updated sidebar colors to night sky theme with gradient from black to night blue */
-  --sidebar: oklch(0.08 0.02 250);
-  --sidebar-foreground: oklch(0.95 0.02 250);
-  --sidebar-primary: oklch(0.25 0.08 250);
-  --sidebar-primary-foreground: oklch(0.95 0.02 250);
-  --sidebar-accent: oklch(0.22 0.06 250);
-  --sidebar-accent-foreground: oklch(0.95 0.02 250);
-  --sidebar-border: oklch(0.25 0.05 250);
-  --sidebar-ring: oklch(0.35 0.08 250);
+  /* ── Base backgrounds: cinza-azulado escuro (base ~0.22) ── */
+  --background: oklch(0.20 0.026 258);        /* fundo principal */
+  --foreground: oklch(0.96 0.005 250);
+  --card: oklch(0.32 0.020 258);              /* card elevado acima do fundo */
+  --card-foreground: oklch(0.96 0.005 250);
+  --popover: oklch(0.32 0.020 258);
+  --popover-foreground: oklch(0.96 0.005 250);
 
-  /* Added semantic status color tokens for dark mode */
-  --success: oklch(0.65 0.15 145);
-  --success-foreground: oklch(0.85 0.1 145);
-  --success-muted: oklch(0.25 0.08 145);
-  --warning: oklch(0.75 0.15 85);
-  --warning-foreground: oklch(0.9 0.1 85);
-  --warning-muted: oklch(0.25 0.08 85);
-  --info: oklch(0.6 0.15 240);
-  --info-foreground: oklch(0.85 0.12 240);
-  --info-muted: oklch(0.25 0.08 240);
-  --online: oklch(0.65 0.15 145);
+  /* ── Tabela: zebra striping ── */
+  --table-head: oklch(0.26 0.022 258);        /* cabeçalho mais visível */
+  --table-row: oklch(0.22 0.024 258);         /* linha normal */
+  --table-row-alt: oklch(0.24 0.022 258);     /* linha alternada */
+  --table-row-hover: oklch(0.28 0.020 258);   /* hover */
+  --table-border: oklch(0.25 0.022 258);      /* divisor de linha sutil */
+
+  /* ── Primary ── */
+  --primary: oklch(0.96 0.005 250);
+  --primary-foreground: oklch(0.20 0.026 258);
+
+  /* ── Secondary / Muted / Accent ── */
+  --secondary: oklch(0.26 0.022 258);
+  --secondary-foreground: oklch(0.92 0.005 250);
+  --muted: oklch(0.25 0.022 258);
+  --muted-foreground: oklch(0.60 0.018 255);
+  --accent: oklch(0.28 0.026 258);
+  --accent-foreground: oklch(0.96 0.005 250);
+
+  /* ── Destructive ── */
+  --destructive: oklch(0.42 0.16 25);
+  --destructive-foreground: oklch(0.75 0.20 25);
+
+  /* ── Borders / Inputs ── */
+  --border: oklch(0.29 0.022 258);
+  --input: oklch(0.22 0.026 258);
+  --ring: oklch(0.52 0.12 258);
+
+  /* ── Charts: cores vibrantes que funcionam no escuro ── */
+  --chart-1: oklch(0.60 0.22 258);            /* azul vivo */
+  --chart-2: oklch(0.68 0.18 162);            /* verde água */
+  --chart-3: oklch(0.78 0.16 85);             /* âmbar */
+  --chart-4: oklch(0.62 0.24 300);            /* roxo */
+  --chart-5: oklch(0.68 0.22 20);             /* laranja-vermelho */
+
+  /* ── Sidebar: mais escura que o fundo principal ── */
+  --sidebar: oklch(0.13 0.030 258);
+  --sidebar-foreground: oklch(0.95 0.02 250);
+  --sidebar-primary: oklch(0.26 0.09 258);
+  --sidebar-primary-foreground: oklch(0.95 0.02 250);
+  --sidebar-accent: oklch(0.21 0.042 258);
+  --sidebar-accent-foreground: oklch(0.95 0.02 250);
+  --sidebar-border: oklch(0.23 0.036 258);
+  --sidebar-ring: oklch(0.38 0.09 258);
+
+  /* ── Status tokens ── */
+  --success: oklch(0.60 0.16 145);
+  --success-foreground: oklch(0.82 0.12 145);
+  --success-muted: oklch(0.26 0.08 145);
+  --warning: oklch(0.72 0.16 85);
+  --warning-foreground: oklch(0.88 0.10 85);
+  --warning-muted: oklch(0.27 0.08 85);
+  --info: oklch(0.58 0.16 240);
+  --info-foreground: oklch(0.83 0.12 240);
+  --info-muted: oklch(0.26 0.08 240);
+  --online: oklch(0.60 0.16 145);
   --busy: oklch(0.637 0.237 25.331);
-  --away: oklch(0.75 0.15 85);
-  --offline: oklch(0.708 0 0);
+  --away: oklch(0.72 0.16 85);
+  --offline: oklch(0.55 0.010 258);
 }
 
 /* Added high contrast mode styles for improved accessibility */
@@ -185,6 +211,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Table tokens */
+  --color-table-head: var(--table-head);
+  --color-table-row: var(--table-row);
+  --color-table-row-alt: var(--table-row-alt);
+  --color-table-row-hover: var(--table-row-hover);
+  --color-table-border: var(--table-border);
 
   /* Added brand color tokens */
   --color-terracotta: var(--terracotta);
@@ -642,3 +675,266 @@
   filter: none !important;
   cursor: not-allowed !important;
 }
+
+/* ============================================================
+   DARK MODE — Slide Panels / Drawers / Dialogs
+   Cobre todos os painéis que usam [data-slot="sheet-content"]
+   e [data-slot="dialog-content"] sem precisar editar cada
+   componente individualmente.
+   ============================================================ */
+
+/* ── Backgrounds ── */
+.dark [data-slot="sheet-content"] .bg-white,
+.dark [data-slot="dialog-content"] .bg-white {
+  background-color: oklch(0.17 0.016 258);
+}
+.dark [data-slot="sheet-content"] .hover\:bg-white:hover,
+.dark [data-slot="dialog-content"] .hover\:bg-white:hover {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark [data-slot="sheet-content"] .bg-slate-50,
+.dark [data-slot="dialog-content"] .bg-slate-50 {
+  background-color: oklch(0.19 0.018 258);
+}
+.dark [data-slot="sheet-content"] .hover\:bg-slate-50:hover,
+.dark [data-slot="dialog-content"] .hover\:bg-slate-50:hover {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark [data-slot="sheet-content"] .bg-slate-100,
+.dark [data-slot="dialog-content"] .bg-slate-100 {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark [data-slot="sheet-content"] .hover\:bg-slate-100:hover,
+.dark [data-slot="dialog-content"] .hover\:bg-slate-100:hover {
+  background-color: oklch(0.23 0.020 258);
+}
+.dark [data-slot="sheet-content"] .bg-slate-200,
+.dark [data-slot="dialog-content"] .bg-slate-200 {
+  background-color: oklch(0.20 0.018 258);
+}
+.dark [data-slot="sheet-content"] .hover\:bg-slate-200:hover {
+  background-color: oklch(0.22 0.020 258);
+}
+
+/* ── Borders & Dividers ── */
+.dark [data-slot="sheet-content"] .border-slate-200,
+.dark [data-slot="dialog-content"] .border-slate-200 {
+  border-color: oklch(0.24 0.022 258);
+}
+.dark [data-slot="sheet-content"] .border-slate-100,
+.dark [data-slot="dialog-content"] .border-slate-100 {
+  border-color: oklch(0.22 0.020 258);
+}
+.dark [data-slot="sheet-content"] .border-slate-300 {
+  border-color: oklch(0.27 0.022 258);
+}
+.dark [data-slot="sheet-content"] .divide-slate-100 > * + *,
+.dark [data-slot="sheet-content"] .divide-slate-200 > * + * {
+  border-color: oklch(0.22 0.020 258);
+}
+
+/* ── Text — fundos escuros exigem texto claro ── */
+.dark [data-slot="sheet-content"] .text-slate-900,
+.dark [data-slot="dialog-content"] .text-slate-900 {
+  color: oklch(0.94 0.006 250);
+}
+.dark [data-slot="sheet-content"] .text-slate-800,
+.dark [data-slot="dialog-content"] .text-slate-800 {
+  color: oklch(0.87 0.008 250);
+}
+.dark [data-slot="sheet-content"] .text-slate-700,
+.dark [data-slot="dialog-content"] .text-slate-700 {
+  color: oklch(0.76 0.012 255);
+}
+.dark [data-slot="sheet-content"] .text-slate-600,
+.dark [data-slot="dialog-content"] .text-slate-600 {
+  color: oklch(0.64 0.014 255);
+}
+.dark [data-slot="sheet-content"] .text-slate-500,
+.dark [data-slot="dialog-content"] .text-slate-500 {
+  color: oklch(0.55 0.012 255);
+}
+
+/* ── KPI cards: pastéis claros → tonalidades escuras temáticas ── */
+.dark [data-slot="sheet-content"] .from-blue-50    { --tw-gradient-from: oklch(0.20 0.040 258); }
+.dark [data-slot="sheet-content"] .to-blue-100     { --tw-gradient-to:   oklch(0.22 0.045 258); }
+.dark [data-slot="sheet-content"] .from-emerald-50 { --tw-gradient-from: oklch(0.18 0.035 152); }
+.dark [data-slot="sheet-content"] .to-emerald-100  { --tw-gradient-to:   oklch(0.20 0.040 152); }
+.dark [data-slot="sheet-content"] .from-violet-50  { --tw-gradient-from: oklch(0.18 0.042 290); }
+.dark [data-slot="sheet-content"] .to-violet-100   { --tw-gradient-to:   oklch(0.20 0.048 290); }
+.dark [data-slot="sheet-content"] .from-amber-50   { --tw-gradient-from: oklch(0.20 0.038 80); }
+.dark [data-slot="sheet-content"] .to-amber-100    { --tw-gradient-to:   oklch(0.22 0.042 80); }
+.dark [data-slot="sheet-content"] .border-blue-200    { border-color: oklch(0.28 0.08 258); }
+.dark [data-slot="sheet-content"] .border-emerald-200 { border-color: oklch(0.26 0.07 152); }
+.dark [data-slot="sheet-content"] .border-violet-200  { border-color: oklch(0.26 0.08 290); }
+.dark [data-slot="sheet-content"] .border-amber-200   { border-color: oklch(0.28 0.07 80); }
+.dark [data-slot="sheet-content"] .text-slate-900 { color: oklch(0.94 0.006 250); }  /* redecl. para override nos KPI cards */
+
+/* ── Inputs dentro de painéis ── */
+.dark [data-slot="sheet-content"] input:not([class*="dark:"]),
+.dark [data-slot="sheet-content"] textarea:not([class*="dark:"]),
+.dark [data-slot="sheet-content"] select:not([class*="dark:"]) {
+  background-color: oklch(0.18 0.018 258);
+  border-color: oklch(0.24 0.022 258);
+  color: oklch(0.94 0.006 250);
+}
+
+/* ============================================================
+   DARK MODE — Conteúdo das páginas (dentro de <main>)
+   Cobre todos os cards, tabelas e elementos das páginas sem
+   precisar editar cada page.tsx individualmente.
+   ============================================================ */
+
+/* ── Backgrounds ── */
+.dark main .bg-white {
+  background-color: oklch(0.17 0.016 258);
+}
+.dark main .hover\:bg-white:hover {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark main .bg-slate-50 {
+  background-color: oklch(0.19 0.018 258);
+}
+.dark main .hover\:bg-slate-50:hover,
+.dark main .hover\:bg-slate-50\/50:hover {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark main .bg-slate-100 {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark main .hover\:bg-slate-100:hover {
+  background-color: oklch(0.23 0.020 258);
+}
+.dark main .bg-slate-200 {
+  background-color: oklch(0.20 0.018 258);
+}
+.dark main .hover\:bg-slate-200:hover {
+  background-color: oklch(0.22 0.020 258);
+}
+.dark main .bg-gray-50 {
+  background-color: oklch(0.19 0.018 258);
+}
+.dark main .bg-gray-100 {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark main .hover\:bg-gray-50:hover {
+  background-color: oklch(0.21 0.018 258);
+}
+.dark main .hover\:bg-gray-100:hover {
+  background-color: oklch(0.23 0.020 258);
+}
+
+/* ── Bordas & divisores ── */
+.dark main .border-slate-100,
+.dark main .border-slate-200 {
+  border-color: oklch(0.24 0.022 258);
+}
+.dark main .border-slate-300 {
+  border-color: oklch(0.27 0.022 258);
+}
+.dark main .border-gray-100,
+.dark main .border-gray-200 {
+  border-color: oklch(0.24 0.022 258);
+}
+.dark main .divide-slate-100 > * + *,
+.dark main .divide-slate-200 > * + * {
+  border-color: oklch(0.22 0.020 258);
+}
+
+/* ── Texto ── */
+.dark main .text-slate-900 {
+  color: oklch(0.94 0.006 250);
+}
+.dark main .text-slate-800 {
+  color: oklch(0.87 0.008 250);
+}
+.dark main .text-slate-700 {
+  color: oklch(0.76 0.012 255);
+}
+.dark main .text-slate-600 {
+  color: oklch(0.64 0.014 255);
+}
+.dark main .text-slate-500 {
+  color: oklch(0.55 0.012 255);
+}
+.dark main .text-gray-900,
+.dark main .text-gray-800,
+.dark main .text-gray-700 {
+  color: oklch(0.87 0.008 250);
+}
+.dark main .text-gray-600 {
+  color: oklch(0.64 0.014 255);
+}
+.dark main .text-gray-500 {
+  color: oklch(0.55 0.012 255);
+}
+
+/* ── Badges/pills com bg cinza claro ── */
+.dark main .bg-gray-100 {
+  background-color: oklch(0.22 0.018 258);
+}
+
+/* ── Colored icon containers (stat cards) ── */
+.dark main .bg-blue-50   { background-color: oklch(0.20 0.040 258); }
+.dark main .bg-blue-100  { background-color: oklch(0.22 0.045 258); }
+.dark main .bg-green-50  { background-color: oklch(0.18 0.035 152); }
+.dark main .bg-green-100 { background-color: oklch(0.20 0.040 152); }
+.dark main .bg-emerald-50  { background-color: oklch(0.18 0.035 152); }
+.dark main .bg-emerald-100 { background-color: oklch(0.20 0.040 152); }
+.dark main .bg-purple-50  { background-color: oklch(0.18 0.042 290); }
+.dark main .bg-purple-100 { background-color: oklch(0.20 0.048 290); }
+.dark main .bg-violet-50  { background-color: oklch(0.18 0.042 290); }
+.dark main .bg-violet-100 { background-color: oklch(0.20 0.048 290); }
+.dark main .bg-orange-50  { background-color: oklch(0.20 0.038 50); }
+.dark main .bg-orange-100 { background-color: oklch(0.22 0.042 50); }
+.dark main .bg-amber-50   { background-color: oklch(0.20 0.038 80); }
+.dark main .bg-amber-100  { background-color: oklch(0.22 0.042 80); }
+.dark main .bg-rose-50    { background-color: oklch(0.18 0.038 10); }
+.dark main .bg-rose-100   { background-color: oklch(0.20 0.044 10); }
+.dark main .bg-red-50     { background-color: oklch(0.18 0.038 20); }
+.dark main .bg-red-100    { background-color: oklch(0.20 0.044 20); }
+.dark main .bg-indigo-50  { background-color: oklch(0.18 0.042 275); }
+.dark main .bg-indigo-100 { background-color: oklch(0.20 0.048 275); }
+.dark main .bg-teal-50    { background-color: oklch(0.18 0.035 185); }
+.dark main .bg-teal-100   { background-color: oklch(0.20 0.040 185); }
+.dark main .bg-cyan-50    { background-color: oklch(0.18 0.035 200); }
+.dark main .bg-cyan-100   { background-color: oklch(0.20 0.040 200); }
+
+/* ── KPI cards pastel → tons escuros temáticos ── */
+.dark main .from-blue-50    { --tw-gradient-from: oklch(0.20 0.040 258); }
+.dark main .to-blue-100     { --tw-gradient-to:   oklch(0.22 0.045 258); }
+.dark main .from-emerald-50 { --tw-gradient-from: oklch(0.18 0.035 152); }
+.dark main .to-emerald-100  { --tw-gradient-to:   oklch(0.20 0.040 152); }
+.dark main .from-violet-50  { --tw-gradient-from: oklch(0.18 0.042 290); }
+.dark main .to-violet-100   { --tw-gradient-to:   oklch(0.20 0.048 290); }
+.dark main .from-amber-50   { --tw-gradient-from: oklch(0.20 0.038 80); }
+.dark main .to-amber-100    { --tw-gradient-to:   oklch(0.22 0.042 80); }
+.dark main .from-rose-50    { --tw-gradient-from: oklch(0.18 0.038 10); }
+.dark main .to-rose-100     { --tw-gradient-to:   oklch(0.20 0.044 10); }
+.dark main .border-blue-200    { border-color: oklch(0.28 0.08 258); }
+.dark main .border-emerald-200 { border-color: oklch(0.26 0.07 152); }
+.dark main .border-violet-200  { border-color: oklch(0.26 0.08 290); }
+.dark main .border-amber-200   { border-color: oklch(0.28 0.07 80); }
+.dark main .border-rose-200    { border-color: oklch(0.26 0.07 10); }
+
+/* ── Inputs nativos dentro das páginas ── */
+.dark main input:not([class*="dark:"]),
+.dark main textarea:not([class*="dark:"]),
+.dark main select:not([class*="dark:"]) {
+  background-color: oklch(0.18 0.018 258);
+  border-color: oklch(0.24 0.022 258);
+  color: oklch(0.94 0.006 250);
+}
+
+/* ── Colored icon text (stat cards) ── */
+.dark main .text-blue-600   { color: oklch(0.65 0.18 258); }
+.dark main .text-green-600  { color: oklch(0.60 0.15 152); }
+.dark main .text-emerald-600 { color: oklch(0.60 0.15 152); }
+.dark main .text-purple-600 { color: oklch(0.62 0.18 290); }
+.dark main .text-violet-600 { color: oklch(0.62 0.18 290); }
+.dark main .text-orange-600 { color: oklch(0.68 0.16 50); }
+.dark main .text-amber-600  { color: oklch(0.68 0.16 80); }
+.dark main .text-rose-600   { color: oklch(0.62 0.18 10); }
+.dark main .text-red-600    { color: oklch(0.62 0.18 20); }
+.dark main .text-indigo-600 { color: oklch(0.62 0.18 275); }
+.dark main .text-teal-600   { color: oklch(0.60 0.15 185); }

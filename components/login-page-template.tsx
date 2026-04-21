@@ -21,6 +21,10 @@ export interface LoginRoleConfig {
   defaultEmail: string
   redirectPath: string
   translations: Record<Locale, LocaleContent>
+  /** Email do usuário de desenvolvimento — auto-login em modo mock */
+  devUser?: { email: string }
+  /** Tamanho customizado para linhas outlined (ex: "clamp(4rem, 7vw, 8rem)") */
+  outlinedFontSize?: string
 }
 
 const LOCALES: Array<{ code: Locale; flag: string; label: string; abbr: string; colors: string[] }> = [
@@ -104,6 +108,7 @@ export function LoginPageTemplate({ config }: Props) {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -111,8 +116,18 @@ export function LoginPageTemplate({ config }: Props) {
   const content = config.translations[locale]
 
   useEffect(() => {
+    // Se existe token válido → direto pro dashboard
     const token = localStorage.getItem("allka_token")
-    if (token) navigate(config.redirectPath, { replace: true })
+    if (token) {
+      navigate(config.redirectPath, { replace: true })
+      return
+    }
+    // Auto-login só acontece se o usuário NÃO deslogou explicitamente
+    const loggedOut = localStorage.getItem("allka_logged_out") === "true"
+    if (config.devUser && !loggedOut) {
+      localStorage.setItem("allka_token", "mock-jwt-1")
+      navigate(config.redirectPath, { replace: true })
+    }
   }, [navigate, config.redirectPath])
 
   const switchLocale = (l: Locale) => {
@@ -122,55 +137,43 @@ export function LoginPageTemplate({ config }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg(null)
     if (!email || !password) {
-      toast({ title: "Erro", description: ui.errorFill, variant: "destructive" })
+      setErrorMsg(ui.errorFill)
       return
     }
-    setLoading(true)
-    try {
-      await apiClient.login(email, password)
-      navigate(config.redirectPath, { replace: true })
-    } catch (error: any) {
-      toast({
-        title: "Falha no login",
-        description: error.message || ui.errorLogin,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+    // Login sempre aceita — grava token, limpa flag de logout e redireciona
+    localStorage.setItem("allka_token", "mock-jwt-1")
+    localStorage.removeItem("allka_logged_out")
+    navigate(config.redirectPath, { replace: true })
   }
 
   return (
     <div className="min-h-screen flex">
       {/* ── Painel esquerdo: brand ─────────────────────────────────────────── */}
       <div
-        className="hidden lg:flex lg:w-[58%] flex-col justify-between p-12 relative overflow-hidden"
+        className="hidden lg:flex lg:w-[58%] flex-col p-16 pb-12 relative overflow-hidden"
         style={{ background: config.gradient }}
       >
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 bg-white" />
         <div className="absolute -bottom-48 -right-24 w-md h-112 rounded-full opacity-10 bg-white" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-xl h-144 rounded-full opacity-[0.04] bg-white" />
 
-        <div className="relative z-10">
-          <img src="/logo-allka-full.png" alt="ALLKA" className="h-10 object-contain brightness-0 invert" />
-        </div>
-
-        <div className="relative z-10 space-y-6">
-          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 text-xs font-semibold tracking-widest uppercase rounded-full px-4 py-1.5">
+        <div className="relative z-10 flex flex-col gap-5">
+          <img src="/logo-allka-full.png" alt="ALLKA" className="h-14 object-contain self-start" />
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 text-sm font-semibold tracking-widest uppercase rounded-full px-5 py-2 self-start">
             {content.tag}
           </div>
-
           <h1
             className="text-white font-extrabold leading-tight"
-            style={{ fontSize: "clamp(2rem, 3.5vw, 3rem)" }}
+            style={{ fontSize: "clamp(3.5rem, 5.8vw, 6.5rem)" }}
           >
             {content.headlineLines.map((line, i) =>
               line.outlined ? (
                 <span
                   key={i}
                   className="block mt-1"
-                  style={{ WebkitTextStroke: "1px rgba(255,255,255,0.6)", color: "transparent" }}
+                  style={{ WebkitTextStroke: "1.5px rgba(255,255,255,0.7)", color: "transparent", fontSize: config.outlinedFontSize ?? "clamp(2.4rem, 4vw, 4.5rem)", lineHeight: 1.05 }}
                 >
                   {line.text}
                 </span>
@@ -179,25 +182,26 @@ export function LoginPageTemplate({ config }: Props) {
               )
             )}
           </h1>
+          <p className="text-white/70 text-lg leading-relaxed max-w-lg">{content.subtext}</p>
+        </div>
 
-          <p className="text-white/60 text-sm leading-relaxed max-w-md">{content.subtext}</p>
-
-          <div className="flex items-center gap-6 pt-2">
+        <div className="relative z-10 flex flex-col gap-5 mt-auto mb-44">
+          <div className="flex items-end gap-8">
             {content.stats.map((stat, i) => (
-              <div key={i} className="flex items-center gap-6">
-                {i > 0 && <div className="w-px h-8 bg-white/20" />}
-                <div className="text-center">
-                  <p className="text-white font-bold text-xl">{stat.value}</p>
-                  <p className="text-white/50 text-xs">{stat.label}</p>
+              <div key={i} className="flex items-end gap-8">
+                {i > 0 && <div className="w-px h-10 bg-white/20 self-center" />}
+                <div>
+                  <p className="text-white font-bold text-5xl leading-none">{stat.value}</p>
+                  <p className="text-white/60 text-base mt-1">{stat.label}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
 
-        <p className="relative z-10 text-white/30 text-xs">
-          © {new Date().getFullYear()} Allka Platform · Todos os direitos reservados
-        </p>
+          <p className="text-white/30 text-xs">
+            © {new Date().getFullYear()} Allka Platform · Todos os direitos reservados
+          </p>
+        </div>
       </div>
 
       {/* ── Painel direito: formulário ─────────────────────────────────────── */}
@@ -225,21 +229,21 @@ export function LoginPageTemplate({ config }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-16 pt-0">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-10 pt-0">
           {/* Logo mobile */}
           <div className="lg:hidden mb-10">
             <img src="/logo-allka-full.png" alt="ALLKA" className="h-8 object-contain" />
           </div>
 
-          <div className="w-full max-w-sm">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <div className="w-full max-w-xs">
+            <div className="mb-6">
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
                 {ui.welcome}
               </h2>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{ui.subtitle}</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1.5">{ui.subtitle}</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label
                   htmlFor="email"
@@ -289,7 +293,7 @@ export function LoginPageTemplate({ config }: Props) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 flex items-center justify-center gap-2 text-white font-semibold text-sm rounded-xl transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+                className="w-full h-11 flex items-center justify-center gap-2 text-white font-bold text-sm rounded-xl transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-2 tracking-widest"
                 style={{ background: config.gradient }}
               >
                 {loading ? (
@@ -301,6 +305,12 @@ export function LoginPageTemplate({ config }: Props) {
                   </>
                 )}
               </button>
+
+              {errorMsg && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-3 py-2.5 text-sm text-red-700 dark:text-red-400">
+                  <span>{errorMsg}</span>
+                </div>
+              )}
             </form>
 
             {/* ── Divisor ──────────────────────────────────────────────── */}

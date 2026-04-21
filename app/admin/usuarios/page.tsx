@@ -918,7 +918,7 @@ export default function UsuariosPage() {
                         
                         {/* SEÇÃO: IDENTIFICAÇÃO */}
                         <AccordionItem value="identificacao" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Identificação</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -989,7 +989,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: TIPO E FUNÇÃO */}
                         <AccordionItem value="tipo-funcao" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Tipo e Função</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1074,7 +1074,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: DATAS */}
                         <AccordionItem value="datas" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Período de Datas</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1124,7 +1124,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: MÉTRICAS */}
                         <AccordionItem value="metricas" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Métricas e Pontuação</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1187,7 +1187,7 @@ export default function UsuariosPage() {
 
                         {/* SEÇÃO: DADOS COMPLEMENTARES */}
                         <AccordionItem value="complementares" className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <AccordionTrigger className="bg-white hover:bg-slate-50 px-4 py-3 transition-colors">
+                          <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
                             <span className="text-sm font-semibold text-slate-900 dark:text-white">Dados Complementares</span>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
@@ -1411,7 +1411,7 @@ export default function UsuariosPage() {
                     return (
                       <tr
                         key={user.id}
-                        className={`group transition-colors cursor-pointer ${paginatedUsers.indexOf(user) % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"} dark:hover:bg-slate-700/50`}
+                        className={`group transition-colors cursor-pointer ${paginatedUsers.indexOf(user) % 2 === 0 ? "bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)]" : "bg-slate-200/50 hover:bg-slate-200/70 dark:bg-[oklch(0.19_0.018_258)]"} dark:hover:bg-[oklch(0.22_0.022_258)]`}
                       >
                         <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <div className="flex items-center gap-2.5">
@@ -1550,7 +1550,7 @@ export default function UsuariosPage() {
                             position: "sticky",
                             right: 0,
                             zIndex: 1,
-                            background: paginatedUsers.indexOf(user) % 2 === 0 ? "#ffffff" : "#f1f4f8",
+                            background: paginatedUsers.indexOf(user) % 2 === 0 ? "var(--table-row)" : "var(--table-row-alt)",
                             borderLeft: "1px solid rgba(148,163,184,0.25)",
                           }}
                         >

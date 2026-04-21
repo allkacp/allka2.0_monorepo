@@ -193,7 +193,7 @@ export default function ProductSelectionModal({
     <>
       <div className="fixed inset-0 z-60 bg-black/20 pointer-events-none"></div>
       <div
-        className="fixed right-0 top-0 h-full bg-white shadow-2xl flex flex-col pointer-events-auto"
+        className="fixed right-0 top-0 h-full bg-white dark:bg-background shadow-2xl flex flex-col pointer-events-auto"
         style={{
           width: "calc(100% - 240px)",
           left: "240px",

@@ -2227,10 +2227,10 @@ export function UserViewSlidePanel({
           {/* Conta + Dados Unificado */}
           <TabsContent
             value="conta"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-200 mt-0"
+            className="flex-1 flex flex-col overflow-hidden bg-slate-200 dark:bg-background mt-0"
           >
             {/* Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200">
+            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200 dark:bg-background">
               <h3 className="text-sm font-semibold text-slate-900">
                 Conta &amp; Dados
               </h3>
@@ -3108,10 +3108,10 @@ export function UserViewSlidePanel({
           {/* Permissões */}
           <TabsContent
             value="permissoes"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-100 mt-0"
+            className="flex-1 flex flex-col overflow-hidden bg-slate-100 dark:bg-background mt-0"
           >
             {/* Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-5 pb-3 bg-slate-100">
+            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-5 pb-3 bg-slate-100 dark:bg-background">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-slate-600" />
                 <h3 className="text-sm font-semibold text-slate-900">
@@ -3795,10 +3795,10 @@ export function UserViewSlidePanel({
           {/* Segurança */}
           <TabsContent
             value="seguranca"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-200 mt-0"
+            className="flex-1 flex flex-col overflow-hidden bg-slate-200 dark:bg-background mt-0"
           >
             {/* Security Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200">
+            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200 dark:bg-background">
               <div className="flex items-center gap-3">
                 <h3 className="text-sm font-semibold text-slate-900">
                   Segurança da Conta

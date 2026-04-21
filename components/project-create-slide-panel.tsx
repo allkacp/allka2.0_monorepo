@@ -813,7 +813,7 @@ export function ProjectCreateSlidePanel({ open, onClose, onSubmit, initialData, 
         >
           <div
             className={cn(
-              "h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800",
+              "h-full bg-white dark:bg-background shadow-2xl flex flex-col border-l border-gray-200 dark:border-border",
             )}
           >
             {showCheckout ? (

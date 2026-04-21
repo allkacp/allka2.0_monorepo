@@ -4,13 +4,16 @@ const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 55%, #c81a7f 100%)",
   defaultEmail: "empresa@allka.com.vc",
   redirectPath: "/empresa/dashboard",
+  devUser: { email: "maria.oliveira@starbucks.com.br" },
   translations: {
     pt: {
       tag: "Allka Company",
       headlineLines: [
         { text: "MARKETING SOB DEMANDA:" },
         { text: " ESCALE SUA EQUIPE" },
-        { text: "SEM CONTRATAR.", outlined: true },
+        { text: "SEM CONTRATAR", outlined: true },
+        { text: "UMA PESSOA", outlined: true },
+        { text: "SEQUER.", outlined: true },
       ],
       subtext: "Acesse uma rede de profissionais qualificados para seus projetos de marketing. Prazo garantido, preço fixo.",
       stats: [
@@ -24,7 +27,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "ON-DEMAND MARKETING:" },
         { text: " SCALE YOUR TEAM" },
-        { text: "WITHOUT HIRING.", outlined: true },
+        { text: "WITHOUT HIRING", outlined: true },
+        { text: "A SINGLE", outlined: true },
+        { text: "PERSON.", outlined: true },
       ],
       subtext: "Access a network of certified professionals for your marketing projects. Guaranteed deadlines, fixed pricing.",
       stats: [
@@ -38,7 +43,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "MARKETING BAJO DEMANDA:" },
         { text: " ESCALA TU EQUIPO" },
-        { text: "SIN CONTRATAR.", outlined: true },
+        { text: "SIN CONTRATAR", outlined: true },
+        { text: "A UNA SOLA", outlined: true },
+        { text: "PERSONA.", outlined: true },
       ],
       subtext: "Accede a una red de profesionales certificados para tus proyectos de marketing. Plazos garantizados, precio fijo.",
       stats: [
@@ -52,7 +59,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "按需营销：" },
         { text: " 扩展您的团队" },
-        { text: "无需招聘。", outlined: true },
+        { text: "无需", outlined: true },
+        { text: "招聘", outlined: true },
+        { text: "任何人。", outlined: true },
       ],
       subtext: "访问经过认证的专业人士网络，用于您的营销项目。保证截止日期，固定定价。",
       stats: [

@@ -919,10 +919,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
           )}
 
           {/* Content Wrapper */}
-          <div className="flex-1 flex flex-col bg-white overflow-hidden">
+          <div className="flex-1 flex flex-col bg-white dark:bg-background overflow-hidden">
             {/* Content with Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+            <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
               <TabsList className="grid w-max grid-cols-10 gap-1 bg-transparent p-0 h-auto">
                 <TabsTrigger
                   value="visao-geral"

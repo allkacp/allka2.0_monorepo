@@ -4,13 +4,16 @@ const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #c81a7f 60%, #1a2a6f 100%)",
   defaultEmail: "nomade@allka.com.vc",
   redirectPath: "/nomades/dashboard",
+  devUser: { email: "ana.santos@allka.com" },
   translations: {
     pt: {
       tag: "Nômades Allka",
       headlineLines: [
         { text: "TRABALHE NO SEU TEMPO:" },
         { text: " GANHE E CRESÇA" },
-        { text: "SEM LIMITES.", outlined: true },
+        { text: "SEM NENHUM", outlined: true },
+        { text: "LIMITE", outlined: true },
+        { text: "DE RENDA.", outlined: true },
       ],
       subtext: "Execute tarefas de marketing para agências e empresas de todo o Brasil. Ganhe por entrega, evolua por desempenho.",
       stats: [
@@ -24,7 +27,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "WORK ON YOUR TERMS:" },
         { text: " EARN & GROW" },
-        { text: "WITHOUT LIMITS.", outlined: true },
+        { text: "WITHOUT ANY", outlined: true },
+        { text: "INCOME", outlined: true },
+        { text: "LIMITS.", outlined: true },
       ],
       subtext: "Execute marketing tasks for agencies and companies. Get paid per delivery, level up through performance.",
       stats: [
@@ -38,7 +43,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "TRABAJA A TU RITMO:" },
         { text: " GANA Y CRECE" },
-        { text: "SIN LÍMITES.", outlined: true },
+        { text: "SIN NINGÚN", outlined: true },
+        { text: "LÍMITE", outlined: true },
+        { text: "DE INGRESOS.", outlined: true },
       ],
       subtext: "Ejecuta tareas de marketing para agencias y empresas. Cobra por entrega, evoluciona por desempeño.",
       stats: [
@@ -52,7 +59,9 @@ const config: LoginRoleConfig = {
       headlineLines: [
         { text: "按你的节奏工作：" },
         { text: " 赚錢并成长" },
-        { text: "没有限制。", outlined: true },
+        { text: "收入", outlined: true },
+        { text: "完全", outlined: true },
+        { text: "没有上限。", outlined: true },
       ],
       subtext: "为机构和公司执行营销任务。按交付获得报酬，通过表现模式升级。",
       stats: [

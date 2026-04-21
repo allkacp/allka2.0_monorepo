@@ -179,9 +179,9 @@ const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("allka_token")
+  const token = localStorage.getItem("allka_token");
   if (!token) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
 }
@@ -296,7 +296,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                       <PricingProvider>
                         <ProductProvider>
                           <MobileLayoutWrapper>
-                            <div className="flex h-screen bg-gray-50 overflow-visible font-sans">
+                            <div className="flex h-screen bg-gray-50 dark:bg-background overflow-visible font-sans">
                               <div
                                 className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
                                 id="sidebar-overlay"
@@ -314,7 +314,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 <PageErrorBoundary>
                                   <Header />
                                 </PageErrorBoundary>
-                                <main className="flex-1 overflow-auto bg-slate-200 mx-0 py-12 px-14 pb-mobile-nav">
+                                <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-12 px-14 pb-mobile-nav">
                                   <PageErrorBoundary>
                                     <Suspense fallback={<PageLoader />}>
                                       {children}
@@ -358,11 +358,46 @@ export default function App() {
     <AccountTypeProvider>
       <Routes>
         {/* ─── Login pages (fora do AppLayout, públicas) ─── */}
-        <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
-        <Route path="/nomades/login" element={<Suspense fallback={<PageLoader />}><NomadeLoginPage /></Suspense>} />
-        <Route path="/empresa/login" element={<Suspense fallback={<PageLoader />}><EmpresaLoginPage /></Suspense>} />
-        <Route path="/agencia/login" element={<Suspense fallback={<PageLoader />}><AgenciaLoginPage /></Suspense>} />
-        <Route path="/parceiro/login" element={<Suspense fallback={<PageLoader />}><ParceiroLoginPage /></Suspense>} />
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/nomades/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <NomadeLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/empresa/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <EmpresaLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/agencia/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <AgenciaLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/parceiro/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <ParceiroLoginPage />
+            </Suspense>
+          }
+        />
 
         {/* ─── Todas as rotas protegidas passam pelo AppLayout ── */}
         <Route

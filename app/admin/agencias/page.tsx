@@ -161,15 +161,15 @@ export default function AgenciasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6 bg-slate-200 px-0 py-0">
-      <div className="max-w-7xl mx-auto bg-slate-200 px-0 py-0 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-transparent dark:via-transparent dark:to-transparent p-6 bg-slate-200 dark:bg-transparent px-0 py-0">
+      <div className="max-w-7xl mx-auto bg-slate-200 dark:bg-transparent px-0 py-0 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
               Gestão de Agências
             </h1>
-            <p className="text-slate-600 mt-1">Gerencie todas as agências parceiras da plataforma</p>
+            <p className="text-slate-600 dark:text-slate-400 mt-1">Gerencie todas as agências parceiras da plataforma</p>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

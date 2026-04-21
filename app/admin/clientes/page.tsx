@@ -112,8 +112,8 @@ export default function ClientesPage() {
     );
 
   return (
-    <div className="min-h-screen p-6 px-0 py-0 bg-slate-200">
-      <div className="max-w-7xl bg-slate-200 mx-0 my-0 px-0 py-0 space-y-0">
+    <div className="min-h-screen p-6 px-0 py-0 bg-slate-200 dark:bg-transparent">
+      <div className="max-w-7xl bg-slate-200 dark:bg-transparent mx-0 my-0 px-0 py-0 space-y-0">
         <PageHeader
           title="Clientes"
           description="Gerencie todos os seus clientes pagantes em um só lugar"
@@ -170,7 +170,7 @@ export default function ClientesPage() {
           onValueChange={setActiveTab}
           className="space-y-4"
         >
-          <TabsList className="bg-gray-100">
+          <TabsList className="bg-gray-100 dark:bg-[oklch(0.21_0.018_258)]">
             <TabsTrigger value="all">
               Todos ({allApiClients.length})
             </TabsTrigger>
