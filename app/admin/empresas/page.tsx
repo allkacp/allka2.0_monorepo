@@ -645,7 +645,7 @@ export default function EmpresasPage() {
 
     return (
       <div
-        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 ${hovered ? "shadow-md scale-[1.02]" : "shadow-sm"} bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60`}
+        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 ${hovered ? "shadow-md scale-[1.02]" : "shadow-sm"} bg-white dark:bg-[oklch(0.17_0.028_258)] border border-slate-200/80 dark:border-[oklch(0.22_0.024_258)/50]`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -931,7 +931,7 @@ export default function EmpresasPage() {
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white dark:bg-[oklch(0.20_0.020_258)]"
+                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white dark:bg-[oklch(0.19_0.026_258)]"
                     style={{
                       paddingLeft: 20,
                       paddingRight: 20,
@@ -976,14 +976,14 @@ export default function EmpresasPage() {
 
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-[oklch(0.20_0.022_258)]">
               {paginatedCompanies.map((company, rowIndex) => (
                 <tr
                   key={company.id}
                   className={`group transition-colors cursor-pointer ${
                     rowIndex % 2 === 0
-                      ? "bg-white dark:bg-[oklch(0.17_0.016_258)] hover:bg-slate-50 dark:hover:bg-[oklch(0.22_0.022_258)]"
-                      : "bg-slate-100/70 dark:bg-[oklch(0.19_0.018_258)] hover:bg-slate-200/70 dark:hover:bg-[oklch(0.22_0.022_258)]"
+                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-slate-50 dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      : "bg-slate-50/80 dark:bg-[oklch(0.16_0.024_258)] hover:bg-slate-100 dark:hover:bg-[oklch(0.21_0.024_258)]"
                   }`}
                 >
                   {/* Company */}
@@ -1001,7 +1001,7 @@ export default function EmpresasPage() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium hover:bg-orange-200 transition-colors"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium hover:bg-orange-200 transition-colors dark:bg-orange-500/15 dark:text-orange-400 dark:hover:bg-orange-500/25"
                                     onClick={(e) => { e.stopPropagation(); handleEditCompany(company) }}
                                   >
                                     <AlertTriangle className="h-3 w-3" />
@@ -1021,7 +1021,7 @@ export default function EmpresasPage() {
                             <TooltipProvider delayDuration={200}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-200 cursor-default">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-200 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30">
                                     <ShieldCheck className="h-3 w-3" />
                                     DPO cadastrado
                                   </span>
@@ -1037,7 +1037,7 @@ export default function EmpresasPage() {
                           )}
                           {/* Política de privacidade ainda não aceita */}
                           {company.lgpd && !company.lgpd.privacy_policy_accepted && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">Política pendente</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium dark:bg-amber-500/15 dark:text-amber-400">Política pendente</span>
                           )}
                         </div>
                       </div>
@@ -1095,12 +1095,12 @@ export default function EmpresasPage() {
                   {visibleCols.has("status") && (
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
                         company.status === "active"
-                          ? "bg-emerald-500 text-white"
+                          ? "bg-emerald-500 text-white border-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30"
                           : company.status === "inactive"
-                          ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                          ? "bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600/50"
+                          : "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30"
                       }`}
                     >
                       {company.status === "active" && <CheckCircle className="h-3.5 w-3.5" />}
@@ -1116,20 +1116,20 @@ export default function EmpresasPage() {
                   <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                     {(() => {
                       const planMap: Record<string, { name: string; price: string; discount: string; info: string; color: string }> = {
-                        lite:       { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        start:      { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200" },
-                        standard:   { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200" },
-                        growth:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-                        scale:      { name: "Scale",      price: "R$ 3.000/mês", discount: "20%", info: "20% de desconto em todos os produtos",          color: "bg-violet-100 text-violet-700 border-violet-200" },
-                        squad:      { name: "Squad",      price: "R$ 5.000/mês", discount: "20%", info: "Agências — 20% desconto + pós pago + squad dedicado", color: "bg-orange-100 text-orange-700 border-orange-200" },
-                        enterprise: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                        lite:       { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40" },
+                        start:      { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40" },
+                        standard:   { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40" },
+                        growth:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-700/40" },
+                        scale:      { name: "Scale",      price: "R$ 3.000/mês", discount: "20%", info: "20% de desconto em todos os produtos",          color: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700/40" },
+                        squad:      { name: "Squad",      price: "R$ 5.000/mês", discount: "20%", info: "Agências — 20% desconto + pós pago + squad dedicado", color: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/40" },
+                        enterprise: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/40" },
                         // backwards compat
-                        basic:    { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        starter:  { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200" },
-                        premium:  { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200" },
-                        gold:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-                        silver:   { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200" },
-                        platinum: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200" },
+                        basic:    { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40" },
+                        starter:  { name: "Start",      price: "R$ 500/mês",   discount: "5%",  info: "5% de desconto em todos os produtos",           color: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40" },
+                        premium:  { name: "Standard",   price: "R$ 1.000/mês", discount: "10%", info: "10% de desconto em todos os produtos",          color: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40" },
+                        gold:     { name: "Growth",     price: "R$ 1.500/mês", discount: "15%", info: "15% de desconto em todos os produtos",          color: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-700/40" },
+                        silver:   { name: "Lite",       price: "R$ 300/mês",   discount: "—",   info: "Ativa conta agency na plataforma",              color: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40" },
+                        platinum: { name: "Enterprise", price: "R$ 5.000/mês", discount: "—",   info: "Empresas — pós pago + atendimento exclusivo + squad dedicado", color: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/40" },
                       }
                       const key = ((company.partner_level || company.account_type) ?? "").toLowerCase()
                       const plan = planMap[key]
