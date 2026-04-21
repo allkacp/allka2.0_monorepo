@@ -433,14 +433,14 @@ export function Header() {
           <div className="flex-1" />
 
           {/* Right actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
 
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-[220px]"
             >
-              <Search className="h-4 w-4" />
-              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors">Buscar...</span>
+              <Search className="h-4 w-4 shrink-0" />
+              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">Buscar...</span>
               <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">⌘K</span>
             </button>
 
@@ -456,7 +456,7 @@ export function Header() {
             </button>
 
             <div className="relative">
-              <Button variant="ghost" size="sm" onClick={() => setNotifOpen(true)} className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/10 hover:text-white rounded-xl">
+              <Button variant="ghost" size="sm" onClick={() => setNotifOpen(true)} className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15">
                 <Bell className="h-4 w-4" />
                 <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
                   2

@@ -53,10 +53,10 @@ export function AlertsHeaderIcon() {
         <button
           onClick={() => hasAlerts && setModalOpen(true)}
           className={cn(
-            "relative flex items-center justify-center rounded-md transition-all duration-200",
-            "h-8 w-8 sm:h-9 sm:w-9",
+            "relative flex items-center justify-center rounded-xl transition-all duration-200 bg-white/10 border border-white/15 hover:bg-white/20",
+            "h-9 w-9",
             hasAlerts
-              ? "cursor-pointer text-red-400 hover:bg-white/10"
+              ? "cursor-pointer text-white/80"
               : "cursor-default text-white/50",
           )}
           aria-label="Alertas do sistema"
