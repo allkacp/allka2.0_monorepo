@@ -1121,9 +1121,10 @@ export function Sidebar() {
                                 className={cn(
                                   "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
                                   isActive
-                                    ? "bg-white/25 text-white shadow-lg backdrop-blur-sm"
+                                    ? "text-white shadow-md"
                                     : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                                 )}
+                                style={isActive ? { background: "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(200,26,127,0.35) 100%)" } : {}}
                               >
                                 <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
                                 <subitem.icon className="h-4 w-4 mr-3" />
@@ -1133,7 +1134,9 @@ export function Sidebar() {
                                 {subitem.badge && (
                                   <Badge
                                     variant="secondary"
-                                    className="bg-white/90 text-gray-800 text-xs font-semibold px-2"
+                                    className={isActive
+                                      ? "bg-[#c81a7f] text-white text-xs font-semibold px-2 border-0"
+                                      : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"}
                                   >
                                     {subitem.badge}
                                   </Badge>
@@ -1187,7 +1190,9 @@ export function Sidebar() {
                             {item.badge && (
                               <Badge
                                 variant="secondary"
-                                className="bg-white/90 text-gray-800 text-xs font-semibold px-2"
+                                className={isActive
+                                  ? "bg-[#c81a7f] text-white text-xs font-semibold px-2 border-0"
+                                  : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"}
                               >
                                 {item.badge}
                               </Badge>
