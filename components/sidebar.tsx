@@ -707,7 +707,7 @@ export function Sidebar() {
     ) {
       return {
         background:
-          "linear-gradient(to bottom, #000000 0%, #0a1628 8%, #1a2f5a 20%, #2563eb 40%, #3b82f6 60%, #2563eb 80%, #1a2f5a 92%, #0a1628 100%)",
+          "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)",
       };
     }
 
@@ -1217,6 +1217,25 @@ export function Sidebar() {
             })}
           </nav>
         </div>
+
+        {/* Bottom role pill */}
+        {!collapsed && (
+          <div className="px-3 pb-4 pt-2 shrink-0">
+            <button
+              onClick={() => setSettingsModalOpen(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-full bg-white/10 hover:bg-white/18 border border-white/15 backdrop-blur-sm transition-all duration-200 group"
+            >
+              <div className="h-7 w-7 rounded-full bg-sky-500/20 border border-sky-400/40 flex items-center justify-center shrink-0">
+                <Shield className="h-3.5 w-3.5 text-sky-300" />
+              </div>
+              <span className="flex-1 text-left text-xs font-semibold text-white/90 truncate capitalize">
+                {accountType === "admin" ? "Administrador" : accountType === "agencias" ? "Agência" : accountType === "empresas" ? "Empresa" : accountType === "nomades" ? "Nômade" : "Parceiro"}
+              </span>
+              <span className="h-2 w-2 rounded-full bg-sky-400 shrink-0" />
+              <ChevronDown className="h-3 w-3 text-white/50 shrink-0 group-hover:text-white/80 transition-colors" />
+            </button>
+          </div>
+        )}
 
         {/* Floating hover buttons outside sidebar, right side, only when collapsed */}
         {collapsed && (
