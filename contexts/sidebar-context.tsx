@@ -21,6 +21,7 @@ interface SidebarSettings {
   dominantImageColor?: string | null
   headerBg?: string | null
   buttonBg?: string | null
+  activeItemColor?: string | null
   fontScale?: "compact" | "normal" | "comfortable" | "large"
   fontSizeSidebar?: "xs" | "sm" | "base"
   fontSizeHeading?: "sm" | "base" | "lg" | "xl"
@@ -113,6 +114,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     sidebarFavicon: null,
     headerBg: null,
     buttonBg: null,
+    activeItemColor: null,
     fontScale: "normal",
     fontSizeSidebar: "sm",
     fontSizeHeading: "lg",
@@ -208,7 +210,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--brand-gradient", cssValue)
     const buttonCss = s.buttonBg ? bgToCSS(s.buttonBg) : cssValue
     root.style.setProperty("--app-brand-button", buttonCss)
-    // Font scale: changes html font-size so all rem-based Tailwind classes scale proportionally
+    const activeColor = s.activeItemColor || "#c81a7f"
+    root.style.setProperty("--app-brand-active", activeColor)
     const fontScaleMap = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
     document.documentElement.style.fontSize = fontScaleMap[s.fontScale || "normal"]
     // Per-context font sizes
@@ -247,6 +250,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-brand-solid", cssValue)
     root.style.setProperty("--brand-gradient", cssValue)
     root.style.setProperty("--app-brand-button", buttonCss)
+    const activeColor2 = newSettings.activeItemColor || "#c81a7f"
+    root.style.setProperty("--app-brand-active", activeColor2)
     const fontScaleMap2 = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
     document.documentElement.style.fontSize = fontScaleMap2[newSettings.fontScale || "normal"]
     const fsMap2 = { xs: "0.7rem", sm: "0.8125rem", base: "0.875rem", lg: "1rem", xl: "1.125rem" } as const

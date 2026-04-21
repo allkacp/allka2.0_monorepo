@@ -870,6 +870,31 @@ export function SidebarSettingsModal({ open, onClose }: SidebarSettingsModalProp
                   )}
                 </div>
 
+                {/* ITEM ATIVO */}
+                <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Item Ativo</p>
+                    <button type="button"
+                      onClick={() => applyPreview({ activeItemColor: null })}
+                      className={`h-5 px-2 rounded-full border text-[10px] font-medium transition-all ${
+                        !sidebarSettings.activeItemColor ? "border-emerald-400/40 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}>{!sidebarSettings.activeItemColor ? "Padrão" : "Restaurar"}</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={sidebarSettings.activeItemColor || "#c81a7f"}
+                      onChange={(e) => applyPreview({ activeItemColor: e.target.value })}
+                      className="w-8 h-8 rounded cursor-pointer border border-slate-200 p-0.5 shrink-0"
+                    />
+                    <div className="flex-1 h-8 rounded border border-slate-200 flex items-center px-2 gap-2 text-xs text-slate-600">
+                      <div className="h-4 w-4 rounded-sm shrink-0" style={{ backgroundColor: sidebarSettings.activeItemColor || "#c81a7f" }} />
+                      <span className="font-mono">{sidebarSettings.activeItemColor || "#c81a7f"}</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1.5">Cor do fundo e do badge do item selecionado no menu.</p>
+                </div>
+
               </div>
             )}
 
