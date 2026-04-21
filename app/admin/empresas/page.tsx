@@ -581,40 +581,48 @@ export default function EmpresasPage() {
   }
 
   const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
-    const w = 80, h = 16
+    const w = 80, h = 28
     const min = Math.min(...data), max = Math.max(...data)
     const range = max - min || 1
-    const pts = data.map((v, i) => {
-      const x = (i / (data.length - 1)) * w
-      const y = h - ((v - min) / range) * (h - 4) - 2
-      return `${x},${y}`
-    }).join(" ")
+    const pts = data.map((v, i) => ({
+      x: (i / (data.length - 1)) * w,
+      y: h - 4 - ((v - min) / range) * (h - 12),
+    }))
+    const polyPts = pts.map(p => `${p.x},${p.y}`).join(" ")
+    const areaPath = `M0,${h} ${pts.map(p => `L${p.x},${p.y}`).join(" ")} L${w},${h} Z`
+    const gradId = `fill-${color.replace("#", "")}`
     return (
       <svg width={w} height={h} className="overflow-visible">
         <defs>
-          <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="white" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
           </linearGradient>
         </defs>
+        <path d={areaPath} fill={`url(#${gradId})`} />
         <polyline
           fill="none"
-          stroke="white"
+          stroke={color}
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          points={pts}
-          style={{ opacity: 0.9 }}
+          points={polyPts}
         />
         <circle
-          cx={(data.length - 1) / (data.length - 1) * w}
-          cy={h - ((data[data.length - 1] - min) / range) * (h - 4) - 2}
+          cx={pts[pts.length - 1].x}
+          cy={pts[pts.length - 1].y}
           r="2.5"
-          fill="white"
-          opacity="0.9"
+          fill={color}
         />
       </svg>
     )
+  }
+
+  const statColorMap: Record<string, { titleClass: string; iconClass: string; iconBg: string; trendClass: string; strokeColor: string }> = {
+    blue:    { titleClass: "text-blue-600 dark:text-blue-400",    iconClass: "text-blue-500 dark:text-blue-400",    iconBg: "bg-blue-50 dark:bg-blue-900/30",    trendClass: "text-blue-500/80",    strokeColor: "#3b82f6" },
+    emerald: { titleClass: "text-emerald-600 dark:text-emerald-400", iconClass: "text-emerald-500 dark:text-emerald-400", iconBg: "bg-emerald-50 dark:bg-emerald-900/30", trendClass: "text-emerald-500/80", strokeColor: "#10b981" },
+    violet:  { titleClass: "text-violet-600 dark:text-violet-400",  iconClass: "text-violet-500 dark:text-violet-400",  iconBg: "bg-violet-50 dark:bg-violet-900/30",  trendClass: "text-violet-500/80",  strokeColor: "#8b5cf6" },
+    orange:  { titleClass: "text-orange-600 dark:text-orange-400",  iconClass: "text-orange-500 dark:text-orange-400",  iconBg: "bg-orange-50 dark:bg-orange-900/30",  trendClass: "text-orange-500/80",  strokeColor: "#f97316" },
   }
 
   const StatCard = ({
@@ -633,10 +641,11 @@ export default function EmpresasPage() {
     const diff = value - prevValue
     const pct = prevValue > 0 ? Math.round(Math.abs(diff / prevValue) * 100) : 0
     const up = diff >= 0
+    const colors = statColorMap[trendColor] ?? statColorMap.blue
 
     return (
       <div
-        className={`relative rounded-xl overflow-hidden shadow-sm cursor-default transition-all duration-200 ${hovered ? "shadow-lg scale-[1.02]" : ""} bg-gradient-to-br ${gradient}`}
+        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 ${hovered ? "shadow-md scale-[1.02]" : "shadow-sm"} bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -647,8 +656,8 @@ export default function EmpresasPage() {
           <TooltipProvider>
             <Tooltip open={hovered}>
               <TooltipTrigger asChild>
-                <div className="bg-white/25 hover:bg-white/35 rounded-md p-0.5 cursor-pointer transition-colors">
-                  <Info className="h-2.5 w-2.5 text-white" />
+                <div className="bg-white/10 hover:bg-white/20 rounded-md p-0.5 cursor-pointer transition-colors">
+                  <Info className={`h-2.5 w-2.5 ${colors.iconClass}`} />
                 </div>
               </TooltipTrigger>
               <TooltipContent
@@ -675,25 +684,25 @@ export default function EmpresasPage() {
           </TooltipProvider>
         </div>
 
-        <div className="px-3 pt-2 pb-1.5">
+        <div className="px-3 pt-2 pb-2">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-medium text-white/70 leading-tight truncate">{label}</p>
-            <div className="bg-white/20 rounded-md p-1 flex-shrink-0 ml-1">
-              <Icon className="h-3 w-3 text-white" />
+            <p className={`text-[10px] font-medium leading-tight truncate ${colors.titleClass}`}>{label}</p>
+            <div className={`${colors.iconBg} rounded-md p-1 flex-shrink-0 ml-1`}>
+              <Icon className={`h-3 w-3 ${colors.iconClass}`} />
             </div>
           </div>
 
           <div className="flex items-end justify-between gap-2">
             <div>
-              <p className="text-xl font-bold text-white leading-none">{value}</p>
-              <div className="inline-flex items-center gap-0.5 mt-0.5">
-                {up ? <TrendingUp className="h-2.5 w-2.5 text-white/80" /> : <TrendingDown className="h-2.5 w-2.5 text-white/80" />}
-                <span className="text-[9px] font-semibold text-white/80">{up ? "+" : "-"}{pct}%</span>
+              <p className={`text-2xl font-bold leading-none ${colors.titleClass}`}>{value}</p>
+              <div className="inline-flex items-center gap-0.5 mt-1">
+                {up ? <TrendingUp className={`h-2.5 w-2.5 ${colors.trendClass}`} /> : <TrendingDown className="h-2.5 w-2.5 text-red-400" />}
+                <span className={`text-[9px] font-semibold ${up ? colors.trendClass : "text-red-400"}`}>{up ? "+" : "-"}{pct}%</span>
               </div>
             </div>
             {/* Sparkline */}
             <div className="flex-shrink-0">
-              <Sparkline data={statsHistory[sparkKey].data} color={trendColor} />
+              <Sparkline data={statsHistory[sparkKey].data} color={colors.strokeColor} />
             </div>
           </div>
         </div>
@@ -802,10 +811,11 @@ export default function EmpresasPage() {
               variant="top"
             />
             <span className="text-xs text-slate-400 whitespace-nowrap">
-              {filteredCompanies.length !== companies.length
-                ? <>de <span className="font-semibold text-blue-500">{filteredCompanies.length}</span> de {companies.length} empresa{companies.length !== 1 ? "s" : ""}</>
-                : <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{companies.length}</span> empresa{companies.length !== 1 ? "s" : ""}</>
-              }
+              {(() => {
+                const start = Math.min((currentPage - 1) * pageSize + 1, filteredCompanies.length)
+                const end = Math.min(currentPage * pageSize, filteredCompanies.length)
+                return <>{start}-{end} de <span className="font-semibold text-slate-600 dark:text-slate-300">{filteredCompanies.length}</span> empresa{filteredCompanies.length !== 1 ? "s" : ""}</>
+              })()}
             </span>
           </div>
 
