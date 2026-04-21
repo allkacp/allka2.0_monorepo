@@ -196,6 +196,12 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
     diamond: 3, platinum: 6, gold: 11, silver: 12, bronze: 6,
     mrrGenerated: 22400,
   },
+  cmv: {
+    totalCosts: 87400, revenue: 270800,
+    cmvPercent: 32.3, prevCmvPercent: 34.1,
+    nomades: 42800, impostos: 18200, comissoes: 14900, outros: 11500,
+    variation: -1.8,
+  },
   metrics: {}, activity: [], alerts: [], performers: [], userDistribution: [],
   systemAlerts: [], adminProfiles: [], permissionMatrix: [], managementTools: [],
 });
