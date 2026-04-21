@@ -103,8 +103,14 @@ import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sid
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (_from?: any, _to?: any): any => ({
-  revenue: { total: 270800, series: [], growth: 18.1 },
-  activeProjects: { total: 7, series: [], growth: 5.2 },
+  revenue: { total: 270800, series: [], growth: 18.1, trendData: [180000, 205000, 215000, 230000, 248000, 270800] },
+  activeProjects: {
+    total: 127, growth: 5.2, series: [],
+    agencies: 48, agenciesGrowth: 7,
+    leadPremium: 63, leadPremiumGrowth: 9,
+    nomades: 16, nomadesGrowth: 3,
+    newTotal: 22, newAgencies: 9, newLeadPremium: 10, newNomades: 3,
+  },
   creditPlans: {
     total: 114000, growth: 18, series: [],
     basic:   { revenue: 38000, newContracts: 12, growth: 8 },
@@ -115,6 +121,7 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
     total: 97600, growth: 8, series: [],
     newMrr: 12400, expansion: 5200, contraction: 1800,
     churnRevenue: 3100, baseMrr: 89600, netChange: 12700,
+    trendData: [72000, 78000, 82000, 86000, 91000, 97600],
   },
   churn: {
     total: 0, growth: 0, series: [],
