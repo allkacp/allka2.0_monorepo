@@ -902,7 +902,7 @@ export default function EmpresasPage() {
                   onClick={() => setCurrentPage(Number(page))}
                   className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                     page === currentPage
-                      ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                      ? "btn-brand text-white shadow-sm"
                       : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                   }`}
                 >
@@ -1279,7 +1279,7 @@ export default function EmpresasPage() {
                     onClick={() => setCurrentPage(Number(page))}
                     className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                       page === currentPage
-                        ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                        ? "btn-brand text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                     }`}
                   >
