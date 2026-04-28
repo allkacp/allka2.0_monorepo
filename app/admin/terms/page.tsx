@@ -172,8 +172,8 @@ export default function TermsManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Gestão de Termos</h1>
-          <p className="text-muted-foreground">Gerencie todos os termos e documentos legais da plataforma</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Termos</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie todos os termos e documentos legais da plataforma</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="h-4 w-4 mr-2" />

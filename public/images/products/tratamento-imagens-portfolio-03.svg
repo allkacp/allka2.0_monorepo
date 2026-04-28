@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1e1145;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6"/>
+      <stop offset="100%" style="stop-color:#0f766e"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Tratamento de até 10 Imagens</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Painel de entrega — lote de 10 imagens</text>
+
+  <!-- Delivery grid: 10 image thumbnails with status -->
+  <text x="50" y="100" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" letter-spacing="1.5">IMAGENS TRATADAS</text>
+  <!-- Row 1: 5 images -->
+  <g>
+    <rect x="44" y="110" width="120" height="80" rx="8" fill="rgba(20,184,166,0.12)" stroke="rgba(20,184,166,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="44" y="110" width="120" height="55" rx="8" fill="rgba(20,184,166,0.15)"/>
+    <text x="104" y="148" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">img_001.jpg</text>
+    <circle cx="112" cy="178" r="8" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.5)" stroke-width="1"/>
+    <text x="112" y="182" font-family="system-ui,sans-serif" font-size="8" fill="#4ade80" text-anchor="middle">✓</text>
+    <text x="56" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)">Tratada</text>
+  </g>
+  <g>
+    <rect x="178" y="110" width="120" height="80" rx="8" fill="rgba(20,184,166,0.12)" stroke="rgba(20,184,166,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="178" y="110" width="120" height="55" rx="8" fill="rgba(59,130,246,0.15)"/>
+    <text x="238" y="148" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">img_002.jpg</text>
+    <circle cx="246" cy="178" r="8" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.5)" stroke-width="1"/>
+    <text x="246" y="182" font-family="system-ui,sans-serif" font-size="8" fill="#4ade80" text-anchor="middle">✓</text>
+    <text x="190" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)">Tratada</text>
+  </g>
+  <g>
+    <rect x="312" y="110" width="120" height="80" rx="8" fill="rgba(20,184,166,0.12)" stroke="rgba(20,184,166,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="312" y="110" width="120" height="55" rx="8" fill="rgba(200,26,127,0.15)"/>
+    <text x="372" y="148" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">img_003.jpg</text>
+    <circle cx="380" cy="178" r="8" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.5)" stroke-width="1"/>
+    <text x="380" y="182" font-family="system-ui,sans-serif" font-size="8" fill="#4ade80" text-anchor="middle">✓</text>
+    <text x="324" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)">Tratada</text>
+  </g>
+  <g>
+    <rect x="446" y="110" width="120" height="80" rx="8" fill="rgba(20,184,166,0.12)" stroke="rgba(20,184,166,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="446" y="110" width="120" height="55" rx="8" fill="rgba(139,92,246,0.15)"/>
+    <text x="506" y="148" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">img_004.jpg</text>
+    <circle cx="514" cy="178" r="8" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.5)" stroke-width="1"/>
+    <text x="514" y="182" font-family="system-ui,sans-serif" font-size="8" fill="#4ade80" text-anchor="middle">✓</text>
+    <text x="458" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)">Tratada</text>
+  </g>
+  <g>
+    <rect x="580" y="110" width="176" height="80" rx="8" fill="rgba(20,184,166,0.12)" stroke="rgba(20,184,166,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="580" y="110" width="176" height="55" rx="8" fill="rgba(251,191,36,0.12)"/>
+    <text x="668" y="148" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">img_005.jpg</text>
+    <circle cx="738" cy="178" r="8" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.5)" stroke-width="1"/>
+    <text x="738" y="182" font-family="system-ui,sans-serif" font-size="8" fill="#4ade80" text-anchor="middle">✓</text>
+    <text x="592" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)">Tratada</text>
+  </g>
+
+  <!-- Row 2 summary + delivery panel -->
+  <text x="50" y="220" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" letter-spacing="1.5">+ 5 IMAGENS ADICIONAIS</text>
+  <rect x="44" y="230" width="448" height="70" rx="10" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <text x="64" y="256" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.55)">img_006.jpg  ·  img_007.jpg  ·  img_008.jpg  ·  img_009.jpg  ·  img_010.jpg</text>
+  <rect x="340" y="264" width="130" height="22" rx="11" fill="rgba(74,222,128,0.1)" stroke="rgba(74,222,128,0.25)" stroke-width="1"/>
+  <text x="405" y="279" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle">10/10 tratadas ✓</text>
+
+  <!-- Delivery summary panel -->
+  <rect x="512" y="210" width="244" height="145" rx="12" fill="rgba(20,184,166,0.07)" stroke="rgba(20,184,166,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="530" y="234" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" letter-spacing="1.5">ARQUIVOS GERADOS</text>
+  <text x="530" y="258" font-family="system-ui,sans-serif" font-size="13" fill="#14b8a6" font-weight="700">10 × .PNG</text>
+  <text x="530" y="276" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.5)">arquivos finais exportados</text>
+  <text x="530" y="298" font-family="system-ui,sans-serif" font-size="13" fill="#14b8a6" font-weight="700">10 × .PSD + .XMP</text>
+  <text x="530" y="316" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.5)">arquivos abertos para edição</text>
+  <rect x="530" y="326" width="200" height="22" rx="11" fill="rgba(74,222,128,0.12)" stroke="rgba(74,222,128,0.25)" stroke-width="1"/>
+  <text x="630" y="341" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle">Entregue em 3 dias úteis ✓</text>
+
+  <!-- Checklist summary -->
+  <rect x="44" y="318" width="448" height="58" rx="10" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <text x="64" y="338" font-family="system-ui,sans-serif" font-size="11" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="80" y="338" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Exposição e contraste corrigidos</text>
+  <text x="260" y="338" font-family="system-ui,sans-serif" font-size="11" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="276" y="338" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Ruído reduzido</text>
+  <text x="64" y="358" font-family="system-ui,sans-serif" font-size="11" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="80" y="358" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Imperfeições removidas</text>
+  <text x="260" y="358" font-family="system-ui,sans-serif" font-size="11" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="276" y="358" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Nitidez e saturação ajustadas</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Tratamento de Imagens — allka</text>
+</svg>

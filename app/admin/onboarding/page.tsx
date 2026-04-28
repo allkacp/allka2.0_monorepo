@@ -171,13 +171,10 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                <Rocket className="h-8 w-8 text-white" />
-              </div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Onboarding
             </h1>
-            <p className="text-gray-600 mt-1">Gerencie circuitos de onboarding para diferentes tipos de conta</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie circuitos de onboarding para diferentes tipos de conta</p>
           </div>
           <Dialog open={isCircuitDialogOpen} onOpenChange={setIsCircuitDialogOpen}>
             <DialogTrigger asChild>

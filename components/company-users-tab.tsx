@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -104,7 +103,7 @@ interface UserPermissions {
 }
 
 interface CompanyUsersTabProps {
-  companyId: number;
+  companyId: number | string;
   companyName: string;
   users?: UserListItem[];
   /** Called when a new user is created so the admin/usuarios page stays in sync */
@@ -268,6 +267,7 @@ export function CompanyUsersTab({
   const {
     users: contextUsers,
     addUser,
+    addCompanyLink,
     getUserById,
     upsertProjectMembership,
     removeProjectMembership,
@@ -276,14 +276,17 @@ export function CompanyUsersTab({
 
   // Derive UserListItem list from platform-users context for this company
   const companyContextUsers = useMemo<UserListItem[]>(() => {
-    const matched = contextUsers.filter((u) =>
-      u.company_associations?.some((a) => a.company_id === companyId),
+    const matched = contextUsers.filter(
+      (u) =>
+        u.company_associations?.some(
+          (a) => String(a.company_id) === String(companyId),
+        ) || String(u.company_id) === String(companyId),
     );
     if (matched.length === 0) return [];
     return matched.map((u) => {
-      const assoc = u.company_associations!.find(
-        (a) => a.company_id === companyId,
-      )!;
+      const assoc = u.company_associations?.find(
+        (a) => String(a.company_id) === String(companyId),
+      ) ?? { role: u.role ?? "company_user", company_permissions: {} as any };
       return {
         id: u.id,
         platformUserId: u.id,
@@ -326,6 +329,7 @@ export function CompanyUsersTab({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isDetailsClosing, setIsDetailsClosing] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Partial<UserListItem> | null>(null);
   const [confirmSave, setConfirmSave] = useState(false);
@@ -534,6 +538,20 @@ export function CompanyUsersTab({
   const handleViewDetails = (user: UserListItem) => {
     setSelectedUser(user);
     setIsDetailsOpen(true);
+    setIsDetailsClosing(false);
+  };
+
+  const handleCloseDetails = () => {
+    setIsDetailsClosing(true);
+    setTimeout(() => {
+      setIsDetailsClosing(false);
+      setIsDetailsOpen(false);
+      setEditMode(false);
+      setEditData(null);
+      setPermissionsMode(false);
+      setPermissionsData(null);
+      setHasUnsavedChanges(false);
+    }, 400);
   };
 
   const handleEditUser = () => {
@@ -759,7 +777,20 @@ export function CompanyUsersTab({
   const handlePlatformUserCreated = (platformUser: any) => {
     // 1. Register in platform-level context so admin/usuarios page sees it
     addUser(platformUser);
-    // 2. Also notify parent if provided
+    // 2. Immediately link user to this company in the context (enables companyContextUsers filter)
+    addCompanyLink(platformUser.id, {
+      id: 0,
+      user_id: platformUser.id,
+      company_id: companyId,
+      company_name: companyName || String(companyId),
+      role: platformUser.role || "company_user",
+      permissions: [],
+      company_permissions: {} as any,
+      project_memberships: [],
+      is_active: true,
+      joined_at: new Date().toISOString(),
+    });
+    // 3. Also notify parent if provided
     onUserCreated?.(platformUser);
     // 3. Create a local UserListItem entry linked to the platform user
     const newListItem: UserListItem = {
@@ -1404,280 +1435,273 @@ export function CompanyUsersTab({
         </div>
       </div>
 
-      {/* User Details Sheet */}
-      <Sheet
-        open={isDetailsOpen}
-        onOpenChange={(open) => {
-          setIsDetailsOpen(open);
-          if (!open) {
-            setEditMode(false);
-            setEditData(null);
-            setPermissionsMode(false);
-            setPermissionsData(null);
-          }
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="!w-[480px] !max-w-none border-l flex flex-col p-0 overflow-hidden"
-          style={{ width: 480 }}
-          onPointerDownOutside={(e) => {
-            if (detailShowAvatarMenu || (cropOpen && cropContext === "detail"))
-              e.preventDefault();
-          }}
-          onInteractOutside={(e) => {
-            if (detailShowAvatarMenu || (cropOpen && cropContext === "detail"))
-              e.preventDefault();
-          }}
-        >
-          {selectedUser && (
-            <div className="relative h-full flex flex-col bg-white">
-              {/* hidden detail file input */}
-              <input
-                ref={detailFileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleDetailFileChange}
-              />
+      {/* User Details Panel — full-width sidebar-aware */}
+      {(isDetailsOpen || isDetailsClosing) && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            data-state={isDetailsClosing ? "closed" : "open"}
+            style={{
+              animation: isDetailsClosing
+                ? "fadeOut 0.4s ease forwards"
+                : "fadeIn 0.2s ease forwards",
+            }}
+            onClick={() => {
+              if (
+                !detailShowAvatarMenu &&
+                !(cropOpen && cropContext === "detail")
+              ) {
+                handleCloseDetails();
+              }
+            }}
+          />
+          {/* Panel */}
+          <div
+            data-slot="sheet-content"
+            data-state={isDetailsClosing ? "closed" : "open"}
+            className="fixed top-0 z-50 h-screen bg-white flex flex-col shadow-2xl border-l border-slate-200 overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+            style={{
+              left:
+                typeof sidebarWidth === "number"
+                  ? `${sidebarWidth}px`
+                  : `${parseInt(String(sidebarWidth)) || 240}px`,
+              width: `calc(100vw - ${typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 240}px)`,
+            }}
+          >
+            {selectedUser && (
+              <div className="relative h-full flex flex-col bg-white">
+                {/* hidden detail file input */}
+                <input
+                  ref={detailFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleDetailFileChange}
+                />
 
-              {/* Gradient Header — matches add-user panel */}
-              <header
-                className="relative flex items-center gap-4 px-6 pr-14 bg-gradient-to-r from-blue-950 via-indigo-900 to-fuchsia-900 text-white flex-shrink-0 overflow-hidden"
-                style={{ height: 100 }}
-              >
-                {/* Clickable avatar — same as add-user panel */}
-                <button
-                  onClick={handleDetailAvatarClick}
-                  className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+                {/* Gradient Header — full-width premium */}
+                <header
+                  className="app-brand-header relative flex items-center gap-4 pl-8 pr-14 flex-shrink-0 overflow-hidden"
+                  style={{ minHeight: 100 }}
                 >
-                  {/* fallback initials */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                    <span className="text-white text-xl font-bold">
-                      {selectedUser.name.substring(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                  {/* dicebear or uploaded photo */}
-                  {detailAvatarPreview[selectedUser.id] ? (
-                    <img
-                      src={detailAvatarPreview[selectedUser.id]}
-                      alt="avatar"
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
-                      alt={selectedUser.name}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  )}
-                  {/* Camera hover overlay */}
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                    <Camera className="h-5 w-5 text-white" />
-                    <span className="text-[9px] text-white/90 font-medium mt-0.5">
-                      {detailAvatarPreview[selectedUser.id] ? "Editar" : "Foto"}
-                    </span>
-                  </div>
-                </button>
+                  {/* Close button */}
+                  <button
+                    onClick={handleCloseDetails}
+                    className="absolute top-4 right-4 z-10 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors text-white/80 hover:text-white"
+                    title="Fechar"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  {/* Clickable avatar — same as add-user panel */}
+                  <button
+                    onClick={handleDetailAvatarClick}
+                    className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 shadow-lg group overflow-hidden hover:border-white/60 transition-all"
+                  >
+                    {/* fallback initials */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
+                      <span className="text-white text-xl font-bold">
+                        {selectedUser.name.substring(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    {/* dicebear or uploaded photo */}
+                    {detailAvatarPreview[selectedUser.id] ? (
+                      <img
+                        src={detailAvatarPreview[selectedUser.id]}
+                        alt="avatar"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.avatar}`}
+                        alt={selectedUser.name}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    )}
+                    {/* Camera hover overlay */}
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                      <Camera className="h-5 w-5 text-white" />
+                      <span className="text-[9px] text-white/90 font-medium mt-0.5">
+                        {detailAvatarPreview[selectedUser.id]
+                          ? "Editar"
+                          : "Foto"}
+                      </span>
+                    </div>
+                  </button>
 
-                {/* Name / email / status */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">
-                    Perfil do usuário
-                  </p>
-                  <h2 className="text-lg font-bold text-white leading-tight truncate">
-                    {selectedUser.name}
-                  </h2>
-                  <p className="text-xs text-white/60 truncate mt-0.5">
-                    {selectedUser.email}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span
-                      className={`inline-flex h-2 w-2 rounded-full ${selectedUser.status === "online" ? "bg-green-400" : "bg-gray-400"}`}
-                    />
-                    <span className="text-[10px] font-medium text-white/70">
-                      {selectedUser.status === "online" ? "Online" : "Offline"}
-                    </span>
+                  {/* Name / email / status */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-0.5">
+                      Perfil do usuário
+                    </p>
+                    <h2 className="text-lg font-bold text-white leading-tight truncate">
+                      {selectedUser.name}
+                    </h2>
+                    <p className="text-xs text-white/60 truncate mt-0.5">
+                      {selectedUser.email}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span
+                        className={`inline-flex h-2 w-2 rounded-full ${selectedUser.status === "online" ? "bg-green-400" : "bg-gray-400"}`}
+                      />
+                      <span className="text-[10px] font-medium text-white/70">
+                        {selectedUser.status === "online"
+                          ? "Online"
+                          : "Offline"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {/* Action icon buttons — absolute bottom-right, before Sheet's X */}
-                <div className="absolute bottom-3 right-5 flex items-center gap-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleEditUser}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
-                      >
-                        <Edit2 className="h-3.5 w-3.5 text-white/80" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Editar</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleOpenPermissions}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
-                      >
-                        <Shield className="h-3.5 w-3.5 text-white/80" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Permissões</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) =>
-                          handleBlockToggle(
-                            selectedUser.id,
-                            e as React.MouseEvent<HTMLButtonElement>,
-                          )
-                        }
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
-                      >
-                        {selectedUser.isBlocked ? (
-                          <Unlock className="h-3.5 w-3.5 text-white/80" />
-                        ) : (
-                          <Lock className="h-3.5 w-3.5 text-white/80" />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) =>
-                          handleDeleteUser(
-                            selectedUser.id,
-                            e as React.MouseEvent<HTMLButtonElement>,
-                          )
-                        }
-                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-500/30 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-red-300" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Excluir</TooltipContent>
-                  </Tooltip>
-                </div>
-              </header>
+                  {/* Action icon buttons — absolute bottom-right */}
+                  <div className="absolute bottom-3 right-5 flex items-center gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleEditUser}
+                          className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                        >
+                          <Edit2 className="h-3.5 w-3.5 text-white/80" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Editar</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleOpenPermissions}
+                          className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                        >
+                          <Shield className="h-3.5 w-3.5 text-white/80" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Permissões</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) =>
+                            handleBlockToggle(
+                              selectedUser.id,
+                              e as React.MouseEvent<HTMLButtonElement>,
+                            )
+                          }
+                          className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                        >
+                          {selectedUser.isBlocked ? (
+                            <Unlock className="h-3.5 w-3.5 text-white/80" />
+                          ) : (
+                            <Lock className="h-3.5 w-3.5 text-white/80" />
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {selectedUser.isBlocked ? "Desbloquear" : "Bloquear"}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) =>
+                            handleDeleteUser(
+                              selectedUser.id,
+                              e as React.MouseEvent<HTMLButtonElement>,
+                            )
+                          }
+                          className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-500/30 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Excluir</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </header>
 
-              {/* Detail avatar context menu */}
-              {detailShowAvatarMenu &&
-                selectedUser &&
-                (detailAvatarPreview[selectedUser.id] ||
-                  selectedUser.avatar) && (
-                  <>
-                    <div
-                      className="absolute inset-0 z-40"
-                      onClick={() => setDetailShowAvatarMenu(false)}
-                    />
-                    <div
-                      className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                      style={{ top: 108, left: 24 }}
-                    >
-                      <button
-                        onClick={() => {
-                          setDetailShowAvatarMenu(false);
-                          setTimeout(
-                            () => detailFileInputRef.current?.click(),
-                            10,
-                          );
-                        }}
-                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                {/* Detail avatar context menu */}
+                {detailShowAvatarMenu &&
+                  selectedUser &&
+                  (detailAvatarPreview[selectedUser.id] ||
+                    selectedUser.avatar) && (
+                    <>
+                      <div
+                        className="absolute inset-0 z-40"
+                        onClick={() => setDetailShowAvatarMenu(false)}
+                      />
+                      <div
+                        className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
+                        style={{ top: 108, left: 24 }}
                       >
-                        <Camera className="h-3.5 w-3.5 text-gray-400" />
-                        Nova foto
-                      </button>
-                      {detailOriginalRawSrc && (
                         <button
                           onClick={() => {
                             setDetailShowAvatarMenu(false);
-                            setRawImageSrc(detailOriginalRawSrc);
-                            setCropZoom(1);
-                            setCropOffset({ x: 0, y: 0 });
-                            setCropContext("detail");
-                            setCropOpen(true);
+                            setTimeout(
+                              () => detailFileInputRef.current?.click(),
+                              10,
+                            );
                           }}
-                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
-                          <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                          Reposicionar
+                          <Camera className="h-3.5 w-3.5 text-gray-400" />
+                          Nova foto
                         </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setDetailShowAvatarMenu(false);
-                          if (selectedUser)
-                            setDetailAvatarPreview((prev) => {
-                              const n = { ...prev };
-                              delete n[selectedUser.id];
-                              return n;
-                            });
-                          setDetailOriginalRawSrc(null);
-                        }}
-                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remover foto
-                      </button>
-                    </div>
-                  </>
-                )}
+                        {detailOriginalRawSrc && (
+                          <button
+                            onClick={() => {
+                              setDetailShowAvatarMenu(false);
+                              setRawImageSrc(detailOriginalRawSrc);
+                              setCropZoom(1);
+                              setCropOffset({ x: 0, y: 0 });
+                              setCropContext("detail");
+                              setCropOpen(true);
+                            }}
+                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                          >
+                            <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                            Reposicionar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setDetailShowAvatarMenu(false);
+                            if (selectedUser)
+                              setDetailAvatarPreview((prev) => {
+                                const n = { ...prev };
+                                delete n[selectedUser.id];
+                                return n;
+                              });
+                            setDetailOriginalRawSrc(null);
+                          }}
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remover foto
+                        </button>
+                      </div>
+                    </>
+                  )}
 
-              {/* Detail crop overlay */}
-              {cropOpen && rawImageSrc && cropContext === "detail" && (
-                <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
-                  <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
-                    <p className="text-white text-sm font-semibold">
-                      Ajustar foto de perfil
-                    </p>
-                    <p className="text-white/50 text-xs mt-0.5">
-                      Arraste para reposicionar · Use o zoom para ajustar
-                    </p>
-                  </div>
-                  <div
-                    className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
-                    onMouseDown={handleCropMouseDown}
-                    onMouseMove={handleCropMouseMove}
-                    onMouseUp={handleCropMouseUp}
-                    onMouseLeave={handleCropMouseUp}
-                  >
-                    <img
-                      src={rawImageSrc}
-                      alt=""
-                      draggable={false}
-                      className="absolute pointer-events-none select-none opacity-25"
-                      style={{
-                        maxWidth: "none",
-                        transform: `scale(${cropZoom})`,
-                        transformOrigin: "center",
-                        left: `calc(50% + ${cropOffset.x}px)`,
-                        top: `calc(50% + ${cropOffset.y}px)`,
-                        translate: "-50% -50%",
-                      }}
-                    />
+                {/* Detail crop overlay */}
+                {cropOpen && rawImageSrc && cropContext === "detail" && (
+                  <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
+                    <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
+                      <p className="text-white text-sm font-semibold">
+                        Ajustar foto de perfil
+                      </p>
+                      <p className="text-white/50 text-xs mt-0.5">
+                        Arraste para reposicionar · Use o zoom para ajustar
+                      </p>
+                    </div>
                     <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        background: `radial-gradient(circle ${CROP_SIZE / 2}px at 50% 50%, transparent ${CROP_SIZE / 2}px, rgba(0,0,0,0.72) ${CROP_SIZE / 2}px)`,
-                      }}
-                    />
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)`,
-                      }}
+                      className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
+                      onMouseDown={handleCropMouseDown}
+                      onMouseMove={handleCropMouseMove}
+                      onMouseUp={handleCropMouseUp}
+                      onMouseLeave={handleCropMouseUp}
                     >
                       <img
-                        ref={cropImgRef}
                         src={rawImageSrc}
-                        alt="crop"
+                        alt=""
                         draggable={false}
-                        className="absolute select-none"
+                        className="absolute pointer-events-none select-none opacity-25"
                         style={{
                           maxWidth: "none",
                           transform: `scale(${cropZoom})`,
@@ -1690,697 +1714,750 @@ export function CompanyUsersTab({
                       <div
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          backgroundImage:
-                            "linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)",
-                          backgroundSize: "33.3% 33.3%",
+                          background: `radial-gradient(circle ${CROP_SIZE / 2}px at 50% 50%, transparent ${CROP_SIZE / 2}px, rgba(0,0,0,0.72) ${CROP_SIZE / 2}px)`,
                         }}
                       />
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div
-                        className="rounded-full border-2 border-white/70 shadow-2xl"
-                        style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          clipPath: `circle(${CROP_SIZE / 2}px at 50% 50%)`,
+                        }}
+                      >
+                        <img
+                          ref={cropImgRef}
+                          src={rawImageSrc}
+                          alt="crop"
+                          draggable={false}
+                          className="absolute select-none"
+                          style={{
+                            maxWidth: "none",
+                            transform: `scale(${cropZoom})`,
+                            transformOrigin: "center",
+                            left: `calc(50% + ${cropOffset.x}px)`,
+                            top: `calc(50% + ${cropOffset.y}px)`,
+                            translate: "-50% -50%",
+                          }}
+                        />
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)",
+                            backgroundSize: "33.3% 33.3%",
+                          }}
+                        />
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div
+                          className="rounded-full border-2 border-white/70 shadow-2xl"
+                          style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 px-8 py-4 flex items-center gap-3">
+                      <span className="text-white/40 text-xs w-8 text-right">
+                        {Math.round(cropZoom * 100)}%
+                      </span>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="3"
+                        step="0.02"
+                        value={cropZoom}
+                        onChange={(e) => setCropZoom(Number(e.target.value))}
+                        className="flex-1 accent-white cursor-pointer"
                       />
+                      <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
+                      <button
+                        onClick={() => setCropOffset({ x: 0, y: 0 })}
+                        title="Centralizar"
+                        className="flex-shrink-0 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
+                      >
+                        <Crosshair className="h-3.5 w-3.5 text-white/70" />
+                      </button>
+                    </div>
+                    <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
+                      <button
+                        onClick={() => {
+                          setCropOpen(false);
+                          setRawImageSrc(null);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleCropConfirm}
+                        className="flex-1 py-2.5 rounded-xl btn-brand text-sm font-semibold shadow-md transition-all"
+                      >
+                        Usar esta foto
+                      </button>
                     </div>
                   </div>
-                  <div className="flex-shrink-0 px-8 py-4 flex items-center gap-3">
-                    <span className="text-white/40 text-xs w-8 text-right">
-                      {Math.round(cropZoom * 100)}%
-                    </span>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="3"
-                      step="0.02"
-                      value={cropZoom}
-                      onChange={(e) => setCropZoom(Number(e.target.value))}
-                      className="flex-1 accent-white cursor-pointer"
-                    />
-                    <ZoomIn className="h-4 w-4 text-white/50 flex-shrink-0" />
-                    <button
-                      onClick={() => setCropOffset({ x: 0, y: 0 })}
-                      title="Centralizar"
-                      className="flex-shrink-0 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
-                    >
-                      <Crosshair className="h-3.5 w-3.5 text-white/70" />
-                    </button>
-                  </div>
-                  <div className="flex-shrink-0 flex gap-3 px-8 pb-6">
-                    <button
-                      onClick={() => {
-                        setCropOpen(false);
-                        setRawImageSrc(null);
-                      }}
-                      className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleCropConfirm}
-                      className="flex-1 py-2.5 rounded-xl btn-brand text-sm font-semibold shadow-md transition-all"
-                    >
-                      Usar esta foto
-                    </button>
-                  </div>
-                </div>
-              )}
+                )}
 
-              {/* Scrollable body */}
-              <div className="flex-1 overflow-y-auto">
-                {!permissionsMode ? (
-                  <div className="px-4 py-3 space-y-4">
-                    {/* Section: Dados da Conta */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <div className="h-4 w-4 rounded bg-blue-100 flex items-center justify-center">
-                          <Shield className="h-2.5 w-2.5 text-blue-600" />
-                        </div>
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                          Dados da Conta
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            ID
-                          </p>
-                          <p className="text-xs font-bold text-slate-800 mt-0.5 font-mono">
-                            #{selectedUser.id}
-                          </p>
-                        </div>
-                        <div className="bg-purple-50 border border-purple-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            Perfil
-                          </p>
-                          <p className="text-xs font-bold text-slate-800 mt-0.5">
-                            {selectedUser.profile}
-                          </p>
-                        </div>
-                        <div className="bg-green-50 border border-green-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            Status
-                          </p>
-                          <span
-                            className={`inline-flex items-center mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${selectedUser.isBlocked ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}
-                          >
-                            {selectedUser.isBlocked ? "Bloqueado" : "Ativo"}
+                {/* Scrollable body */}
+                <div className="flex-1 overflow-y-auto bg-slate-50/40">
+                  {!permissionsMode ? (
+                    <div className="px-8 py-6 space-y-5 max-w-4xl">
+                      {/* Section: Dados da Conta */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                            <Shield className="h-3 w-3 text-blue-600" />
+                          </div>
+                          <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">
+                            Dados da Conta
                           </span>
                         </div>
-                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            Último acesso
-                          </p>
-                          <p className="text-xs font-bold text-slate-800 mt-0.5">
-                            {selectedUser.lastAccess}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section: Identificação */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <div className="h-4 w-4 rounded bg-blue-100 flex items-center justify-center">
-                          <User className="h-2.5 w-2.5 text-blue-600" />
-                        </div>
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                          Identificação
-                        </span>
-                      </div>
-                      {!editMode ? (
-                        <div className="space-y-1.5">
-                          {[
-                            {
-                              label: "Nome completo",
-                              value: selectedUser.name,
-                            },
-                            {
-                              label: "CPF",
-                              value: selectedUser.cpf || "Não informado",
-                            },
-                            {
-                              label: "Telefone",
-                              value: selectedUser.phone || "Não informado",
-                            },
-                            { label: "E-mail", value: selectedUser.email },
-                          ].map(({ label, value }) => (
-                            <div
-                              key={label}
-                              className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60"
+                        <div className="grid grid-cols-4 gap-3">
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              ID
+                            </p>
+                            <p className="text-sm font-bold text-slate-800 mt-1 font-mono">
+                              #{selectedUser.id}
+                            </p>
+                          </div>
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Perfil
+                            </p>
+                            <p className="text-sm font-bold text-slate-800 mt-1">
+                              {selectedUser.profile}
+                            </p>
+                          </div>
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Status
+                            </p>
+                            <span
+                              className={`inline-flex items-center mt-1 gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${selectedUser.isBlocked ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-700"}`}
                             >
-                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                                {label}
-                              </p>
-                              <p className="text-xs font-medium text-slate-800 mt-0.5 break-all">
-                                {value}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                              Nome completo
-                            </label>
-                            <Input
-                              value={editData?.name || ""}
-                              onChange={(e) =>
-                                handleEditFieldChange("name", e.target.value)
-                              }
-                              placeholder="Nome completo"
-                              className="mt-1 h-8 text-xs"
-                            />
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${selectedUser.isBlocked ? "bg-red-500" : "bg-emerald-500"}`}
+                              />
+                              {selectedUser.isBlocked ? "Bloqueado" : "Ativo"}
+                            </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                                Telefone
-                              </label>
-                              <Input
-                                value={editData?.phone || ""}
-                                onChange={(e) =>
-                                  handleEditFieldChange("phone", e.target.value)
-                                }
-                                placeholder="(11) 98765-4321"
-                                className="mt-1 h-8 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                                E-mail
-                              </label>
-                              <Input
-                                value={editData?.email || ""}
-                                onChange={(e) =>
-                                  handleEditFieldChange("email", e.target.value)
-                                }
-                                placeholder="email@exemplo.com"
-                                type="email"
-                                className="mt-1 h-8 text-xs"
-                              />
-                            </div>
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Último acesso
+                            </p>
+                            <p className="text-sm font-bold text-slate-800 mt-1">
+                              {selectedUser.lastAccess}
+                            </p>
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Section: Endereço */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <div className="h-4 w-4 rounded bg-violet-100 flex items-center justify-center">
-                          <MapPin className="h-2.5 w-2.5 text-violet-600" />
-                        </div>
-                        <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">
-                          Endereço
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-medium">
-                          (opcional)
-                        </span>
                       </div>
-                      {!editMode ? (
-                        <div className="space-y-1.5">
-                          <div className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
-                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                              Logradouro
-                            </p>
-                            <p className="text-xs font-medium text-slate-800 mt-0.5">
-                              {selectedUser.address || "Não informado"}
-                            </p>
+
+                      {/* Section: Identificação */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                            <User className="h-3 w-3 text-blue-600" />
                           </div>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            <div className="col-span-1 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
-                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                                UF
+                          <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">
+                            Identificação
+                          </span>
+                        </div>
+                        {!editMode ? (
+                          <div className="grid grid-cols-2 gap-3">
+                            {[
+                              {
+                                label: "Nome completo",
+                                value: selectedUser.name,
+                              },
+                              {
+                                label: "CPF",
+                                value: selectedUser.cpf || "Não informado",
+                              },
+                              {
+                                label: "Telefone",
+                                value: selectedUser.phone || "Não informado",
+                              },
+                              { label: "E-mail", value: selectedUser.email },
+                            ].map(({ label, value }) => (
+                              <div
+                                key={label}
+                                className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm"
+                              >
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                  {label}
+                                </p>
+                                <p className="text-sm font-medium text-slate-800 mt-1 break-all">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                Nome completo
+                              </label>
+                              <Input
+                                value={editData?.name || ""}
+                                onChange={(e) =>
+                                  handleEditFieldChange("name", e.target.value)
+                                }
+                                placeholder="Nome completo"
+                                className="mt-1 h-8 text-xs"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                  Telefone
+                                </label>
+                                <Input
+                                  value={editData?.phone || ""}
+                                  onChange={(e) =>
+                                    handleEditFieldChange(
+                                      "phone",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="(11) 98765-4321"
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                  E-mail
+                                </label>
+                                <Input
+                                  value={editData?.email || ""}
+                                  onChange={(e) =>
+                                    handleEditFieldChange(
+                                      "email",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="email@exemplo.com"
+                                  type="email"
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section: Endereço */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
+                            <MapPin className="h-3 w-3 text-violet-600" />
+                          </div>
+                          <span className="text-xs font-bold text-violet-600 uppercase tracking-widest">
+                            Endereço
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            (opcional)
+                          </span>
+                        </div>
+                        {!editMode ? (
+                          <div className="grid grid-cols-4 gap-3">
+                            <div className="col-span-4 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                Logradouro
                               </p>
                               <p className="text-xs font-medium text-slate-800 mt-0.5">
+                                {selectedUser.address || "Não informado"}
+                              </p>
+                            </div>
+                            <div className="col-span-1 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                UF
+                              </p>
+                              <p className="text-sm font-medium text-slate-800 mt-1">
                                 {selectedUser.state || "—"}
                               </p>
                             </div>
-                            <div className="col-span-2 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
-                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
+                            <div className="col-span-2 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
                                 Cidade
                               </p>
-                              <p className="text-xs font-medium text-slate-800 mt-0.5">
+                              <p className="text-sm font-medium text-slate-800 mt-1">
                                 {selectedUser.city || "Não informado"}
                               </p>
                             </div>
-                          </div>
-                          <div className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
-                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                              CEP
-                            </p>
-                            <p className="text-xs font-medium text-slate-800 mt-0.5">
-                              {selectedUser.zipCode || "Não informado"}
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                              Logradouro
-                            </label>
-                            <Input
-                              value={editData?.address || ""}
-                              onChange={(e) =>
-                                handleEditFieldChange("address", e.target.value)
-                              }
-                              placeholder="Rua, Avenida, Nº..."
-                              className="mt-1 h-8 text-xs"
-                            />
-                          </div>
-                          <div className="grid grid-cols-5 gap-2">
-                            <div className="col-span-2">
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                                Cidade
-                              </label>
-                              <Input
-                                value={editData?.city || ""}
-                                onChange={(e) =>
-                                  handleEditFieldChange("city", e.target.value)
-                                }
-                                placeholder="São Paulo"
-                                className="mt-1 h-8 text-xs"
-                              />
-                            </div>
-                            <div className="col-span-1">
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                                UF
-                              </label>
-                              <Input
-                                value={editData?.state || ""}
-                                onChange={(e) =>
-                                  handleEditFieldChange("state", e.target.value)
-                                }
-                                placeholder="SP"
-                                maxLength={2}
-                                className="mt-1 h-8 text-xs"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                            <div className="col-span-1 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
                                 CEP
+                              </p>
+                              <p className="text-sm font-medium text-slate-800 mt-1">
+                                {selectedUser.zipCode || "Não informado"}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                Logradouro
                               </label>
                               <Input
-                                value={editData?.zipCode || ""}
+                                value={editData?.address || ""}
                                 onChange={(e) =>
                                   handleEditFieldChange(
-                                    "zipCode",
+                                    "address",
                                     e.target.value,
                                   )
                                 }
-                                placeholder="01234-567"
+                                placeholder="Rua, Avenida, Nº..."
                                 className="mt-1 h-8 text-xs"
                               />
                             </div>
+                            <div className="grid grid-cols-5 gap-2">
+                              <div className="col-span-2">
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                  Cidade
+                                </label>
+                                <Input
+                                  value={editData?.city || ""}
+                                  onChange={(e) =>
+                                    handleEditFieldChange(
+                                      "city",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="São Paulo"
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div className="col-span-1">
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                  UF
+                                </label>
+                                <Input
+                                  value={editData?.state || ""}
+                                  onChange={(e) =>
+                                    handleEditFieldChange(
+                                      "state",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="SP"
+                                  maxLength={2}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                  CEP
+                                </label>
+                                <Input
+                                  value={editData?.zipCode || ""}
+                                  onChange={(e) =>
+                                    handleEditFieldChange(
+                                      "zipCode",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="01234-567"
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section: Uso e Métricas */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-5 w-5 rounded-md bg-amber-100 flex items-center justify-center">
+                            <CheckCircle className="h-3 w-3 text-amber-600" />
+                          </div>
+                          <span className="text-xs font-bold text-amber-600 uppercase tracking-widest">
+                            Uso e Métricas
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Tempo online
+                            </p>
+                            <p className="text-xl font-bold text-amber-600 mt-1">
+                              {selectedUser.averageOnlineHours || 2.5}h
+                              <span className="text-sm font-medium text-slate-500">
+                                /dia
+                              </span>
+                            </p>
+                          </div>
+                          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Sem acesso
+                            </p>
+                            <p className="text-xl font-bold text-orange-600 mt-1">
+                              {selectedUser.averageOfflineDays || 1}
+                              <span className="text-sm font-medium text-slate-500">
+                                {" "}
+                                dias
+                              </span>
+                            </p>
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Section: Uso e Métricas */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <div className="h-4 w-4 rounded bg-amber-100 flex items-center justify-center">
-                          <CheckCircle className="h-2.5 w-2.5 text-amber-600" />
+                        {/* Chart */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 mb-3">
+                            Tempo online — últimos 7 dias
+                          </p>
+                          <div className="h-28">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={timelineData}>
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke="#e5e7eb"
+                                  vertical={false}
+                                />
+                                <XAxis
+                                  dataKey="day"
+                                  tick={{ fontSize: 9 }}
+                                  stroke="#9CA3AF"
+                                />
+                                <YAxis
+                                  tick={{ fontSize: 9 }}
+                                  stroke="#9CA3AF"
+                                  tickFormatter={(v) => `${v}h`}
+                                />
+                                <RechartsTooltip
+                                  contentStyle={{
+                                    backgroundColor: "#1F2937",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontSize: 10,
+                                  }}
+                                  formatter={(v: number) => [`${v}h`, "Online"]}
+                                />
+                                <Bar
+                                  dataKey="hours"
+                                  radius={[4, 4, 0, 0]}
+                                  fill="#3B82F6"
+                                />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
-                          Uso e Métricas
+                      </div>
+                    </div>
+                  ) : (
+                    /* Permissions Mode */
+                    <div className="px-8 py-6 space-y-4 max-w-4xl">
+                      {/* === BLOCK A: Company permissions (editable by company admin) === */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
+                          <Shield className="h-3 w-3 text-blue-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">
+                          Permissões na Empresa
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5 mb-2">
-                        <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            Tempo online
-                          </p>
-                          <p className="text-sm font-bold text-yellow-600 mt-0.5">
-                            {selectedUser.averageOnlineHours || 2.5}h/dia
-                          </p>
-                        </div>
-                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
-                            Sem acesso
-                          </p>
-                          <p className="text-sm font-bold text-orange-600 mt-0.5">
-                            {selectedUser.averageOfflineDays || 1}d
-                          </p>
-                        </div>
-                      </div>
-                      {/* Chart */}
-                      <div className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
-                        <p className="text-[10px] font-semibold text-slate-500 mb-2">
-                          Tempo online — 7 dias
-                        </p>
-                        <div className="h-24">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={timelineData}>
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="#e5e7eb"
-                                vertical={false}
-                              />
-                              <XAxis
-                                dataKey="day"
-                                tick={{ fontSize: 9 }}
-                                stroke="#9CA3AF"
-                              />
-                              <YAxis
-                                tick={{ fontSize: 9 }}
-                                stroke="#9CA3AF"
-                                tickFormatter={(v) => `${v}h`}
-                              />
-                              <RechartsTooltip
-                                contentStyle={{
-                                  backgroundColor: "#1F2937",
-                                  border: "none",
-                                  borderRadius: "8px",
-                                  fontSize: 10,
-                                }}
-                                formatter={(v: number) => [`${v}h`, "Online"]}
-                              />
-                              <Bar
-                                dataKey="hours"
-                                radius={[4, 4, 0, 0]}
-                                fill="#3B82F6"
-                              />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Permissions Mode */
-                  <div className="px-6 py-5 space-y-4">
-                    {/* === BLOCK A: Company permissions (editable by company admin) === */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-5 w-5 rounded-md bg-blue-100 flex items-center justify-center">
-                        <Shield className="h-3 w-3 text-blue-600" />
-                      </div>
-                      <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">
-                        Permissões na Empresa
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 -mt-2">
-                      Gerenciadas pelo administrador da empresa.
-                    </p>
-                    {permissionsData &&
-                      Object.entries(permissionsData).map(
-                        ([categoryKey, categoryData]) => (
-                          <div
-                            key={categoryKey}
-                            className="border border-slate-100 rounded-xl overflow-hidden"
-                          >
-                            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                              <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                                {categoryKey === "gestao"
-                                  ? "Gestão"
-                                  : categoryKey === "tasks"
-                                    ? "Tarefas"
-                                    : categoryKey === "projects"
-                                      ? "Projetos"
-                                      : "Usuários"}
-                              </p>
+                      <p className="text-[11px] text-slate-500 -mt-2">
+                        Gerenciadas pelo administrador da empresa.
+                      </p>
+                      {permissionsData &&
+                        Object.entries(permissionsData).map(
+                          ([categoryKey, categoryData]) => (
+                            <div
+                              key={categoryKey}
+                              className="border border-slate-100 rounded-xl overflow-hidden"
+                            >
+                              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                                  {categoryKey === "gestao"
+                                    ? "Gestão"
+                                    : categoryKey === "tasks"
+                                      ? "Tarefas"
+                                      : categoryKey === "projects"
+                                        ? "Projetos"
+                                        : "Usuários"}
+                                </p>
+                              </div>
+                              <div className="divide-y divide-slate-100">
+                                {categoryData.map((permission) => (
+                                  <div
+                                    key={permission.id}
+                                    className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                                  >
+                                    <span className="text-sm text-slate-800">
+                                      {permission.name}
+                                    </span>
+                                    <Switch
+                                      checked={permission.enabled}
+                                      onCheckedChange={() =>
+                                        handleTogglePermission(
+                                          categoryKey,
+                                          permission.id,
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             </div>
+                          ),
+                        )}
+
+                      {/* === BLOCK B: Platform permissions (read-only — managed by platform admin) === */}
+                      <div className="mt-6 pt-4 border-t border-slate-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="h-5 w-5 rounded-md bg-slate-200 flex items-center justify-center">
+                            <Lock className="h-3 w-3 text-slate-500" />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                            Permissões na Plataforma
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 mb-3">
+                          <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                            <Lock className="h-3 w-3 text-slate-400 shrink-0" />
+                            Gerenciadas exclusivamente pelo administrador da
+                            plataforma.
+                          </p>
+                        </div>
+                        {selectedUser?.platform_permissions &&
+                        selectedUser.platform_permissions.length > 0 ? (
+                          <div className="border border-slate-100 rounded-xl overflow-hidden opacity-70">
                             <div className="divide-y divide-slate-100">
-                              {categoryData.map((permission) => (
+                              {selectedUser.platform_permissions.map((perm) => (
                                 <div
-                                  key={permission.id}
-                                  className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                                  key={perm}
+                                  className="flex items-center justify-between px-4 py-2.5 bg-white"
                                 >
-                                  <span className="text-sm text-slate-800">
-                                    {permission.name}
+                                  <span className="text-xs text-slate-600">
+                                    {perm
+                                      .replace(/_/g, " ")
+                                      .replace(/\b\w/g, (c) => c.toUpperCase())}
                                   </span>
-                                  <Switch
-                                    checked={permission.enabled}
-                                    onCheckedChange={() =>
-                                      handleTogglePermission(
-                                        categoryKey,
-                                        permission.id,
-                                      )
-                                    }
-                                  />
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                    <CheckCircle className="h-2.5 w-2.5" />{" "}
+                                    Ativo
+                                  </span>
                                 </div>
                               ))}
                             </div>
                           </div>
-                        ),
-                      )}
-
-                    {/* === BLOCK B: Platform permissions (read-only — managed by platform admin) === */}
-                    <div className="mt-6 pt-4 border-t border-slate-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="h-5 w-5 rounded-md bg-slate-200 flex items-center justify-center">
-                          <Lock className="h-3 w-3 text-slate-500" />
-                        </div>
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                          Permissões na Plataforma
-                        </span>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 mb-3">
-                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                          <Lock className="h-3 w-3 text-slate-400 shrink-0" />
-                          Gerenciadas exclusivamente pelo administrador da
-                          plataforma.
-                        </p>
-                      </div>
-                      {selectedUser?.platform_permissions &&
-                      selectedUser.platform_permissions.length > 0 ? (
-                        <div className="border border-slate-100 rounded-xl overflow-hidden opacity-70">
-                          <div className="divide-y divide-slate-100">
-                            {selectedUser.platform_permissions.map((perm) => (
-                              <div
-                                key={perm}
-                                className="flex items-center justify-between px-4 py-2.5 bg-white"
-                              >
-                                <span className="text-xs text-slate-600">
-                                  {perm
-                                    .replace(/_/g, " ")
-                                    .replace(/\b\w/g, (c) => c.toUpperCase())}
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                  <CheckCircle className="h-2.5 w-2.5" /> Ativo
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400 text-center py-3">
-                          Nenhuma permissão de plataforma atribuída.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* === BLOCK C: Project permissions (per-project, managed by company admin) === */}
-                    {(() => {
-                      const platformUser = selectedUser?.platformUserId
-                        ? getUserById(selectedUser.platformUserId)
-                        : null;
-                      const assoc = platformUser?.company_associations?.find(
-                        (a) => a.company_id === companyId,
-                      );
-                      const memberships = assoc?.project_memberships || [];
-                      const availableProjects = (
-                        MOCK_COMPANY_PROJECTS[companyId] || []
-                      ).filter(
-                        (p) => !memberships.some((m) => m.project_id === p.id),
-                      );
-                      return (
-                        <div className="mt-6 pt-4 border-t border-slate-200">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
-                                <Cog className="h-3 w-3 text-violet-600" />
-                              </div>
-                              <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">
-                                Permissões por Projeto
-                              </span>
-                            </div>
-                            {availableProjects.length > 0 && (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 text-xs gap-1 text-violet-600 hover:text-violet-700 hover:bg-violet-50"
-                                  >
-                                    <Plus className="h-3 w-3" /> Vincular
-                                    projeto
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-64 p-2"
-                                  align="end"
-                                >
-                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 mb-1">
-                                    Projetos disponíveis
-                                  </p>
-                                  {availableProjects.map((proj) => (
-                                    <button
-                                      key={proj.id}
-                                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm text-slate-700 flex items-center justify-between group"
-                                      onClick={() => {
-                                        if (selectedUser?.platformUserId) {
-                                          upsertProjectMembership(
-                                            selectedUser.platformUserId,
-                                            companyId,
-                                            {
-                                              project_id: proj.id,
-                                              project_name: proj.name,
-                                              permissions: ["view"],
-                                            },
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <span>{proj.name}</span>
-                                      <Plus className="h-3.5 w-3.5 text-violet-500 opacity-0 group-hover:opacity-100" />
-                                    </button>
-                                  ))}
-                                </PopoverContent>
-                              </Popover>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-slate-500 -mt-1 mb-3">
-                            Defina o que este usuário pode fazer em cada
-                            projeto.
+                        ) : (
+                          <p className="text-xs text-slate-400 text-center py-3">
+                            Nenhuma permissão de plataforma atribuída.
                           </p>
-                          {memberships.length === 0 ? (
-                            <div className="flex flex-col items-center py-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                              <Cog className="h-7 w-7 text-slate-300 mb-2" />
-                              <p className="text-xs text-slate-400">
-                                Nenhum projeto vinculado ainda.
-                              </p>
+                        )}
+                      </div>
+
+                      {/* === BLOCK C: Project permissions (per-project, managed by company admin) === */}
+                      {(() => {
+                        const platformUser = selectedUser?.platformUserId
+                          ? getUserById(selectedUser.platformUserId)
+                          : null;
+                        const assoc = platformUser?.company_associations?.find(
+                          (a) => a.company_id === companyId,
+                        );
+                        const memberships = assoc?.project_memberships || [];
+                        const availableProjects = (
+                          MOCK_COMPANY_PROJECTS[companyId] || []
+                        ).filter(
+                          (p) =>
+                            !memberships.some((m) => m.project_id === p.id),
+                        );
+                        return (
+                          <div className="mt-6 pt-4 border-t border-slate-200">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center">
+                                  <Cog className="h-3 w-3 text-violet-600" />
+                                </div>
+                                <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">
+                                  Permissões por Projeto
+                                </span>
+                              </div>
                               {availableProjects.length > 0 && (
-                                <p className="text-[11px] text-violet-400 mt-1">
-                                  Clique em "Vincular projeto" para adicionar.
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {memberships.map((membership) => (
-                                <div
-                                  key={membership.project_id}
-                                  className="border border-slate-200 rounded-xl overflow-hidden"
-                                >
-                                  <div className="px-4 py-2.5 bg-violet-50/60 border-b border-slate-200 flex items-center justify-between">
-                                    <p className="text-xs font-bold text-slate-700">
-                                      {membership.project_name}
-                                    </p>
-                                    <button
-                                      className="text-slate-400 hover:text-red-500 transition-colors"
-                                      onClick={() => {
-                                        if (selectedUser?.platformUserId) {
-                                          removeProjectMembership(
-                                            selectedUser.platformUserId,
-                                            companyId,
-                                            membership.project_id,
-                                          );
-                                        }
-                                      }}
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs gap-1 text-violet-600 hover:text-violet-700 hover:bg-violet-50"
                                     >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                  <div className="divide-y divide-slate-100">
-                                    {ALL_PROJECT_PERMISSIONS.map((perm) => (
-                                      <div
-                                        key={perm.id}
-                                        className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors"
-                                      >
-                                        <div>
-                                          <p className="text-xs font-medium text-slate-700">
-                                            {perm.label}
-                                          </p>
-                                          <p className="text-[10px] text-slate-400">
-                                            {perm.description}
-                                          </p>
-                                        </div>
-                                        <Switch
-                                          checked={membership.permissions.includes(
-                                            perm.id,
-                                          )}
-                                          onCheckedChange={(checked) => {
-                                            if (!selectedUser?.platformUserId)
-                                              return;
-                                            const newPerms = checked
-                                              ? [
-                                                  ...membership.permissions.filter(
-                                                    (p) => p !== perm.id,
-                                                  ),
-                                                  perm.id,
-                                                ]
-                                              : membership.permissions.filter(
-                                                  (p) => p !== perm.id,
-                                                );
+                                      <Plus className="h-3 w-3" /> Vincular
+                                      projeto
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-64 p-2"
+                                    align="end"
+                                  >
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 mb-1">
+                                      Projetos disponíveis
+                                    </p>
+                                    {availableProjects.map((proj) => (
+                                      <button
+                                        key={proj.id}
+                                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm text-slate-700 flex items-center justify-between group"
+                                        onClick={() => {
+                                          if (selectedUser?.platformUserId) {
                                             upsertProjectMembership(
                                               selectedUser.platformUserId,
                                               companyId,
                                               {
-                                                ...membership,
-                                                permissions: newPerms,
+                                                project_id: proj.id,
+                                                project_name: proj.name,
+                                                permissions: ["view"],
                                               },
                                             );
-                                          }}
-                                        />
-                                      </div>
+                                          }
+                                        }}
+                                      >
+                                        <span>{proj.name}</span>
+                                        <Plus className="h-3.5 w-3.5 text-violet-500 opacity-0 group-hover:opacity-100" />
+                                      </button>
                                     ))}
-                                  </div>
-                                </div>
-                              ))}
+                                  </PopoverContent>
+                                </Popover>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })()}
+                            <p className="text-[11px] text-slate-500 -mt-1 mb-3">
+                              Defina o que este usuário pode fazer em cada
+                              projeto.
+                            </p>
+                            {memberships.length === 0 ? (
+                              <div className="flex flex-col items-center py-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                                <Cog className="h-7 w-7 text-slate-300 mb-2" />
+                                <p className="text-xs text-slate-400">
+                                  Nenhum projeto vinculado ainda.
+                                </p>
+                                {availableProjects.length > 0 && (
+                                  <p className="text-[11px] text-violet-400 mt-1">
+                                    Clique em "Vincular projeto" para adicionar.
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {memberships.map((membership) => (
+                                  <div
+                                    key={membership.project_id}
+                                    className="border border-slate-200 rounded-xl overflow-hidden"
+                                  >
+                                    <div className="px-4 py-2.5 bg-violet-50/60 border-b border-slate-200 flex items-center justify-between">
+                                      <p className="text-xs font-bold text-slate-700">
+                                        {membership.project_name}
+                                      </p>
+                                      <button
+                                        className="text-slate-400 hover:text-red-500 transition-colors"
+                                        onClick={() => {
+                                          if (selectedUser?.platformUserId) {
+                                            removeProjectMembership(
+                                              selectedUser.platformUserId,
+                                              companyId,
+                                              membership.project_id,
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {ALL_PROJECT_PERMISSIONS.map((perm) => (
+                                        <div
+                                          key={perm.id}
+                                          className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors"
+                                        >
+                                          <div>
+                                            <p className="text-xs font-medium text-slate-700">
+                                              {perm.label}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400">
+                                              {perm.description}
+                                            </p>
+                                          </div>
+                                          <Switch
+                                            checked={membership.permissions.includes(
+                                              perm.id,
+                                            )}
+                                            onCheckedChange={(checked) => {
+                                              if (!selectedUser?.platformUserId)
+                                                return;
+                                              const newPerms = checked
+                                                ? [
+                                                    ...membership.permissions.filter(
+                                                      (p) => p !== perm.id,
+                                                    ),
+                                                    perm.id,
+                                                  ]
+                                                : membership.permissions.filter(
+                                                    (p) => p !== perm.id,
+                                                  );
+                                              upsertProjectMembership(
+                                                selectedUser.platformUserId,
+                                                companyId,
+                                                {
+                                                  ...membership,
+                                                  permissions: newPerms,
+                                                },
+                                              );
+                                            }}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit footer */}
+                {editMode && (
+                  <div className="flex-shrink-0 border-t border-slate-200 px-8 py-4 bg-white flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      className="h-10 px-6"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleSaveClick}
+                      className="h-10 px-6 btn-brand border-0"
+                    >
+                      Salvar alterações
+                    </Button>
+                  </div>
+                )}
+
+                {/* Permissions footer */}
+                {permissionsMode && hasPermissionChanges && (
+                  <div className="flex-shrink-0 border-t border-slate-200 px-8 py-4 bg-white flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelPermissions}
+                      className="h-10 px-6"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleSavePermissionsClick}
+                      className="h-10 px-6 btn-brand border-0"
+                    >
+                      Salvar permissões
+                    </Button>
                   </div>
                 )}
               </div>
-
-              {/* Edit footer */}
-              {editMode && (
-                <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    className="flex-1 h-10"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSaveClick}
-                    className="flex-1 h-10 btn-brand border-0"
-                  >
-                    Salvar alterações
-                  </Button>
-                </div>
-              )}
-
-              {/* Permissions footer */}
-              {permissionsMode && hasPermissionChanges && (
-                <div className="flex-shrink-0 border-t border-slate-200 px-6 py-4 bg-slate-50/60 flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelPermissions}
-                    className="flex-1 h-10"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSavePermissionsClick}
-                    className="flex-1 h-10 btn-brand border-0"
-                  >
-                    Salvar permissões
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog

@@ -935,7 +935,7 @@ export default function CampanhasPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold bg-linear-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Campanhas e Promoções
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -1026,7 +1026,7 @@ export default function CampanhasPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-white leading-none">
-            R$ {totalInvested.toLocaleString()}
+            R$ {(totalInvested ?? 0).toLocaleString()}
           </p>
         </div>
       </div>
@@ -1238,7 +1238,7 @@ export default function CampanhasPage() {
                       </span>
                       <span className="flex items-center gap-1">
                         <TrendingUp className="h-3 w-3" />
-                        R$ {campaign.totalEarned.toLocaleString()} pagos
+                        R$ {(campaign.totalEarned ?? 0).toLocaleString()} pagos
                       </span>
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />

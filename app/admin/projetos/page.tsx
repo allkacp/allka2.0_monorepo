@@ -124,7 +124,12 @@ import { apiClient } from "@/lib/api-client";
 import type { FrontendProject } from "@/lib/project-adapter";
 
 export default function AdminProjetosPage() {
-  const { projects: apiProjects, loading: projectsLoading, refetch: refetchProjects, setProjects: setApiProjects } = useProjects();
+  const {
+    projects: apiProjects,
+    loading: projectsLoading,
+    refetch: refetchProjects,
+    setProjects: setApiProjects,
+  } = useProjects();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -140,9 +145,8 @@ export default function AdminProjetosPage() {
   const [filterTasksMin, setFilterTasksMin] = useState("");
   const [filterTasksMax, setFilterTasksMax] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<
-    FrontendProject | null
-  >(null);
+  const [selectedProject, setSelectedProject] =
+    useState<FrontendProject | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"view" | "edit" | "create">(
     "view",
@@ -152,9 +156,15 @@ export default function AdminProjetosPage() {
   const [projectCreateData, setProjectCreateData] = useState<any>(null);
   // Draft-resume state for ProjectCreateNewPanel
   const [draftPanelProducts, setDraftPanelProducts] = useState<any[]>([]);
-  const [draftPanelQuantities, setDraftPanelQuantities] = useState<Record<string, number>>({});
-  const [draftPanelCommissions, setDraftPanelCommissions] = useState<Record<string, number>>({});
-  const [draftPanelProjectId, setDraftPanelProjectId] = useState<string | number | undefined>(undefined);
+  const [draftPanelQuantities, setDraftPanelQuantities] = useState<
+    Record<string, number>
+  >({});
+  const [draftPanelCommissions, setDraftPanelCommissions] = useState<
+    Record<string, number>
+  >({});
+  const [draftPanelProjectId, setDraftPanelProjectId] = useState<
+    string | number | undefined
+  >(undefined);
   const [draftResumeToCheckout, setDraftResumeToCheckout] = useState(false);
   const [viewMode, setViewMode] = useState<"accordion" | "kanban" | "planner">(
     "accordion",
@@ -163,9 +173,9 @@ export default function AdminProjetosPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
-  const [projectToClone, setProjectToClone] = useState<
-    FrontendProject | null
-  >(null);
+  const [projectToClone, setProjectToClone] = useState<FrontendProject | null>(
+    null,
+  );
   const [cloneProjectName, setCloneProjectName] = useState("");
   const [cloneOptions, setCloneOptions] = useState({
     team: true,
@@ -174,9 +184,8 @@ export default function AdminProjetosPage() {
     financial: false,
   });
   const [showCancelWizard, setShowCancelWizard] = useState(false);
-  const [projectToCancel, setProjectToCancel] = useState<
-    FrontendProject | null
-  >(null);
+  const [projectToCancel, setProjectToCancel] =
+    useState<FrontendProject | null>(null);
   const [cancelStep, setCancelStep] = useState<1 | 2 | 3>(1);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -272,6 +281,12 @@ export default function AdminProjetosPage() {
 
   const [kanbanColumns, setKanbanColumns] = useState([
     { id: "draft", label: "Rascunho", color: "bg-gray-800", count: 0 },
+    {
+      id: "pending-approval",
+      label: "Ag. Aprovação",
+      color: "bg-amber-500",
+      count: 0,
+    },
     {
       id: "negotiation",
       label: "Negociação",
@@ -1177,9 +1192,7 @@ export default function AdminProjetosPage() {
     setShowCloneDialog(true);
   };
 
-  const handleSaveProjectChanges = async (
-    updatedProject: FrontendProject,
-  ) => {
+  const handleSaveProjectChanges = async (updatedProject: FrontendProject) => {
     try {
       await apiClient.updateProject(updatedProject.id, {
         title: updatedProject.name,
@@ -1197,10 +1210,17 @@ export default function AdminProjetosPage() {
         portfolio_permission: updatedProject.portfolioPermission || false,
         bitrix_sync: updatedProject.bitrixSync || false,
       });
-      toast({ title: "Projeto atualizado", description: "As alterações foram salvas com sucesso." });
+      toast({
+        title: "Projeto atualizado",
+        description: "As alterações foram salvas com sucesso.",
+      });
       refetchProjects();
     } catch (error: any) {
-      toast({ title: "Erro ao salvar", description: error.message || "Não foi possível salvar.", variant: "destructive" });
+      toast({
+        title: "Erro ao salvar",
+        description: error.message || "Não foi possível salvar.",
+        variant: "destructive",
+      });
     }
     setSelectedProject(updatedProject);
     setModalMode("view");
@@ -1443,6 +1463,13 @@ export default function AdminProjetosPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "pending-approval":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white whitespace-nowrap">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            Ag. Aprovação
+          </span>
+        );
       case "awaiting-payment":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white whitespace-nowrap">
@@ -1506,14 +1533,14 @@ export default function AdminProjetosPage() {
       <div className="space-y-5">
         <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={7} />
       </div>
-    )
+    );
   }
 
   return (
     <div className="space-y-5" ref={pageRef}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Gestão de Projetos
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -1996,7 +2023,10 @@ export default function AdminProjetosPage() {
         {/* ── Draft / Awaiting-Payment Banner ── */}
         {(() => {
           const pendingProjects = projectsData.filter(
-            (p) => p.status === "draft" || p.status === "awaiting-payment"
+            (p) =>
+              p.status === "draft" ||
+              p.status === "awaiting-payment" ||
+              p.status === "pending-approval",
           );
           if (pendingProjects.length === 0) return null;
           return (
@@ -2013,7 +2043,8 @@ export default function AdminProjetosPage() {
                         : `${pendingProjects.length} projetos pendentes`}
                     </p>
                     <p className="text-xs text-amber-600">
-                      Projetos em rascunho ou aguardando pagamento precisam de ação.
+                      Projetos em rascunho, aguardando pagamento ou aprovação
+                      precisam de ação.
                     </p>
                   </div>
                 </div>
@@ -2030,23 +2061,35 @@ export default function AdminProjetosPage() {
                         background:
                           project.status === "awaiting-payment"
                             ? "linear-gradient(135deg,#0891b2,#6d28d9)"
-                            : "linear-gradient(135deg,#475569,#94a3b8)",
+                            : project.status === "pending-approval"
+                              ? "linear-gradient(135deg,#d97706,#b45309)"
+                              : "linear-gradient(135deg,#475569,#94a3b8)",
                       }}
                     >
                       {(project.name ?? "P")[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{project.name}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{project.client}</p>
+                      <p className="text-xs font-semibold text-slate-800 truncate">
+                        {project.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {project.client}
+                      </p>
                     </div>
                     <span
                       className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
                         project.status === "awaiting-payment"
                           ? "bg-cyan-100 text-cyan-700"
-                          : "bg-slate-100 text-slate-600"
+                          : project.status === "pending-approval"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {project.status === "awaiting-payment" ? "Ag. Pagamento" : "Rascunho"}
+                      {project.status === "awaiting-payment"
+                        ? "Ag. Pagamento"
+                        : project.status === "pending-approval"
+                          ? "Ag. Aprovação"
+                          : "Rascunho"}
                     </span>
                     {project.status === "draft" ? (
                       <Button
@@ -2055,6 +2098,15 @@ export default function AdminProjetosPage() {
                         onClick={() => handleContinueDraft(project)}
                       >
                         Continuar
+                        <ArrowRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : project.status === "pending-approval" ? (
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0"
+                        onClick={() => handleGoToPayment(project)}
+                      >
+                        Aprovar
                         <ArrowRight className="h-3 w-3 ml-1" />
                       </Button>
                     ) : (
@@ -2616,7 +2668,9 @@ export default function AdminProjetosPage() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleContinueDraft(project)}
+                                          onClick={() =>
+                                            handleContinueDraft(project)
+                                          }
                                           className="h-5 w-5 p-0 rounded text-violet-500 hover:text-violet-700 hover:bg-violet-50"
                                         >
                                           <ArrowRight className="h-2.5 w-2.5" />
@@ -2651,7 +2705,9 @@ export default function AdminProjetosPage() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleGoToPayment(project)}
+                                          onClick={() =>
+                                            handleGoToPayment(project)
+                                          }
                                           className="h-5 w-5 p-0 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50"
                                         >
                                           <CreditCard className="h-2.5 w-2.5" />
@@ -2666,7 +2722,9 @@ export default function AdminProjetosPage() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleViewProject(project)}
+                                          onClick={() =>
+                                            handleViewProject(project)
+                                          }
                                           className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
                                         >
                                           <Eye className="h-2.5 w-2.5" />
@@ -2701,7 +2759,9 @@ export default function AdminProjetosPage() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleViewProject(project)}
+                                          onClick={() =>
+                                            handleViewProject(project)
+                                          }
                                           className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
                                         >
                                           <Eye className="h-2.5 w-2.5" />
@@ -3285,6 +3345,10 @@ export default function AdminProjetosPage() {
                                     {[
                                       { value: "all", label: "Todos" },
                                       { value: "draft", label: "Rascunho" },
+                                      {
+                                        value: "pending-approval",
+                                        label: "Ag. Aprovação",
+                                      },
                                       {
                                         value: "negotiation",
                                         label: "Negociação",
@@ -4496,12 +4560,25 @@ export default function AdminProjetosPage() {
             setModalMode("edit");
           }}
           onClone={() => handleCloneProject(selectedProject)}
-          onExport={() => {
-          }}
+          onExport={() => {}}
           onSave={handleSaveProjectChanges}
           onCancel={() => handleStartCancelProject(selectedProject)}
-          onContinueDraft={selectedProject ? () => { setModalOpen(false); handleContinueDraft(selectedProject); } : undefined}
-          onGoToPayment={selectedProject ? () => { setModalOpen(false); handleGoToPayment(selectedProject); } : undefined}
+          onContinueDraft={
+            selectedProject
+              ? () => {
+                  setModalOpen(false);
+                  handleContinueDraft(selectedProject);
+                }
+              : undefined
+          }
+          onGoToPayment={
+            selectedProject
+              ? () => {
+                  setModalOpen(false);
+                  handleGoToPayment(selectedProject);
+                }
+              : undefined
+          }
         />
         <ProjectWizardSlidePanel
           open={showWizard}
@@ -4525,9 +4602,15 @@ export default function AdminProjetosPage() {
           initialData={projectCreateData}
           cloneMode={!!projectCreateData && !draftPanelProjectId}
           allowCompanySelect={!projectCreateData}
-          draftProducts={draftPanelProducts.length > 0 ? draftPanelProducts : undefined}
-          draftProductQuantities={draftPanelProducts.length > 0 ? draftPanelQuantities : undefined}
-          draftCommissions={draftPanelProducts.length > 0 ? draftPanelCommissions : undefined}
+          draftProducts={
+            draftPanelProducts.length > 0 ? draftPanelProducts : undefined
+          }
+          draftProductQuantities={
+            draftPanelProducts.length > 0 ? draftPanelQuantities : undefined
+          }
+          draftCommissions={
+            draftPanelProducts.length > 0 ? draftPanelCommissions : undefined
+          }
           draftProjectId={draftPanelProjectId}
           resumeToCheckout={draftResumeToCheckout}
           onCreate={() => {

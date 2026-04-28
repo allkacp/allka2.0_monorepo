@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1b2a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1a3a5c;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="730" cy="90" r="120" fill="#fbbc04" fill-opacity="0.04"/>
+  <circle cx="70" cy="390" r="100" fill="#ea4335" fill-opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="200" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">AVALIAÇÕES E REPUTAÇÃO</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Google Reviews</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Gestão de avaliações · últimos 6 meses</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Rating summary (left) -->
+  <rect x="30" y="135" width="230" height="170" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="145" y="188" font-family="system-ui,sans-serif" font-size="56" fill="#fbbc04" text-anchor="middle" font-weight="800" filter="url(#glow)">4,9</text>
+  <text x="145" y="212" font-family="system-ui,sans-serif" font-size="20" fill="#fbbc04" text-anchor="middle">★★★★★</text>
+  <text x="145" y="234" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.5)" text-anchor="middle">247 avaliações</text>
+  <text x="145" y="256" font-family="system-ui,sans-serif" font-size="11" fill="#34a853" text-anchor="middle">+38 este mês</text>
+  <text x="145" y="277" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.3)" text-anchor="middle">Google Negócios</text>
+
+  <!-- Ratings breakdown (middle) -->
+  <rect x="278" y="135" width="280" height="170" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="298" y="162" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.6)" font-weight="600">DISTRIBUIÇÃO</text>
+
+  <!-- 5 stars -->
+  <text x="298" y="187" font-family="system-ui,sans-serif" font-size="11" fill="#fbbc04">★★★★★</text>
+  <rect x="365" y="177" width="160" height="12" rx="6" fill="rgba(255,255,255,0.08)"/>
+  <rect x="365" y="177" width="145" height="12" rx="6" fill="#fbbc04" opacity="0.8"/>
+  <text x="537" y="188" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">81%</text>
+
+  <!-- 4 stars -->
+  <text x="298" y="212" font-family="system-ui,sans-serif" font-size="11" fill="#fbbc04">★★★★</text>
+  <text x="346" y="212" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.3)">☆</text>
+  <rect x="365" y="202" width="160" height="12" rx="6" fill="rgba(255,255,255,0.08)"/>
+  <rect x="365" y="202" width="27" height="12" rx="6" fill="#fbbc04" opacity="0.5"/>
+  <text x="537" y="213" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">15%</text>
+
+  <!-- 3 stars -->
+  <text x="298" y="237" font-family="system-ui,sans-serif" font-size="11" fill="#fbbc04">★★★</text>
+  <text x="322" y="237" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.3)">☆☆</text>
+  <rect x="365" y="227" width="160" height="12" rx="6" fill="rgba(255,255,255,0.08)"/>
+  <rect x="365" y="227" width="6" height="12" rx="6" fill="#fbbc04" opacity="0.4"/>
+  <text x="537" y="238" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">3%</text>
+
+  <!-- 1-2 stars -->
+  <text x="298" y="262" font-family="system-ui,sans-serif" font-size="11" fill="#ea4335">★★</text>
+  <text x="312" y="262" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.3)">☆☆☆</text>
+  <rect x="365" y="252" width="160" height="12" rx="6" fill="rgba(255,255,255,0.08)"/>
+  <rect x="365" y="252" width="2" height="12" rx="6" fill="#ea4335" opacity="0.6"/>
+  <text x="537" y="263" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">1%</text>
+
+  <!-- Response rate badge -->
+  <rect x="278" y="272" width="280" height="24" rx="6" fill="rgba(52,168,83,0.15)"/>
+  <text x="418" y="288" font-family="system-ui,sans-serif" font-size="11" fill="#34a853" text-anchor="middle" font-weight="600">✓ 100% das avaliações respondidas</text>
+
+  <!-- Recent reviews (right) -->
+  <rect x="576" y="135" width="194" height="170" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="596" y="162" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.6)" font-weight="600">RECENTES</text>
+
+  <!-- Review 1 -->
+  <text x="596" y="186" font-family="system-ui,sans-serif" font-size="10" fill="#fbbc04">★★★★★</text>
+  <text x="596" y="200" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)">"Atendimento incrível..."</text>
+  <text x="596" y="214" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.3)">Ana C. · há 2 dias</text>
+
+  <!-- Review 2 -->
+  <line x1="596" y1="224" x2="756" y2="224" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="596" y="240" font-family="system-ui,sans-serif" font-size="10" fill="#fbbc04">★★★★★</text>
+  <text x="596" y="254" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)">"Super profissionais!"</text>
+  <text x="596" y="268" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.3)">Marco R. · há 5 dias</text>
+
+  <!-- Review 3 -->
+  <line x1="596" y1="278" x2="756" y2="278" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="596" y="294" font-family="system-ui,sans-serif" font-size="10" fill="#fbbc04">★★★★★</text>
+  <text x="596" y="303" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.3)">Júlia M. · há 1 semana</text>
+
+  <!-- Monthly trend chart -->
+  <rect x="30" y="322" width="740" height="90" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="50" y="344" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.45)" font-weight="600">NOVAS AVALIAÇÕES POR MÊS</text>
+
+  <!-- Bars -->
+  <rect x="80"  y="388" width="60" height="16" rx="4" fill="rgba(251,188,4,0.4)"/>
+  <rect x="180" y="378" width="60" height="26" rx="4" fill="rgba(251,188,4,0.55)"/>
+  <rect x="280" y="368" width="60" height="36" rx="4" fill="rgba(251,188,4,0.7)"/>
+  <rect x="380" y="360" width="60" height="44" rx="4" fill="rgba(251,188,4,0.8)"/>
+  <rect x="480" y="352" width="60" height="52" rx="4" fill="rgba(251,188,4,0.9)"/>
+  <rect x="580" y="344" width="60" height="60" rx="4" fill="#fbbc04"/>
+
+  <!-- Month labels -->
+  <text x="110"  y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">Nov</text>
+  <text x="210" y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">Dez</text>
+  <text x="310" y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">Jan</text>
+  <text x="410" y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">Fev</text>
+  <text x="510" y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">Mar</text>
+  <text x="610" y="412" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.45)" text-anchor="middle" font-weight="700">Abr</text>
+
+  <!-- Values -->
+  <text x="110"  y="384" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">12</text>
+  <text x="210" y="374" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">18</text>
+  <text x="310" y="364" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">26</text>
+  <text x="410" y="356" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">31</text>
+  <text x="510" y="348" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">36</text>
+  <text x="610" y="340" font-family="system-ui,sans-serif" font-size="10" fill="#fbbc04" text-anchor="middle" font-weight="700">38</text>
+
+  <text x="400" y="430" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.25)" text-anchor="end">Google Reviews · allka</text>
+</svg>

@@ -36,6 +36,10 @@ import {
   Copy,
   ChevronRight,
   Loader2,
+  Trophy,
+  Shield,
+  Gem,
+  Crown,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { useNomadeLevels } from "@/hooks/useNomadeLevels";
@@ -46,97 +50,104 @@ const LEVEL_THEMES: Record<
   string,
   {
     accent: string;
-    headerBg: string;
-    iconBg: string;
     badgeBg: string;
     badgeBorder: string;
     badgeText: string;
     statBg: string;
     statBorder: string;
-    cardBorder: string;
+    statIconColor: string;
+    neonRing: string;
+    glowShadow: string;
   }
 > = {
   Bronze: {
     accent: "border-l-amber-500",
-    headerBg: "bg-gradient-to-r from-amber-50 via-orange-50/60 to-white",
-    iconBg: "bg-amber-100",
-    badgeBg: "bg-amber-50",
-    badgeBorder: "border-amber-200",
-    badgeText: "text-amber-700",
-    statBg: "bg-amber-50/70",
-    statBorder: "border-amber-100",
-    cardBorder: "border-slate-200 hover:border-amber-300",
+    badgeBg: "bg-amber-50 dark:bg-amber-950/30",
+    badgeBorder: "border-amber-200 dark:border-amber-700/40",
+    badgeText: "text-amber-700 dark:text-amber-400",
+    statBg: "bg-amber-50/70 dark:bg-amber-950/20",
+    statBorder: "border-amber-100 dark:border-amber-900/40",
+    statIconColor: "text-amber-500",
+    neonRing: "ring-1 ring-amber-300/30 dark:ring-amber-500/20 hover:ring-amber-400/70 dark:hover:ring-amber-400/50",
+    glowShadow: "shadow-sm shadow-amber-400/10 hover:shadow-xl hover:shadow-amber-400/20 dark:shadow-amber-400/15 dark:hover:shadow-amber-400/35",
   },
   Silver: {
     accent: "border-l-slate-400",
-    headerBg: "bg-gradient-to-r from-slate-50 via-slate-100/40 to-white",
-    iconBg: "bg-slate-100",
-    badgeBg: "bg-slate-50",
-    badgeBorder: "border-slate-300",
-    badgeText: "text-slate-600",
-    statBg: "bg-slate-50/70",
-    statBorder: "border-slate-200",
-    cardBorder: "border-slate-200 hover:border-slate-400",
+    badgeBg: "bg-slate-50 dark:bg-slate-800/50",
+    badgeBorder: "border-slate-300 dark:border-slate-600/50",
+    badgeText: "text-slate-600 dark:text-slate-300",
+    statBg: "bg-slate-50/70 dark:bg-slate-800/30",
+    statBorder: "border-slate-200 dark:border-slate-700/40",
+    statIconColor: "text-slate-500 dark:text-slate-400",
+    neonRing: "ring-1 ring-slate-300/40 dark:ring-slate-500/25 hover:ring-slate-400/70 dark:hover:ring-slate-400/50",
+    glowShadow: "shadow-sm shadow-slate-400/10 hover:shadow-xl hover:shadow-slate-400/15 dark:shadow-slate-400/15 dark:hover:shadow-slate-400/25",
   },
   Gold: {
     accent: "border-l-yellow-500",
-    headerBg: "bg-gradient-to-r from-yellow-50 via-amber-50/60 to-white",
-    iconBg: "bg-yellow-100",
-    badgeBg: "bg-yellow-50",
-    badgeBorder: "border-yellow-200",
-    badgeText: "text-yellow-700",
-    statBg: "bg-yellow-50/70",
-    statBorder: "border-yellow-100",
-    cardBorder: "border-slate-200 hover:border-yellow-300",
+    badgeBg: "bg-yellow-50 dark:bg-yellow-950/30",
+    badgeBorder: "border-yellow-200 dark:border-yellow-700/40",
+    badgeText: "text-yellow-700 dark:text-yellow-400",
+    statBg: "bg-yellow-50/70 dark:bg-yellow-950/20",
+    statBorder: "border-yellow-100 dark:border-yellow-900/40",
+    statIconColor: "text-yellow-500",
+    neonRing: "ring-1 ring-yellow-300/30 dark:ring-yellow-500/20 hover:ring-yellow-400/70 dark:hover:ring-yellow-400/50",
+    glowShadow: "shadow-sm shadow-yellow-400/10 hover:shadow-xl hover:shadow-yellow-400/20 dark:shadow-yellow-400/15 dark:hover:shadow-yellow-400/35",
   },
   Platinum: {
     accent: "border-l-sky-500",
-    headerBg: "bg-gradient-to-r from-sky-50 via-blue-50/40 to-white",
-    iconBg: "bg-sky-100",
-    badgeBg: "bg-sky-50",
-    badgeBorder: "border-sky-200",
-    badgeText: "text-sky-700",
-    statBg: "bg-sky-50/70",
-    statBorder: "border-sky-100",
-    cardBorder: "border-slate-200 hover:border-sky-300",
+    badgeBg: "bg-sky-50 dark:bg-sky-950/30",
+    badgeBorder: "border-sky-200 dark:border-sky-700/40",
+    badgeText: "text-sky-700 dark:text-sky-400",
+    statBg: "bg-sky-50/70 dark:bg-sky-950/20",
+    statBorder: "border-sky-100 dark:border-sky-900/40",
+    statIconColor: "text-sky-500",
+    neonRing: "ring-1 ring-sky-300/30 dark:ring-sky-500/20 hover:ring-sky-400/70 dark:hover:ring-sky-400/50",
+    glowShadow: "shadow-sm shadow-sky-400/10 hover:shadow-xl hover:shadow-sky-400/20 dark:shadow-sky-400/15 dark:hover:shadow-sky-400/35",
   },
   Diamond: {
     accent: "border-l-violet-500",
-    headerBg: "bg-gradient-to-r from-violet-50 via-purple-50/40 to-white",
-    iconBg: "bg-violet-100",
-    badgeBg: "bg-violet-50",
-    badgeBorder: "border-violet-200",
-    badgeText: "text-violet-700",
-    statBg: "bg-violet-50/70",
-    statBorder: "border-violet-100",
-    cardBorder: "border-slate-200 hover:border-violet-300",
+    badgeBg: "bg-violet-50 dark:bg-violet-950/30",
+    badgeBorder: "border-violet-200 dark:border-violet-700/40",
+    badgeText: "text-violet-700 dark:text-violet-400",
+    statBg: "bg-violet-50/70 dark:bg-violet-950/20",
+    statBorder: "border-violet-100 dark:border-violet-900/40",
+    statIconColor: "text-violet-500",
+    neonRing: "ring-1 ring-violet-300/30 dark:ring-violet-500/20 hover:ring-violet-400/70 dark:hover:ring-violet-400/50",
+    glowShadow: "shadow-sm shadow-violet-400/10 hover:shadow-xl hover:shadow-violet-400/20 dark:shadow-violet-400/15 dark:hover:shadow-violet-400/35",
   },
   Leader: {
     accent: "border-l-rose-500",
-    headerBg: "bg-gradient-to-r from-rose-50 via-pink-50/40 to-white",
-    iconBg: "bg-rose-100",
-    badgeBg: "bg-rose-50",
-    badgeBorder: "border-rose-200",
-    badgeText: "text-rose-700",
-    statBg: "bg-rose-50/70",
-    statBorder: "border-rose-100",
-    cardBorder: "border-slate-200 hover:border-rose-300",
+    badgeBg: "bg-rose-50 dark:bg-rose-950/30",
+    badgeBorder: "border-rose-200 dark:border-rose-700/40",
+    badgeText: "text-rose-700 dark:text-rose-400",
+    statBg: "bg-rose-50/70 dark:bg-rose-950/20",
+    statBorder: "border-rose-100 dark:border-rose-900/40",
+    statIconColor: "text-rose-500",
+    neonRing: "ring-1 ring-rose-300/30 dark:ring-rose-500/20 hover:ring-rose-400/70 dark:hover:ring-rose-400/50",
+    glowShadow: "shadow-sm shadow-rose-400/10 hover:shadow-xl hover:shadow-rose-400/20 dark:shadow-rose-400/15 dark:hover:shadow-rose-400/35",
   },
 };
 
 const DEFAULT_THEME = {
   accent: "border-l-blue-500",
-  headerBg: "bg-gradient-to-r from-blue-50 via-indigo-50/40 to-white",
-  iconBg: "bg-blue-100",
-  badgeBg: "bg-blue-50",
-  badgeBorder: "border-blue-200",
-  badgeText: "text-blue-700",
-  statBg: "bg-blue-50/70",
-  statBorder: "border-blue-100",
-  cardBorder: "border-slate-200 hover:border-blue-300",
+  badgeBg: "bg-blue-50 dark:bg-blue-950/30",
+  badgeBorder: "border-blue-200 dark:border-blue-700/40",
+  badgeText: "text-blue-700 dark:text-blue-400",
+  statBg: "bg-blue-50/70 dark:bg-blue-950/20",
+  statBorder: "border-blue-100 dark:border-blue-900/40",
+  statIconColor: "text-blue-500",
+  neonRing: "ring-1 ring-blue-300/30 dark:ring-blue-500/20 hover:ring-blue-400/70 dark:hover:ring-blue-400/50",
+  glowShadow: "shadow-sm shadow-blue-400/10 hover:shadow-xl hover:shadow-blue-400/20 dark:shadow-blue-400/15 dark:hover:shadow-blue-400/35",
 };
 
-// Nomad levels loaded from API via useNomadeLevels hook
+const LEVEL_ICON_MAP: Record<string, { gradient: string; Icon: any }> = {
+  Bronze:   { gradient: "from-amber-500 to-orange-600",  Icon: Award   },
+  Silver:   { gradient: "from-slate-400 to-slate-600",   Icon: Star    },
+  Gold:     { gradient: "from-yellow-400 to-amber-500",  Icon: Trophy  },
+  Platinum: { gradient: "from-sky-400 to-blue-600",      Icon: Shield  },
+  Diamond:  { gradient: "from-violet-500 to-purple-700", Icon: Gem     },
+  Leader:   { gradient: "from-rose-500 to-pink-600",     Icon: Crown   },
+};
 
 
 // Tasks/90d and min rating criteria to MAINTAIN current level
@@ -608,6 +619,8 @@ export default function NiveisNomadesPage() {
   const {
     levels: apiLevels,
     loading: levelsLoading,
+    error: levelsError,
+    refetch: refetchLevels,
     createLevel,
     updateLevel,
     deleteLevel: apiDeleteLevel,
@@ -623,9 +636,18 @@ export default function NiveisNomadesPage() {
     name: string;
   }>({ open: false, id: null, name: "" });
 
-  // Sync API levels into local state
+  // Sync API levels into local state (parse benefits JSON string if needed)
   useEffect(() => {
-    if (apiLevels.length > 0) setNomadLevels(apiLevels);
+    if (apiLevels.length > 0) {
+      const parsed = apiLevels.map((l: any) => ({
+        ...l,
+        benefits:
+          typeof l.benefits === "string"
+            ? (() => { try { const p = JSON.parse(l.benefits); return Array.isArray(p) ? p : []; } catch { return []; } })()
+            : Array.isArray(l.benefits) ? l.benefits : [],
+      }));
+      setNomadLevels(parsed);
+    }
   }, [apiLevels]);
 
   const handleSaveLevel = async (levelData: any) => {
@@ -693,197 +715,195 @@ export default function NiveisNomadesPage() {
         </TabsList>
         <TabsContent value="config">
           <div className="grid gap-4">
-            {nomadLevels.map((level, index) => {
+
+            {levelsLoading && (
+              <div className="flex items-center justify-center py-20 text-slate-400">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-violet-500" />
+                  <span className="text-sm">Carregando níveis...</span>
+                </div>
+              </div>
+            )}
+
+            {!levelsLoading && levelsError && (
+              <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <div className="rounded-xl bg-red-50 border border-red-200 px-6 py-5 max-w-md text-center">
+                  <p className="text-sm font-semibold text-red-700 mb-1">Erro ao carregar níveis</p>
+                  <p className="text-xs text-red-500 font-mono">{levelsError}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={refetchLevels} className="gap-2">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+
+            {!levelsLoading && !levelsError && nomadLevels.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                <Award className="h-10 w-10 opacity-30" />
+                <p className="text-sm">Nenhum nível cadastrado ainda.</p>
+                <Button size="sm" onClick={() => openEditDialog()} className="btn-brand gap-2">
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar primeiro nível
+                </Button>
+              </div>
+            )}
+
+            {!levelsLoading && !levelsError && nomadLevels.map((level, index) => {
               const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
+              const levelConfig = LEVEL_ICON_MAP[level.name] ?? { gradient: "from-blue-500 to-indigo-600", Icon: Award };
+              const LevelIcon = levelConfig.Icon;
               return (
                 <div
                   key={level.id}
                   className="animate-in fade-in slide-in-from-bottom duration-500"
                   style={{ animationDelay: `${index * 80}ms` }}
                 >
-                  <Card
-                    className={`overflow-hidden bg-white border border-l-4 ${theme.accent} ${theme.cardBorder} shadow-sm hover:shadow-md transition-all duration-200`}
-                  >
-                    <CardHeader
-                      className={`p-4 pb-3 ${theme.headerBg} border-b border-slate-100`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`shrink-0 w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center text-xl shadow-sm`}
-                          >
-                            {level.icon}
+                  <Card className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}>
+
+                    {/* ── HEADER ── */}
+                    <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-4 min-w-0">
+
+                          {/* Gradient icon badge */}
+                          <div className="relative shrink-0">
+                            <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}>
+                              <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
+                            </div>
+                            <span
+                              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
+                              style={{ backgroundColor: level.color ?? "#6B7280" }}
+                            >
+                              {level.sort_order ?? index + 1}
+                            </span>
                           </div>
+
+                          {/* Name + badges + description */}
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-base font-semibold text-slate-800">
-                                {level.name}
-                              </h3>
+                              <h3 className="text-base font-bold text-slate-800 dark:text-white">{level.name}</h3>
                               {level.is_leader_level && (
-                                <Badge
-                                  className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                                >
-                                  <Users className="h-3 w-3 mr-1" />
+                                <Badge className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                                  <Crown className="h-3 w-3 mr-1" />
                                   Liderança
                                 </Badge>
                               )}
                               {level.bonus_percentage > 0 && (
-                                <Badge className="border text-xs font-medium bg-emerald-50 border-emerald-200 text-emerald-700">
-                                  <TrendingUp className="h-3 w-3 mr-1" />+
-                                  {level.bonus_percentage}% bônus
+                                <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                  +{level.bonus_percentage}% bônus
                                 </Badge>
                               )}
-                              {level.min_tasks_quarter === 0 &&
-                                !level.is_leader_level && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs text-slate-500 border-slate-200 bg-white"
-                                  >
-                                    Nível base
-                                  </Badge>
-                                )}
+                              {level.min_tasks_quarter === 0 && !level.is_leader_level && (
+                                <Badge variant="outline" className="text-xs text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                                  Nível base
+                                </Badge>
+                              )}
                             </div>
-                            <p className="text-sm text-slate-500 mt-0.5">
-                              {level.description}
-                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{level.description}</p>
                           </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(level)}
-                            className="h-8 w-8 p-0 border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-800"
-                          >
+
+                        {/* Actions */}
+                        <div className="flex gap-1.5 shrink-0">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(level)}
+                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100">
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setDeleteDialog({
-                                open: true,
-                                id: level.id,
-                                name: level.name,
-                              })
-                            }
-                            className="h-8 w-8 p-0 border-red-100 bg-white hover:bg-red-50 text-red-400 hover:text-red-600"
-                          >
+                          <Button variant="outline" size="sm" onClick={() => setDeleteDialog({ open: true, id: level.id, name: level.name })}
+                            className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                     </CardHeader>
 
-                    <CardContent className="p-4 pt-3 space-y-4">
-                      {/* Critérios de performance */}
+                    <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
+
+                      {/* ── CRITÉRIOS DE PERFORMANCE ── */}
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
                           Critérios de Performance
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <div
-                            className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                          >
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <ClipboardCheck className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                Tarefas/Trimestre
-                              </span>
+                          <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              <ClipboardCheck className={`h-3 w-3 ${theme.statIconColor}`} />
+                              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Tarefas/Trim.</span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              {level.min_tasks_quarter > 0
-                                ? `≥ ${level.min_tasks_quarter}`
-                                : "—"}
+                            <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                              {level.min_tasks_quarter > 0 ? `≥ ${level.min_tasks_quarter}` : "—"}
                             </p>
                           </div>
-                          <div
-                            className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                          >
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Star className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                Avaliação Mín.
-                              </span>
+                          <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              <Star className={`h-3 w-3 ${theme.statIconColor}`} />
+                              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Avaliação Mín.</span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              {level.min_rating > 0
-                                ? `≥ ${level.min_rating.toFixed(1)} ★`
-                                : "—"}
+                            <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                              {level.min_rating > 0 ? `≥ ${level.min_rating.toFixed(1)} ★` : "—"}
                             </p>
                           </div>
-                          <div
-                            className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                          >
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Target className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                Entrega no Prazo
-                              </span>
+                          <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              <Target className={`h-3 w-3 ${theme.statIconColor}`} />
+                              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Entrega Prazo</span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              {level.min_ontime_rate > 0
-                                ? `≥ ${level.min_ontime_rate}%`
-                                : "—"}
+                            <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                              {level.min_ontime_rate > 0 ? `≥ ${level.min_ontime_rate}%` : "—"}
                             </p>
                           </div>
-                          <div
-                            className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                          >
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <BarChart3 className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                Rejeição Máx.
-                              </span>
+                          <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              <BarChart3 className={`h-3 w-3 ${theme.statIconColor}`} />
+                              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Rejeição Máx.</span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              {level.max_rejection_rate < 100
-                                ? `≤ ${level.max_rejection_rate}%`
-                                : "—"}
+                            <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                              {level.max_rejection_rate < 100 ? `≤ ${level.max_rejection_rate}%` : "—"}
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      {/* Perks */}
-                      <div className="flex flex-wrap gap-2">
-                        {level.bonus_percentage > 0 && (
-                          <span
-                            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                          >
-                            <Zap className="h-3 w-3" />+{level.bonus_percentage}
-                            % de bônus nas tarefas
-                          </span>
-                        )}
-                        {level.level_up_bonus_credits > 0 && (
-                          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium bg-purple-50 border-purple-200 text-purple-700">
-                            <Gift className="h-3 w-3" />
-                            R${" "}
-                            {level.level_up_bonus_credits.toLocaleString(
-                              "pt-BR",
-                            )}{" "}
-                            em créditos ao atingir nível
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Benefícios */}
-                      <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                          Benefícios desbloqueados
-                        </p>
+                      {/* ── PERKS ── */}
+                      {(level.bonus_percentage > 0 || level.level_up_bonus_credits > 0) && (
                         <div className="flex flex-wrap gap-1.5">
-                          {level.benefits.map((benefit, i) => (
-                            <span
-                              key={i}
-                              className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                            >
-                              <CheckCircle2 className="h-3 w-3 opacity-60" />
-                              {benefit}
+                          {level.bonus_percentage > 0 && (
+                            <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                              <Zap className="h-2.5 w-2.5" />
+                              +{level.bonus_percentage}% de bônus nas tarefas
                             </span>
-                          ))}
+                          )}
+                          {level.level_up_bonus_credits > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
+                              <Gift className="h-2.5 w-2.5" />
+                              R$ {level.level_up_bonus_credits.toLocaleString("pt-BR")} em créditos ao atingir nível
+                            </span>
+                          )}
                         </div>
-                      </div>
+                      )}
+
+                      {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
+                      {(Array.isArray(level.benefits) ? level.benefits : []).length > 0 && (
+                        <div>
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                            Benefícios Desbloqueados
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(Array.isArray(level.benefits) ? level.benefits : []).map((benefit, i) => (
+                              <span
+                                key={i}
+                                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                              >
+                                <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                                {benefit}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                     </CardContent>
                   </Card>
                 </div>

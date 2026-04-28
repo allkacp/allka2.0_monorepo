@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1b2a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1a3a5c;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <linearGradient id="bar1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#34a853"/>
+      <stop offset="100%" style="stop-color:#4ade80"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4285f4"/>
+      <stop offset="100%" style="stop-color:#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ea4335"/>
+      <stop offset="100%" style="stop-color:#f87171"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="720" cy="80" r="130" fill="#34a853" fill-opacity="0.04"/>
+  <circle cx="80" cy="400" r="100" fill="#4285f4" fill-opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="230" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">PERFIL DO GOOGLE NEGÓCIOS</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Completude do Perfil</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Checklist de configuração · Clínica Estética Lumina</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Score circle -->
+  <circle cx="700" cy="260" r="80" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14"/>
+  <circle cx="700" cy="260" r="80" fill="none" stroke="#34a853" stroke-width="14" stroke-dasharray="472" stroke-dashoffset="47" stroke-linecap="round" transform="rotate(-90 700 260)" opacity="0.9"/>
+  <text x="700" y="254" font-family="system-ui,sans-serif" font-size="32" fill="#4ade80" text-anchor="middle" font-weight="800">90%</text>
+  <text x="700" y="278" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">completo</text>
+
+  <!-- Checklist items -->
+  <!-- Table header -->
+  <rect x="30" y="128" width="640" height="28" rx="6" fill="#ffffff0a"/>
+  <text x="44" y="147" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="700">ITEM DO PERFIL</text>
+  <text x="440" y="147" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="700">STATUS</text>
+  <text x="560" y="147" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="700">IMPACTO</text>
+
+  <!-- Row 1 -->
+  <rect x="30" y="160" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="180" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Nome e categoria do negócio</text>
+  <rect x="424" y="165" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="179" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="180" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Alto</text>
+
+  <!-- Row 2 -->
+  <rect x="30" y="194" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="214" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Endereço completo e área de atendimento</text>
+  <rect x="424" y="199" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="213" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="214" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Alto</text>
+
+  <!-- Row 3 -->
+  <rect x="30" y="228" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="248" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Horários de funcionamento</text>
+  <rect x="424" y="233" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="247" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="248" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Médio</text>
+
+  <!-- Row 4 -->
+  <rect x="30" y="262" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="282" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Fotos do estabelecimento (logo + capa + galeria)</text>
+  <rect x="424" y="267" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="281" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="282" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Alto</text>
+
+  <!-- Row 5 -->
+  <rect x="30" y="296" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="316" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Descrição e atributos do negócio</text>
+  <rect x="424" y="301" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="315" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="316" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Médio</text>
+
+  <!-- Row 6 — pending -->
+  <rect x="30" y="330" width="640" height="30" rx="4" fill="#fbbc04" fill-opacity="0.05"/>
+  <text x="44" y="350" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Link de avaliação curto configurado</text>
+  <rect x="424" y="335" width="72" height="20" rx="4" fill="#fbbc04" fill-opacity="0.2"/>
+  <text x="460" y="349" font-family="system-ui,sans-serif" font-size="11" fill="#fbbc04" text-anchor="middle" font-weight="700">Pendente</text>
+  <text x="560" y="350" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Alto</text>
+
+  <!-- Row 7 -->
+  <rect x="30" y="364" width="640" height="30" rx="4" fill="#34a853" fill-opacity="0.08"/>
+  <text x="44" y="384" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb">Categorias primária e secundárias configuradas</text>
+  <rect x="424" y="369" width="72" height="20" rx="4" fill="#34a853" fill-opacity="0.25"/>
+  <text x="460" y="383" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Feito</text>
+  <text x="560" y="384" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Alto</text>
+
+  <text x="400" y="430" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.25)" text-anchor="end">Perfil do Google Negócios · allka</text>
+</svg>

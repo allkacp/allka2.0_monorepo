@@ -11,6 +11,9 @@ import {
   Building2,
   Search,
   X as XIcon,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +43,7 @@ interface UserCreateSlidePanelProps {
   onClose: () => void;
   onUserCreated?: (user: any) => void;
   /** When set, the panel was opened from within a company and will pre-fill company context */
-  companyId?: number;
+  companyId?: number | string;
   companyName?: string;
 }
 
@@ -114,6 +117,8 @@ export function UserCreateSlidePanel({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Vínculo com empresas
   const [availableCompanies, setAvailableCompanies] = useState<
@@ -213,6 +218,7 @@ export function UserCreateSlidePanel({
       });
       setAvatarPreview(null);
       setErrors({});
+      setCreateError(null);
       setLgpdConsent(false);
       setLegalBasis("consent");
       setLinkedCompanyIds(companyId ? [String(companyId)] : []);
@@ -258,15 +264,21 @@ export function UserCreateSlidePanel({
   };
 
   const handleCreateUser = async () => {
+    setCreateError(null);
     try {
-      const created = await apiClient.createUser({
+      const payload: Record<string, any> = {
         email: newUser.email,
         password: newUser.password || "Allka@2026",
         name: newUser.name,
+        username: newUser.username || undefined,
         role: newUser.role || "company_user",
         account_type: newUser.account_type || "empresas",
         phone: newUser.phone || undefined,
-      });
+      };
+      if (linkedCompanyIds.length > 0) {
+        payload.company_id = linkedCompanyIds[0];
+      }
+      const created = await apiClient.createUser(payload);
 
       toast({
         title: "Sucesso",
@@ -279,9 +291,11 @@ export function UserCreateSlidePanel({
 
       handleClose();
     } catch (error: any) {
+      const msg = error?.message || "Não foi possível criar o usuário.";
+      setCreateError(msg);
       toast({
         title: "Erro ao criar usuário",
-        description: error.message || "Não foi possível criar o usuário.",
+        description: msg,
         variant: "destructive",
       });
     }
@@ -396,15 +410,24 @@ export function UserCreateSlidePanel({
                 </div>
                 <div className="space-y-2">
                   <Label>Senha *</Label>
-                  <Input
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={newUser.password}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, password: e.target.value })
-                    }
-                    className={errors.password ? "border-red-500" : ""}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres"
+                      value={newUser.password}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, password: e.target.value })
+                      }
+                      className={cn("pr-10", errors.password ? "border-red-500" : "")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   {errors.password && (
                     <p className="text-xs text-red-500">{errors.password}</p>
                   )}
@@ -934,6 +957,14 @@ export function UserCreateSlidePanel({
             )}
           </div>
         </ScrollArea>
+
+        {/* Inline error — shown when creation fails, persists until next attempt */}
+        {createError && (
+          <div className="mx-4 mt-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2 shrink-0">
+            <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-red-700 leading-snug">{createError}</p>
+          </div>
+        )}
 
         {/* Footer - FIXO */}
         <div className={`flex-shrink-0 border-t border-slate-200 bg-slate-50 p-4 flex items-center ${currentStep === 1 ? "justify-start" : "justify-between"}`}>

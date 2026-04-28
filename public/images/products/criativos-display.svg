@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="60%" style="stop-color:#1a2a5e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c81a7f"/>
+      <stop offset="100%" style="stop-color:#7b1850"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6"/>
+      <stop offset="100%" style="stop-color:#6d28d9"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="rgba(0,0,0,0.5)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <g opacity="0.05" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="90" x2="800" y2="90"/>
+    <line x1="0" y1="225" x2="800" y2="225"/>
+    <line x1="0" y1="360" x2="800" y2="360"/>
+    <line x1="200" y1="0" x2="200" y2="450"/>
+    <line x1="400" y1="0" x2="400" y2="450"/>
+    <line x1="600" y1="0" x2="600" y2="450"/>
+  </g>
+  <circle cx="720" cy="80" r="110" fill="none" stroke="rgba(200,26,127,0.12)" stroke-width="2"/>
+  <circle cx="80" cy="390" r="90" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="2"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Criativos Mídia Display Estático</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Banners profissionais em todos os formatos — com arquivo aberto para edição</text>
+
+  <!-- Banner mockups grid -->
+  <!-- Leaderboard 728×90 -->
+  <rect x="44" y="88" width="400" height="55" rx="6" fill="rgba(200,26,127,0.12)" stroke="rgba(200,26,127,0.3)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="bannerL" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" style="stop-color:#c81a7f;stop-opacity:0.3"/>
+    <stop offset="100%" style="stop-color:#7b1850;stop-opacity:0.1"/>
+  </linearGradient>
+  <rect x="44" y="88" width="400" height="55" rx="6" fill="url(#bannerL)"/>
+  <rect x="44" y="88" width="6" height="55" rx="3" fill="url(#pink)"/>
+  <text x="62" y="111" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.85)" font-weight="700">Leaderboard</text>
+  <text x="62" y="128" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">728 × 90 px</text>
+  <text x="430" y="120" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">.psd + .png</text>
+
+  <!-- Medium Rectangle 300×250 -->
+  <rect x="44" y="155" width="175" height="130" rx="8" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="44" y="155" width="175" height="6" rx="3" fill="url(#blue)"/>
+  <text x="132" y="208" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)" text-anchor="middle" font-weight="600">300 × 250</text>
+  <text x="132" y="224" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">Medium Rect.</text>
+  <!-- Mini ad content -->
+  <rect x="64" y="240" width="135" height="8" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <rect x="74" y="254" width="80" height="18" rx="9" fill="url(#blue)" opacity="0.8"/>
+  <text x="114" y="267" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Saiba mais</text>
+
+  <!-- Half Page 300×600 — condensed -->
+  <rect x="232" y="155" width="175" height="130" rx="8" fill="rgba(139,92,246,0.1)" stroke="rgba(139,92,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="232" y="155" width="175" height="6" rx="3" fill="url(#purple)"/>
+  <text x="320" y="208" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)" text-anchor="middle" font-weight="600">300 × 600</text>
+  <text x="320" y="224" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">Half Page</text>
+  <rect x="252" y="240" width="135" height="8" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <rect x="262" y="254" width="80" height="18" rx="9" fill="url(#purple)" opacity="0.8"/>
+  <text x="302" y="267" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Ver oferta</text>
+
+  <!-- Right panel — format list -->
+  <rect x="460" y="88" width="295" height="300" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="478" y="114" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" letter-spacing="1.5">FORMATOS INCLUÍDOS</text>
+  <rect x="478" y="122" width="259" height="1" fill="rgba(255,255,255,0.07)"/>
+
+  <!-- Format list items -->
+  <rect x="478" y="132" width="259" height="28" rx="6" fill="rgba(200,26,127,0.1)"/>
+  <text x="492" y="150" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Leaderboard</text>
+  <text x="720" y="150" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">728×90</text>
+
+  <rect x="478" y="167" width="259" height="28" rx="6" fill="rgba(59,130,246,0.08)"/>
+  <text x="492" y="185" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Medium Rectangle</text>
+  <text x="720" y="185" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">300×250</text>
+
+  <rect x="478" y="202" width="259" height="28" rx="6" fill="rgba(139,92,246,0.08)"/>
+  <text x="492" y="220" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Half Page</text>
+  <text x="720" y="220" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">300×600</text>
+
+  <rect x="478" y="237" width="259" height="28" rx="6" fill="rgba(74,222,128,0.06)"/>
+  <text x="492" y="255" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Billboard</text>
+  <text x="720" y="255" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">970×250</text>
+
+  <rect x="478" y="272" width="259" height="28" rx="6" fill="rgba(251,191,36,0.06)"/>
+  <text x="492" y="290" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Large Rectangle</text>
+  <text x="720" y="290" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">336×280</text>
+
+  <rect x="478" y="307" width="259" height="28" rx="6" fill="rgba(200,26,127,0.06)"/>
+  <text x="492" y="325" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">Wide Skyscraper</text>
+  <text x="720" y="325" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">160×600</text>
+
+  <rect x="478" y="344" width="259" height="28" rx="6" fill="rgba(59,130,246,0.06)"/>
+  <text x="492" y="362" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.75)" font-weight="600">+ Personalizado</text>
+  <text x="720" y="362" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="end">sob briefing</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <rect x="50" y="413" width="95" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="97" y="428" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">Arquivo aberto</text>
+  <rect x="157" y="413" width="80" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="197" y="428" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">3 dias úteis</text>
+  <rect x="249" y="413" width="70" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="284" y="428" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">.zip entrega</text>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Criativos Display Estático — allka</text>
+</svg>

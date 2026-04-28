@@ -119,7 +119,7 @@ export function AlertsHeaderIcon() {
           <div
             className={cn(
               "relative pointer-events-auto w-full max-w-lg mx-4 rounded-2xl shadow-2xl",
-              "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700",
+              "bg-white dark:bg-card border border-gray-200 dark:border-gray-700",
               "animate-in fade-in-0 zoom-in-95 duration-200",
             )}
             style={{ marginLeft: "calc(var(--sidebar-width, 220px) / 2)" }}

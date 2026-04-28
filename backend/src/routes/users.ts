@@ -11,10 +11,12 @@ const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().min(1),
+  username: z.string().optional(),
   role: z.string().default("company_user"),
   account_type: z.string().default("empresas"),
   phone: z.string().optional(),
   avatar: z.string().optional(),
+  company_id: z.string().optional(),
 });
 
 const updateUserSchema = createUserSchema
@@ -28,12 +30,15 @@ const updateUserSchema = createUserSchema
 const safeSelect = {
   id: true,
   email: true,
+  username: true,
   name: true,
   role: true,
   account_type: true,
   is_active: true,
   avatar: true,
   phone: true,
+  company_id: true,
+  last_login: true,
   created_at: true,
   updated_at: true,
 };

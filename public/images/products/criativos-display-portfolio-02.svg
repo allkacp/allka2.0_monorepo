@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1e1145;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c81a7f"/>
+      <stop offset="100%" style="stop-color:#7b1850"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Criativos Mídia Display Estático</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">O que está incluso na entrega</text>
+
+  <!-- Delivery breakdown columns -->
+  <!-- Column 1: Arquivos entregues -->
+  <rect x="44" y="88" width="220" height="290" rx="12" fill="rgba(200,26,127,0.07)" stroke="rgba(200,26,127,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="44" y="88" width="220" height="5" rx="3" fill="url(#pink)"/>
+  <text x="154" y="116" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="600">Arquivos entregues</text>
+  <rect x="60" y="126" width="188" height="1" fill="rgba(255,255,255,0.07)"/>
+  <text x="68" y="150" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="150" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">.PSD editável</text>
+  <text x="68" y="172" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="172" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">.PNG finalizado</text>
+  <text x="68" y="194" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="194" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">Arquivo .zip</text>
+  <text x="68" y="216" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="216" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">Todos os formatos</text>
+  <text x="68" y="238" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="238" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">Alta resolução</text>
+  <text x="68" y="260" font-family="system-ui,sans-serif" font-size="12" fill="rgba(74,222,128,0.9)">✓</text>
+  <text x="86" y="260" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)">Identidade visual</text>
+
+  <!-- Column 2: Plataformas compatíveis -->
+  <rect x="290" y="88" width="220" height="290" rx="12" fill="rgba(59,130,246,0.06)" stroke="rgba(59,130,246,0.15)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="290" y="88" width="220" height="5" rx="3" fill="rgba(59,130,246,0.8)"/>
+  <text x="400" y="116" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="600">Plataformas</text>
+  <rect x="306" y="126" width="188" height="1" fill="rgba(255,255,255,0.07)"/>
+  <text x="314" y="150" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· Google Display Network</text>
+  <text x="314" y="170" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· Meta Ads (Facebook/IG)</text>
+  <text x="314" y="190" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· LinkedIn Ads</text>
+  <text x="314" y="210" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· TikTok Ads</text>
+  <text x="314" y="230" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· Programáticas</text>
+  <text x="314" y="250" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· E-mail marketing</text>
+  <text x="314" y="270" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">· Sites e landing pages</text>
+
+  <!-- Column 3: Prazo e processo -->
+  <rect x="536" y="88" width="220" height="290" rx="12" fill="rgba(74,222,128,0.05)" stroke="rgba(74,222,128,0.12)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="536" y="88" width="220" height="5" rx="3" fill="rgba(74,222,128,0.7)"/>
+  <text x="646" y="116" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="600">Prazo e processo</text>
+  <rect x="552" y="126" width="188" height="1" fill="rgba(255,255,255,0.07)"/>
+  <text x="560" y="152" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" letter-spacing="1">ETAPA 1</text>
+  <text x="560" y="168" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">Análise do briefing</text>
+  <text x="560" y="186" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" letter-spacing="1">ETAPA 2</text>
+  <text x="560" y="202" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">Criação dos banners</text>
+  <text x="560" y="220" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" letter-spacing="1">ETAPA 3</text>
+  <text x="560" y="236" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.65)">Exportação e empacotamento</text>
+  <text x="560" y="254" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" letter-spacing="1">ENTREGA</text>
+  <rect x="556" y="262" width="188" height="40" rx="8" fill="rgba(74,222,128,0.12)" stroke="rgba(74,222,128,0.25)" stroke-width="1"/>
+  <text x="650" y="278" font-family="system-ui,sans-serif" font-size="13" fill="#4ade80" text-anchor="middle" font-weight="700">3 dias úteis</text>
+  <text x="650" y="295" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">após aprovação do briefing</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Criativos Display Estático — allka</text>
+</svg>

@@ -98,8 +98,8 @@ export default function ComissionamentosPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestão de Comissionamentos</h1>
-          <p className="text-gray-600 mt-1">Configure remuneração e comissões dos líderes por categoria.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Comissionamentos</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure remuneração e comissões dos líderes por categoria.</p>
         </div>
         <Button onClick={() => setIsEditingGlobal(true)} className="btn-brand">
           <Settings className="h-4 w-4 mr-2" />

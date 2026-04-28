@@ -618,11 +618,11 @@ export default function EmpresasPage() {
     )
   }
 
-  const statColorMap: Record<string, { titleClass: string; iconClass: string; iconBg: string; trendClass: string; strokeColor: string }> = {
-    blue:    { titleClass: "text-blue-600 dark:text-blue-400",    iconClass: "text-blue-500 dark:text-blue-400",    iconBg: "bg-blue-50 dark:bg-blue-900/30",    trendClass: "text-blue-500/80",    strokeColor: "#3b82f6" },
-    emerald: { titleClass: "text-emerald-600 dark:text-emerald-400", iconClass: "text-emerald-500 dark:text-emerald-400", iconBg: "bg-emerald-50 dark:bg-emerald-900/30", trendClass: "text-emerald-500/80", strokeColor: "#10b981" },
-    violet:  { titleClass: "text-violet-600 dark:text-violet-400",  iconClass: "text-violet-500 dark:text-violet-400",  iconBg: "bg-violet-50 dark:bg-violet-900/30",  trendClass: "text-violet-500/80",  strokeColor: "#8b5cf6" },
-    orange:  { titleClass: "text-orange-600 dark:text-orange-400",  iconClass: "text-orange-500 dark:text-orange-400",  iconBg: "bg-orange-50 dark:bg-orange-900/30",  trendClass: "text-orange-500/80",  strokeColor: "#f97316" },
+  const statColorMap: Record<string, { gradient: string; borderClass: string; strokeColor: string }> = {
+    blue:    { gradient: "from-blue-500 to-blue-700",       borderClass: "border-2 border-blue-300/70",    strokeColor: "white" },
+    emerald: { gradient: "from-emerald-500 to-teal-600",   borderClass: "border-2 border-emerald-300/70", strokeColor: "white" },
+    violet:  { gradient: "from-violet-500 to-purple-700",  borderClass: "border-2 border-violet-300/70",  strokeColor: "white" },
+    orange:  { gradient: "from-orange-500 to-rose-600",    borderClass: "border-2 border-orange-300/70",  strokeColor: "white" },
   }
 
   const StatCard = ({
@@ -645,36 +645,31 @@ export default function EmpresasPage() {
 
     return (
       <div
-        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 ${hovered ? "shadow-md scale-[1.02]" : "shadow-sm"} bg-white dark:bg-[oklch(0.17_0.028_258)] border border-slate-200/80 dark:border-[oklch(0.22_0.024_258)/50]`}
+        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.borderClass} ${hovered ? "shadow-xl scale-[1.02]" : "shadow-lg"}`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         {/* Info tooltip */}
-        <div
-          className={`absolute top-2 right-2 z-10 transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0"}`}
-        >
+        <div className={`absolute top-2 right-2 z-10 transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0"}`}>
           <TooltipProvider>
             <Tooltip open={hovered}>
               <TooltipTrigger asChild>
-                <div className="bg-white/10 hover:bg-white/20 rounded-md p-0.5 cursor-pointer transition-colors">
-                  <Info className={`h-2.5 w-2.5 ${colors.iconClass}`} />
+                <div className="bg-white/20 hover:bg-white/30 rounded-md p-0.5 cursor-pointer transition-colors">
+                  <Info className="h-2.5 w-2.5 text-white" />
                 </div>
               </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                className="bg-slate-900 border-slate-700 text-white p-3 rounded-xl shadow-xl"
-              >
+              <TooltipContent side="top" className="bg-slate-100 border-slate-200 text-slate-900 p-3 rounded-xl shadow-xl">
                 <div className="min-w-[130px]">
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
                   <div className="flex items-center justify-between gap-4 mb-1.5">
-                    <span className="text-xs text-slate-300">Atual</span>
-                    <span className="text-sm font-bold text-white">{value}</span>
+                    <span className="text-xs text-slate-500">Atual</span>
+                    <span className="text-sm font-bold text-slate-900">{value}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4 mb-2">
-                    <span className="text-xs text-slate-300">{prevLabel}</span>
-                    <span className="text-sm font-semibold text-slate-300">{prevValue}</span>
+                    <span className="text-xs text-slate-500">{prevLabel}</span>
+                    <span className="text-sm font-semibold text-slate-600">{prevValue}</span>
                   </div>
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${up ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${up ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                     {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                     <span className="text-xs font-semibold">{up ? "+" : "-"}{pct}% vs {prevLabel}</span>
                   </div>
@@ -686,21 +681,20 @@ export default function EmpresasPage() {
 
         <div className="px-3 pt-2 pb-2">
           <div className="flex items-center justify-between mb-1">
-            <p className={`text-[10px] font-medium leading-tight truncate ${colors.titleClass}`}>{label}</p>
-            <div className={`${colors.iconBg} rounded-md p-1 flex-shrink-0 ml-1`}>
-              <Icon className={`h-3 w-3 ${colors.iconClass}`} />
+            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight truncate">{label}</p>
+            <div className="bg-white/20 rounded-md p-1 flex-shrink-0 ml-1">
+              <Icon className="h-3 w-3 text-white" />
             </div>
           </div>
-
           <div className="flex items-end justify-between gap-2">
             <div>
-              <p className={`text-2xl font-bold leading-none ${colors.titleClass}`}>{value}</p>
-              <div className="inline-flex items-center gap-0.5 mt-1">
-                {up ? <TrendingUp className={`h-2.5 w-2.5 ${colors.trendClass}`} /> : <TrendingDown className="h-2.5 w-2.5 text-red-400" />}
-                <span className={`text-[9px] font-semibold ${up ? colors.trendClass : "text-red-400"}`}>{up ? "+" : "-"}{pct}%</span>
+              <p className="text-2xl font-bold leading-none text-white">{value}</p>
+              <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-white/20">
+                {up ? <TrendingUp className="h-2.5 w-2.5 text-white" /> : <TrendingDown className="h-2.5 w-2.5 text-white" />}
+                <span className="text-[9px] font-semibold text-white">{up ? "+" : "-"}{pct}%</span>
+                <span className="text-[9px] text-white/60">vs. anterior</span>
               </div>
             </div>
-            {/* Sparkline */}
             <div className="flex-shrink-0">
               <Sparkline data={statsHistory[sparkKey].data} color={colors.strokeColor} />
             </div>
@@ -725,7 +719,7 @@ export default function EmpresasPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Empresas
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">

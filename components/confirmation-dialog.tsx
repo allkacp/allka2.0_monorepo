@@ -73,7 +73,7 @@ export function ConfirmationDialog({
     >
       {/* Modal */}
       <div
-        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
+        className="relative bg-white dark:bg-card rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
         onClick={e => e.stopPropagation()}
       >
 

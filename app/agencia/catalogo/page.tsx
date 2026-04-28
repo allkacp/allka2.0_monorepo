@@ -1,93 +1,119 @@
 // @ts-nocheck
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ShoppingCart, Store, Sparkles, X, Trash2, Minus, Plus, Package } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useProducts, type Product } from "@/lib/contexts/product-context"
+import { useState } from "react";
+import {
+  ShoppingCart,
+  Store,
+  Sparkles,
+  X,
+  Trash2,
+  Minus,
+  Plus,
+  Package,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useProducts, type Product } from "@/lib/contexts/product-context";
 import {
   ProductCatalogView,
   type CatalogSelectedProduct,
-} from "@/components/product-catalog-view"
-import { ProjectCreateSlidePanel } from "@/components/project-create-slide-panel"
-import { cn } from "@/lib/utils"
+} from "@/components/product-catalog-view";
+import { ProjectCreateSlidePanel } from "@/components/project-create-slide-panel";
+import { useProjectBasket } from "@/contexts/project-basket-context";
+import { cn } from "@/lib/utils";
 
 function formatCurrency(value: number | undefined | null) {
-  if (value === undefined || value === null) return "R$ 0,00"
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+  if (value === undefined || value === null) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
 }
 
 export default function AgenciaCatalogo() {
-  const { products } = useProducts()
+  const { products } = useProducts();
 
-  const [selectedProducts, setSelectedProducts] = useState<CatalogSelectedProduct[]>([])
-  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({})
-  const [cartOpen, setCartOpen] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const basket = useProjectBasket();
+
+  const [selectedProducts, setSelectedProducts] = useState<
+    CatalogSelectedProduct[]
+  >([]);
+  const [productQuantities, setProductQuantities] = useState<
+    Record<string, number>
+  >({});
+  const [cartOpen, setCartOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   /* ── cart helpers ─────────────────────────────────────── */
   const handleAdd = (product: Product) => {
-    const exists = selectedProducts.find((p) => p.id === product.id)
+    basket.addItem(product);
+    const exists = selectedProducts.find((p) => p.id === product.id);
     if (!exists) {
-      setSelectedProducts((prev) => [...prev, { ...product, quantity: 1, customizations: {} }])
-      setProductQuantities((prev) => ({ ...prev, [product.id]: 1 }))
+      setSelectedProducts((prev) => [
+        ...prev,
+        { ...product, quantity: 1, customizations: {} },
+      ]);
+      setProductQuantities((prev) => ({ ...prev, [product.id]: 1 }));
     } else {
-      handleIncrease(product.id)
+      handleIncrease(product.id);
     }
-  }
+  };
 
   const handleRemove = (productId: string) => {
-    setSelectedProducts((prev) => prev.filter((p) => p.id !== productId))
+    setSelectedProducts((prev) => prev.filter((p) => p.id !== productId));
     setProductQuantities((prev) => {
-      const next = { ...prev }
-      delete next[productId]
-      return next
-    })
-  }
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  };
 
   const handleIncrease = (productId: string) => {
-    const qty = productQuantities[productId] || 1
-    setProductQuantities((prev) => ({ ...prev, [productId]: qty + 1 }))
+    const qty = productQuantities[productId] || 1;
+    setProductQuantities((prev) => ({ ...prev, [productId]: qty + 1 }));
     setSelectedProducts((prev) =>
       prev.map((p) => (p.id === productId ? { ...p, quantity: qty + 1 } : p)),
-    )
-  }
+    );
+  };
 
   const handleDecrease = (productId: string) => {
-    const qty = productQuantities[productId] || 1
+    const qty = productQuantities[productId] || 1;
     if (qty <= 1) {
-      handleRemove(productId)
+      handleRemove(productId);
     } else {
-      setProductQuantities((prev) => ({ ...prev, [productId]: qty - 1 }))
+      setProductQuantities((prev) => ({ ...prev, [productId]: qty - 1 }));
       setSelectedProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, quantity: qty - 1 } : p)),
-      )
+      );
     }
-  }
+  };
 
   const cartTotal = selectedProducts.reduce(
     (sum, p) => sum + (p.finalPrice || 0) * (productQuantities[p.id] || 1),
     0,
-  )
+  );
 
-  const cartCount = selectedProducts.length
+  const cartCount = selectedProducts.length;
 
   /* ── Contratar: open panel with pre-selected products ─── */
   const handleContratar = () => {
-    setCartOpen(false)
-    setPanelOpen(true)
-  }
+    setCartOpen(false);
+    setPanelOpen(true);
+  };
 
   const handlePanelSubmit = (project: any) => {
-    // After project is created/submitted, clear cart
-    setSelectedProducts([])
-    setProductQuantities({})
-    setPanelOpen(false)
-  }
+    // Clear both local cart state and the global basket
+    basket.clearBasket();
+    setSelectedProducts([]);
+    setProductQuantities({});
+    setPanelOpen(false);
+  };
 
-  const activeCount = products.filter((p) => p.isActive).length
-  const categoryCount = new Set(products.filter((p) => p.isActive).map((p) => p.category)).size
+  const activeCount = products.filter((p) => p.isActive).length;
+  const categoryCount = new Set(
+    products.filter((p) => p.isActive).map((p) => p.category),
+  ).size;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-transparent">
@@ -113,8 +139,8 @@ export default function AgenciaCatalogo() {
               <span className="text-blue-200">para o seu projeto</span>
             </h1>
             <p className="text-white/60 text-sm max-w-lg leading-relaxed">
-              Explore nossa coleção completa de produtos e serviços. Selecione os que deseja, monte
-              seu pedido e contrate com um clique.
+              Explore nossa coleção completa de produtos e serviços. Selecione
+              os que deseja, monte seu pedido e contrate com um clique.
             </p>
 
             {/* Stats chips */}
@@ -144,8 +170,12 @@ export default function AgenciaCatalogo() {
                 </span>
               </div>
               <div className="text-left">
-                <p className="text-xs text-slate-500 leading-none">Meu pedido</p>
-                <p className="text-sm font-bold text-slate-900 mt-0.5">{formatCurrency(cartTotal)}</p>
+                <p className="text-xs text-slate-500 leading-none">
+                  Meu pedido
+                </p>
+                <p className="text-sm font-bold text-slate-900 mt-0.5">
+                  {formatCurrency(cartTotal)}
+                </p>
               </div>
             </button>
           )}
@@ -174,7 +204,9 @@ export default function AgenciaCatalogo() {
         >
           <ShoppingCart className="h-5 w-5" />
           <span className="text-sm font-bold">{formatCurrency(cartTotal)}</span>
-          <Badge className="bg-white/20 text-white text-xs border-0 px-1.5">{cartCount}</Badge>
+          <Badge className="bg-white/20 text-white text-xs border-0 px-1.5">
+            {cartCount}
+          </Badge>
         </button>
       )}
 
@@ -219,7 +251,7 @@ export default function AgenciaCatalogo() {
         {/* Cart items */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {selectedProducts.map((product) => {
-            const qty = productQuantities[product.id] || 1
+            const qty = productQuantities[product.id] || 1;
             return (
               <div
                 key={product.id}
@@ -232,7 +264,9 @@ export default function AgenciaCatalogo() {
                   <p className="text-xs font-semibold text-slate-900 line-clamp-2 leading-tight">
                     {product.name}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">{product.category}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {product.category}
+                  </p>
                   <p className="text-xs font-bold text-slate-900 mt-1">
                     {formatCurrency((product.finalPrice || 0) * qty)}
                   </p>
@@ -253,7 +287,9 @@ export default function AgenciaCatalogo() {
                     >
                       <Minus className="h-2.5 w-2.5" />
                     </button>
-                    <span className="w-7 text-center text-xs font-bold text-slate-900">{qty}</span>
+                    <span className="w-7 text-center text-xs font-bold text-slate-900">
+                      {qty}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleIncrease(product.id)}
@@ -264,7 +300,7 @@ export default function AgenciaCatalogo() {
                   </div>
                 </div>
               </div>
-            )
+            );
           })}
         </div>
 
@@ -273,9 +309,12 @@ export default function AgenciaCatalogo() {
           {/* Order summary */}
           <div className="space-y-2">
             {selectedProducts.map((p) => {
-              const qty = productQuantities[p.id] || 1
+              const qty = productQuantities[p.id] || 1;
               return (
-                <div key={p.id} className="flex justify-between text-xs text-slate-500">
+                <div
+                  key={p.id}
+                  className="flex justify-between text-xs text-slate-500"
+                >
                   <span className="truncate flex-1 pr-2">
                     {p.name} × {qty}
                   </span>
@@ -283,10 +322,12 @@ export default function AgenciaCatalogo() {
                     {formatCurrency((p.finalPrice || 0) * qty)}
                   </span>
                 </div>
-              )
+              );
             })}
             <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
-              <span className="text-sm font-semibold text-slate-700">Total</span>
+              <span className="text-sm font-semibold text-slate-700">
+                Total
+              </span>
               <span className="text-lg font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {formatCurrency(cartTotal)}
               </span>
@@ -304,8 +345,8 @@ export default function AgenciaCatalogo() {
           <button
             type="button"
             onClick={() => {
-              setSelectedProducts([])
-              setProductQuantities({})
+              setSelectedProducts([]);
+              setProductQuantities({});
             }}
             className="w-full text-xs text-slate-400 hover:text-red-400 transition-colors text-center"
           >
@@ -324,5 +365,5 @@ export default function AgenciaCatalogo() {
         initialProductQuantities={productQuantities}
       />
     </div>
-  )
+  );
 }

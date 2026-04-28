@@ -2600,42 +2600,58 @@ export default function AdminDashboardPage() {
     let bgColor: string;
     let gradientFrom: string;
     let cardBgGradient: string;
+    let borderClass: string;
+    let shadowClass: string;
 
     switch (metricType) {
       case "totalUsers":
         bgColor = "from-blue-400 to-blue-600";
         gradientFrom = "from-blue-600/10";
         cardBgGradient = "from-blue-500 to-blue-700";
+        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
+        shadowClass = "";
         break;
       case "activeUsers":
         bgColor = "from-emerald-400 to-emerald-600";
         gradientFrom = "from-emerald-600/10";
         cardBgGradient = "from-emerald-500 to-teal-600";
+        borderClass = "border-2 border-emerald-300/70 dark:border-emerald-300/50";
+        shadowClass = "";
         break;
       case "companies":
         bgColor = "from-violet-400 to-violet-600";
         gradientFrom = "from-violet-600/10";
         cardBgGradient = "from-violet-500 to-purple-700";
+        borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
+        shadowClass = "";
         break;
       case "activeProjects":
         bgColor = "from-orange-400 to-orange-600";
         gradientFrom = "from-orange-600/10";
         cardBgGradient = "from-orange-500 to-rose-600";
+        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
+        shadowClass = "";
         break;
       case "revenue":
         bgColor = "from-green-400 to-green-600";
         gradientFrom = "from-green-600/10";
         cardBgGradient = "from-green-500 to-emerald-700";
+        borderClass = "border-2 border-green-300/70 dark:border-green-300/50";
+        shadowClass = "";
         break;
       case "avgRating":
         bgColor = "from-amber-400 to-amber-600";
         gradientFrom = "from-amber-600/10";
         cardBgGradient = "from-amber-500 to-orange-600";
+        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+        shadowClass = "";
         break;
       default:
         bgColor = "from-muted to-muted-foreground";
         gradientFrom = "from-muted/5";
         cardBgGradient = "from-slate-500 to-slate-700";
+        borderClass = "border-2 border-slate-400/50 dark:border-slate-300/40";
+        shadowClass = "";
     }
 
     const cardProps = {
@@ -2673,14 +2689,14 @@ export default function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           className={cn(
-            `relative rounded-xl overflow-hidden shadow-sm transition-all duration-200 bg-gradient-to-br ${cardBgGradient}`,
+            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
             !isDragging &&
               !isDragOver &&
               !isEditing &&
-              "hover:shadow-md hover:scale-[1.02]",
+              "hover:shadow-xl hover:scale-[1.02]",
           )}
         >
           {isEditing && (
@@ -2696,29 +2712,29 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           )}
-          <div className="px-3.5 pt-2.5 pb-2.5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-white/70 uppercase tracking-wider truncate">
+          <div className="px-4 pt-2 pb-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
                 {metricName}
               </p>
-              <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
-                <Icon className="h-5 w-5 text-white" />
+              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
+                <Icon className="h-4 w-4 text-white" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white leading-none mb-2">
+            <p className="text-xl font-bold text-white leading-none mb-1.5">
               {metric.value}
             </p>
             <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-white/20 text-white">
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
                 {metric.trend === "up" ? (
-                  <TrendingUp className="h-3.5 w-3.5" />
+                  <TrendingUp className="h-3 w-3" />
                 ) : (
-                  <TrendingDown className="h-3.5 w-3.5" />
+                  <TrendingDown className="h-3 w-3" />
                 )}
                 {metric.trend === "up" ? "+" : "-"}
                 {Math.abs(metric.change)}%
               </div>
-              <span className="text-[11px] text-white/60">vs. anterior</span>
+              <span className="text-[10px] text-white/60">vs. anterior</span>
             </div>
           </div>
         </div>
@@ -2738,14 +2754,14 @@ export default function AdminDashboardPage() {
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
         className={cn(
-          `relative rounded-xl overflow-hidden shadow-sm transition-all duration-200 bg-gradient-to-br ${cardBgGradient}`,
+          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
           !isDragging &&
             !isDragOver &&
             !isEditing &&
-            "hover:shadow-md hover:scale-[1.02]",
+            "hover:shadow-xl hover:scale-[1.02]",
         )}
       >
         {isEditing && (
@@ -2761,32 +2777,32 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         )}
-        <div className="px-3.5 pt-2.5 pb-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-white/70 uppercase tracking-wider truncate">
+        <div className="px-4 pt-2 pb-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
               {metricName}
             </p>
-            <div className="bg-white/20 rounded-lg p-1.5 flex-shrink-0 ml-1">
-              <Icon className="h-5 w-5 text-white" />
+            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
+              <Icon className="h-4 w-4 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-white leading-none mb-2">
+          <p className="text-xl font-bold text-white leading-none mb-1.5">
             {typeof metric.value === "number"
               ? metric.value.toLocaleString()
               : metric.value}
           </p>
           <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-white/20 text-white">
+            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
               {metric.trend === "up" ? (
-                <TrendingUp className="h-3.5 w-3.5" />
+                <TrendingUp className="h-3 w-3" />
               ) : (
-                <TrendingDown className="h-3.5 w-3.5" />
+                <TrendingDown className="h-3 w-3" />
               )}
               {metric.trend === "up" ? "+" : "-"}
               {Math.abs(metric.change)}
               {metricType === "avgRating" ? " pts" : "%"}
             </div>
-            <span className="text-[11px] text-white/60">
+            <span className="text-[10px] text-white/60">
               {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
             </span>
           </div>
@@ -6749,7 +6765,7 @@ export default function AdminDashboardPage() {
       {/* Dashboard Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Painel Administrativo
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -6763,7 +6779,7 @@ export default function AdminDashboardPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-800 hover:border-violet-400"
+                className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
               >
                 <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
                 <span className="truncate">
@@ -6875,7 +6891,7 @@ export default function AdminDashboardPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-3 gap-1.5 text-xs font-medium bg-transparent dark:border-white/20"
+                className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
                 disabled={isExporting}
               >
                 {isExporting ? (

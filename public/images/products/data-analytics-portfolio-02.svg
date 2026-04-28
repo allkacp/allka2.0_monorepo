@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#112b55;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="720" cy="80" r="130" fill="#a855f7" fill-opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="230" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">STATUS DOS PIXELS DE ANÚNCIO</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Pixels Instalados</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Diagnóstico de disparo confirmado via ferramentas nativas</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Pixel cards — 2x3 grid -->
+
+  <!-- GA4 -->
+  <rect x="30"  y="140" width="228" height="90" rx="12" fill="rgba(34,211,238,0.07)"  stroke="rgba(34,211,238,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="50"  y="160" width="36" height="36" rx="8" fill="rgba(34,211,238,0.15)" stroke="rgba(34,211,238,0.3)" stroke-width="1"/>
+  <text x="68"  y="183" font-family="monospace" font-size="13" fill="#22d3ee" text-anchor="middle" font-weight="800">G4</text>
+  <text x="100" y="170" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">Google Analytics 4</text>
+  <text x="100" y="186" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">Propriedade: lumina.com.br</text>
+  <rect x="50"  y="207" width="190" height="16" rx="6" fill="rgba(34,211,238,0.15)"/>
+  <text x="145" y="219" font-family="system-ui,sans-serif" font-size="10" fill="#22d3ee" text-anchor="middle" font-weight="700">✓ Dados chegando em tempo real</text>
+
+  <!-- Google Ads -->
+  <rect x="280" y="140" width="228" height="90" rx="12" fill="rgba(251,191,36,0.07)"  stroke="rgba(251,191,36,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="300" y="160" width="36" height="36" rx="8" fill="rgba(251,191,36,0.15)" stroke="rgba(251,191,36,0.3)" stroke-width="1"/>
+  <text x="318" y="183" font-family="monospace" font-size="13" fill="#fbbf24" text-anchor="middle" font-weight="800">Ads</text>
+  <text x="350" y="170" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">Google Ads</text>
+  <text x="350" y="186" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">Tag de Conversão ativa</text>
+  <rect x="300" y="207" width="190" height="16" rx="6" fill="rgba(251,191,36,0.15)"/>
+  <text x="395" y="219" font-family="system-ui,sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle" font-weight="700">✓ Conversão disparando</text>
+
+  <!-- Meta Pixel -->
+  <rect x="530" y="140" width="240" height="90" rx="12" fill="rgba(59,130,246,0.07)"  stroke="rgba(59,130,246,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="550" y="160" width="36" height="36" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width="1"/>
+  <text x="568" y="183" font-family="monospace" font-size="13" fill="#60a5fa" text-anchor="middle" font-weight="800">fb</text>
+  <text x="600" y="170" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">Meta Pixel</text>
+  <text x="600" y="186" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">ID: 987654321012345</text>
+  <rect x="550" y="207" width="202" height="16" rx="6" fill="rgba(59,130,246,0.15)"/>
+  <text x="651" y="219" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="middle" font-weight="700">✓ Pixel Helper confirmado</text>
+
+  <!-- TikTok -->
+  <rect x="30"  y="252" width="228" height="90" rx="12" fill="rgba(168,85,247,0.07)"  stroke="rgba(168,85,247,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="50"  y="272" width="36" height="36" rx="8" fill="rgba(168,85,247,0.15)" stroke="rgba(168,85,247,0.3)" stroke-width="1"/>
+  <text x="68"  y="295" font-family="monospace" font-size="12" fill="#c084fc" text-anchor="middle" font-weight="800">Tt</text>
+  <text x="100" y="282" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">TikTok Pixel</text>
+  <text x="100" y="298" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">Business Center: Lumina</text>
+  <rect x="50"  y="319" width="190" height="16" rx="6" fill="rgba(168,85,247,0.15)"/>
+  <text x="145" y="331" font-family="system-ui,sans-serif" font-size="10" fill="#c084fc" text-anchor="middle" font-weight="700">✓ Eventos recebidos</text>
+
+  <!-- LinkedIn -->
+  <rect x="280" y="252" width="228" height="90" rx="12" fill="rgba(14,165,233,0.07)"  stroke="rgba(14,165,233,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="300" y="272" width="36" height="36" rx="8" fill="rgba(14,165,233,0.15)" stroke="rgba(14,165,233,0.3)" stroke-width="1"/>
+  <text x="318" y="295" font-family="monospace" font-size="12" fill="#38bdf8" text-anchor="middle" font-weight="800">in</text>
+  <text x="350" y="282" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">LinkedIn Insight Tag</text>
+  <text x="350" y="298" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">Campaign Manager</text>
+  <rect x="300" y="319" width="190" height="16" rx="6" fill="rgba(14,165,233,0.15)"/>
+  <text x="395" y="331" font-family="system-ui,sans-serif" font-size="10" fill="#38bdf8" text-anchor="middle" font-weight="700">✓ Tag verificada</text>
+
+  <!-- Search Console -->
+  <rect x="530" y="252" width="240" height="90" rx="12" fill="rgba(74,222,128,0.07)"  stroke="rgba(74,222,128,0.2)"  stroke-width="1" filter="url(#shadow)"/>
+  <rect x="550" y="272" width="36" height="36" rx="8" fill="rgba(74,222,128,0.15)" stroke="rgba(74,222,128,0.3)" stroke-width="1"/>
+  <text x="568" y="295" font-family="monospace" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="800">SC</text>
+  <text x="600" y="282" font-family="system-ui,sans-serif" font-size="13" fill="#ffffff" font-weight="600">Search Console</text>
+  <text x="600" y="298" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)">lumina.com.br — DNS</text>
+  <rect x="550" y="319" width="202" height="16" rx="6" fill="rgba(74,222,128,0.15)"/>
+  <text x="651" y="331" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="700">✓ Propriedade verificada</text>
+
+  <!-- Summary bar -->
+  <rect x="30" y="362" width="740" height="40" rx="10" fill="rgba(34,211,238,0.07)" stroke="rgba(34,211,238,0.15)" stroke-width="1"/>
+  <text x="400" y="386" font-family="system-ui,sans-serif" font-size="13" fill="#22d3ee" text-anchor="middle" font-weight="700">✓ 6/6 pixels e tags instalados e validados — documento DTAN-DOC-ENTREGA gerado</text>
+
+  <text x="400" y="430" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.25)" text-anchor="end">Pixel Status · allka</text>
+</svg>

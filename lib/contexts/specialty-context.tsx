@@ -1,31 +1,41 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 
 export interface Specialty {
-  id: number
-  name: string
+  id: number;
+  name: string;
   rates: {
-    iniciante: number
-    junior: number
-    pleno: number
-    senior: number
-  }
-  activeNomades: number
-  status: "active" | "inactive"
-  aiEnabled?: boolean
-  aiFixedValue?: number
+    iniciante: number;
+    junior: number;
+    pleno: number;
+    senior: number;
+  };
+  activeNomades: number;
+  status: "active" | "inactive";
+  aiEnabled?: boolean;
+  aiFixedValue?: number;
 }
 
 interface SpecialtyContextType {
-  specialties: Specialty[]
-  addSpecialty: (specialty: Specialty) => void
-  updateSpecialty: (id: number, specialty: Specialty) => void
-  deleteSpecialty: (id: number) => void
-  isLoading: boolean
+  specialties: Specialty[];
+  addSpecialty: (specialty: Specialty) => void;
+  updateSpecialty: (id: number, specialty: Specialty) => void;
+  deleteSpecialty: (id: number) => void;
+  isLoading: boolean;
 }
 
-const SpecialtyContext = createContext<SpecialtyContextType | undefined>(undefined)
+const SpecialtyContext = createContext<SpecialtyContextType | undefined>(
+  undefined,
+);
 
 const initialSpecialties: Specialty[] = [
   {
@@ -35,7 +45,7 @@ const initialSpecialties: Specialty[] = [
     activeNomades: 12,
     status: "active",
     aiEnabled: true,
-    aiFixedValue: 15.00,
+    aiFixedValue: 15.0,
   },
   {
     id: 2,
@@ -44,7 +54,7 @@ const initialSpecialties: Specialty[] = [
     activeNomades: 8,
     status: "active",
     aiEnabled: true,
-    aiFixedValue: 25.00,
+    aiFixedValue: 25.0,
   },
   {
     id: 3,
@@ -53,7 +63,7 @@ const initialSpecialties: Specialty[] = [
     activeNomades: 15,
     status: "active",
     aiEnabled: true,
-    aiFixedValue: 10.00,
+    aiFixedValue: 10.0,
   },
   {
     id: 4,
@@ -71,45 +81,54 @@ const initialSpecialties: Specialty[] = [
     status: "active",
     aiEnabled: false,
   },
-]
+  {
+    id: 6,
+    name: "Tráfego Pago",
+    rates: { iniciante: 25, junior: 40, pleno: 60, senior: 100 },
+    activeNomades: 0,
+    status: "active",
+    aiEnabled: false,
+  },
+];
 
 export function SpecialtyProvider({ children }: { children: ReactNode }) {
-  const [specialties, setSpecialties] = useState<Specialty[]>(initialSpecialties)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [specialties, setSpecialties] =
+    useState<Specialty[]>(initialSpecialties);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Hydration - Load specialties from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem("allka-specialties")
+    const stored = localStorage.getItem("allka-specialties");
     if (stored) {
       try {
-        setSpecialties(JSON.parse(stored))
+        setSpecialties(JSON.parse(stored));
       } catch (e) {
-        setSpecialties(initialSpecialties)
+        setSpecialties(initialSpecialties);
       }
     }
-    setIsHydrated(true)
-    setIsLoading(false)
-  }, [])
+    setIsHydrated(true);
+    setIsLoading(false);
+  }, []);
 
   // Save to localStorage whenever specialties change (debounced)
   useEffect(() => {
     if (isHydrated && specialties.length > 0) {
-      localStorage.setItem("allka-specialties", JSON.stringify(specialties))
+      localStorage.setItem("allka-specialties", JSON.stringify(specialties));
     }
-  }, [specialties, isHydrated])
+  }, [specialties, isHydrated]);
 
   const addSpecialty = useCallback((specialty: Specialty) => {
-    setSpecialties((prev) => [...prev, specialty])
-  }, [])
+    setSpecialties((prev) => [...prev, specialty]);
+  }, []);
 
   const updateSpecialty = useCallback((id: number, specialty: Specialty) => {
-    setSpecialties((prev) => prev.map((s) => (s.id === id ? specialty : s)))
-  }, [])
+    setSpecialties((prev) => prev.map((s) => (s.id === id ? specialty : s)));
+  }, []);
 
   const deleteSpecialty = useCallback((id: number) => {
-    setSpecialties((prev) => prev.filter((s) => s.id !== id))
-  }, [])
+    setSpecialties((prev) => prev.filter((s) => s.id !== id));
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -119,21 +138,28 @@ export function SpecialtyProvider({ children }: { children: ReactNode }) {
       deleteSpecialty,
       isLoading,
     }),
-    [specialties, addSpecialty, updateSpecialty, deleteSpecialty, isLoading]
-  )
+    [specialties, addSpecialty, updateSpecialty, deleteSpecialty, isLoading],
+  );
 
-  return <SpecialtyContext.Provider value={value}>{children}</SpecialtyContext.Provider>
+  return (
+    <SpecialtyContext.Provider value={value}>
+      {children}
+    </SpecialtyContext.Provider>
+  );
 }
 
 export function useSpecialties() {
-  const context = useContext(SpecialtyContext)
+  const context = useContext(SpecialtyContext);
   if (context === undefined) {
-    throw new Error("useSpecialties must be used within a SpecialtyProvider")
+    throw new Error("useSpecialties must be used within a SpecialtyProvider");
   }
-  return context
+  return context;
 }
 
 export function useSpecialty(id: number | string) {
-  const { specialties } = useSpecialties()
-  return useMemo(() => specialties.find((s) => s.id === Number(id)), [specialties, id])
+  const { specialties } = useSpecialties();
+  return useMemo(
+    () => specialties.find((s) => s.id === Number(id)),
+    [specialties, id],
+  );
 }

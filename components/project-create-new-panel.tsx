@@ -32,12 +32,22 @@ import {
   TrendingUp,
   ShoppingCart,
   Plus,
+  Send,
+  UserCheck,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import { useCompanyData } from "@/lib/mock-companies";
 import type { MockClientItem, MockCompanyItem } from "@/lib/mock-companies";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel";
+import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
 import { useProjects } from "@/hooks/useProjects";
+import {
+  exportProposalPDF,
+  parseBrandGradient,
+  type ProposalData,
+} from "@/lib/proposal-export";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -70,6 +80,7 @@ import type { CheckoutData } from "@/components/checkout-flow";
 // ── Project status types & config ─────────────────────────────────────────────
 type ProjectStatus =
   | "draft"
+  | "pending-approval"
   | "awaiting-payment"
   | "planning"
   | "in-progress"
@@ -93,6 +104,13 @@ const PROJECT_STATUS_CONFIG: Record<
     color: "bg-slate-100 text-slate-700",
     btn: "bg-slate-100 text-slate-700 hover:bg-slate-200",
     btnSelected: "bg-slate-500 text-white shadow-md scale-105",
+  },
+  "pending-approval": {
+    label: "Ag. Aprovação",
+    dot: "bg-amber-500",
+    color: "bg-amber-100 text-amber-800",
+    btn: "bg-amber-50 text-amber-700 hover:bg-amber-100",
+    btnSelected: "bg-amber-500 text-white shadow-md scale-105",
   },
   "awaiting-payment": {
     label: "Ag. Pagamento",
@@ -251,8 +269,9 @@ export function ProjectCreateNewPanel({
   resumeToCheckout,
 }: ProjectCreateNewPanelProps) {
   const { toast } = useToast();
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, sidebarSettings } = useSidebar();
   const [loading, setLoading] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const ALL_ACCORDIONS = [
@@ -278,6 +297,13 @@ export function ProjectCreateNewPanel({
   const [newClientName, setNewClientName] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
   const [localClients, setLocalClients] = useState<MockClientItem[]>([]);
+
+  // Consultant state — fetched from API per company
+  const [localConsultants, setLocalConsultants] = useState<
+    { id: string; name: string; email: string; role: string }[]
+  >([]);
+  const [loadingConsultants, setLoadingConsultants] = useState(false);
+  const [showCreateConsultant, setShowCreateConsultant] = useState(false);
 
   // Custom project types added inline
   const [localProjectTypes, setLocalProjectTypes] = useState<string[]>([]);
@@ -373,6 +399,8 @@ export function ProjectCreateNewPanel({
       setShowNewClientForm(false);
       setNewClientName("");
       setNewClientEmail("");
+      setLocalConsultants([]);
+      setShowCreateConsultant(false);
       setShowProductsStep(false);
       setShowReview(false);
       setShowCheckout(false);
@@ -386,7 +414,11 @@ export function ProjectCreateNewPanel({
         setSelectedProducts(draftProducts);
         setProductQuantities(draftProductQuantities ?? {});
         setProductCommissions(draftCommissions ?? {});
-        setShowProductsStep(true);
+        // Only auto-jump to products step when resuming an existing draft (has projectId).
+        // Basket items (no projectId) stay on the main form so the user fills project details first.
+        if (draftProjectId) {
+          setShowProductsStep(true);
+        }
       }
       if (resumeToCheckout) {
         setShowProductsStep(true);
@@ -394,6 +426,32 @@ export function ProjectCreateNewPanel({
       }
     }
   }, [open]);
+
+  // Fetch consultants whenever the resolved company changes
+  useEffect(() => {
+    if (!open) return;
+    setLocalConsultants([]);
+    const filters: Record<string, string> = { limit: "500" };
+    if (resolvedCompanyId) filters.company_id = String(resolvedCompanyId);
+    setLoadingConsultants(true);
+    apiClient
+      .getUsers(filters)
+      .then((res: any) => {
+        const data: any[] = res.data || (Array.isArray(res) ? res : []);
+        setLocalConsultants(
+          data
+            .filter((u) => u.is_active !== false)
+            .map((u) => ({
+              id: String(u.id),
+              name: u.name,
+              email: u.email || "",
+              role: u.role || "",
+            })),
+        );
+      })
+      .catch(() => setLocalConsultants([]))
+      .finally(() => setLoadingConsultants(false));
+  }, [open, resolvedCompanyId]);
 
   // ── Helpers ──
   const updateField = <K extends keyof FormData>(
@@ -504,7 +562,11 @@ export function ProjectCreateNewPanel({
       };
       const created: any = await apiClient.createProject(payload);
       // Persist draft state to localStorage so the banner can restore it
-      if (status === "draft" || status === "awaiting-payment") {
+      if (
+        status === "draft" ||
+        status === "awaiting-payment" ||
+        status === "pending-approval"
+      ) {
         const storageKey = `allka-draft-${created?.id ?? draftProjectId ?? Date.now()}`;
         try {
           localStorage.setItem(
@@ -601,6 +663,23 @@ export function ProjectCreateNewPanel({
       return sum + p.finalPrice * qty;
     }, 0);
 
+  const handleSaveForApproval = () => {
+    if (!formData.nome.trim()) {
+      toast({
+        title: "Nome obrigatório",
+        description: "Informe o nome do projeto para enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const products = selectedProducts.map((p) => ({
+      name: p.name,
+      price: p.finalPrice,
+      qty: productQuantities[String(p.id)] || p.quantity || 1,
+    }));
+    confirmSubmit("pending-approval", products);
+  };
+
   const handleSaveDraftNow = () => {
     if (!formData.nome.trim()) {
       toast({
@@ -621,6 +700,73 @@ export function ProjectCreateNewPanel({
   const handleOpenReview = () => {
     setActiveReviewTab("resumo");
     setShowReview(true);
+  };
+
+  const handleExportPresentation = async () => {
+    setExportingPDF(true);
+    try {
+      const totalValue = selectedProducts.reduce((acc, p) => {
+        const qty = productQuantities[String(p.id)] || p.quantity || 1;
+        return acc + (p.finalPrice || 0) * qty;
+      }, 0);
+      const produtos = selectedProducts.map((p) => {
+        const qty = productQuantities[String(p.id)] || p.quantity || 1;
+        const unit = p.finalPrice || 0;
+        const total = unit * qty;
+        return {
+          PRODUTO_NOME: p.name,
+          PRODUTO_QTD: qty,
+          PRODUTO_VALOR_UNIT: unit.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }),
+          PRODUTO_VALOR_TOTAL: total.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }),
+        };
+      });
+      const effectiveCompanyName =
+        resolvedCompanyName || formData.agencia || companyName || "";
+      const proposalData: ProposalData = {
+        PROJETO_NOME: formData.nome || "Projeto sem nome",
+        PROJETO_TIPO: formData.tipo || "",
+        PROJETO_STATUS: "Rascunho",
+        PROJETO_DESCRICAO: formData.descricao || "",
+        CLIENTE_NOME: formData.cliente || "",
+        EMPRESA_NOME: effectiveCompanyName,
+        CONSULTOR_NOME: formData.consultor || "",
+        CONSULTOR_EMAIL: formData.emailConsultor || "",
+        DATA_CRIACAO:
+          formData.dataInicio || new Date().toLocaleDateString("pt-BR"),
+        DATA_ENTREGA: formData.prazo || "",
+        PROPOSTA_DATA: new Date().toLocaleDateString("pt-BR"),
+        TOTAL_VALOR: totalValue.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }),
+        produtos,
+      };
+      const brandConfig = {
+        gradient: parseBrandGradient(sidebarSettings?.backgroundColor || ""),
+        logoUrl: sidebarSettings?.logoUrl || "/images/logob.png",
+        agencyName: effectiveCompanyName || "Allka",
+      };
+      const filename = `proposta-${(formData.nome || "projeto").replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      await exportProposalPDF(proposalData, brandConfig, filename);
+      toast({
+        title: "PDF gerado!",
+        description: "A proposta foi baixada com sucesso.",
+      });
+    } catch {
+      toast({
+        title: "Erro ao exportar",
+        description: "Não foi possível gerar o PDF.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingPDF(false);
+    }
   };
 
   const calculateCommissionTotal = () =>
@@ -1402,48 +1548,77 @@ export function ProjectCreateNewPanel({
                       <Label className="text-xs font-medium text-slate-600">
                         Consultor Responsável *
                       </Label>
-                      {resolvedCompanyId ? (
-                        <SearchableSelect
-                          items={(
-                            mockUsersByCompany[resolvedCompanyId] ?? []
-                          ).map((u) => ({
-                            value: u.name,
-                            label: u.name,
-                            sublabel: u.role,
-                          }))}
-                          value={formData.consultor}
-                          onValueChange={(v) => {
-                            const users =
-                              mockUsersByCompany[resolvedCompanyId] ?? [];
-                            const u = users.find((u) => u.name === v);
-                            updateField("consultor", v);
-                            if (u?.email)
-                              updateField("emailConsultor", u.email);
-                          }}
-                          placeholder="Pesquisar consultor..."
-                          searchPlaceholder="Digite para buscar..."
-                          emptyMessage="Nenhum consultor encontrado."
-                          className={cn(
-                            "h-8 text-xs",
-                            errors.consultor && "border-red-400",
+                      <div className="flex gap-1.5">
+                        <div className="flex-1 min-w-0">
+                          {loadingConsultants ? (
+                            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Carregando consultores...
+                            </div>
+                          ) : localConsultants.length > 0 ? (
+                            <SearchableSelect
+                              items={localConsultants.map((u) => ({
+                                value: u.name,
+                                label: u.name,
+                                sublabel: u.role || u.email,
+                              }))}
+                              value={formData.consultor}
+                              onValueChange={(v) => {
+                                const u = localConsultants.find(
+                                  (u) => u.name === v,
+                                );
+                                updateField("consultor", v);
+                                if (u?.email)
+                                  updateField("emailConsultor", u.email);
+                              }}
+                              placeholder="Pesquisar consultor..."
+                              searchPlaceholder="Digite para buscar..."
+                              emptyMessage="Nenhum consultor encontrado."
+                              className={cn(
+                                "h-8 text-xs",
+                                errors.consultor && "border-red-400",
+                              )}
+                            />
+                          ) : (
+                            <div className="relative">
+                              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                              <Input
+                                placeholder={
+                                  resolvedCompanyId
+                                    ? "Nenhum consultor cadastrado nesta empresa"
+                                    : "Nome do consultor"
+                                }
+                                value={formData.consultor}
+                                onChange={(e) =>
+                                  updateField("consultor", e.target.value)
+                                }
+                                className={cn(
+                                  "h-8 text-xs pl-8",
+                                  errors.consultor && "border-red-400",
+                                )}
+                              />
+                            </div>
                           )}
-                        />
-                      ) : (
-                        <div className="relative">
-                          <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                          <Input
-                            placeholder="Nome do consultor"
-                            value={formData.consultor}
-                            onChange={(e) =>
-                              updateField("consultor", e.target.value)
-                            }
-                            className={cn(
-                              "h-8 text-xs pl-8",
-                              errors.consultor && "border-red-400",
-                            )}
-                          />
                         </div>
-                      )}
+                        <button
+                          type="button"
+                          title="Adicionar novo consultor"
+                          onClick={() => setShowCreateConsultant(true)}
+                          className="h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 hover:border-indigo-300 text-slate-500 hover:text-indigo-600 transition-colors"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {resolvedCompanyId &&
+                        !loadingConsultants &&
+                        localConsultants.length === 0 && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                            Nenhum consultor ativo nesta empresa. Use o botão{" "}
+                            <UserPlus className="h-3 w-3 inline mx-0.5" /> para
+                            cadastrar.
+                          </p>
+                        )}
                       {errors.consultor && (
                         <p className="text-xs text-red-500">
                           {errors.consultor}
@@ -1722,6 +1897,92 @@ export function ProjectCreateNewPanel({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-2">
+            {/* When products are already pre-loaded (e.g. from basket), offer to go straight to review */}
+            {selectedProducts.length > 0 && (
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-auto py-3 border-violet-200 bg-violet-50 hover:bg-violet-100"
+                onClick={() => {
+                  setShowNextStepModal(false);
+                  setShowProductsStep(true);
+                  setActiveReviewTab("resumo");
+                  setShowReview(true);
+                }}
+              >
+                <Eye className="h-5 w-5 text-violet-600" />
+                <div className="text-left">
+                  <div className="font-medium text-violet-700">
+                    Revisar Projeto ({selectedProducts.length}{" "}
+                    {selectedProducts.length === 1 ? "item" : "itens"})
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Ver resumo, exportar proposta ou enviar para aprovação
+                  </div>
+                </div>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => {
+                setShowNextStepModal(false);
+                setShowProductsStep(true);
+              }}
+            >
+              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+              <div className="text-left">
+                <div className="font-medium">
+                  {selectedProducts.length > 0
+                    ? `Ver/Editar Produtos (${selectedProducts.length} selecionado${selectedProducts.length !== 1 ? "s" : ""})`
+                    : "Adicionar Produtos"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedProducts.length > 0
+                    ? "Gerenciar produtos e serviços do projeto"
+                    : "Selecionar produtos e serviços para o projeto"}
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3 border-amber-200 hover:bg-amber-50"
+              onClick={() => {
+                setShowNextStepModal(false);
+                handleSaveForApproval();
+              }}
+            >
+              <Send className="h-5 w-5 text-amber-500" />
+              <div className="text-left">
+                <div className="font-medium text-amber-700">
+                  Enviar para Aprovação do Cliente
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Salvar o projeto montado para apresentação e aprovação antes
+                  do pagamento
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3 border-slate-200 hover:bg-slate-50"
+              disabled={exportingPDF || selectedProducts.length === 0}
+              onClick={() => {
+                setShowNextStepModal(false);
+                handleExportPresentation();
+              }}
+            >
+              {exportingPDF ? (
+                <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
+              ) : (
+                <FileDown className="h-5 w-5 text-slate-500" />
+              )}
+              <div className="text-left">
+                <div className="font-medium">Exportar Proposta (PDF)</div>
+                <div className="text-xs text-muted-foreground">
+                  Baixar ficha de apresentação do projeto com produtos e valores
+                </div>
+              </div>
+            </Button>
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-auto py-3"
@@ -1735,22 +1996,6 @@ export function ProjectCreateNewPanel({
                 <div className="font-medium">Salvar Rascunho</div>
                 <div className="text-xs text-muted-foreground">
                   Salvar projeto como rascunho e continuar depois
-                </div>
-              </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => {
-                setShowNextStepModal(false);
-                setShowProductsStep(true);
-              }}
-            >
-              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-              <div className="text-left">
-                <div className="font-medium">Adicionar Produtos</div>
-                <div className="text-xs text-muted-foreground">
-                  Selecionar produtos e serviços para o projeto
                 </div>
               </div>
             </Button>
@@ -2247,6 +2492,20 @@ export function ProjectCreateNewPanel({
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={handleExportPresentation}
+                      disabled={exportingPDF || selectedProducts.length === 0}
+                      className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50"
+                    >
+                      {exportingPDF ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileDown className="h-3.5 w-3.5" />
+                      )}
+                      Exportar Proposta
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         setShowReview(false);
                         handleSaveDraftNow();
@@ -2256,6 +2515,19 @@ export function ProjectCreateNewPanel({
                     >
                       <Save className="h-3.5 w-3.5" />
                       Salvar Rascunho
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowReview(false);
+                        handleSaveForApproval();
+                      }}
+                      disabled={loading}
+                      className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Enviar para Aprovação
                     </Button>
                     <Button
                       className="btn-brand gap-1.5"
@@ -2326,6 +2598,38 @@ export function ProjectCreateNewPanel({
           setLocalClients([]);
           setShowCreateCompany(false);
         }}
+      />
+
+      {/* Consultant creation panel */}
+      <UserCreateSlidePanel
+        open={showCreateConsultant}
+        onClose={() => setShowCreateConsultant(false)}
+        onUserCreated={(user: any) => {
+          updateField("consultor", user.name || "");
+          updateField("emailConsultor", user.email || "");
+          // refresh local consultants list
+          const filters: Record<string, string> = { limit: "500" };
+          if (resolvedCompanyId) filters.company_id = String(resolvedCompanyId);
+          apiClient
+            .getUsers(filters)
+            .then((res: any) => {
+              const data: any[] = res.data || (Array.isArray(res) ? res : []);
+              setLocalConsultants(
+                data
+                  .filter((u) => u.is_active !== false)
+                  .map((u) => ({
+                    id: String(u.id),
+                    name: u.name,
+                    email: u.email || "",
+                    role: u.role || "",
+                  })),
+              );
+            })
+            .catch(() => {});
+          setShowCreateConsultant(false);
+        }}
+        companyId={resolvedCompanyId ?? undefined}
+        companyName={resolvedCompanyName || companyName}
       />
     </>
   );

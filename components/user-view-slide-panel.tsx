@@ -560,9 +560,15 @@ export function UserViewSlidePanel({
 
   // Normalizar tipo de conta corretamente, sem fallback silencioso
   const rawAccountType = displayUser?.account_type || displayUser?.tipo;
-  const userAccountType = rawAccountType
-    ? rawAccountType.toString().toLowerCase()
-    : undefined;
+  // Normalize legacy Portuguese values to canonical English keys
+  const userAccountType = (() => {
+    if (!rawAccountType) return undefined;
+    const t = rawAccountType.toString().toLowerCase();
+    if (t === "empresa" || t === "empresas") return "company";
+    if (t === "agencia" || t === "agencias") return "agency";
+    if (t === "nomade" || t === "nomades") return "nomad";
+    return t;
+  })();
 
   // Derivar status do usuário a partir dos dados persistidos (atualiza ao salvar)
   const userAccountStatus = ((contaEditedData as any).status ??

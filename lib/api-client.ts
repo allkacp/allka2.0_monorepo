@@ -5,23 +5,32 @@
 import { mockApiClient } from "../dev-mocks/mock-api-client";
 
 const API_BASE_URL =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
-  "https://api-dev.allka.com.vc/api";
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_URL) ||
+  "/api";
 
 const TOKEN_KEY = "allka_token";
 
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
-    try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch {}
   }
 
   clearToken() {
-    try { localStorage.removeItem(TOKEN_KEY); } catch {}
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {}
   }
 
   private getToken(): string | null {
-    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
   }
 
   // ─── Core Request ──────────────────────────────────────────────────────────
@@ -35,12 +44,17 @@ class ApiClient {
     if (params) {
       const qs = Object.entries(params)
         .filter(([, v]) => v !== undefined && v !== null && v !== "")
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .map(
+          ([k, v]) =>
+            `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+        )
         .join("&");
       if (qs) url += `?${qs}`;
     }
 
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
     const token = this.getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -52,7 +66,20 @@ class ApiClient {
 
     if (!res.ok) {
       let msg = `HTTP ${res.status}`;
-      try { const j = await res.json(); msg = j.error || j.message || msg; } catch {}
+      try {
+        const j = await res.json();
+        msg = j.error || j.message || msg;
+        // Append field-specific validation details when present
+        if (j.details && typeof j.details === "object") {
+          const fieldErrors = Object.entries(
+            j.details as Record<string, string[]>,
+          )
+            .filter(([, v]) => Array.isArray(v) && v.length > 0)
+            .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+            .join("; ");
+          if (fieldErrors) msg += ` — ${fieldErrors}`;
+        }
+      } catch {}
       throw new Error(msg);
     }
 
@@ -136,11 +163,21 @@ class ApiClient {
   }
 
   // Alias — some components use "client" terminology
-  async getClients(filters?: Record<string, any>) { return this.getCompanies(filters); }
-  async getClient(id: string | number) { return this.getCompany(id); }
-  async createClient(data: Record<string, any>) { return this.createCompany(data); }
-  async updateClient(id: string | number, data: Record<string, any>) { return this.updateCompany(id, data); }
-  async deleteClient(id: string | number) { return this.deleteCompany(id); }
+  async getClients(filters?: Record<string, any>) {
+    return this.getCompanies(filters);
+  }
+  async getClient(id: string | number) {
+    return this.getCompany(id);
+  }
+  async createClient(data: Record<string, any>) {
+    return this.createCompany(data);
+  }
+  async updateClient(id: string | number, data: Record<string, any>) {
+    return this.updateCompany(id, data);
+  }
+  async deleteClient(id: string | number) {
+    return this.deleteCompany(id);
+  }
 
   // ─── Project Clients ──────────────────────────────────────────────────────
   async getProjectClients(filters?: Record<string, any>) {
@@ -252,10 +289,6 @@ class ApiClient {
     return this.get("/nomade-levels");
   }
 
-  async getLevels() {
-    return this.getNomadeLevels();
-  }
-
   async createNomadeLevel(data: Record<string, any>) {
     return this.post("/nomade-levels", data);
   }
@@ -267,10 +300,6 @@ class ApiClient {
   async deleteNomadeLevel(id: string | number) {
     return this.del(`/nomade-levels/${id}`);
   }
-
-  async createLevel(data: Record<string, any>) { return this.createNomadeLevel(data); }
-  async updateLevel(id: string | number, data: Record<string, any>) { return this.updateNomadeLevel(id, data); }
-  async deleteLevel(id: string | number) { return this.deleteNomadeLevel(id); }
 
   // ─── Agencies ─────────────────────────────────────────────────────────────
   async getAgencies(filters?: Record<string, any>) {
@@ -291,7 +320,10 @@ class ApiClient {
   }
 
   async getPartnerCommissions(id: string | number) {
-    const path = String(id) === "me" ? "/partners/me/commissions" : `/partners/${id}/commissions`;
+    const path =
+      String(id) === "me"
+        ? "/partners/me/commissions"
+        : `/partners/${id}/commissions`;
     return this.get(path);
   }
 
@@ -488,7 +520,10 @@ class ApiClient {
     return this.post("/permissions/profiles", data);
   }
 
-  async updatePermissionProfile(id: string | number, data: Record<string, any>) {
+  async updatePermissionProfile(
+    id: string | number,
+    data: Record<string, any>,
+  ) {
     return this.put(`/permissions/profiles/${id}`, data);
   }
 
@@ -496,7 +531,10 @@ class ApiClient {
     return this.del(`/permissions/profiles/${id}`);
   }
 
-  async updateProfilePermissions(profileId: string | number, permissions: any[]) {
+  async updateProfilePermissions(
+    profileId: string | number,
+    permissions: any[],
+  ) {
     return this.post("/permissions", { profile_id: profileId, permissions });
   }
 
@@ -514,7 +552,9 @@ class ApiClient {
   }
 
   async sendMessage(conversationId: string | number, content: string) {
-    return this.post(`/chat/conversations/${conversationId}/messages`, { content });
+    return this.post(`/chat/conversations/${conversationId}/messages`, {
+      content,
+    });
   }
 
   // ─── Reports ──────────────────────────────────────────────────────────────
@@ -527,16 +567,16 @@ class ApiClient {
   }
 
   async getLevels(filters?: Record<string, any>) {
-    return this.request(`/levels${this.buildQuery(filters)}`);
+    return this.get("/levels", filters);
   }
   async createLevel(data: any) {
-    return this.request("/levels", { method: "POST", body: JSON.stringify(data) });
+    return this.post("/levels", data);
   }
   async updateLevel(id: string, data: any) {
-    return this.request(`/levels/${id}`, { method: "PUT", body: JSON.stringify(data) });
+    return this.put(`/levels/${id}`, data);
   }
   async deleteLevel(id: string) {
-    return this.request(`/levels/${id}`, { method: "DELETE" });
+    return this.del(`/levels/${id}`);
   }
 }
 

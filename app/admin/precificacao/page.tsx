@@ -357,11 +357,7 @@ setIsOpen(false)
   return (
     <div className="flex flex-col space-y-3">
       <PageHeader
-        title={
-          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Precificação
-          </span>
-        }
+        title="Precificação"
         description="Gerencie comissões, taxas, impostos e custos"
       />
 

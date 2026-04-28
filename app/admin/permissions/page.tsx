@@ -171,8 +171,8 @@ export default function PermissionsPage() {
     <div className="space-y-3" ref={pageRef}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Gestão de Permissões</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Configure perfis de acesso e permissões granulares</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Permissões</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure perfis de acesso e permissões granulares</p>
         </div>
         <div className="flex items-center gap-2">
           <ExportButton pageRef={pageRef} filename="permissoes" />

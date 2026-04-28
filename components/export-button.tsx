@@ -180,18 +180,16 @@ export function ExportButton({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 text-xs px-2.5 font-medium border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm"
+          className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
           data-export-button
           disabled={isExporting}
         >
           {isExporting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <Download className="h-3.5 w-3.5 text-slate-500" />
+            <Download className="h-3.5 w-3.5" />
           )}
-          <span className="text-slate-600">
-            {isExporting ? "Exportando…" : "Exportar"}
-          </span>
+          {isExporting ? "Exportando…" : "Exportar"}
         </Button>
       </DropdownMenuTrigger>
 

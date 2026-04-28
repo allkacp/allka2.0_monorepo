@@ -79,8 +79,31 @@ export function PlatformUsersProvider({
         if (cancelled) return;
         if (usersRes.status === "fulfilled") {
           const data: any = usersRes.value;
-          const list = data.data || (Array.isArray(data) ? data : []);
-          setUsers(list);
+          const rawList = data.data || (Array.isArray(data) ? data : []);
+          // Build company_associations from company_id field (backend-persisted link)
+          let companiesList: any[] = [];
+          if (companiesRes.status === "fulfilled") {
+            const cData: any = companiesRes.value;
+            companiesList = cData.data || (Array.isArray(cData) ? cData : []);
+          }
+          const enriched = rawList.map((u: any) => {
+            if (!u.company_id) return u;
+            const co = companiesList.find((c: any) => c.id === u.company_id);
+            const assoc = {
+              id: 0,
+              user_id: u.id,
+              company_id: u.company_id as any,
+              company_name: co?.name || u.company_id,
+              role: u.role || "company_user",
+              permissions: [],
+              company_permissions: {} as any,
+              project_memberships: [],
+              is_active: u.is_active ?? true,
+              joined_at: u.created_at || new Date().toISOString(),
+            };
+            return { ...u, company_associations: [assoc] };
+          });
+          setUsers(enriched);
         }
         if (companiesRes.status === "fulfilled") {
           const data: any = companiesRes.value;

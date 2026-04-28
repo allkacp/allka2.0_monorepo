@@ -1,93 +1,250 @@
-
-import { useState, useRef, useEffect } from "react"
-import { Link } from "react-router-dom"
-import { useLocation } from "react-router-dom"
-import { cn } from "@/lib/utils"
-import { useAccountType } from "@/contexts/account-type-context"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Users, FolderOpen, CheckSquare, Wallet, Building2, Award, CreditCard, Target, Briefcase, BarChart3, Menu, ChevronRight, Package } from 'lucide-react'
+import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useAccountType } from "@/contexts/account-type-context";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  LayoutDashboard,
+  Users,
+  FolderOpen,
+  CheckSquare,
+  Wallet,
+  Building2,
+  Award,
+  CreditCard,
+  Target,
+  Briefcase,
+  BarChart3,
+  Menu,
+  ChevronRight,
+  Package,
+  BookOpen,
+} from "lucide-react";
 
 const horizontalMenuConfig = {
   empresas: {
     company: [
-      { name: "Dashboard", href: "/company/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
-      { name: "Projetos", href: "/company/projetos", icon: FolderOpen, badge: "8", color: "from-purple-500 to-purple-600" },
-      { name: "Aprovações", href: "/company/aprovacoes", icon: CheckSquare, badge: "3", color: "from-green-500 to-green-600" },
-      { name: "Pagamentos", href: "/company/pagamentos", icon: CreditCard, color: "from-orange-500 to-orange-600" },
-      { name: "Relatórios", href: "/company/relatorios", icon: BarChart3, color: "from-pink-500 to-pink-600" },
+      {
+        name: "Dashboard",
+        href: "/company/dashboard",
+        icon: LayoutDashboard,
+        color: "from-blue-500 to-blue-600",
+      },
+      {
+        name: "Projetos",
+        href: "/company/projetos",
+        icon: FolderOpen,
+        badge: "8",
+        color: "from-purple-500 to-purple-600",
+      },
+      {
+        name: "Aprovações",
+        href: "/company/aprovacoes",
+        icon: CheckSquare,
+        badge: "3",
+        color: "from-green-500 to-green-600",
+      },
+      {
+        name: "Pagamentos",
+        href: "/company/pagamentos",
+        icon: CreditCard,
+        color: "from-orange-500 to-orange-600",
+      },
+      {
+        name: "Relatórios",
+        href: "/company/relatorios",
+        icon: BarChart3,
+        color: "from-pink-500 to-pink-600",
+      },
     ],
     "in-house": [
-      { name: "Dashboard", href: "/in-house/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
-      { name: "Catálogo", href: "/in-house/catalogo", icon: Briefcase, color: "from-indigo-500 to-indigo-600" },
-      { name: "Projetos", href: "/in-house/projetos", icon: FolderOpen, badge: "12", color: "from-purple-500 to-purple-600" },
-      { name: "Equipe", href: "/in-house/equipe", icon: Users, badge: "8", color: "from-green-500 to-green-600" },
-      { name: "Financeiro", href: "/in-house/financeiro", icon: Wallet, color: "from-orange-500 to-orange-600" },
+      {
+        name: "Dashboard",
+        href: "/in-house/dashboard",
+        icon: LayoutDashboard,
+        color: "from-blue-500 to-blue-600",
+      },
+      {
+        name: "Catálogo",
+        href: "/in-house/catalogo",
+        icon: Briefcase,
+        color: "from-indigo-500 to-indigo-600",
+      },
+      {
+        name: "Projetos",
+        href: "/in-house/projetos",
+        icon: FolderOpen,
+        badge: "12",
+        color: "from-purple-500 to-purple-600",
+      },
+      {
+        name: "Equipe",
+        href: "/in-house/equipe",
+        icon: Users,
+        badge: "8",
+        color: "from-green-500 to-green-600",
+      },
+      {
+        name: "Financeiro",
+        href: "/in-house/financeiro",
+        icon: Wallet,
+        color: "from-orange-500 to-orange-600",
+      },
     ],
   },
   agencias: [
-    { name: "Dashboard", href: "/agencias/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
-    { name: "Clientes", href: "/agencias/clientes", icon: Building2, badge: "15", color: "from-purple-500 to-purple-600" },
-    { name: "Projetos", href: "/agencias/projetos", icon: FolderOpen, badge: "24", color: "from-green-500 to-green-600" },
-    { name: "Partner", href: "/agencias/programa", icon: Award, color: "from-amber-500 to-amber-600" },
-    { name: "Equipe", href: "/agencias/equipe", icon: Users, badge: "8", color: "from-pink-500 to-pink-600" },
+    {
+      name: "Dashboard",
+      href: "/agencias/dashboard",
+      icon: LayoutDashboard,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      name: "Clientes",
+      href: "/agencias/clientes",
+      icon: Building2,
+      badge: "15",
+      color: "from-purple-500 to-purple-600",
+    },
+    {
+      name: "Projetos",
+      href: "/agencias/projetos",
+      icon: FolderOpen,
+      badge: "24",
+      color: "from-green-500 to-green-600",
+    },
+    {
+      name: "Partner",
+      href: "/agencias/programa",
+      icon: Award,
+      color: "from-amber-500 to-amber-600",
+    },
+    {
+      name: "Equipe",
+      href: "/agencias/equipe",
+      icon: Users,
+      badge: "8",
+      color: "from-pink-500 to-pink-600",
+    },
   ],
   nomades: [
-    { name: "Dashboard", href: "/nomades/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
-    { name: "Tarefas", href: "/nomades/tarefasdisponiveis", icon: Target, badge: "18", color: "from-purple-500 to-purple-600" },
-    { name: "Minhas", href: "/nomades/minhastarefas", icon: CheckSquare, badge: "6", color: "from-green-500 to-green-600" },
-    { name: "Ganhos", href: "/nomades/ganhos", icon: Wallet, color: "from-orange-500 to-orange-600" },
-    { name: "Habilitações", href: "/nomades/habilitacoes", icon: Award, color: "from-pink-500 to-pink-600" },
+    {
+      name: "Dashboard",
+      href: "/nomades/dashboard",
+      icon: LayoutDashboard,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      name: "Tarefas",
+      href: "/nomades/tarefasdisponiveis",
+      icon: Target,
+      badge: "18",
+      color: "from-purple-500 to-purple-600",
+    },
+    {
+      name: "Minhas",
+      href: "/nomades/minhastarefas",
+      icon: CheckSquare,
+      badge: "6",
+      color: "from-green-500 to-green-600",
+    },
+    {
+      name: "Ganhos",
+      href: "/nomades/ganhos",
+      icon: Wallet,
+      color: "from-orange-500 to-orange-600",
+    },
+    {
+      name: "Habilitações",
+      href: "/nomades/habilitacoes",
+      icon: Award,
+      color: "from-pink-500 to-pink-600",
+    },
   ],
   admin: [
-    { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
-    { name: "Usuários", href: "/admin/clientes", icon: Users, badge: "89", color: "from-purple-500 to-purple-600" },
-    { name: "Projetos", href: "/admin/projetos", icon: FolderOpen, badge: "156", color: "from-green-500 to-green-600" },
-    { name: "Produtos", href: "/admin/produtos", icon: Package, color: "from-orange-500 to-orange-600" },
-    { name: "Financeiro", href: "/admin/financeiro", icon: Wallet, color: "from-pink-500 to-pink-600" },
+    {
+      name: "Dashboard",
+      href: "/admin/dashboard",
+      icon: LayoutDashboard,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      name: "Usuários",
+      href: "/admin/clientes",
+      icon: Users,
+      badge: "89",
+      color: "from-purple-500 to-purple-600",
+    },
+    {
+      name: "Projetos",
+      href: "/admin/projetos",
+      icon: FolderOpen,
+      badge: "156",
+      color: "from-green-500 to-green-600",
+    },
+    {
+      name: "Gestão",
+      href: "/admin/produtos",
+      icon: Package,
+      color: "from-orange-500 to-orange-600",
+    },
+    {
+      name: "Catálogo",
+      href: "/admin/catalogo-produtos",
+      icon: BookOpen,
+      color: "from-teal-500 to-teal-600",
+    },
+    {
+      name: "Financeiro",
+      href: "/admin/financeiro",
+      icon: Wallet,
+      color: "from-pink-500 to-pink-600",
+    },
   ],
-}
+};
 
 interface HorizontalMenuBarProps {
-  onMenuClick: () => void
+  onMenuClick: () => void;
 }
 
 export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
-  const location = useLocation()
-  const pathname = location.pathname
-  const { accountType, accountSubType } = useAccountType()
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [showLeftFade, setShowLeftFade] = useState(false)
-  const [showRightFade, setShowRightFade] = useState(true)
+  const location = useLocation();
+  const pathname = location.pathname;
+  const { accountType, accountSubType } = useAccountType();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showLeftFade, setShowLeftFade] = useState(false);
+  const [showRightFade, setShowRightFade] = useState(true);
 
   const getNavigationItems = () => {
     if (accountType === "admin") {
-      return horizontalMenuConfig.admin
+      return horizontalMenuConfig.admin;
     }
     if (accountType === "empresas") {
-      return horizontalMenuConfig.empresas[accountSubType || "company"]
+      return horizontalMenuConfig.empresas[accountSubType || "company"];
     }
-    return horizontalMenuConfig[accountType] || []
-  }
+    return horizontalMenuConfig[accountType] || [];
+  };
 
-  const navigation = getNavigationItems()
+  const navigation = getNavigationItems();
 
   const handleScroll = () => {
     if (scrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
-      setShowLeftFade(scrollLeft > 10)
-      setShowRightFade(scrollLeft < scrollWidth - clientWidth - 10)
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      setShowLeftFade(scrollLeft > 10);
+      setShowRightFade(scrollLeft < scrollWidth - clientWidth - 10);
     }
-  }
+  };
 
   useEffect(() => {
-    handleScroll()
-    const scrollElement = scrollRef.current
+    handleScroll();
+    const scrollElement = scrollRef.current;
     if (scrollElement) {
-      scrollElement.addEventListener("scroll", handleScroll)
-      return () => scrollElement.removeEventListener("scroll", handleScroll)
+      scrollElement.addEventListener("scroll", handleScroll);
+      return () => scrollElement.removeEventListener("scroll", handleScroll);
     }
-  }, [navigation])
+  }, [navigation]);
 
   return (
     <div className="xl:hidden sticky top-0 z-30 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 border-b border-white/10">
@@ -110,8 +267,8 @@ export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
           }}
         >
           {navigation.map((item) => {
-            const isActive = pathname === item.href
-            const Icon = item.icon
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
 
             return (
               <Link
@@ -119,7 +276,7 @@ export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
                 to={item.href}
                 className={cn(
                   "flex-shrink-0 snap-center relative group",
-                  "transition-all duration-300 active:scale-95"
+                  "transition-all duration-300 active:scale-95",
                 )}
               >
                 <div
@@ -129,14 +286,19 @@ export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
                     "transition-all duration-300",
                     isActive
                       ? `bg-gradient-to-br ${item.color} shadow-lg scale-105`
-                      : "bg-white/10 hover:bg-white/15 backdrop-blur-sm"
+                      : "bg-white/10 hover:bg-white/15 backdrop-blur-sm",
                   )}
                 >
-                  <Icon className={cn("h-6 w-6 mb-1", isActive ? "text-white" : "text-white/80")} />
+                  <Icon
+                    className={cn(
+                      "h-6 w-6 mb-1",
+                      isActive ? "text-white" : "text-white/80",
+                    )}
+                  />
                   <span
                     className={cn(
                       "text-[10px] font-medium text-center leading-tight px-1",
-                      isActive ? "text-white" : "text-white/80"
+                      isActive ? "text-white" : "text-white/80",
                     )}
                   >
                     {item.name}
@@ -156,7 +318,7 @@ export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
                   )}
                 </div>
               </Link>
-            )
+            );
           })}
 
           {/* Menu button */}
@@ -168,15 +330,17 @@ export function HorizontalMenuBar({ onMenuClick }: HorizontalMenuBarProps) {
               "w-20 h-20 rounded-2xl",
               "bg-white/10 hover:bg-white/20 backdrop-blur-sm",
               "transition-all duration-300 active:scale-95",
-              "border border-white/20"
+              "border border-white/20",
             )}
           >
             <Menu className="h-6 w-6 mb-1 text-white" />
-            <span className="text-[10px] font-medium text-white text-center leading-tight">Todos</span>
+            <span className="text-[10px] font-medium text-white text-center leading-tight">
+              Todos
+            </span>
             <ChevronRight className="h-3 w-3 text-white/60 mt-0.5" />
           </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

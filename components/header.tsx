@@ -1,344 +1,582 @@
 ﻿// @ts-nocheck
 import {
-  Search, Bell, Menu, X, Wallet, Star, TrendingUp,
-  ChevronDown, LogOut, Settings, User, CreditCard,
-  FolderOpen, Award, Shield, DollarSign, CheckSquare,
-  Building2, Users, Briefcase, Zap, Target, Activity,
-  Sun, Moon,
-} from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+  Search,
+  Bell,
+  Menu,
+  X,
+  Wallet,
+  Star,
+  TrendingUp,
+  ChevronDown,
+  LogOut,
+  Settings,
+  User,
+  CreditCard,
+  FolderOpen,
+  Award,
+  Shield,
+  DollarSign,
+  CheckSquare,
+  Building2,
+  Users,
+  Briefcase,
+  Zap,
+  Target,
+  Activity,
+  Sun,
+  Moon,
+  ShoppingCart,
+  Trash2,
+  Minus,
+  Plus,
+  Package,
+  FolderPlus,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useState, useEffect, useRef, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
-import { useAccountType } from "@/contexts/account-type-context"
-import { useSidebar } from "@/contexts/sidebar-context"
-import { AlertsHeaderIcon } from "@/components/alerts-header-icon"
-import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel"
-import { UserViewSlidePanel } from "@/components/user-view-slide-panel"
-import { usePartner } from "@/contexts/partner-context"
-import { useEmpresa } from "@/contexts/empresa-context"
-import { useAgencia } from "@/contexts/agencia-context"
-import { apiClient } from "@/lib/api-client"
-import { useSettings } from "@/contexts/settings-context"
+} from "@/components/ui/dropdown-menu";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAccountType } from "@/contexts/account-type-context";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
+import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
+import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
+import { usePartner } from "@/contexts/partner-context";
+import { useEmpresa } from "@/contexts/empresa-context";
+import { useAgencia } from "@/contexts/agencia-context";
+import { apiClient } from "@/lib/api-client";
+import { useSettings } from "@/contexts/settings-context";
+import { useProjectBasket } from "@/contexts/project-basket-context";
+import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
 
 const LEVEL_CONFIG = {
-  bronze:   { label: "Bronze",   bg: "bg-amber-100",  text: "text-amber-700"  },
-  silver:   { label: "Prata",    bg: "bg-slate-100",  text: "text-slate-600"  },
-  gold:     { label: "Ouro",     bg: "bg-yellow-100", text: "text-yellow-700" },
-  platinum: { label: "Platina",  bg: "bg-cyan-100",   text: "text-cyan-700"   },
-  diamond:  { label: "Diamante", bg: "bg-violet-100", text: "text-violet-700" },
-}
+  bronze: { label: "Bronze", bg: "bg-amber-100", text: "text-amber-700" },
+  silver: { label: "Prata", bg: "bg-slate-100", text: "text-slate-600" },
+  gold: { label: "Ouro", bg: "bg-yellow-100", text: "text-yellow-700" },
+  platinum: { label: "Platina", bg: "bg-cyan-100", text: "text-cyan-700" },
+  diamond: { label: "Diamante", bg: "bg-violet-100", text: "text-violet-700" },
+};
 
 const ACCOUNT_CONFIG = {
-  admin:    { color: "text-rose-600",   badgeBg: "bg-rose-50",   badgeBorder: "border-rose-200"   },
-  nomades:  { color: "text-amber-600",  badgeBg: "bg-amber-50",  badgeBorder: "border-amber-200"  },
-  empresas: { color: "text-violet-600", badgeBg: "bg-violet-50", badgeBorder: "border-violet-200" },
-  agencias: { color: "text-indigo-600", badgeBg: "bg-indigo-50", badgeBorder: "border-indigo-200" },
-  parceiro: { color: "text-blue-600",   badgeBg: "bg-blue-50",   badgeBorder: "border-blue-200"   },
-}
+  admin: {
+    color: "text-rose-600",
+    badgeBg: "bg-rose-50",
+    badgeBorder: "border-rose-200",
+  },
+  nomades: {
+    color: "text-amber-600",
+    badgeBg: "bg-amber-50",
+    badgeBorder: "border-amber-200",
+  },
+  empresas: {
+    color: "text-violet-600",
+    badgeBg: "bg-violet-50",
+    badgeBorder: "border-violet-200",
+  },
+  agencias: {
+    color: "text-indigo-600",
+    badgeBg: "bg-indigo-50",
+    badgeBorder: "border-indigo-200",
+  },
+  parceiro: {
+    color: "text-blue-600",
+    badgeBg: "bg-blue-50",
+    badgeBorder: "border-blue-200",
+  },
+};
 
 function fmtBRL(value) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
 }
 
 function getInitials(name) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export function Header() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
-  const [selfUser, setSelfUser] = useState<any>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<{type:string; label:string; sub:string; path:string; icon:any}[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selfUser, setSelfUser] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<
+    { type: string; label: string; sub: string; path: string; icon: any }[]
+  >([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const navigate = useNavigate()
-  const { accountType, unlockAccountType } = useAccountType()
-  const { userProfile, updateUserProfile } = useSidebar()
-  const { theme, setTheme } = useSettings()
-  const partner = usePartner()
-  const empresa = useEmpresa()
-  const agencia = useAgencia()
+  const navigate = useNavigate();
+  const { accountType, unlockAccountType } = useAccountType();
+  const { userProfile, updateUserProfile } = useSidebar();
+  const { theme, setTheme } = useSettings();
+  const partner = usePartner();
+  const empresa = useEmpresa();
+  const agencia = useAgencia();
+  const basket = useProjectBasket();
 
   const toggleMobileSidebar = () => {
-    const sidebar = document.getElementById("mobile-sidebar")
-    const overlay = document.getElementById("sidebar-overlay")
+    const sidebar = document.getElementById("mobile-sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
     if (sidebar && overlay) {
       if (mobileMenuOpen) {
-        sidebar.classList.add("-translate-x-full")
-        overlay.classList.add("hidden")
+        sidebar.classList.add("-translate-x-full");
+        overlay.classList.add("hidden");
       } else {
-        sidebar.classList.remove("-translate-x-full")
-        overlay.classList.remove("hidden")
+        sidebar.classList.remove("-translate-x-full");
+        overlay.classList.remove("hidden");
       }
-      setMobileMenuOpen(!mobileMenuOpen)
+      setMobileMenuOpen(!mobileMenuOpen);
     }
-  }
+  };
 
   useEffect(() => {
-    const overlay = document.getElementById("sidebar-overlay")
-    if (overlay) overlay.addEventListener("click", toggleMobileSidebar)
-  }, [])
+    const overlay = document.getElementById("sidebar-overlay");
+    if (overlay) overlay.addEventListener("click", toggleMobileSidebar);
+  }, []);
 
   // Fetch authenticated user to show real name in greeting
   useEffect(() => {
-    apiClient.getCurrentUser()
+    apiClient
+      .getCurrentUser()
       .then((u: any) => {
-        if (u?.name) updateUserProfile({ name: u.name, email: u.email || "", job_title: u.job_title || "" })
+        if (u?.name)
+          updateUserProfile({
+            name: u.name,
+            email: u.email || "",
+            job_title: u.job_title || "",
+          });
       })
-      .catch(() => { /* no token or API unavailable — keep fallback */ })
-  }, [])
+      .catch(() => {
+        /* no token or API unavailable — keep fallback */
+      });
+  }, []);
 
   // Close search on outside click
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false)
-        setSearchQuery("")
-        setSearchResults([])
+        setSearchOpen(false);
+        setSearchQuery("");
+        setSearchResults([]);
       }
     }
     if (searchOpen) {
-      document.addEventListener("mousedown", onClickOutside)
-      setTimeout(() => inputRef.current?.focus(), 50)
+      document.addEventListener("mousedown", onClickOutside);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
-    return () => document.removeEventListener("mousedown", onClickOutside)
-  }, [searchOpen])
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [searchOpen]);
 
   // Close search on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        setSearchOpen(false)
-        setSearchQuery("")
-        setSearchResults([])
+        setSearchOpen(false);
+        setSearchQuery("");
+        setSearchResults([]);
       }
     }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [])
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // Search scope per account type
   const searchScope = (() => {
-    const base = (at: string) => `/${at}`
-    if (accountType === "admin") return {
-      users: true, companies: true, projects: true,
-      usersPath: "/admin/usuarios", companiesPath: "/admin/empresas", projectsPath: "/admin/projetos",
-    }
-    if (accountType === "parceiro") return {
-      users: false, companies: true, projects: false,
-      usersPath: "", companiesPath: `${base("parceiro")}/agencias`, projectsPath: "",
-    }
-    if (accountType === "empresas") return {
-      users: false, companies: false, projects: true,
-      usersPath: "", companiesPath: "", projectsPath: `${base("empresa")}/projetos`,
-    }
-    if (accountType === "agencias") return {
-      users: false, companies: true, projects: true,
-      usersPath: "", companiesPath: `${base("agencia")}/empresas`, projectsPath: `${base("agencia")}/projetos`,
-    }
-    if (accountType === "nomades") return {
-      users: false, companies: false, projects: false,
-      usersPath: "", companiesPath: "", projectsPath: "",
-    }
-    return { users: false, companies: false, projects: false, usersPath: "", companiesPath: "", projectsPath: "" }
-  })()
+    const base = (at: string) => `/${at}`;
+    if (accountType === "admin")
+      return {
+        users: true,
+        companies: true,
+        projects: true,
+        usersPath: "/admin/usuarios",
+        companiesPath: "/admin/empresas",
+        projectsPath: "/admin/projetos",
+      };
+    if (accountType === "parceiro")
+      return {
+        users: false,
+        companies: true,
+        projects: false,
+        usersPath: "",
+        companiesPath: `${base("parceiro")}/agencias`,
+        projectsPath: "",
+      };
+    if (accountType === "empresas")
+      return {
+        users: false,
+        companies: false,
+        projects: true,
+        usersPath: "",
+        companiesPath: "",
+        projectsPath: `${base("empresa")}/projetos`,
+      };
+    if (accountType === "agencias")
+      return {
+        users: false,
+        companies: true,
+        projects: true,
+        usersPath: "",
+        companiesPath: `${base("agencia")}/empresas`,
+        projectsPath: `${base("agencia")}/projetos`,
+      };
+    if (accountType === "nomades")
+      return {
+        users: false,
+        companies: false,
+        projects: false,
+        usersPath: "",
+        companiesPath: "",
+        projectsPath: "",
+      };
+    return {
+      users: false,
+      companies: false,
+      projects: false,
+      usersPath: "",
+      companiesPath: "",
+      projectsPath: "",
+    };
+  })();
 
   // Debounced live search
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return }
-    setSearchLoading(true)
-    try {
-      const promises: Promise<any>[] = []
-      const keys: string[] = []
-      if (searchScope.users)     { promises.push(apiClient.getUsers({ search: q }));     keys.push("users") }
-      if (searchScope.companies) { promises.push(apiClient.getCompanies({ search: q })); keys.push("companies") }
-      if (searchScope.projects)  { promises.push(apiClient.getProjects({ search: q }));  keys.push("projects") }
-
-      const settled = await Promise.allSettled(promises)
-      const results: {type:string; label:string; sub:string; path:string; icon:any}[] = []
-
-      settled.forEach((res, i) => {
-        if (res.status !== "fulfilled") return
-        const list = Array.isArray(res.value) ? res.value : (res.value as any)?.data ?? []
-        const key = keys[i]
-        if (key === "users") {
-          list.slice(0, 5).forEach((u: any) => results.push({
-            type: "Usuário", label: u.name, sub: u.email ?? u.role ?? "",
-            path: searchScope.usersPath, icon: User,
-          }))
-        } else if (key === "companies") {
-          list.slice(0, 5).forEach((c: any) => results.push({
-            type: "Empresa", label: c.name ?? c.nomeFantasia, sub: c.email ?? c.cnpj ?? "",
-            path: searchScope.companiesPath, icon: Building2,
-          }))
-        } else if (key === "projects") {
-          list.slice(0, 5).forEach((p: any) => results.push({
-            type: "Projeto", label: p.name ?? p.titulo, sub: p.client ?? p.status ?? "",
-            path: searchScope.projectsPath, icon: Briefcase,
-          }))
+  const doSearch = useCallback(
+    async (q: string) => {
+      if (!q.trim()) {
+        setSearchResults([]);
+        return;
+      }
+      setSearchLoading(true);
+      try {
+        const promises: Promise<any>[] = [];
+        const keys: string[] = [];
+        if (searchScope.users) {
+          promises.push(apiClient.getUsers({ search: q }));
+          keys.push("users");
         }
-      })
-      setSearchResults(results)
-    } catch {
-      setSearchResults([])
-    } finally {
-      setSearchLoading(false)
-    }
-  }, [accountType])
+        if (searchScope.companies) {
+          promises.push(apiClient.getCompanies({ search: q }));
+          keys.push("companies");
+        }
+        if (searchScope.projects) {
+          promises.push(apiClient.getProjects({ search: q }));
+          keys.push("projects");
+        }
+
+        const settled = await Promise.allSettled(promises);
+        const results: {
+          type: string;
+          label: string;
+          sub: string;
+          path: string;
+          icon: any;
+        }[] = [];
+
+        settled.forEach((res, i) => {
+          if (res.status !== "fulfilled") return;
+          const list = Array.isArray(res.value)
+            ? res.value
+            : ((res.value as any)?.data ?? []);
+          const key = keys[i];
+          if (key === "users") {
+            list.slice(0, 5).forEach((u: any) =>
+              results.push({
+                type: "Usuário",
+                label: u.name,
+                sub: u.email ?? u.role ?? "",
+                path: searchScope.usersPath,
+                icon: User,
+              }),
+            );
+          } else if (key === "companies") {
+            list.slice(0, 5).forEach((c: any) =>
+              results.push({
+                type: "Empresa",
+                label: c.name ?? c.nomeFantasia,
+                sub: c.email ?? c.cnpj ?? "",
+                path: searchScope.companiesPath,
+                icon: Building2,
+              }),
+            );
+          } else if (key === "projects") {
+            list.slice(0, 5).forEach((p: any) =>
+              results.push({
+                type: "Projeto",
+                label: p.name ?? p.titulo,
+                sub: p.client ?? p.status ?? "",
+                path: searchScope.projectsPath,
+                icon: Briefcase,
+              }),
+            );
+          }
+        });
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [accountType],
+  );
 
   useEffect(() => {
-    const t = setTimeout(() => doSearch(searchQuery), 300)
-    return () => clearTimeout(t)
-  }, [searchQuery, doSearch])
+    const t = setTimeout(() => doSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, doSearch]);
 
   const openProfile = async () => {
-    setProfileOpen(true)
-    if (!selfUser) {
+    setProfileOpen(true);
+    // Only fetch the real authenticated user for admin.
+    // Other account types (empresa, agencia, parceiro, nomades) build their
+    // profile object directly from their respective context — so we never
+    // accidentally show admin data (e.g. Vinícius Guardia) inside company view.
+    if (accountType === "admin" && !selfUser) {
       try {
-        const u = await apiClient.getCurrentUser()
-        setSelfUser(u)
-      } catch { /* use fallback */ }
+        const u = await apiClient.getCurrentUser();
+        setSelfUser(u);
+      } catch {
+        /* use fallback */
+      }
     }
-  }
+  };
 
   const handleLogout = () => {
-    localStorage.removeItem("simulatedUser")
-    localStorage.removeItem("allka_token")
-    localStorage.setItem("allka_logged_out", "true")
-    unlockAccountType()
-    apiClient.clearToken()
-    window.location.href = "/login"
-  }
+    localStorage.removeItem("simulatedUser");
+    localStorage.removeItem("allka_token");
+    localStorage.setItem("allka_logged_out", "true");
+    unlockAccountType();
+    apiClient.clearToken();
+    window.location.href = "/login";
+  };
 
   const PLACEHOLDER = (role, path) => ({
-    name: "Carregando...", email: "", initials: "..",
-    roleLabel: role, levelBadge: null,
-    wallet: null, stat: null, points: null, level: null, nextLevel: null, tasks: null,
-    settingsPath: path, menuItems: [],
-  })
+    name: "Carregando...",
+    email: "",
+    initials: "..",
+    roleLabel: role,
+    levelBadge: null,
+    wallet: null,
+    stat: null,
+    points: null,
+    level: null,
+    nextLevel: null,
+    tasks: null,
+    settingsPath: path,
+    menuItems: [],
+  });
 
   const ctx = (() => {
     if (accountType === "parceiro") {
-      const p = partner.profile
-      if (!p) return PLACEHOLDER("Parceiro", "/parceiro/dashboard")
-      const lvl = LEVEL_CONFIG[p.level ?? "bronze"]
+      const p = partner.profile;
+      if (!p) return PLACEHOLDER("Parceiro", "/parceiro/dashboard");
+      const lvl = LEVEL_CONFIG[p.level ?? "bronze"];
       return {
-        name: p.name, email: p.email, initials: getInitials(p.name),
-        roleLabel: "Parceiro", levelBadge: lvl,
-        wallet: { label: "Saldo disponível", value: fmtBRL(p.balance), icon: Wallet, color: "text-blue-600" },
-        stat: { label: "Total ganho", value: fmtBRL(p.totalEarned), icon: TrendingUp },
-        points: "1.450 pts", level: lvl.label, nextLevel: "Prata",
+        name: p.name,
+        email: p.email,
+        initials: getInitials(p.name),
+        roleLabel: "Parceiro",
+        levelBadge: lvl,
+        wallet: {
+          label: "Saldo disponível",
+          value: fmtBRL(p.balance),
+          icon: Wallet,
+          color: "text-blue-600",
+        },
+        stat: {
+          label: "Total ganho",
+          value: fmtBRL(p.totalEarned),
+          icon: TrendingUp,
+        },
+        points: "1.450 pts",
+        level: lvl.label,
+        nextLevel: "Prata",
         tasks: "3 tarefas abertas",
         settingsPath: "/parceiro/dashboard",
         menuItems: [
-          { label: "Meu Perfil",  icon: User,       path: "/parceiro/dashboard" },
-          { label: "Comissões",   icon: DollarSign, path: "/parceiro/comissoes" },
-          { label: "Saques",      icon: Wallet,     path: "/parceiro/saques"    },
-          { label: "Agências",    icon: Building2,  path: "/parceiro/agencias"  },
+          { label: "Meu Perfil", icon: User, path: "/parceiro/dashboard" },
+          { label: "Comissões", icon: DollarSign, path: "/parceiro/comissoes" },
+          { label: "Saques", icon: Wallet, path: "/parceiro/saques" },
+          { label: "Agências", icon: Building2, path: "/parceiro/agencias" },
         ],
-      }
+      };
     }
     if (accountType === "empresas") {
-      const p = empresa.profile
-      if (!p) return PLACEHOLDER("Empresa", "/empresa/dashboard")
-      const activeCount = empresa.projects.filter((x) => !["entregue","cancelado"].includes(x.status)).length
+      const p = empresa.profile;
+      if (!p) return PLACEHOLDER("Empresa", "/company/dashboard");
+      const activeCount = empresa.projects.filter(
+        (x) => !["entregue", "cancelado"].includes(x.status),
+      ).length;
       return {
-        name: p.name, email: p.email, initials: getInitials(p.name),
-        roleLabel: "Empresa", levelBadge: null,
-        wallet: { label: "Total investido", value: fmtBRL(p.totalInvested), icon: CreditCard, color: "text-violet-600" },
-        stat: { label: "Projetos ativos", value: String(activeCount), icon: FolderOpen },
-        points: null, level: null, nextLevel: null,
+        name: p.name,
+        email: p.email,
+        initials: getInitials(p.name),
+        roleLabel: "Company",
+        levelBadge: null,
+        wallet: {
+          label: "Total investido",
+          value: fmtBRL(p.totalInvested),
+          icon: CreditCard,
+          color: "text-violet-600",
+        },
+        stat: {
+          label: "Projetos ativos",
+          value: String(activeCount),
+          icon: FolderOpen,
+        },
+        points: null,
+        level: null,
+        nextLevel: null,
         tasks: `${activeCount} projetos ativos`,
-        settingsPath: "/empresa/dashboard",
+        settingsPath: "/company/dashboard",
         menuItems: [
-          { label: "Minha Empresa", icon: Building2,   path: "/empresa/dashboard" },
-          { label: "Projetos",      icon: FolderOpen,  path: "/empresa/projetos"  },
-          { label: "Tarefas",       icon: CheckSquare, path: "/empresa/tarefas"   },
-          { label: "Faturas",       icon: CreditCard,  path: "/empresa/faturas"   },
+          {
+            label: "Minha Empresa",
+            icon: Building2,
+            path: "/company/dashboard",
+          },
+          { label: "Projetos", icon: FolderOpen, path: "/company/projetos" },
+          { label: "Tarefas", icon: CheckSquare, path: "/company/tarefas" },
+          { label: "Faturas", icon: CreditCard, path: "/company/faturas" },
         ],
-      }
+      };
     }
     if (accountType === "agencias") {
-      const p = agencia.profile
-      if (!p) return PLACEHOLDER("Agência", "/agencia/dashboard")
+      const p = agencia.profile;
+      if (!p) return PLACEHOLDER("Agência", "/agencia/dashboard");
       return {
-        name: p.name, email: p.email, initials: getInitials(p.name),
-        roleLabel: "Agência", levelBadge: null,
-        wallet: { label: "MRR mensal", value: fmtBRL(p.currentMrr) + "/mês", icon: TrendingUp, color: "text-indigo-600" },
-        stat: { label: "Projetos", value: String(p.totalProjects), icon: FolderOpen },
-        points: null, level: null, nextLevel: null,
+        name: p.name,
+        email: p.email,
+        initials: getInitials(p.name),
+        roleLabel: "Agência",
+        levelBadge: null,
+        wallet: {
+          label: "MRR mensal",
+          value: fmtBRL(p.currentMrr) + "/mês",
+          icon: TrendingUp,
+          color: "text-indigo-600",
+        },
+        stat: {
+          label: "Projetos",
+          value: String(p.totalProjects),
+          icon: FolderOpen,
+        },
+        points: null,
+        level: null,
+        nextLevel: null,
         tasks: `${p.totalProjects} projetos no total`,
         settingsPath: "/agencia/dashboard",
         menuItems: [
-          { label: "Minha Agência", icon: Building2,   path: "/agencia/dashboard"  },
-          { label: "Projetos",      icon: FolderOpen,  path: "/agencia/projetos"   },
-          { label: "Tarefas",       icon: CheckSquare, path: "/agencia/tarefas"    },
-          { label: "Financeiro",    icon: Wallet,      path: "/agencia/financeiro" },
+          {
+            label: "Minha Agência",
+            icon: Building2,
+            path: "/agencia/dashboard",
+          },
+          { label: "Projetos", icon: FolderOpen, path: "/agencia/projetos" },
+          { label: "Tarefas", icon: CheckSquare, path: "/agencia/tarefas" },
+          { label: "Financeiro", icon: Wallet, path: "/agencia/financeiro" },
         ],
-      }
+      };
     }
     if (accountType === "nomades") {
-      const name = userProfile.name || "Nômade"
+      const name = userProfile.name || "Nômade";
       return {
-        name, email: userProfile.email || "", initials: getInitials(name),
-        roleLabel: "Nômade", levelBadge: null,
-        wallet: { label: "Ganhos no mês", value: "R$ 3.280", icon: Wallet, color: "text-amber-600" },
+        name,
+        email: userProfile.email || "",
+        initials: getInitials(name),
+        roleLabel: "Nômade",
+        levelBadge: null,
+        wallet: {
+          label: "Ganhos no mês",
+          value: "R$ 3.280",
+          icon: Wallet,
+          color: "text-amber-600",
+        },
         stat: { label: "Pontos", value: "1.250 pts", icon: Star },
-        points: "1.250 pts", level: "Bronze", nextLevel: "Prata",
+        points: "1.250 pts",
+        level: "Bronze",
+        nextLevel: "Prata",
         tasks: "5 tarefas pendentes",
         settingsPath: "/nomades/perfil",
         menuItems: [
-          { label: "Meu Perfil",     icon: User,        path: "/nomades/perfil"        },
-          { label: "Minhas Tarefas", icon: CheckSquare, path: "/nomades/minhastarefas" },
-          { label: "Ganhos",         icon: DollarSign,  path: "/nomades/ganhos"        },
-          { label: "Habilitações",   icon: Award,       path: "/nomades/habilitacoes"  },
+          { label: "Meu Perfil", icon: User, path: "/nomades/perfil" },
+          {
+            label: "Minhas Tarefas",
+            icon: CheckSquare,
+            path: "/nomades/minhastarefas",
+          },
+          { label: "Ganhos", icon: DollarSign, path: "/nomades/ganhos" },
+          { label: "Habilitações", icon: Award, path: "/nomades/habilitacoes" },
         ],
-      }
+      };
     }
-    const name = userProfile.name || "Admin Sistema"
+    const name = userProfile.name || "Admin Sistema";
     return {
-      name, email: userProfile.email || "admin@allka.com.br", initials: getInitials(name),
-      roleLabel: "Administrador", levelBadge: null,
-      wallet: null, stat: null,
-      points: null, level: "Master", nextLevel: null,
+      name,
+      email: userProfile.email || "admin@allka.com.br",
+      initials: getInitials(name),
+      roleLabel: "Administrador",
+      levelBadge: null,
+      wallet: null,
+      stat: null,
+      points: null,
+      level: "Master",
+      nextLevel: null,
       tasks: null,
       settingsPath: "/admin/configuracoes",
       menuItems: [
-        { label: "Meu Perfil",      icon: User,     path: "/admin/dashboard"      },
-        { label: "Usuários",        icon: Shield,   path: "/admin/usuarios"       },
-        { label: "Permissões",      icon: Shield,   path: "/admin/permissoes"     },
-        { label: "Configurações",   icon: Settings, path: "/admin/configuracoes"  },
+        { label: "Meu Perfil", icon: User, path: "/admin/dashboard" },
+        { label: "Usuários", icon: Shield, path: "/admin/usuarios" },
+        { label: "Permissões", icon: Shield, path: "/admin/permissoes" },
+        {
+          label: "Configurações",
+          icon: Settings,
+          path: "/admin/configuracoes",
+        },
       ],
-    }
-  })()
+    };
+  })();
 
-  const cfg = ACCOUNT_CONFIG[accountType] ?? ACCOUNT_CONFIG.admin
+  const cfg = ACCOUNT_CONFIG[accountType] ?? ACCOUNT_CONFIG.admin;
 
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"
-  const firstName = ctx.name.split(" ")[0]
-  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const firstName = ctx.name.split(" ")[0];
+  const today = new Date().toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <>
       {/* Global search overlay */}
       {searchOpen && (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
-          <div ref={searchRef} className="w-full max-w-2xl bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-2xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden">
+          <div
+            ref={searchRef}
+            className="w-full max-w-2xl bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-2xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden"
+          >
             {/* Search input */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-[oklch(0.20_0.022_258)]">
               <Search className="h-5 w-5 text-gray-400 shrink-0" />
@@ -347,13 +585,24 @@ export function Header() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={accountType === "admin" ? "Buscar usuários, empresas, projetos..." : "Buscar na plataforma..."}
+                placeholder={
+                  accountType === "admin"
+                    ? "Buscar usuários, empresas, projetos..."
+                    : "Buscar na plataforma..."
+                }
                 className="flex-1 text-sm outline-none bg-transparent text-gray-900 dark:text-white placeholder:text-gray-400"
               />
               {searchLoading && (
                 <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
               )}
-              <button onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]) }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
                 <X className="h-4 w-4 text-gray-400" />
               </button>
             </div>
@@ -372,31 +621,51 @@ export function Header() {
               )}
               {searchResults.length > 0 && (
                 <div className="py-2">
-                  {["Usuário","Empresa","Projeto"].map((type) => {
-                    const group = searchResults.filter((r) => r.type === type)
-                    if (!group.length) return null
-                    const GroupIcon = type === "Usuário" ? User : type === "Empresa" ? Building2 : Briefcase
+                  {["Usuário", "Empresa", "Projeto"].map((type) => {
+                    const group = searchResults.filter((r) => r.type === type);
+                    if (!group.length) return null;
+                    const GroupIcon =
+                      type === "Usuário"
+                        ? User
+                        : type === "Empresa"
+                          ? Building2
+                          : Briefcase;
                     return (
                       <div key={type}>
-                        <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{type}s</p>
+                        <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                          {type}s
+                        </p>
                         {group.map((result, i) => (
                           <button
                             key={i}
-                            onClick={() => { window.open(result.path, "_blank"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]) }}
+                            onClick={() => {
+                              window.open(result.path, "_blank");
+                              setSearchOpen(false);
+                              setSearchQuery("");
+                              setSearchResults([]);
+                            }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                           >
                             <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
                               <GroupIcon className="h-4 w-4 text-gray-500" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{result.label}</p>
-                              {result.sub && <p className="text-xs text-gray-400 truncate">{result.sub}</p>}
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {result.label}
+                              </p>
+                              {result.sub && (
+                                <p className="text-xs text-gray-400 truncate">
+                                  {result.sub}
+                                </p>
+                              )}
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">{result.type}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">
+                              {result.type}
+                            </span>
                           </button>
                         ))}
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
@@ -411,37 +680,57 @@ export function Header() {
 
       <header
         className="border-b border-white/10 px-4 sm:px-8 relative z-40 shadow-xl overflow-visible"
-        style={{ background: "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))" }}
+        style={{
+          background:
+            "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+        }}
       >
         {/* === TOP ROW: greeting + right actions === */}
         <div className="flex items-center h-16 gap-4 border-b border-white/8">
-
           {/* Mobile hamburger */}
-          <Button variant="ghost" size="sm" className="lg:hidden p-2 text-white/80 hover:bg-white/10 hover:text-white rounded-xl shrink-0" onClick={toggleMobileSidebar}>
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="lg:hidden p-2 text-white/80 hover:bg-white/10 hover:text-white rounded-xl shrink-0"
+            onClick={toggleMobileSidebar}
+          >
+            {mobileMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </Button>
 
           {/* Greeting + date */}
           <div className="hidden lg:block shrink-0">
-            <p className="text-lg font-bold text-white leading-tight tracking-tight">{greeting}, {firstName}! 👋</p>
-            <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">{today}</p>
+            <p className="text-lg font-bold text-white leading-tight tracking-tight">
+              {greeting}, {firstName}! 👋
+            </p>
+            <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">
+              {today}
+            </p>
           </div>
           <div className="lg:hidden min-w-0">
-            <p className="text-sm font-bold text-white truncate">{greeting}, {firstName}!</p>
+            <p className="text-sm font-bold text-white truncate">
+              {greeting}, {firstName}!
+            </p>
           </div>
 
           <div className="flex-1" />
 
           {/* Right actions */}
           <div className="flex items-center gap-3 shrink-0">
-
             <button
               onClick={() => setSearchOpen(true)}
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-[220px]"
             >
               <Search className="h-4 w-4 shrink-0" />
-              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">Buscar...</span>
-              <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">⌘K</span>
+              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
+                Buscar...
+              </span>
+              <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">
+                ⌘K
+              </span>
             </button>
 
             <AlertsHeaderIcon />
@@ -452,11 +741,94 @@ export function Header() {
               title={theme === "dark" ? "Modo claro" : "Modo escuro"}
               className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all"
             >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
             </button>
 
+            {/* ── Cesta de projeto ──────────────────────────────────── */}
+            {(() => {
+              const totalItems = basket.getTotalItems();
+              const hasItems = totalItems > 0;
+              return (
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => basket.setOpen(true)}
+                    aria-label="Cesta do projeto"
+                    className={
+                      hasItems
+                        ? "relative flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-xl border transition-all duration-200 bg-white/15 border-white/30 text-white hover:bg-white/25 hover:border-white/40 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
+                        : "relative flex items-center justify-center h-9 w-9 rounded-xl border transition-all duration-200 bg-white/10 border-white/15 text-white/50 hover:bg-white/20 hover:text-white/80"
+                    }
+                  >
+                    {/* pulse ring when active */}
+                    {hasItems && (
+                      <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-400/20 pointer-events-none" />
+                    )}
+
+                    <Briefcase
+                      className={
+                        hasItems
+                          ? "h-4 w-4 shrink-0 text-indigo-200 drop-shadow-sm"
+                          : "h-4 w-4 shrink-0"
+                      }
+                    />
+
+                    {hasItems && (
+                      <span className="flex items-center gap-1 text-xs font-bold leading-none">
+                        <span
+                          className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-extrabold leading-none"
+                          style={{
+                            background:
+                              "var(--app-brand-button, linear-gradient(135deg, #6366f1 0%, #c81a7f 100%))",
+                            color: "#fff",
+                          }}
+                        >
+                          {totalItems}
+                        </span>
+                        <span className="hidden sm:inline text-[11px] text-white/80 font-semibold">
+                          {totalItems === 1 ? "item" : "itens"}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Tooltip */}
+                  <div className="pointer-events-none absolute top-full right-0 mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <div className="bg-gray-900/95 text-white text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap border border-white/10">
+                      {hasItems ? (
+                        <>
+                          <span className="font-semibold">
+                            {totalItems}{" "}
+                            {totalItems === 1 ? "produto" : "produtos"} na cesta
+                          </span>
+                          <br />
+                          <span className="text-white/60">
+                            Clique para ver e criar projeto
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-white/70">
+                          Cesta do projeto vazia
+                        </span>
+                      )}
+                    </div>
+                    <div className="absolute -top-1 right-3.5 h-2 w-2 rotate-45 bg-gray-900/95 border-l border-t border-white/10" />
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="relative">
-              <Button variant="ghost" size="sm" onClick={() => setNotifOpen(true)} className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setNotifOpen(true)}
+                className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
+              >
                 <Bell className="h-4 w-4" />
                 <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
                   2
@@ -476,19 +848,29 @@ export function Header() {
                   </Avatar>
                   <div className="hidden sm:block text-left">
                     {accountType === "admin" && (
-                      <p className="text-sm font-bold leading-tight text-white truncate max-w-[130px]">{ctx.name}</p>
+                      <p className="text-sm font-bold leading-tight text-white truncate max-w-[130px]">
+                        {ctx.name}
+                      </p>
                     )}
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${cfg.badgeBg} ${cfg.color} leading-tight`}>
-                        {accountType === "admin" ? (userProfile.job_title || ctx.roleLabel) : ctx.roleLabel}
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${cfg.badgeBg} ${cfg.color} leading-tight`}
+                      >
+                        {accountType === "admin"
+                          ? userProfile.job_title || ctx.roleLabel
+                          : ctx.roleLabel}
                       </span>
                       {ctx.levelBadge && (
-                        <span className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}>
+                        <span
+                          className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}
+                        >
                           {ctx.levelBadge.label}
                         </span>
                       )}
                       {ctx.level && !ctx.levelBadge && (
-                        <span className="text-[9px] text-white/40">{ctx.level}</span>
+                        <span className="text-[9px] text-white/40">
+                          {ctx.level}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -496,8 +878,14 @@ export function Header() {
                 </button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" sideOffset={10} className="w-72 p-2 rounded-2xl shadow-2xl border border-gray-100 dark:border-border bg-white dark:bg-background">
-                <div className={`px-3 py-3 rounded-xl mb-2 border ${cfg.badgeBg} ${cfg.badgeBorder} dark:bg-card dark:border-border`}>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={10}
+                className="w-72 p-2 rounded-2xl shadow-2xl border border-gray-100 dark:border-border bg-white dark:bg-background"
+              >
+                <div
+                  className={`px-3 py-3 rounded-xl mb-2 border ${cfg.badgeBg} ${cfg.badgeBorder} dark:bg-card dark:border-border`}
+                >
                   <div className="flex items-center gap-3">
                     <Avatar className="h-12 w-12 shrink-0 ring-2 ring-white shadow-md">
                       <AvatarFallback className="bg-linear-to-br from-blue-600 to-purple-600 text-white text-sm font-bold">
@@ -506,22 +894,34 @@ export function Header() {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       {accountType === "admin" && (
-                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{ctx.name}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                          {ctx.name}
+                        </p>
                       )}
                       <div className="flex items-center gap-1 flex-wrap mt-0.5">
                         <p className={`text-[11px] font-semibold ${cfg.color}`}>
-                          {accountType === "admin" ? (userProfile.job_title || ctx.roleLabel) : ctx.roleLabel}
+                          {accountType === "admin"
+                            ? userProfile.job_title || ctx.roleLabel
+                            : ctx.roleLabel}
                         </p>
                         {ctx.levelBadge && (
-                          <span className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}>
+                          <span
+                            className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}
+                          >
                             {ctx.levelBadge.label}
                           </span>
                         )}
                         {ctx.level && !ctx.levelBadge && (
-                          <span className="text-[10px] text-gray-400">• {ctx.level}</span>
+                          <span className="text-[10px] text-gray-400">
+                            • {ctx.level}
+                          </span>
                         )}
                       </div>
-                      {ctx.email && <p className="text-[10px] text-gray-400 truncate mt-0.5">{ctx.email}</p>}
+                      {ctx.email && (
+                        <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                          {ctx.email}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {(ctx.wallet || ctx.points || ctx.tasks) && (
@@ -530,8 +930,14 @@ export function Header() {
                         <div className="flex items-center gap-1.5">
                           <ctx.wallet.icon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                           <div>
-                            <p className="text-[9px] text-gray-400 leading-none">{ctx.wallet.label}</p>
-                            <p className={`text-xs font-bold ${ctx.wallet.color} leading-tight`}>{ctx.wallet.value}</p>
+                            <p className="text-[9px] text-gray-400 leading-none">
+                              {ctx.wallet.label}
+                            </p>
+                            <p
+                              className={`text-xs font-bold ${ctx.wallet.color} leading-tight`}
+                            >
+                              {ctx.wallet.value}
+                            </p>
                           </div>
                         </div>
                       )}
@@ -539,31 +945,46 @@ export function Header() {
                         <div className="flex items-center gap-1.5">
                           <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                           <div>
-                            <p className="text-[9px] text-gray-400 leading-none">Pontos</p>
-                            <p className="text-xs font-bold text-amber-600 leading-tight">{ctx.points}</p>
+                            <p className="text-[9px] text-gray-400 leading-none">
+                              Pontos
+                            </p>
+                            <p className="text-xs font-bold text-amber-600 leading-tight">
+                              {ctx.points}
+                            </p>
                           </div>
                         </div>
                       )}
                       {ctx.tasks && (
                         <div className="flex items-center gap-1.5 col-span-2">
                           <Activity className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                          <p className="text-[10px] text-gray-500">{ctx.tasks}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {ctx.tasks}
+                          </p>
                         </div>
                       )}
                     </div>
                   )}
                 </div>
 
-                <DropdownMenuItem onClick={openProfile} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                <DropdownMenuItem
+                  onClick={openProfile}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                >
                   <User className="h-4 w-4 text-gray-400 shrink-0" />
                   Meu Perfil
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setNotifOpen(true)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                <DropdownMenuItem
+                  onClick={() => setNotifOpen(true)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                >
                   <Settings className="h-4 w-4 text-gray-400 shrink-0" />
                   Configurações
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="my-1" />
-                <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-red-600 dark:text-red-400 hover:bg-red-50 focus:bg-red-50 focus:text-red-600">
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-red-600 dark:text-red-400 hover:bg-red-50 focus:bg-red-50 focus:text-red-600"
+                >
                   <LogOut className="h-4 w-4 shrink-0" />
                   Sair
                 </DropdownMenuItem>
@@ -573,7 +994,7 @@ export function Header() {
         </div>
 
         {/* === BOTTOM ROW: quick stats pills === */}
-        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto">
+        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto pb-2 pt-0.5">
           {ctx.level && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
               <div className="h-6 w-6 rounded-lg bg-yellow-400/20 flex items-center justify-center shrink-0">
@@ -581,7 +1002,9 @@ export function Header() {
               </div>
               <div>
                 <p className="text-[10px] text-white/45 leading-none">Nível</p>
-                <p className="text-xs font-bold text-white leading-tight">{ctx.level}</p>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {ctx.level}
+                </p>
               </div>
             </div>
           )}
@@ -592,7 +1015,9 @@ export function Header() {
               </div>
               <div>
                 <p className="text-[10px] text-white/45 leading-none">Pontos</p>
-                <p className="text-xs font-bold text-white leading-tight">{ctx.points}</p>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {ctx.points}
+                </p>
               </div>
             </div>
           )}
@@ -602,8 +1027,12 @@ export function Header() {
                 <ctx.stat.icon className="h-3.5 w-3.5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-[10px] text-white/45 leading-none">{ctx.stat.label}</p>
-                <p className="text-xs font-bold text-white leading-tight">{ctx.stat.value}</p>
+                <p className="text-[10px] text-white/45 leading-none">
+                  {ctx.stat.label}
+                </p>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {ctx.stat.value}
+                </p>
               </div>
             </div>
           )}
@@ -614,7 +1043,9 @@ export function Header() {
               </div>
               <div>
                 <p className="text-[10px] text-white/45 leading-none">Status</p>
-                <p className="text-xs font-bold text-white leading-tight">{ctx.tasks}</p>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {ctx.tasks}
+                </p>
               </div>
             </div>
           )}
@@ -627,22 +1058,96 @@ export function Header() {
                 <ctx.wallet.icon className="h-3.5 w-3.5 text-green-400" />
               </div>
               <div className="text-left">
-                <p className="text-[10px] text-white/45 leading-none">{ctx.wallet.label}</p>
-                <p className="text-xs font-bold text-white leading-tight">{ctx.wallet.value}</p>
+                <p className="text-[10px] text-white/45 leading-none">
+                  {ctx.wallet.label}
+                </p>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {ctx.wallet.value}
+                </p>
               </div>
             </button>
           )}
-
-
         </div>
       </header>
 
-      <NotificationPreferencesPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <NotificationPreferencesPanel
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+      />
       <UserViewSlidePanel
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
-        user={selfUser ?? { id: 0, name: ctx.name, email: ctx.email, role: accountType, account_type: accountType, is_active: true, is_admin: accountType === "admin", permissions: [], created_at: "", updated_at: "" }}
+        user={(() => {
+          // Build profile object from context — each account type uses its own data source.
+          if (accountType === "empresas" && empresa.profile) {
+            const p = empresa.profile;
+            return {
+              id: p.id,
+              name: p.name,
+              email: p.email,
+              role: "company_admin",
+              account_type: "company",
+              cnpj: p.cnpj,
+              phone: p.phone,
+              is_active: p.status === "active",
+              is_admin: false,
+              permissions: [],
+              created_at: p.createdAt ?? "",
+              updated_at: p.createdAt ?? "",
+            };
+          }
+          if (accountType === "agencias" && agencia.profile) {
+            const p = agencia.profile;
+            return {
+              id: p.id,
+              name: p.name,
+              email: p.email,
+              role: "agency_admin",
+              account_type: "agency",
+              phone: p.phone ?? "",
+              is_active: true,
+              is_admin: false,
+              permissions: [],
+              created_at: p.createdAt ?? "",
+              updated_at: p.createdAt ?? "",
+            };
+          }
+          if (accountType === "parceiro" && partner.profile) {
+            const p = partner.profile;
+            return {
+              id: p.id,
+              name: p.name,
+              email: p.email,
+              role: "partner",
+              account_type: "parceiro",
+              phone: p.phone ?? "",
+              is_active: true,
+              is_admin: false,
+              permissions: [],
+              created_at: p.createdAt ?? "",
+              updated_at: p.createdAt ?? "",
+            };
+          }
+          // admin + nomades: use real authenticated user (or context fallback)
+          return (
+            selfUser ?? {
+              id: 0,
+              name: ctx.name,
+              email: ctx.email,
+              role: accountType,
+              account_type: accountType,
+              is_active: true,
+              is_admin: accountType === "admin",
+              permissions: [],
+              created_at: "",
+              updated_at: "",
+            }
+          );
+        })()}
       />
+
+      {/* ── Basket drawer ─────────────────────────────────────────────── */}
+      <ProjectBasketDrawer />
     </>
-  )
+  );
 }

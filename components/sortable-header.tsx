@@ -68,7 +68,7 @@ const VALUE_LABELS: Record<string, string> = {
   overdue:      "Vencido",
   at_risk:      "Em risco",
   true:         "Ativo",
-  false:        "Inativo",
+  false:        "Bloqueado",
   agency:       "Agência",
   empresa:      "Empresa",
   nomade:       "Nômade",

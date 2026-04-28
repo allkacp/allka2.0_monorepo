@@ -212,7 +212,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-brand-button", buttonCss)
     const activeColor = s.activeItemColor || "#c81a7f"
     root.style.setProperty("--app-brand-active", activeColor)
-    const fontScaleMap = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
+    const fontScaleMap = { compact: "13px", normal: "15px", comfortable: "16px", large: "17px" } as const
     document.documentElement.style.fontSize = fontScaleMap[s.fontScale || "normal"]
     // Per-context font sizes
     const fsMap = { xs: "0.7rem", sm: "0.8125rem", base: "0.875rem", lg: "1rem", xl: "1.125rem" } as const
@@ -252,7 +252,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-brand-button", buttonCss)
     const activeColor2 = newSettings.activeItemColor || "#c81a7f"
     root.style.setProperty("--app-brand-active", activeColor2)
-    const fontScaleMap2 = { compact: "12px", normal: "14px", comfortable: "15px", large: "16px" } as const
+    const fontScaleMap2 = { compact: "13px", normal: "15px", comfortable: "16px", large: "17px" } as const
     document.documentElement.style.fontSize = fontScaleMap2[newSettings.fontScale || "normal"]
     const fsMap2 = { xs: "0.7rem", sm: "0.8125rem", base: "0.875rem", lg: "1rem", xl: "1.125rem" } as const
     root.style.setProperty("--app-font-sidebar", fsMap2[newSettings.fontSizeSidebar || "sm"])

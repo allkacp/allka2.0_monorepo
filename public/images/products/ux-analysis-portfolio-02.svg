@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#0d1630"/>
+    </linearGradient>
+    <linearGradient id="accentTop" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <rect x="0" y="0" width="800" height="3" fill="url(#accentTop)"/>
+
+  <!-- Header -->
+  <text x="40" y="36" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280" letter-spacing="2">NAVEGAÇÃO, BOTÕES E LINKS</text>
+  <text x="40" y="58" font-family="system-ui, sans-serif" font-size="20" font-weight="800" fill="#f1f5f9">Verificação Funcional por Página</text>
+  <rect x="640" y="25" width="120" height="28" rx="6" fill="#0f172a" stroke="#6366f1" stroke-width="1"/>
+  <text x="700" y="44" font-family="system-ui, sans-serif" font-size="10" fill="#a5b4fc" text-anchor="middle">PA0005-REL-UX / S02</text>
+  
+  <line x1="40" y1="72" x2="760" y2="72" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- LEFT — Site map -->
+  <rect x="40" y="85" width="215" height="320" rx="10" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="147" y="108" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280" text-anchor="middle" letter-spacing="1">MAPA DO SITE</text>
+
+  <!-- Site map nodes -->
+  <!-- Homepage -->
+  <rect x="87" y="120" width="120" height="32" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1"/>
+  <text x="147" y="140" font-family="system-ui, sans-serif" font-size="10" fill="#22d3ee" text-anchor="middle">Homepage /</text>
+  <circle cx="219" cy="136" r="9" fill="#ef4444" opacity="0.15"/>
+  <text x="219" cy="140" font-family="system-ui, sans-serif" font-size="9" fill="#ef4444" text-anchor="middle" y="140">3</text>
+
+  <!-- Tree lines -->
+  <line x1="147" y1="152" x2="147" y2="168" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="87" y1="168" x2="207" y2="168" stroke="#1e293b" stroke-width="1"/>
+  <line x1="87" y1="168" x2="87" y2="178" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="147" y1="168" x2="147" y2="178" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="207" y1="168" x2="207" y2="178" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- Serviços -->
+  <rect x="57" y="178" width="60" height="28" rx="5" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="87" y="196" font-family="system-ui, sans-serif" font-size="8.5" fill="#94a3b8" text-anchor="middle">Serviços</text>
+  <circle cx="107" cy="186" r="7" fill="#f59e0b" opacity="0.15"/>
+  <text x="107" y="190" font-family="system-ui, sans-serif" font-size="8" fill="#f59e0b" text-anchor="middle">1</text>
+
+  <!-- Contato -->
+  <rect x="117" y="178" width="60" height="28" rx="5" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="147" y="196" font-family="system-ui, sans-serif" font-size="8.5" fill="#94a3b8" text-anchor="middle">Contato</text>
+  <circle cx="167" cy="186" r="7" fill="#ef4444" opacity="0.15"/>
+  <text x="167" y="190" font-family="system-ui, sans-serif" font-size="8" fill="#ef4444" text-anchor="middle">2</text>
+
+  <!-- Sobre -->
+  <rect x="177" y="178" width="60" height="28" rx="5" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="207" y="196" font-family="system-ui, sans-serif" font-size="8.5" fill="#94a3b8" text-anchor="middle">Sobre</text>
+  <circle cx="227" cy="186" r="7" fill="#22c55e" opacity="0.15"/>
+  <text x="227" y="190" font-family="system-ui, sans-serif" font-size="8" fill="#22c55e" text-anchor="middle">✓</text>
+
+  <!-- Legenda -->
+  <text x="57" y="235" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" font-weight="600">Legenda:</text>
+  <circle cx="65" cy="250" r="6" fill="#ef4444" opacity="0.3"/>
+  <text x="77" y="254" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Crítico (erro funcional)</text>
+  <circle cx="65" cy="270" r="6" fill="#f59e0b" opacity="0.3"/>
+  <text x="77" y="274" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Moderado (atenção)</text>
+  <circle cx="65" cy="290" r="6" fill="#22c55e" opacity="0.3"/>
+  <text x="77" y="294" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">OK (sem problemas)</text>
+
+  <!-- Summary total -->
+  <rect x="57" y="318" width="181" height="60" rx="8" fill="#0f172a"/>
+  <text x="67" y="336" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">Total de elementos testados</text>
+  <text x="147" y="365" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#f1f5f9" text-anchor="middle">28</text>
+  <text x="67" y="372" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">19 OK  |  4 Atenção  |  5 Críticos</text>
+
+  <!-- RIGHT — Links table -->
+  <rect x="272" y="85" width="488" height="320" rx="10" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="292" y="108" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280" letter-spacing="1">TABELA DE VERIFICAÇÃO</text>
+
+  <!-- Table header -->
+  <rect x="292" y="117" width="448" height="28" rx="5" fill="#0f172a"/>
+  <text x="302" y="135" font-family="system-ui, sans-serif" font-size="9.5" fill="#6b7280" font-weight="600">PÁGINA</text>
+  <text x="430" y="135" font-family="system-ui, sans-serif" font-size="9.5" fill="#6b7280" font-weight="600">ELEMENTO</text>
+  <text x="590" y="135" font-family="system-ui, sans-serif" font-size="9.5" fill="#6b7280" font-weight="600">TIPO</text>
+  <text x="670" y="135" font-family="system-ui, sans-serif" font-size="9.5" fill="#6b7280" font-weight="600">STATUS</text>
+
+  <!-- Row 1 -->
+  <rect x="292" y="149" width="448" height="34" rx="4" fill="#0f172a"/>
+  <text x="302" y="171" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Homepage</text>
+  <text x="430" y="171" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Botão "Saiba Mais"</text>
+  <text x="590" y="171" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">CTA</text>
+  <rect x="668" y="158" width="55" height="16" rx="8" fill="#22c55e" opacity="0.15"/>
+  <text x="695" y="170" font-family="system-ui, sans-serif" font-size="9" fill="#22c55e" text-anchor="middle">✓ OK</text>
+
+  <!-- Row 2 -->
+  <rect x="292" y="187" width="448" height="34" rx="4" fill="#111827"/>
+  <text x="302" y="209" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Homepage</text>
+  <text x="430" y="209" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Link Instagram (rodapé)</text>
+  <text x="590" y="209" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">Link</text>
+  <rect x="663" y="196" width="65" height="16" rx="8" fill="#ef4444" opacity="0.15"/>
+  <text x="695" y="208" font-family="system-ui, sans-serif" font-size="9" fill="#ef4444" text-anchor="middle">✗ Quebrado</text>
+
+  <!-- Row 3 -->
+  <rect x="292" y="225" width="448" height="34" rx="4" fill="#0f172a"/>
+  <text x="302" y="247" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Contato</text>
+  <text x="430" y="247" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Botão WhatsApp (mobile)</text>
+  <text x="590" y="247" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">CTA</text>
+  <rect x="663" y="234" width="65" height="16" rx="8" fill="#ef4444" opacity="0.15"/>
+  <text x="695" y="246" font-family="system-ui, sans-serif" font-size="9" fill="#ef4444" text-anchor="middle">✗ Inativo</text>
+
+  <!-- Row 4 -->
+  <rect x="292" y="263" width="448" height="34" rx="4" fill="#111827"/>
+  <text x="302" y="285" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Serviços</text>
+  <text x="430" y="285" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Botão "Solicitar Orçamento"</text>
+  <text x="590" y="285" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">CTA</text>
+  <rect x="653" y="272" width="87" height="16" rx="8" fill="#f59e0b" opacity="0.15"/>
+  <text x="696" y="284" font-family="system-ui, sans-serif" font-size="9" fill="#f59e0b" text-anchor="middle">⚠ Redir. errado</text>
+
+  <!-- Row 5 -->
+  <rect x="292" y="301" width="448" height="34" rx="4" fill="#0f172a"/>
+  <text x="302" y="323" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Contato</text>
+  <text x="430" y="323" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Formulário — Botão Enviar</text>
+  <text x="590" y="323" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">Form</text>
+  <rect x="663" y="310" width="65" height="16" rx="8" fill="#ef4444" opacity="0.15"/>
+  <text x="695" y="322" font-family="system-ui, sans-serif" font-size="9" fill="#ef4444" text-anchor="middle">✗ Sem ação</text>
+
+  <!-- Row 6 -->
+  <rect x="292" y="339" width="448" height="34" rx="4" fill="#111827"/>
+  <text x="302" y="361" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Sobre Nós</text>
+  <text x="430" y="361" font-family="system-ui, sans-serif" font-size="9.5" fill="#cbd5e1">Menu de navegação completo</text>
+  <text x="590" y="361" font-family="system-ui, sans-serif" font-size="9.5" fill="#94a3b8">Nav</text>
+  <rect x="668" y="348" width="55" height="16" rx="8" fill="#22c55e" opacity="0.15"/>
+  <text x="695" y="360" font-family="system-ui, sans-serif" font-size="9" fill="#22c55e" text-anchor="middle">✓ OK</text>
+
+  <!-- Footer note -->
+  <text x="292" y="398" font-family="system-ui, sans-serif" font-size="8.5" fill="#4b5563">* Exibindo 6 de 28 itens verificados. Tabela completa disponível no relatório PA0005-REL-UX.</text>
+
+  <!-- Footer -->
+  <text x="40" y="443" font-family="system-ui, sans-serif" font-size="9" fill="#374151">PA0005 — Análise de Usabilidade UX  |  Navegação e Links</text>
+  <text x="760" y="443" font-family="system-ui, sans-serif" font-size="9" fill="#374151" text-anchor="end">allka.com.br</text>
+</svg>

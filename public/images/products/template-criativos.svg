@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="60%" style="stop-color:#1a2a5e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c81a7f"/>
+      <stop offset="100%" style="stop-color:#7b1850"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f97316"/>
+      <stop offset="100%" style="stop-color:#c2410c"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6"/>
+      <stop offset="100%" style="stop-color:#6d28d9"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="rgba(0,0,0,0.5)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <g opacity="0.05" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="90" x2="800" y2="90"/>
+    <line x1="0" y1="225" x2="800" y2="225"/>
+    <line x1="0" y1="360" x2="800" y2="360"/>
+    <line x1="200" y1="0" x2="200" y2="450"/>
+    <line x1="400" y1="0" x2="400" y2="450"/>
+    <line x1="600" y1="0" x2="600" y2="450"/>
+  </g>
+  <circle cx="720" cy="80" r="110" fill="none" stroke="rgba(200,26,127,0.12)" stroke-width="2"/>
+  <circle cx="80" cy="390" r="90" fill="none" stroke="rgba(249,115,22,0.1)" stroke-width="2"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Template para Criativos (5 unidades)</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Templates editáveis para redes sociais — identidade visual consistente</text>
+
+  <!-- Template grid: 5 template cards -->
+  <!-- Template 1 - Feed -->
+  <rect x="44" y="88" width="130" height="155" rx="10" fill="rgba(200,26,127,0.12)" stroke="rgba(200,26,127,0.3)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="t1bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#c81a7f;stop-opacity:0.3"/>
+    <stop offset="100%" style="stop-color:#7b1850;stop-opacity:0.15"/>
+  </linearGradient>
+  <rect x="44" y="88" width="130" height="105" rx="10" fill="url(#t1bg)"/>
+  <text x="109" y="128" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="700">Template 1</text>
+  <rect x="64" y="138" width="90" height="2" fill="rgba(200,26,127,0.7)" rx="1"/>
+  <text x="109" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Feed Instagram</text>
+  <text x="109" y="167" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1080×1080px</text>
+  <rect x="64" y="178" width="90" height="20" rx="10" fill="rgba(200,26,127,0.4)"/>
+  <text x="109" y="192" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Canva / PS</text>
+  <rect x="44" y="243" width="130" height="22" rx="0" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="109" y="257" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">.png + arquivo aberto</text>
+
+  <!-- Template 2 - Stories -->
+  <rect x="188" y="88" width="130" height="155" rx="10" fill="rgba(249,115,22,0.1)" stroke="rgba(249,115,22,0.25)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="t2bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#f97316;stop-opacity:0.3"/>
+    <stop offset="100%" style="stop-color:#c2410c;stop-opacity:0.15"/>
+  </linearGradient>
+  <rect x="188" y="88" width="130" height="105" rx="10" fill="url(#t2bg)"/>
+  <text x="253" y="128" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="700">Template 2</text>
+  <rect x="208" y="138" width="90" height="2" fill="rgba(249,115,22,0.7)" rx="1"/>
+  <text x="253" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Stories</text>
+  <text x="253" y="167" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1080×1920px</text>
+  <rect x="208" y="178" width="90" height="20" rx="10" fill="rgba(249,115,22,0.4)"/>
+  <text x="253" y="192" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Canva / AI</text>
+  <rect x="188" y="243" width="130" height="22" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="253" y="257" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">.png + arquivo aberto</text>
+
+  <!-- Template 3 - LinkedIn -->
+  <rect x="332" y="88" width="130" height="155" rx="10" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="t3bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3"/>
+    <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:0.15"/>
+  </linearGradient>
+  <rect x="332" y="88" width="130" height="105" rx="10" fill="url(#t3bg)"/>
+  <text x="397" y="128" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="700">Template 3</text>
+  <rect x="352" y="138" width="90" height="2" fill="rgba(59,130,246,0.7)" rx="1"/>
+  <text x="397" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">LinkedIn Post</text>
+  <text x="397" y="167" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1200×627px</text>
+  <rect x="352" y="178" width="90" height="20" rx="10" fill="rgba(59,130,246,0.4)"/>
+  <text x="397" y="192" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Canva / PS</text>
+  <rect x="332" y="243" width="130" height="22" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="397" y="257" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">.png + arquivo aberto</text>
+
+  <!-- Template 4 - Banner -->
+  <rect x="476" y="88" width="130" height="155" rx="10" fill="rgba(139,92,246,0.1)" stroke="rgba(139,92,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="t4bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.3"/>
+    <stop offset="100%" style="stop-color:#6d28d9;stop-opacity:0.15"/>
+  </linearGradient>
+  <rect x="476" y="88" width="130" height="105" rx="10" fill="url(#t4bg)"/>
+  <text x="541" y="128" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="700">Template 4</text>
+  <rect x="496" y="138" width="90" height="2" fill="rgba(139,92,246,0.7)" rx="1"/>
+  <text x="541" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Banner Promo</text>
+  <text x="541" y="167" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1200×628px</text>
+  <rect x="496" y="178" width="90" height="20" rx="10" fill="rgba(139,92,246,0.4)"/>
+  <text x="541" y="192" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Illustrator</text>
+  <rect x="476" y="243" width="130" height="22" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="541" y="257" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">.png + arquivo aberto</text>
+
+  <!-- Template 5 - Email -->
+  <rect x="620" y="88" width="136" height="155" rx="10" fill="rgba(74,222,128,0.08)" stroke="rgba(74,222,128,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <linearGradient id="t5bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#4ade80;stop-opacity:0.2"/>
+    <stop offset="100%" style="stop-color:#16a34a;stop-opacity:0.1"/>
+  </linearGradient>
+  <rect x="620" y="88" width="136" height="105" rx="10" fill="url(#t5bg)"/>
+  <text x="688" y="128" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle" font-weight="700">Template 5</text>
+  <rect x="640" y="138" width="96" height="2" fill="rgba(74,222,128,0.7)" rx="1"/>
+  <text x="688" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">E-mail / Card</text>
+  <text x="688" y="167" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">600×800px</text>
+  <rect x="648" y="178" width="80" height="20" rx="10" fill="rgba(74,222,128,0.3)"/>
+  <text x="688" y="192" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Canva / PS</text>
+  <rect x="620" y="243" width="136" height="22" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="688" y="257" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">.png + arquivo aberto</text>
+
+  <!-- Bottom panel: delivery summary -->
+  <rect x="44" y="278" width="712" height="100" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="64" y="302" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" letter-spacing="1.5">SUMÁRIO DE ENTREGA</text>
+  <!-- Counters -->
+  <text x="120" y="340" font-family="system-ui,sans-serif" font-size="28" fill="#ffffff" font-weight="700" text-anchor="middle">5</text>
+  <text x="120" y="358" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">templates</text>
+  <line x1="170" y1="315" x2="170" y2="365" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="235" y="340" font-family="system-ui,sans-serif" font-size="28" fill="#ffffff" font-weight="700" text-anchor="middle">3</text>
+  <text x="235" y="358" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">formatos máx.</text>
+  <line x1="295" y1="315" x2="295" y2="365" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="380" y="340" font-family="system-ui,sans-serif" font-size="28" fill="#ffffff" font-weight="700" text-anchor="middle">4</text>
+  <text x="380" y="358" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">dias úteis</text>
+  <line x1="440" y1="315" x2="440" y2="365" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <!-- File types -->
+  <rect x="460" y="310" width="270" height="54" rx="8" fill="rgba(255,255,255,0.03)"/>
+  <text x="480" y="330" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Arquivo aberto: .psd / .ai / link Canva</text>
+  <text x="480" y="350" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.55)">Arquivo final: .png em .zip</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <rect x="50" y="414" width="110" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="105" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">Canva / PS / AI</text>
+  <rect x="172" y="414" width="80" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="212" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">4 dias úteis</text>
+  <rect x="264" y="414" width="95" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="311" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">Arquivo aberto</text>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Template para Criativos — allka</text>
+</svg>

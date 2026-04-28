@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0c2340;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0f3460;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="170" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">AUDITORIA TÉCNICA SEO</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Health Score do Site</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Análise técnica completa · Priorização de correções</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Score circle -->
+  <circle cx="130" cy="265" r="85" fill="none" stroke="#ffffff0a" stroke-width="16"/>
+  <circle cx="130" cy="265" r="85" fill="none" stroke="#4ade80" stroke-width="16"
+    stroke-dasharray="415" stroke-dashoffset="83" stroke-linecap="round" transform="rotate(-90 130 265)" filter="url(#glow)"/>
+  <text x="130" y="253" font-family="system-ui,sans-serif" font-size="34" fill="#4ade80" text-anchor="middle" font-weight="900">80</text>
+  <text x="130" y="272" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">/100</text>
+  <text x="130" y="294" font-family="system-ui,sans-serif" font-size="12" fill="#4ade80" text-anchor="middle" font-weight="700">BOM</text>
+
+  <!-- Issues list -->
+  <!-- Critical -->
+  <rect x="260" y="128" width="510" height="34" rx="8" fill="#f87171" fill-opacity="0.12" stroke="#f8717130" stroke-width="1"/>
+  <rect x="260" y="128" width="4" height="34" rx="2" fill="#f87171"/>
+  <text x="276" y="147" font-family="system-ui,sans-serif" font-size="12" fill="#fca5a5" font-weight="700">Crítico (2)</text>
+  <text x="380" y="147" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Páginas com conteúdo duplicado · Meta description ausente</text>
+
+  <rect x="260" y="170" width="510" height="34" rx="8" fill="#f59e0b" fill-opacity="0.12" stroke="#f59e0b30" stroke-width="1"/>
+  <rect x="260" y="170" width="4" height="34" rx="2" fill="#f59e0b"/>
+  <text x="276" y="189" font-family="system-ui,sans-serif" font-size="12" fill="#fcd34d" font-weight="700">Alto (5)</text>
+  <text x="380" y="189" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Imagens sem alt-text · Core Web Vitals fora do limite</text>
+
+  <rect x="260" y="212" width="510" height="34" rx="8" fill="#60a5fa" fill-opacity="0.10" stroke="#60a5fa25" stroke-width="1"/>
+  <rect x="260" y="212" width="4" height="34" rx="2" fill="#60a5fa"/>
+  <text x="276" y="231" font-family="system-ui,sans-serif" font-size="12" fill="#93c5fd" font-weight="700">Médio (8)</text>
+  <text x="380" y="231" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">H1 faltando em 3 páginas · Schema markup incompleto</text>
+
+  <rect x="260" y="254" width="510" height="34" rx="8" fill="#4ade80" fill-opacity="0.10" stroke="#4ade8025" stroke-width="1"/>
+  <rect x="260" y="254" width="4" height="34" rx="2" fill="#4ade80"/>
+  <text x="276" y="273" font-family="system-ui,sans-serif" font-size="12" fill="#86efac" font-weight="700">Baixo (12)</text>
+  <text x="380" y="273" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">URLs com parâmetros · Links internos para rever</text>
+
+  <!-- Metrics row -->
+  <rect x="260" y="304" width="510" height="70" rx="10" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <text x="280" y="328" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Velocidade Mobile</text>
+  <text x="280" y="348" font-family="system-ui,sans-serif" font-size="18" fill="#f59e0b" font-weight="800">68/100</text>
+
+  <text x="390" y="328" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Velocidade Desktop</text>
+  <text x="390" y="348" font-family="system-ui,sans-serif" font-size="18" fill="#4ade80" font-weight="800">91/100</text>
+
+  <text x="520" y="328" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Páginas indexadas</text>
+  <text x="520" y="348" font-family="system-ui,sans-serif" font-size="18" fill="#60a5fa" font-weight="800">142</text>
+
+  <text x="640" y="328" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Backlinks</text>
+  <text x="640" y="348" font-family="system-ui,sans-serif" font-size="18" fill="#a78bfa" font-weight="800">1.840</text>
+
+  <!-- Action plan -->
+  <rect x="30" y="375" width="740" height="52" rx="8" fill="#2563eb" fill-opacity="0.12" stroke="#2563eb30" stroke-width="1"/>
+  <text x="50" y="397" font-family="system-ui,sans-serif" font-size="12" fill="#bfdbfe" font-weight="700">Plano de Ação — Mês 1</text>
+  <text x="50" y="415" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Prioridade 1: corrigir duplicatas e meta descriptions · Prioridade 2: otimizar imagens e Core Web Vitals</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

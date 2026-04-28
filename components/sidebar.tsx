@@ -54,6 +54,7 @@ import {
   Rocket,
   GripVertical,
   Package,
+  ClipboardList,
 } from "lucide-react";
 
 const navigationConfig = {
@@ -61,26 +62,26 @@ const navigationConfig = {
     company: [
       {
         name: "Dashboard",
-        href: "/empresa/dashboard",
+        href: "/company/dashboard",
         icon: LayoutDashboard,
         current: true,
       },
       {
         name: "Projetos",
-        href: "/empresa/projetos",
+        href: "/company/projetos",
         icon: FolderOpen,
         current: false,
       },
       {
         name: "Tarefas",
-        href: "/empresa/tarefas",
+        href: "/company/tarefas",
         icon: CheckSquare,
         current: false,
       },
       {
-        name: "Faturas",
-        href: "/empresa/faturas",
-        icon: CreditCard,
+        name: "Catálogo de Produtos",
+        href: "/company/produtos",
+        icon: Package,
         current: false,
       },
     ],
@@ -279,7 +280,7 @@ const navigationConfig = {
       ],
     },
     {
-      name: "Gestão de Projetos",
+      name: "Projetos e Tarefas",
       icon: FolderOpen,
       current: false,
       subitems: [
@@ -291,9 +292,34 @@ const navigationConfig = {
           badge: "156",
         },
         {
-          name: "Produtos",
+          name: "Tarefas",
+          href: "/admin/tarefas",
+          icon: CheckSquare,
+          current: false,
+        },
+        {
+          name: "Modelo de Tarefas",
+          href: "/admin/modelo-tarefas",
+          icon: ClipboardList,
+          current: false,
+        },
+      ],
+    },
+    {
+      name: "Produtos",
+      icon: Package,
+      current: false,
+      subitems: [
+        {
+          name: "Cadastro de Produtos",
           href: "/admin/produtos",
           icon: Package,
+          current: false,
+        },
+        {
+          name: "Catálogo de Produtos",
+          href: "/admin/catalogo-produtos",
+          icon: BookOpen,
           current: false,
         },
         {
@@ -302,13 +328,13 @@ const navigationConfig = {
           icon: Calculator,
           current: false,
         },
-        {
-          name: "Campanhas",
-          href: "/admin/campanhas-indicacao",
-          icon: Share2,
-          current: false,
-        },
       ],
+    },
+    {
+      name: "Campanhas",
+      href: "/admin/campanhas-indicacao",
+      icon: Share2,
+      current: false,
     },
     {
       name: "Gameficação",
@@ -786,9 +812,11 @@ export function Sidebar() {
   // Build background image layer style (applied to an absolute div, keeping sidebar content unaffected by opacity)
   const getImageLayerStyle = (): React.CSSProperties | null => {
     if (
-      (appliedTheme.backgroundMode !== "image" && appliedTheme.backgroundMode !== "image+gradient") ||
+      (appliedTheme.backgroundMode !== "image" &&
+        appliedTheme.backgroundMode !== "image+gradient") ||
       !appliedTheme.backgroundImage
-    ) return null;
+    )
+      return null;
 
     const pos = appliedTheme.imagePosition || "center";
     const align = appliedTheme.imageAlignment || "center";
@@ -803,11 +831,12 @@ export function Sidebar() {
     // Color overlay (top layer)
     if (appliedTheme.imageOverlay && appliedTheme.imageOverlay !== "none") {
       const alpha = (appliedTheme.overlayIntensity || 30) / 100;
-      const oc = appliedTheme.imageOverlay === "blue"
-        ? `rgba(30,58,138,${alpha})`
-        : appliedTheme.imageOverlay === "purple"
-        ? `rgba(88,28,135,${alpha})`
-        : `rgba(236,72,153,${alpha})`;
+      const oc =
+        appliedTheme.imageOverlay === "blue"
+          ? `rgba(30,58,138,${alpha})`
+          : appliedTheme.imageOverlay === "purple"
+            ? `rgba(88,28,135,${alpha})`
+            : `rgba(236,72,153,${alpha})`;
       layers.push(`linear-gradient(${oc}, ${oc})`);
       sizes.push("100% 100%");
       positions.push("0 0");
@@ -859,7 +888,12 @@ export function Sidebar() {
           {(() => {
             const imgStyle = getImageLayerStyle();
             if (!imgStyle) return null;
-            return <div className="absolute inset-0 pointer-events-none" style={imgStyle} />;
+            return (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={imgStyle}
+              />
+            );
           })()}
 
           {/* Resize handle */}
@@ -1074,9 +1108,17 @@ export function Sidebar() {
                       className={cn(
                         "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                         hasActiveSubitem
-                          ? "bg-white/15 text-white backdrop-blur-sm"
+                          ? "text-white shadow-lg backdrop-blur-sm"
                           : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                       )}
+                      style={
+                        hasActiveSubitem
+                          ? {
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)",
+                            }
+                          : {}
+                      }
                     >
                       <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
                       <item.icon className="h-5 w-5 mr-3" />
@@ -1124,7 +1166,14 @@ export function Sidebar() {
                                     ? "text-white shadow-md"
                                     : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                                 )}
-                                style={isActive ? { background: "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)" } : {}}
+                                style={
+                                  isActive
+                                    ? {
+                                        background:
+                                          "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)",
+                                      }
+                                    : {}
+                                }
                               >
                                 <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
                                 <subitem.icon className="h-4 w-4 mr-3" />
@@ -1134,10 +1183,19 @@ export function Sidebar() {
                                 {subitem.badge && (
                                   <Badge
                                     variant="secondary"
-                                    className={isActive
-                                      ? "text-white text-xs font-semibold px-2 border-0"
-                                      : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"}
-                                    style={isActive ? { backgroundColor: "var(--app-brand-active, #c81a7f)" } : {}}
+                                    className={
+                                      isActive
+                                        ? "text-white text-xs font-semibold px-2 border-0"
+                                        : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"
+                                    }
+                                    style={
+                                      isActive
+                                        ? {
+                                            backgroundColor:
+                                              "var(--app-brand-active, #c81a7f)",
+                                          }
+                                        : {}
+                                    }
                                   >
                                     {subitem.badge}
                                   </Badge>
@@ -1174,10 +1232,18 @@ export function Sidebar() {
                         className={cn(
                           "flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                           isActive
-                            ? "bg-white/20 text-white shadow-lg backdrop-blur-sm"
+                            ? "text-white shadow-lg backdrop-blur-sm"
                             : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                           collapsed && "justify-center",
                         )}
+                        style={
+                          isActive
+                            ? {
+                                background:
+                                  "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)",
+                              }
+                            : {}
+                        }
                       >
                         {!collapsed && (
                           <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
@@ -1191,10 +1257,19 @@ export function Sidebar() {
                             {item.badge && (
                               <Badge
                                 variant="secondary"
-                                className={isActive
-                                  ? "text-white text-xs font-semibold px-2 border-0"
-                                  : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"}
-                                style={isActive ? { backgroundColor: "var(--app-brand-active, #c81a7f)" } : {}}
+                                className={
+                                  isActive
+                                    ? "text-white text-xs font-semibold px-2 border-0"
+                                    : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"
+                                }
+                                style={
+                                  isActive
+                                    ? {
+                                        backgroundColor:
+                                          "var(--app-brand-active, #c81a7f)",
+                                      }
+                                    : {}
+                                }
                               >
                                 {item.badge}
                               </Badge>
@@ -1236,7 +1311,15 @@ export function Sidebar() {
                 <Shield className="h-3.5 w-3.5 text-sky-300" />
               </div>
               <span className="flex-1 text-left text-xs font-semibold text-white/90 truncate capitalize">
-                {accountType === "admin" ? "Administrador" : accountType === "agencias" ? "Agência" : accountType === "empresas" ? "Empresa" : accountType === "nomades" ? "Nômade" : "Parceiro"}
+                {accountType === "admin"
+                  ? "Administrador"
+                  : accountType === "agencias"
+                    ? "Agência"
+                    : accountType === "empresas"
+                      ? "Empresa"
+                      : accountType === "nomades"
+                        ? "Nômade"
+                        : "Parceiro"}
               </span>
               <span className="h-2 w-2 rounded-full bg-sky-400 shrink-0" />
               <ChevronDown className="h-3 w-3 text-white/50 shrink-0 group-hover:text-white/80 transition-colors" />

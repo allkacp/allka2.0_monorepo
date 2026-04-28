@@ -1,427 +1,144 @@
-﻿# ALLKA 2026 — Plataforma
+﻿# Allka 2026 — Plataforma
 
-> Plataforma de gestão para empresas, nômades digitais, agências e parceiros.
-> React 18 + Vite 7 + TypeScript 5 + Tailwind CSS 4 | Backend: Express 5 + Prisma + SQLite/PostgreSQL
+Plataforma de gestão para empresas, nômades digitais, agências e parceiros.
 
----
-
-## Modos de Desenvolvimento
-
-A plataforma opera em **três modos** independentes, separados por arquivos `.env.*` e flags Vite:
-
-| Comando           | Modo        | Backend necessário? | Dados              |
-|-------------------|-------------|---------------------|--------------------|
-| `npm run dev:mock`| mock        | ❌ Não              | Mock em memória    |
-| `npm run dev`     | development | ✅ Sim (porta 3001) | Banco local (SQLite)|
-| `npm run build`   | production  | ✅ Sim (cPanel API) | Banco PostgreSQL    |
-
-### Como funciona a troca de modo
-
-Vite carrega o arquivo `.env.<mode>` correspondente:
-
-- `.env.mock` → `VITE_USE_MOCKS=true` — nenhuma chamada real é feita
-- `.env.development` → `VITE_USE_MOCKS=false` + `VITE_API_URL=http://localhost:3001/api`
-- `.env.production` → `VITE_USE_MOCKS=false` + `VITE_API_URL=https://api-dev.allka.com.vc/api`
-
-O `lib/api-client-factory.ts` verifica `import.meta.env.VITE_USE_MOCKS` e retorna o cliente correto.
-**Mocks nunca entram no bundle de produção** — Vite faz tree-shaking automático.
+**Stack**: React 18 + Vite 7 + TypeScript 5 + Tailwind CSS 4 (frontend) · Express 5 + Prisma + SQLite/PostgreSQL (backend) · Deploy em cPanel.
 
 ---
 
-## Setup Local — Passo a Passo
+## O que é
 
-### 1. Frontend
+A plataforma **unifica cinco portais** em um único sistema — cada perfil de usuário tem sua área com navegação própria, mas compartilha o mesmo layout e identidade visual.
 
-```bash
-# Instalar dependências
-npm install
+| Portal       | Rota base   | Para quem                                   |
+| ------------ | ----------- | ------------------------------------------- |
+| **Admin**    | `/admin`    | Operação interna da Allka                   |
+| **Empresa**  | `/empresa`  | Clientes que contratam produtos             |
+| **Agência**  | `/agencia`  | Agências parceiras com carteira de clientes |
+| **Parceiro** | `/parceiro` | Indicadores que recebem comissão            |
+| **Nômade**   | `/nomades`  | Freelancers que executam tarefas            |
 
-# Rodar com dados mock (não precisa de backend)
-npm run dev:mock
+O **admin** cria e gerencia produtos, empresas, projetos, nômades e configurações. Empresas contratam produtos e acompanham projetos. Nômades pegam tarefas habilitadas. Agências gerenciam sua carteira. Parceiros indicam agências e recebem comissão.
 
-# Rodar com backend local (precisa do passo 2 primeiro)
-npm run dev
+---
+
+## Arquitetura resumida
+
+```
+Frontend (React/Vite SPA)   →  Backend (Express/Prisma)  →  Banco (SQLite/Postgres)
+ dist/ em public_html/          Node app no cPanel           prisma/*.db ou Postgres
 ```
 
-### 2. Backend (opcional — apenas para modo `dev`)
+Detalhes em [docs/arquitetura.md](./docs/arquitetura.md).
 
-```bash
+---
+
+## Rodar localmente
+
+### Frontend apenas (sem backend, com mocks)
+
+```powershell
+npm install
+npm run dev:mock
+```
+
+### Frontend + backend integrados
+
+```powershell
+# terminal 1 — backend
 cd backend
 npm install
-
-# Criar banco e rodar migrações
-npx prisma db push
-
-# Popular banco com dados de exemplo
+npx prisma migrate dev
 npx tsx prisma/seed.ts
+node app.js       # sobe a API em http://localhost:3001
 
-# Iniciar servidor (porta 3001)
+# terminal 2 — frontend
+npm install
 npm run dev
 ```
 
-O backend usa o arquivo `backend/.env` (gitignored). Um arquivo `backend/.env.example` serve de template.
+### Credenciais de teste (após seed)
+
+- **Admin**: `cp@lamego.com.vc` / `123@321`
+- Outros perfis: ver `backend/prisma/seed.ts`
+
+Detalhes em [docs/arquitetura.md](./docs/arquitetura.md) e [docs/banco.md](./docs/banco.md).
 
 ---
 
-## Credenciais de Teste
+## Deploy resumido
 
-| E-mail                  | Senha      | Perfil         |
-|-------------------------|------------|----------------|
-| admin@allka.com         | admin123   | Admin          |
-| empresa@allka.com       | empresa123 | Empresa        |
-| nomade@allka.com        | nomade123  | Nômade         |
-| agencia@allka.com       | agencia123 | Agência        |
-| parceiro@allka.com      | parceiro123| Parceiro       |
+Três artefatos independentes:
 
-> No modo mock, qualquer e-mail/senha faz login como **admin** (mock sempre retorna o mesmo usuário).
+| Artefato                       | Sobe quando mudei...                                                                           | Para onde                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Frontend** (`dist/`)         | qualquer coisa em `app/`, `components/`, `contexts/`, `lib/`, `hooks/`, CSS, `.env.production` | `public_html/` no cPanel      |
+| **Backend** (`app.js`, `src/`) | qualquer coisa em `backend/src/`, `backend/app.js`, dependências                               | app Node no cPanel (restart)  |
+| **Banco** (migrations)         | `backend/prisma/schema.prisma`                                                                 | SSH + `prisma migrate deploy` |
+
+Guia completo, passo a passo e erros comuns em [docs/deploy.md](./docs/deploy.md).
 
 ---
 
-## Fluxo Tela a Tela
+## Documentação detalhada
 
-O desenvolvimento segue um processo de validação progressiva:
+A documentação técnica completa está em [`/docs`](./docs):
+
+| Documento                                                       | Conteúdo                                                                           |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [arquitetura.md](./docs/arquitetura.md)                         | Camadas, estrutura de pastas, fluxo frontend↔backend↔banco, onde editar cada parte |
+| [deploy.md](./docs/deploy.md)                                   | Deploy no cPanel — frontend, backend, banco, variáveis, erros comuns, checklists   |
+| [banco.md](./docs/banco.md)                                     | Prisma, schema, migrations, seeds, diferença local vs produção, cuidados           |
+| [produtos.md](./docs/produtos.md)                               | Produto pai, variações, tarefas, etapas, testes, briefing, catálogo, onde editar   |
+| [telas-e-funcionalidades.md](./docs/telas-e-funcionalidades.md) | Mapa das páginas de cada portal + onde editar cada uma                             |
+| [ui-e-padroes.md](./docs/ui-e-padroes.md)                       | Padrões visuais, drawers laterais, tema, componentes reutilizáveis                 |
+| [regras-de-negocio.md](./docs/regras-de-negocio.md)             | Regras importantes (perfis, produtos, financeiro, permissões, segurança)           |
+| [boas-praticas-dev.md](./docs/boas-praticas-dev.md)             | Como mexer sem quebrar, identificar impacto, documentar mudanças                   |
+| [checklist-manutencao.md](./docs/checklist-manutencao.md)       | Checklists práticas: criar feature, revisar, preparar deploy, validar pós-deploy   |
+
+---
+
+## Observações importantes para novos devs
+
+1. **Três modos de execução**: `dev:mock` (sem backend), `dev` (com backend local), `build` (produção). Flag via `.env.<modo>`.
+2. **Drawer lateral é o padrão** para criar/editar (nunca modal centralizado). Referência: `components/company-create-slide-panel.tsx`.
+3. **Tema** vem de variáveis CSS do `SidebarContext` (`--app-brand-*`) — nunca hardcodear cor.
+4. **Produtos** têm base compartilhada (no pai) e diferenciais por variação — ver [docs/produtos.md](./docs/produtos.md).
+5. **Sempre testar em `mock` e `dev`** antes de subir.
+6. **Backup do banco** antes de qualquer migration em produção.
+7. **`.env` nunca vai pro git**. Use os `.env.example` como template.
+8. **Desativar em vez de deletar** (preserva histórico).
+9. **Sem SSR** — é SPA pura. Rotas cliente dependem do `.htaccess` no cPanel.
+10. Português na UI, inglês no código.
+
+---
+
+## Estrutura do repositório (alto nível)
 
 ```
-1. dev:mock  →  valida UI, dados, fluxos localmente
-2. dev       →  valida integração real com o backend local
-3. build     →  deploy no cPanel com API de produção
-```
-
-**Regra**: uma tela só vai para cPanel depois de estar **aprovada nos dois modos locais**.
-
----
-
-## Estrutura de Pastas
-
-```
-/app              — Páginas por tipo de usuário (admin, empresa, nomades, agencia, parceiro)
-/components       — Componentes reutilizáveis compartilhados
-/contexts         — Contextos React (estado global)
-/hooks            — Hooks customizados (chamadas de API, utilitários)
-/lib              — Clientes de API, utilitários
-/dev-mocks        — Dados e cliente mock (gitignored, apenas dev)
-  /data           — Arrays de dados simulados por módulo
-  mock-api-client.ts — Cliente mock com mesma interface da API real
-/backend          — API Express + Prisma
-  /src            — Rotas, controllers, middlewares
-  /prisma         — Schema, seed, migrações
-```
-
----
-
-## Stack Técnica
-
-**Frontend**
-- React 18 + TypeScript 5
-- Vite 7 (build tool)
-- Tailwind CSS 4
-- React Router v6
-- shadcn/ui + Radix UI
-- Context API (estado global)
-- TipTap (editor rich text)
-
-**Backend**
-- Express 5
-- Prisma ORM
-- SQLite (dev) / PostgreSQL (prod)
-- JWT (autenticação)
-- Node.js 20+
-
----
-
-## Deploy (cPanel)
-
-```bash
-# 1. Build de produção
-npm run build
-
-# 2. Enviar a pasta /dist para o cPanel via FTP ou Git
-# 3. Configurar rewrite para SPA (nginx/htaccess)
-```
-
-A variável `VITE_API_URL` em `.env.production` aponta para `https://api-dev.allka.com.vc/api`.
-
----
-
-## Arquivos de Ambiente
-
-| Arquivo                | Finalidade                            | Commitado? |
-|------------------------|---------------------------------------|------------|
-| `.env.mock`            | Modo mock local                       | ✅ Sim     |
-| `.env.development`     | Modo dev com backend local            | ✅ Sim     |
-| `.env.production`      | Modo build/cPanel                     | ✅ Sim     |
-| `.env.example`         | Template documentado                  | ✅ Sim     |
-| `backend/.env`         | Credenciais do backend local          | ❌ Não     |
-| `dev-mocks/`           | Toda a pasta de mocks                 | ❌ Não     |
-
----
-
-## Sobre
-
-## Portais da Plataforma
-
-A plataforma conta com **5 tipos de usuário**, cada um com seu portal dedicado. Todos compartilham o mesmo layout (sidebar, header, footer) com o tema configurável pelo admin.
-
-| Portal | Rota base | Descrição |
-|--------|-----------|-----------|
-| Admin | `/admin/*` | Painel completo — gestão de toda a plataforma |
-| Nômade | `/nomades/*` | Freelancers — tarefas, ganhos, habilitações |
-| Empresa | `/empresa/*` | Clientes — projetos, tarefas, faturas |
-| Agência | `/agencia/*` | Agências parceiras — clientes, projetos, financeiro |
-| Parceiro | `/parceiro/*` | Parceiros de indicação — comissões, agências, saques |
-
-### Rota inicial
-```
-/  →  /admin/dashboard
+allka-2026/
+├── app/              ← páginas por portal (admin, empresa, agencia, parceiro, nomades)
+├── components/       ← componentes React reutilizáveis (+ ui/ com primitivos shadcn)
+├── contexts/         ← contextos React globais (account-type, sidebar, company, ...)
+├── lib/              ← clientes de API, engine de pricing, contextos de domínio
+├── hooks/            ← hooks customizados
+├── types/            ← tipos TS compartilhados
+├── constants/        ← constantes de negócio (tax rates, ...)
+├── public/           ← assets estáticos
+├── dev-mocks/        ← dados e cliente mock (gitignored)
+├── backend/          ← API Express + Prisma
+│   ├── src/          ← rotas, middlewares, config
+│   ├── prisma/       ← schema, migrations, seed, dev.db
+│   ├── app.js        ← entry usado em produção
+│   └── seed-*.js     ← seeds pontuais (admin, PA0186)
+├── docs/             ← documentação técnica detalhada
+├── App.tsx           ← router raiz + providers
+├── main.tsx          ← bootstrap React
+└── vite.config.ts    ← configuração do bundler
 ```
 
 ---
 
-## Rotas Ativas
+## Licença
 
-### Admin (34 rotas)
-
-| Rota | Descrição |
-|------|-----------|
-| `/admin/dashboard` | Painel principal |
-| `/admin/dashboard-config` | Configuração do dashboard |
-| `/admin/usuarios` | Gestão de usuários |
-| `/admin/usuarios-internos` | Usuários internos |
-| `/admin/users` | Users (EN) |
-| `/admin/empresas` | Gestão de empresas |
-| `/admin/nomades` | Gestão de nômades |
-| `/admin/projetos` | Gestão de projetos |
-| `/admin/produtos` | Gestão de produtos |
-| `/admin/precificacao` | Precificação |
-| `/admin/niveis` | Níveis agências |
-| `/admin/niveis-nomades` | Níveis nômades |
-| `/admin/programa-partner` | Programa de parceiros |
-| `/admin/especialidades` | Especialidades |
-| `/admin/allkademy` | Allkademy |
-| `/admin/financeiro` | Financeiro |
-| `/admin/relatorios` | Relatórios |
-| `/admin/disponibilidade` | Disponibilidade |
-| `/admin/comissionamentos` | Comissionamentos |
-| `/admin/commissions` | Commissions (EN) |
-| `/admin/campanhas-indicacao` | Campanhas de indicação |
-| `/admin/onboarding` | Onboarding |
-| `/admin/permissoes` | Permissões |
-| `/admin/permissions` | Permissions (EN) |
-| `/admin/terms` | Termos |
-| `/admin/notifications` | Notificações |
-| `/admin/clientes` | Clientes |
-| `/admin/configuracoes` | Configurações |
-| `/admin/configuracion` | Configuração (ES) |
-| `/admin/sistema` | Sistema |
-| `/admin/alertas` | Alertas do sistema |
-
-### Nômades (8 rotas)
-
-| Rota | Descrição |
-|------|-----------|
-| `/nomades/dashboard` | Painel do nômade |
-| `/nomades/tarefasdisponiveis` | Tarefas disponíveis |
-| `/nomades/minhastarefas` | Minhas tarefas |
-| `/nomades/habilitacoes` | Habilitações |
-| `/nomades/historico` | Histórico |
-| `/nomades/programa` | Programa de pontos |
-| `/nomades/ganhos` | Ganhos |
-| `/nomades/perfil` | Perfil |
-
-### Empresa (4 rotas)
-
-| Rota | Descrição |
-|------|-----------|
-| `/empresa/dashboard` | Painel da empresa |
-| `/empresa/projetos` | Projetos contratados |
-| `/empresa/tarefas` | Tarefas dos projetos |
-| `/empresa/faturas` | Faturas e pagamentos |
-
-### Agência (4 rotas)
-
-| Rota | Descrição |
-|------|-----------|
-| `/agencia/dashboard` | Painel da agência |
-| `/agencia/projetos` | Projetos dos clientes |
-| `/agencia/tarefas` | Tarefas em andamento |
-| `/agencia/financeiro` | Financeiro e MRR |
-
-### Parceiro (5 rotas)
-
-| Rota | Descrição |
-|------|-----------|
-| `/parceiro/dashboard` | Painel do parceiro |
-| `/parceiro/agencias` | Agências lideradas |
-| `/parceiro/projetos` | Projetos indicados |
-| `/parceiro/comissoes` | Extrato de comissões |
-| `/parceiro/saques` | Solicitações de saque |
-
----
-
-## Arquitetura
-
-```
-App.tsx                        → Router raiz + AccountTypeProvider
-main.tsx                       → Entry point (BrowserRouter)
-index.html                     → HTML base
-
-app/
-  admin/                       → 31 páginas do admin (page.tsx por rota)
-  nomades/                     → 8 páginas do portal nômade
-  empresa/                     → 4 páginas do portal empresa
-  agencia/                     → 4 páginas do portal agência
-  parceiro/                    → 5 páginas do portal parceiro
-  globals.css                  → Estilos globais (Tailwind)
-
-components/
-  header.tsx                   → Header contextual por tipo de usuário
-  sidebar.tsx                  → Sidebar com temas e nav por portal
-  footer.tsx                   → Rodapé
-  dev-role-switcher.tsx        → Switcher de portal para preview (dev)
-  mobile-*.tsx                 → Componentes de layout mobile
-  page-header.tsx              → Header interno de páginas
-  data-table.tsx               → Tabela de dados reutilizável
-  *-slide-panel.tsx            → Painéis laterais (companies, users, projects)
-  *-modal.tsx / *-dialog.tsx   → Diálogos
-  admin/                       → Componentes exclusivos do admin
-  modals/                      → sidebar-settings-modal
-  address/                     → address-map-picker
-  ui/                          → 30+ componentes shadcn/ui
-
-contexts/
-  account-type-context.tsx     → AccountType + setAccountType (admin/nomades/empresas/agencias/parceiro)
-  sidebar-context.tsx          → Temas, userProfile, agencyProfile
-  company-context.tsx          → Dados de empresas
-  partner-context.tsx          → Perfil, comissões, saques, agências lideradas
-  empresa-context.tsx          → Perfil, projetos, tarefas, faturas (empresa)
-  agencia-context.tsx          → Perfil, projetos, tarefas, faturas (agência)
-  settings-context.tsx         → Configurações globais
-  platform-users-context.tsx   → Usuários da plataforma
-  chat-context.tsx             → Chat em tempo real
-
-lib/
-  contexts/                    → specialty-context, pricing-context, product-context
-  api.ts / api-client.ts       → Cliente HTTP base
-  pricing-engine.ts            → Motor de precificação
-  user-permissions.ts          → Sistema de permissões
-  utils.ts                     → Helpers gerais
-
-types/                         → Definições de tipos TypeScript
-hooks/                         → use-pricing, use-toast, useAutoGeocode
-constants/                     → tax-rates
-public/                        → Assets (logos, ícones, imagens)
-```
-
----
-
-## Funcionalidades Implementadas
-
-### Sistema de Portais
-- Todos os portais compartilham o **mesmo header, sidebar e footer** do admin
-- O `AccountType` controla qual navegação aparece na sidebar
-- Troca de tipo de usuário via `setAccountType()` — atualiza header + nav instantaneamente
-- **Dev Role Switcher** — botão flutuante (canto inferior esquerdo) para trocar portal em preview
-
-### Header Contextual
-O header exibe informações específicas do portal ativo:
-- **Nome real** do usuário (da context do portal)
-- **Tipo e cor** por portal (rose=admin, amber=nômade, violet=empresa, indigo=agência, blue=parceiro)
-- **Stat pill** — métrica rápida (pontos, projetos ativos, MRR, total ganho)
-- **Wallet pill** — saldo/valor monetário clicável
-- **Dropdown** com links de navegação, configurações e sair
-
-### Sidebar com Temas
-- Temas salvos por usuário no `localStorage`
-- Suporte a gradientes customizados, imagens de fundo, overlay
-- Largura redimensionável via drag
-- Reordenação de itens via drag-and-drop
-- Collapse/expand com animação
-
-### Programa de Parceiros (5 níveis)
-- Bronze → Prata → Ouro → Platina → Diamante
-- Badge de nível no header quando logado como parceiro
-- Extrato de comissões, saques PIX, agências lideradas
-
-### Gestão Admin Completa
-- CRUD de empresas, usuários, projetos, produtos
-- Precificação dinâmica com motor de cálculo
-- Programa de níveis para agências e nômades
-- Gestão de permissões por perfil
-- Relatórios, financeiro, comissionamentos
-- Sistema de alertas, onboarding, disponibilidade
-
----
-
-## Dev Tools
-
-### Dev Role Switcher
-Botão flutuante no **canto inferior esquerdo** para trocar de portal durante desenvolvimento:
-
-| Ícone | Portal | Accounttype |
-|-------|--------|-------------|
-| 🛡️ | Administrador | admin |
-| 🧭 | Nômade | nomades |
-| 🏢 | Empresa | empresas |
-| 💼 | Agência | agencias |
-| 🤝 | Parceiro | parceiro |
-
----
-
-## Comandos
-
-```bash
-npm run dev        # Dev server (porta 8080)
-npm run build      # Build de produção
-npm run preview    # Preview do build
-npm run lint       # Linter
-```
-
----
-
-## Stack
-
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| React | 19 | UI |
-| Vite | 7 | Build tool |
-| TypeScript | 5.9 | Linguagem |
-| Tailwind CSS | 4 | Estilização |
-| React Router | 6 | Roteamento |
-| shadcn/ui | latest | Componentes base |
-| Lucide React | latest | Ícones |
-| Radix UI | latest | Primitivos acessíveis |
-
-### Tailwind v4 — diferenças importantes
-```
-bg-linear-to-br   (não bg-gradient-to-br)
-z-9999            (não z-[9999])
-max-w-27.5        (não max-w-[110px])
-shrink-0          (não flex-shrink-0)
-```
-
----
-
-## LGPD & Privacidade (Lei 13.709/2018)
-
-### Cookie Consent Banner
-- Componente: `components/cookie-consent-banner.tsx`
-- Chave localStorage: `allka_cookie_consent`
-- 4 categorias: Necessários (obrigatório), Analíticos, Funcionais, Marketing
-- Aparece na primeira visita
-
-### Term Acceptance Gate
-- Componente: `components/term-acceptance-gate.tsx`
-- Bloqueia a UI até aceite de todos os termos obrigatórios
-- Chave localStorage: `allka_terms_demo_accepted_v1`
-
----
-
-## ARQUIVOS_NAO_USADOS_NO_MOMENTO
-
-Pasta com módulos ainda não ativados. Nenhum arquivo foi deletado — apenas movido para manter o dev server rápido.
-
-Para reintegrar um módulo:
-1. Mover os arquivos de volta para `app/` ou `components/`
-2. Adicionar lazy import e `<Route>` no `App.tsx`
-3. Adicionar navegação em `components/sidebar.tsx` no `navigationConfig`
-4. Testar e commitar
+Privado — Allka by Lamego.

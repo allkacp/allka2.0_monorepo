@@ -1,20 +1,28 @@
-import { useState } from "react"
-import { useNavigate, useLocation } from "react-router-dom"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { ChevronDown, Check } from "lucide-react"
-import { useAccountType, type AccountType, type AccountSubType } from "@/contexts/account-type-context"
+import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ChevronDown, Check } from "lucide-react";
+import {
+  useAccountType,
+  type AccountType,
+  type AccountSubType,
+} from "@/contexts/account-type-context";
 
 const ROLES: Array<{
-  id: string
-  label: string
-  description: string
-  path: string
-  loginPath: string
-  prefix: string
-  color: string
-  emoji: string
-  accountType: AccountType
-  accountSubType: AccountSubType
+  id: string;
+  label: string;
+  description: string;
+  path: string;
+  loginPath: string;
+  prefix: string;
+  color: string;
+  emoji: string;
+  accountType: AccountType;
+  accountSubType: AccountSubType;
 }> = [
   {
     id: "admin",
@@ -42,11 +50,11 @@ const ROLES: Array<{
   },
   {
     id: "empresa",
-    label: "Empresa",
+    label: "Company",
     description: "Projetos, tarefas e faturas",
-    path: "/empresa/dashboard",
-    loginPath: "/empresa/login",
-    prefix: "/empresa",
+    path: "/company/dashboard",
+    loginPath: "/company/login",
+    prefix: "/company",
     color: "bg-violet-500",
     emoji: "🏢",
     accountType: "empresas",
@@ -76,26 +84,26 @@ const ROLES: Array<{
     accountType: "parceiro",
     accountSubType: null,
   },
-]
+];
 
 function getActiveRole(pathname: string) {
   // On login pages, match by loginPath
-  const byLogin = ROLES.find((r) => pathname === r.loginPath)
-  if (byLogin) return byLogin
-  return ROLES.find((r) => pathname.startsWith(r.prefix)) ?? ROLES[0]
+  const byLogin = ROLES.find((r) => pathname === r.loginPath);
+  if (byLogin) return byLogin;
+  return ROLES.find((r) => pathname.startsWith(r.prefix)) ?? ROLES[0];
 }
 
 function isOnLoginPage(pathname: string) {
-  return ROLES.some((r) => pathname === r.loginPath)
+  return ROLES.some((r) => pathname === r.loginPath);
 }
 
 export function DevRoleSwitcher() {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const { setAccountType } = useAccountType()
-  const [open, setOpen] = useState(false)
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { setAccountType } = useAccountType();
+  const [open, setOpen] = useState(false);
 
-  const active = getActiveRole(pathname)
+  const active = getActiveRole(pathname);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -130,16 +138,18 @@ export function DevRoleSwitcher() {
 
         <div className="space-y-0.5">
           {ROLES.map((role) => {
-            const isActive = active.id === role.id
+            const isActive = active.id === role.id;
             return (
               <button
                 key={role.id}
                 onClick={() => {
-                  setAccountType(role.accountType, role.accountSubType)
+                  setAccountType(role.accountType, role.accountSubType);
                   // If currently on any login page, navigate to that role's login page
                   // Otherwise navigate to the role's dashboard
-                  navigate(isOnLoginPage(pathname) ? role.loginPath : role.path)
-                  setOpen(false)
+                  navigate(
+                    isOnLoginPage(pathname) ? role.loginPath : role.path,
+                  );
+                  setOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
                   isActive
@@ -156,7 +166,9 @@ export function DevRoleSwitcher() {
                 </span>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold leading-tight">{role.label}</p>
+                  <p className="text-sm font-semibold leading-tight">
+                    {role.label}
+                  </p>
                   <p
                     className={`text-[11px] leading-tight mt-0.5 truncate ${
                       isActive ? "text-white/55" : "text-slate-400"
@@ -170,7 +182,7 @@ export function DevRoleSwitcher() {
                   <Check className="h-4 w-4 shrink-0 text-white/60" />
                 )}
               </button>
-            )
+            );
           })}
         </div>
 
@@ -181,5 +193,5 @@ export function DevRoleSwitcher() {
         </div>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

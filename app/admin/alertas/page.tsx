@@ -1092,10 +1092,10 @@ export default function AlertasPage() {
             <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Central de Atenções
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               {counts.open} aberto{counts.open !== 1 ? "s" : ""}
               {counts.pending_approval > 0 && (
                 <span className="ml-2 text-amber-600 font-medium">

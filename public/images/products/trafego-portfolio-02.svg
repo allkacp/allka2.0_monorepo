@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f5c;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <radialGradient id="ring1" cx="50%" cy="50%" r="50%">
+      <stop offset="70%" style="stop-color:#7c3aed;stop-opacity:0"/>
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0.35"/>
+    </radialGradient>
+    <radialGradient id="ring2" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" style="stop-color:#2563eb;stop-opacity:0"/>
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0.25"/>
+    </radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="200" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">SEGMENTAÇÃO DE PÚBLICO</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Mapeamento de Audiências</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Definição dos públicos-alvo, lookalikes e remarketing</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Central circle diagram -->
+  <!-- Outer ring -->
+  <circle cx="250" cy="290" r="145" fill="none" stroke="#7c3aed" stroke-width="1.5" opacity="0.3"/>
+  <circle cx="250" cy="290" r="105" fill="none" stroke="#2563eb" stroke-width="1.5" opacity="0.4"/>
+  <circle cx="250" cy="290" r="65" fill="#7c3aed" fill-opacity="0.15" stroke="#7c3aed" stroke-width="2" opacity="0.8" filter="url(#glow)"/>
+  <!-- Core -->
+  <circle cx="250" cy="290" r="36" fill="#7c3aed" fill-opacity="0.7" filter="url(#glow)"/>
+  <text x="250" y="286" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">PÚBLICO</text>
+  <text x="250" y="300" font-family="system-ui,sans-serif" font-size="10" fill="#e9d5ff" text-anchor="middle" font-weight="600">QUENTE</text>
+
+  <!-- Audience nodes -->
+  <!-- Lookalike -->
+  <circle cx="250" cy="170" r="22" fill="#2563eb" fill-opacity="0.7" filter="url(#glow)"/>
+  <text x="250" y="166" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">LOOK-</text>
+  <text x="250" y="178" font-family="system-ui,sans-serif" font-size="9" fill="#bfdbfe" text-anchor="middle">ALIKE</text>
+
+  <!-- Remarketing -->
+  <circle cx="355" cy="235" r="22" fill="#f472b6" fill-opacity="0.7" filter="url(#glow)"/>
+  <text x="355" y="231" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">REMAR-</text>
+  <text x="355" y="243" font-family="system-ui,sans-serif" font-size="9" fill="#fce7f3" text-anchor="middle">KETING</text>
+
+  <!-- Frio -->
+  <circle cx="355" cy="345" r="22" fill="#4ade80" fill-opacity="0.6" filter="url(#glow)"/>
+  <text x="355" y="341" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">PÚBLICO</text>
+  <text x="355" y="353" font-family="system-ui,sans-serif" font-size="9" fill="#d1fae5" text-anchor="middle">FRIO</text>
+
+  <!-- Interesses -->
+  <circle cx="145" cy="345" r="22" fill="#f59e0b" fill-opacity="0.7" filter="url(#glow)"/>
+  <text x="145" y="341" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">INTERES-</text>
+  <text x="145" y="353" font-family="system-ui,sans-serif" font-size="9" fill="#fef3c7" text-anchor="middle">SES</text>
+
+  <!-- Info panel right -->
+  <!-- Card 1 -->
+  <rect x="450" y="128" width="320" height="68" rx="10" fill="#ffffff0d" stroke="#7c3aed30" stroke-width="1"/>
+  <rect x="450" y="128" width="4" height="68" rx="2" fill="#7c3aed"/>
+  <text x="466" y="150" font-family="system-ui,sans-serif" font-size="12" fill="#e9d5ff" font-weight="700">Público Quente</text>
+  <text x="466" y="168" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Visitantes do site · Compradores anteriores</text>
+  <text x="466" y="184" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Tamanho estimado: 8.400 pessoas</text>
+
+  <!-- Card 2 -->
+  <rect x="450" y="208" width="320" height="68" rx="10" fill="#ffffff0d" stroke="#2563eb30" stroke-width="1"/>
+  <rect x="450" y="208" width="4" height="68" rx="2" fill="#2563eb"/>
+  <text x="466" y="230" font-family="system-ui,sans-serif" font-size="12" fill="#bfdbfe" font-weight="700">Lookalike 1%</text>
+  <text x="466" y="248" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Similar aos melhores compradores</text>
+  <text x="466" y="264" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Tamanho estimado: 210.000 pessoas</text>
+
+  <!-- Card 3 -->
+  <rect x="450" y="288" width="320" height="68" rx="10" fill="#ffffff0d" stroke="#f472b630" stroke-width="1"/>
+  <rect x="450" y="288" width="4" height="68" rx="2" fill="#f472b6"/>
+  <text x="466" y="310" font-family="system-ui,sans-serif" font-size="12" fill="#fce7f3" font-weight="700">Remarketing</text>
+  <text x="466" y="328" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Abandonaram carrinho · Viram produto</text>
+  <text x="466" y="344" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Tamanho estimado: 3.200 pessoas</text>
+
+  <!-- Card 4 -->
+  <rect x="450" y="368" width="320" height="56" rx="10" fill="#ffffff0d" stroke="#4ade8030" stroke-width="1"/>
+  <rect x="450" y="368" width="4" height="56" rx="2" fill="#4ade80"/>
+  <text x="466" y="390" font-family="system-ui,sans-serif" font-size="12" fill="#d1fae5" font-weight="700">Público Frio por Interesses</text>
+  <text x="466" y="408" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Segmentação por comportamento e dados demográficos</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

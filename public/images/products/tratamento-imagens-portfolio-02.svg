@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1e1145;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6"/>
+      <stop offset="100%" style="stop-color:#0f766e"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c81a7f"/>
+      <stop offset="100%" style="stop-color:#7b1850"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Tratamento de até 10 Imagens</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Casos de uso</text>
+
+  <!-- 4 use case cards -->
+  <!-- Card 1: Produto e-commerce -->
+  <rect x="44" y="88" width="168" height="280" rx="10" fill="rgba(255,255,255,0.04)" stroke="rgba(20,184,166,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="44" y="88" width="168" height="5" rx="3" fill="url(#teal)"/>
+  <!-- Image mockup - product photo -->
+  <rect x="54" y="103" width="148" height="140" rx="6" fill="rgba(20,184,166,0.1)"/>
+  <rect x="74" y="120" width="108" height="90" rx="4" fill="rgba(20,184,166,0.2)"/>
+  <!-- Product shape placeholder -->
+  <ellipse cx="128" cy="160" rx="30" ry="40" fill="rgba(20,184,166,0.3)"/>
+  <rect x="108" y="165" width="40" height="15" rx="4" fill="rgba(20,184,166,0.2)"/>
+  <text x="128" y="258" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle" font-weight="600">E-commerce</text>
+  <text x="128" y="272" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">fotos de produto</text>
+  <text x="128" y="288" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">fundo limpo</text>
+  <text x="128" y="304" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">alta resolução</text>
+  <rect x="64" y="320" width="128" height="24" rx="12" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="128" y="336" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Lojas online ✓</text>
+
+  <!-- Card 2: Redes sociais -->
+  <rect x="228" y="88" width="168" height="280" rx="10" fill="rgba(255,255,255,0.04)" stroke="rgba(200,26,127,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="228" y="88" width="168" height="5" rx="3" fill="url(#pink)"/>
+  <rect x="238" y="103" width="148" height="140" rx="6" fill="rgba(200,26,127,0.08)"/>
+  <!-- Social grid mockup -->
+  <rect x="248" y="112" width="45" height="45" rx="4" fill="rgba(200,26,127,0.25)"/>
+  <rect x="298" y="112" width="45" height="45" rx="4" fill="rgba(200,26,127,0.2)"/>
+  <rect x="248" y="162" width="45" height="45" rx="4" fill="rgba(200,26,127,0.2)"/>
+  <rect x="298" y="162" width="45" height="45" rx="4" fill="rgba(200,26,127,0.3)"/>
+  <text x="312" y="259" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle" font-weight="600">Redes Sociais</text>
+  <text x="312" y="273" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">grid Instagram</text>
+  <text x="312" y="289" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">cores padronizadas</text>
+  <text x="312" y="305" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">feed consistente</text>
+  <rect x="248" y="320" width="128" height="24" rx="12" fill="rgba(200,26,127,0.15)" stroke="rgba(200,26,127,0.3)" stroke-width="1"/>
+  <text x="312" y="336" font-family="system-ui,sans-serif" font-size="10" fill="#c81a7f" text-anchor="middle">Instagram/FB ✓</text>
+
+  <!-- Card 3: Fotografia corporativa -->
+  <rect x="412" y="88" width="168" height="280" rx="10" fill="rgba(255,255,255,0.04)" stroke="rgba(59,130,246,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="412" y="88" width="168" height="5" rx="3" fill="rgba(59,130,246,0.8)"/>
+  <rect x="422" y="103" width="148" height="140" rx="6" fill="rgba(59,130,246,0.08)"/>
+  <!-- Corporate photo mockup -->
+  <ellipse cx="496" cy="152" rx="28" ry="32" fill="rgba(59,130,246,0.25)"/>
+  <rect x="458" y="185" width="76" height="40" rx="4" fill="rgba(59,130,246,0.15)"/>
+  <text x="496" y="259" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle" font-weight="600">Corporativa</text>
+  <text x="496" y="273" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">fotos de equipe</text>
+  <text x="496" y="289" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">retratos profissionais</text>
+  <text x="496" y="305" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">LinkedIn / site</text>
+  <rect x="432" y="320" width="128" height="24" rx="12" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width="1"/>
+  <text x="496" y="336" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="middle">Empresas ✓</text>
+
+  <!-- Card 4: Evento/moda -->
+  <rect x="596" y="88" width="160" height="280" rx="10" fill="rgba(255,255,255,0.04)" stroke="rgba(251,191,36,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="596" y="88" width="160" height="5" rx="3" fill="rgba(251,191,36,0.8)"/>
+  <rect x="606" y="103" width="140" height="140" rx="6" fill="rgba(251,191,36,0.06)"/>
+  <!-- Fashion/event photo mockup -->
+  <rect x="626" y="118" width="100" height="110" rx="4" fill="rgba(251,191,36,0.12)"/>
+  <ellipse cx="676" cy="148" rx="20" ry="25" fill="rgba(251,191,36,0.2)"/>
+  <rect x="656" y="174" width="40" height="40" rx="4" fill="rgba(251,191,36,0.15)"/>
+  <text x="676" y="259" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle" font-weight="600">Moda / Evento</text>
+  <text x="676" y="273" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">looks e produtos</text>
+  <text x="676" y="289" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">edição artística</text>
+  <text x="676" y="305" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">identidade visual</text>
+  <rect x="616" y="320" width="120" height="24" rx="12" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.25)" stroke-width="1"/>
+  <text x="676" y="336" font-family="system-ui,sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">Marcas ✓</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Tratamento de Imagens — allka</text>
+</svg>

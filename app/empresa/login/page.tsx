@@ -1,10 +1,13 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 55%, #c81a7f 100%)",
-  defaultEmail: "empresa@allka.com.vc",
+  defaultEmail: "empresa@allka.com",
   redirectPath: "/empresa/dashboard",
-  devUser: { email: "maria.oliveira@starbucks.com.br" },
+  devUser: { email: "empresa@allka.com" },
   translations: {
     pt: {
       tag: "Allka Company",
@@ -15,7 +18,8 @@ const config: LoginRoleConfig = {
         { text: "UMA PESSOA", outlined: true },
         { text: "SEQUER.", outlined: true },
       ],
-      subtext: "Acesse uma rede de profissionais qualificados para seus projetos de marketing. Prazo garantido, preço fixo.",
+      subtext:
+        "Acesse uma rede de profissionais qualificados para seus projetos de marketing. Prazo garantido, preço fixo.",
       stats: [
         { value: "200+", label: "Empresas parceiras" },
         { value: "5k+", label: "Projetos concluídos" },
@@ -31,7 +35,8 @@ const config: LoginRoleConfig = {
         { text: "A SINGLE", outlined: true },
         { text: "PERSON.", outlined: true },
       ],
-      subtext: "Access a network of certified professionals for your marketing projects. Guaranteed deadlines, fixed pricing.",
+      subtext:
+        "Access a network of certified professionals for your marketing projects. Guaranteed deadlines, fixed pricing.",
       stats: [
         { value: "200+", label: "Partner companies" },
         { value: "5k+", label: "Projects completed" },
@@ -47,7 +52,8 @@ const config: LoginRoleConfig = {
         { text: "A UNA SOLA", outlined: true },
         { text: "PERSONA.", outlined: true },
       ],
-      subtext: "Accede a una red de profesionales certificados para tus proyectos de marketing. Plazos garantizados, precio fijo.",
+      subtext:
+        "Accede a una red de profesionales certificados para tus proyectos de marketing. Plazos garantizados, precio fijo.",
       stats: [
         { value: "200+", label: "Empresas socias" },
         { value: "5k+", label: "Proyectos completados" },
@@ -63,7 +69,8 @@ const config: LoginRoleConfig = {
         { text: "招聘", outlined: true },
         { text: "任何人。", outlined: true },
       ],
-      subtext: "访问经过认证的专业人士网络，用于您的营销项目。保证截止日期，固定定价。",
+      subtext:
+        "访问经过认证的专业人士网络，用于您的营销项目。保证截止日期，固定定价。",
       stats: [
         { value: "200+", label: "合作企业" },
         { value: "5k+", label: "已完成项目" },
@@ -71,8 +78,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function EmpresaLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }

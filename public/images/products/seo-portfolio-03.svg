@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0c2340;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1a4a7a;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="650" cy="380" r="110" fill="#4ade80" fill-opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="185" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">ESTRATÉGIA DE PALAVRAS-CHAVE</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Mapa de Palavras-Chave</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Distribuição por intenção de busca e dificuldade</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Intent groups -->
+  <!-- Informacional -->
+  <rect x="30" y="132" width="226" height="200" rx="12" fill="#2563eb" fill-opacity="0.10" stroke="#2563eb30" stroke-width="1.5"/>
+  <text x="143" y="156" font-family="system-ui,sans-serif" font-size="13" fill="#60a5fa" font-weight="700" text-anchor="middle">INFORMACIONAL</text>
+  <text x="143" y="172" font-family="system-ui,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">Atrair e educar</text>
+
+  <rect x="46" y="182" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="52" y="197" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">o que é gestão de tráfego</text>
+  <text x="226" y="197" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="end">9.900</text>
+
+  <rect x="46" y="210" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="52" y="225" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">como funciona seo</text>
+  <text x="226" y="225" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="end">6.600</text>
+
+  <rect x="46" y="238" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="52" y="253" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">tipos de anúncio no facebook</text>
+  <text x="226" y="253" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="end">4.400</text>
+
+  <rect x="46" y="266" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="52" y="281" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">melhor estratégia de conteúdo</text>
+  <text x="226" y="281" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="end">2.900</text>
+
+  <rect x="46" y="294" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="52" y="309" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">link building o que é</text>
+  <text x="226" y="309" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="end">1.600</text>
+
+  <!-- Navegacional -->
+  <rect x="272" y="132" width="226" height="200" rx="12" fill="#7c3aed" fill-opacity="0.10" stroke="#7c3aed30" stroke-width="1.5"/>
+  <text x="385" y="156" font-family="system-ui,sans-serif" font-size="13" fill="#a78bfa" font-weight="700" text-anchor="middle">COMERCIAL</text>
+  <text x="385" y="172" font-family="system-ui,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">Comparar e considerar</text>
+
+  <rect x="288" y="182" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="294" y="197" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">melhor agência de seo</text>
+  <text x="468" y="197" font-family="system-ui,sans-serif" font-size="10" fill="#a78bfa" text-anchor="end">5.400</text>
+
+  <rect x="288" y="210" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="294" y="225" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">agência tráfego pago preço</text>
+  <text x="468" y="225" font-family="system-ui,sans-serif" font-size="10" fill="#a78bfa" text-anchor="end">3.600</text>
+
+  <rect x="288" y="238" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="294" y="253" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">contratar gestor de tráfego</text>
+  <text x="468" y="253" font-family="system-ui,sans-serif" font-size="10" fill="#a78bfa" text-anchor="end">2.100</text>
+
+  <rect x="288" y="266" width="194" height="22" rx="5" fill="#ffffff0a"/>
+  <text x="294" y="281" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">consultoria seo vale a pena</text>
+  <text x="468" y="281" font-family="system-ui,sans-serif" font-size="10" fill="#a78bfa" text-anchor="end">1.300</text>
+
+  <!-- Transacional -->
+  <rect x="514" y="132" width="256" height="200" rx="12" fill="#4ade80" fill-opacity="0.08" stroke="#4ade8030" stroke-width="1.5"/>
+  <text x="642" y="156" font-family="system-ui,sans-serif" font-size="13" fill="#4ade80" font-weight="700" text-anchor="middle">TRANSACIONAL</text>
+  <text x="642" y="172" font-family="system-ui,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">Converter</text>
+
+  <rect x="530" y="182" width="224" height="22" rx="5" fill="#4ade80" fill-opacity="0.08"/>
+  <text x="536" y="197" font-family="system-ui,sans-serif" font-size="11" fill="#f9fafb">contratar agência de marketing</text>
+  <text x="740" y="197" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="end">8.100</text>
+
+  <rect x="530" y="210" width="224" height="22" rx="5" fill="#4ade80" fill-opacity="0.08"/>
+  <text x="536" y="225" font-family="system-ui,sans-serif" font-size="11" fill="#f9fafb">agência de tráfego pago</text>
+  <text x="740" y="225" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="end">5.400</text>
+
+  <rect x="530" y="238" width="224" height="22" rx="5" fill="#4ade80" fill-opacity="0.08"/>
+  <text x="536" y="253" font-family="system-ui,sans-serif" font-size="11" fill="#f9fafb">serviço de seo mensal</text>
+  <text x="740" y="253" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="end">2.400</text>
+
+  <rect x="530" y="266" width="224" height="22" rx="5" fill="#4ade80" fill-opacity="0.08"/>
+  <text x="536" y="281" font-family="system-ui,sans-serif" font-size="11" fill="#f9fafb">consultoria seo contratar</text>
+  <text x="740" y="281" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="end">880</text>
+
+  <!-- Stats row -->
+  <rect x="30" y="350" width="226" height="56" rx="8" fill="#ffffff08" stroke="#ffffff10" stroke-width="1"/>
+  <text x="143" y="372" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Total mapeado</text>
+  <text x="143" y="394" font-family="system-ui,sans-serif" font-size="20" fill="#60a5fa" font-weight="800" text-anchor="middle">34 KWs</text>
+
+  <rect x="272" y="350" width="226" height="56" rx="8" fill="#ffffff08" stroke="#ffffff10" stroke-width="1"/>
+  <text x="385" y="372" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Volume total/mês</text>
+  <text x="385" y="394" font-family="system-ui,sans-serif" font-size="20" fill="#a78bfa" font-weight="800" text-anchor="middle">64.700</text>
+
+  <rect x="514" y="350" width="256" height="56" rx="8" fill="#ffffff08" stroke="#ffffff10" stroke-width="1"/>
+  <text x="642" y="372" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Dificuldade média</text>
+  <text x="642" y="394" font-family="system-ui,sans-serif" font-size="20" fill="#4ade80" font-weight="800" text-anchor="middle">KD 38 / 100</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

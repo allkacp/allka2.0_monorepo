@@ -15,6 +15,12 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 8080,
     open: '/admin/dashboard',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
     watch: {
       ignored: ['**/ARQUIVOS_NAO_USADOS_NO_MOMENTO/**', '**/node_modules/**', '**/.git/**'],
     },

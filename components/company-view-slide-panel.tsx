@@ -32,6 +32,7 @@ type CompanyStatus = "active" | "inactive" | "pending"
 
 interface Company {
   id: number
+  _apiId?: string
   name: string
   legal_name?: string
   type: CompanyType
@@ -679,9 +680,10 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
   ]
 
   // Real users linked to this company (via company_associations or company_id)
+  const companyApiId = company._apiId ?? String(company.id)
   const companyUsers = contextUsers.filter(u =>
-    u.company_associations?.some(a => a.company_id === company.id) ||
-    u.company_id === company.id
+    u.company_associations?.some(a => String(a.company_id) === companyApiId) ||
+    u.company_id === companyApiId
   )
 
   // Sort by last_login descending and take up to 5 for the recents card
@@ -919,68 +921,68 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
           )}
 
           {/* Content Wrapper */}
-          <div className="flex-1 flex flex-col bg-white dark:bg-background overflow-hidden">
+          <div className="flex-1 flex flex-col bg-slate-200 dark:bg-background overflow-hidden">
             {/* Content with Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
+            <div className="flex-shrink-0 bg-slate-200 dark:bg-background px-[50px] pt-2 pb-2 border-b border-slate-300 dark:border-slate-700 overflow-x-auto">
               <TabsList className="grid w-max grid-cols-10 gap-1 bg-transparent p-0 h-auto">
                 <TabsTrigger
                   value="visao-geral"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Visão Geral
                 </TabsTrigger>
                 <TabsTrigger
                   value="dados"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Dados
                 </TabsTrigger>
                 <TabsTrigger
                   value="usuarios"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Usuários
                 </TabsTrigger>
                 <TabsTrigger
                   value="redes-sociais"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Redes Sociais
                 </TabsTrigger>
                 <TabsTrigger
                   value="plano"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Plano
                 </TabsTrigger>
                 <TabsTrigger
                   value="termos"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Termos
                 </TabsTrigger>
                 <TabsTrigger
                   value="projetos"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Projetos
                 </TabsTrigger>
                 <TabsTrigger
                   value="tarefas"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Tarefas
                 </TabsTrigger>
                 <TabsTrigger
                   value="log"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   Log
                 </TabsTrigger>
                 <TabsTrigger
                   value="lgpd"
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                 >
                   LGPD
                 </TabsTrigger>
@@ -988,208 +990,161 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
             </div>
 
             {/* Overview Tab */}
-            <TabsContent value="visao-geral" className="flex-1 overflow-y-auto bg-slate-200">
-              <div className="px-[50px] py-[50px] pb-[80px] space-y-4">
-                {/* Expandir toggle */}
-                <div className="flex items-center justify-end pb-2">
-                  <button
-                    onClick={() => {
-                      const allOpen = VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a))
-                      setVisaoOpenAccordions(allOpen ? [] : VISAO_ALL_ACCORDIONS)
-                    }}
-                    className="flex items-center gap-2 group"
-                    title={VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "Fechar todos" : "Abrir todos"}
-                  >
-                    <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
-                      {VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
-                    </span>
-                    <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
-                      VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"
-                    }`}>
-                      <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                        VISAO_ALL_ACCORDIONS.every(a => visaoOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"
-                      }`} />
-                    </div>
-                  </button>
-                </div>
-                {/* KPI Cards Row */}
+            <TabsContent value="visao-geral" className="flex-1 overflow-y-auto bg-slate-200 dark:bg-background">
+              <div className="px-[50px] py-5 pb-16 space-y-4">
+
+                {/* KPI Cards — gradient style matching admin/usuarios */}
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Card 1: Total de tarefas contratadas */}
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">Tarefas contratadas</span>
-                        <div className="text-2xl font-bold text-slate-900 mt-1">1.247</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">Vinculadas à empresa</div>
+                  <div className="relative rounded-xl overflow-hidden bg-linear-to-br from-blue-500 to-blue-700 border border-blue-300/70 shadow-md">
+                    <div className="px-3 pt-2 pb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight">Tarefas contratadas</p>
+                        <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                          <TrendingUp className="h-3 w-3 text-white" />
+                        </div>
                       </div>
-                      <div className="p-1.5 bg-white rounded-md border border-blue-200 flex-shrink-0">
-                        <TrendingUp className="h-4 w-4 text-blue-600" />
-                      </div>
+                      <p className="text-2xl font-bold text-white leading-none">1.247</p>
+                      <p className="text-[10px] text-white/60 mt-1">Vinculadas à empresa</p>
                     </div>
                   </div>
 
-                  {/* Card 2: Pontuação total das tarefas */}
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">Pontuação total</span>
-                        <div className="text-2xl font-bold text-slate-900 mt-1">8.430 pts</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">Soma dos projetos</div>
+                  <div className="relative rounded-xl overflow-hidden bg-linear-to-br from-violet-500 to-purple-700 border border-violet-300/70 shadow-md">
+                    <div className="px-3 pt-2 pb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight">Pontuação total</p>
+                        <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                          <Star className="h-3 w-3 text-white" />
+                        </div>
                       </div>
-                      <div className="p-1.5 bg-white rounded-md border border-purple-200 flex-shrink-0">
-                        <Star className="h-4 w-4 text-purple-600" />
-                      </div>
+                      <p className="text-2xl font-bold text-white leading-none">8.430 pts</p>
+                      <p className="text-[10px] text-white/60 mt-1">Soma dos projetos</p>
                     </div>
                   </div>
 
-                  {/* Card 3: Economia gerada */}
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">Economia gerada</span>
-                        <div className="text-2xl font-bold text-slate-900 mt-1">R$ 124.500</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">Economia acumulada</div>
+                  <div className="relative rounded-xl overflow-hidden bg-linear-to-br from-emerald-500 to-teal-600 border border-emerald-300/70 shadow-md">
+                    <div className="px-3 pt-2 pb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight">Economia gerada</p>
+                        <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                          <Wallet className="h-3 w-3 text-white" />
+                        </div>
                       </div>
-                      <div className="p-1.5 bg-white rounded-md border border-green-200 flex-shrink-0">
-                        <Wallet className="h-4 w-4 text-green-600" />
-                      </div>
+                      <p className="text-2xl font-bold text-white leading-none">R$ 124.500</p>
+                      <p className="text-[10px] text-white/60 mt-1">Economia acumulada</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Seção de Estatísticas - Mesmo padrão de admin/usuarios */}
-                <Accordion type="multiple" value={visaoOpenAccordions.filter(a => a === "estatisticas")} onValueChange={(vals) => setVisaoOpenAccordions(prev => [...prev.filter(a => a !== "estatisticas"), ...vals])} className="space-y-3">
-                  <AccordionItem value="estatisticas" className="border border-slate-200 rounded-lg">
-                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
-                      <div className="flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4 text-slate-600" />
-                        <span className="font-semibold text-slate-900">Estatísticas</span>
+                {/* Mini stats row */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="border-t border-slate-100 pb-0">
-                      <div className="px-3 py-3 rounded-b-lg overflow-hidden">
-                      <div className="grid grid-cols-3 gap-2">
-                        <Card className="p-2 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-900/10 border-emerald-200/50 dark:border-emerald-800/30 shadow-none">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                            <span className="text-[10px] font-medium text-emerald-900 dark:text-emerald-300">Crescimento</span>
-                          </div>
-                          <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                            {company.status === "active" && company.mau > 0
-                              ? `${((company.dau / company.mau) * 100).toFixed(1)}%`
-                              : ""}
-                          </p>
-                        </Card>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total de usuários</p>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{companyUsers.length || company.users_count}</p>
+                  </div>
 
-                        <Card className="p-2 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200/50 dark:border-blue-800/30 shadow-none">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Users className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                            <span className="text-[10px] font-medium text-blue-900 dark:text-blue-300">Usuários</span>
-                          </div>
-                          <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{company.users_count}</p>
-                        </Card>
-
-                        <Card className="p-2 bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/20 dark:to-violet-900/10 border-violet-200/50 dark:border-violet-800/30 shadow-none">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Clock className="h-3 w-3 text-violet-600 dark:text-violet-400" />
-                            <span className="text-[10px] font-medium text-violet-900 dark:text-violet-300">Ativos 90d</span>
-                          </div>
-                          <p className="text-sm font-bold text-violet-700 dark:text-violet-300">
-                            {company.mau > 0 ? Math.round(company.mau / 3) : 0}
-                          </p>
-                        </Card>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="p-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                        <Activity className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                       </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Online agora</p>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{onlineCount}</p>
+                  </div>
 
-                {/* Status de Usuários Row */}
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="p-1.5 bg-violet-50 dark:bg-violet-900/20 rounded-lg">
+                        <CheckCircle className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Projetos</p>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{company.projects_count}</p>
+                  </div>
+                </div>
+
+                {/* Últimos acessos + Módulos mais usados */}
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Card: Últimos usuários que acessaram */}
-                  <div className="bg-white rounded-lg p-3 border border-slate-200">
-                    <h3 className="text-xs font-semibold text-slate-700 mb-2">Últimos acessos</h3>
-                    <div className="space-y-2">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                        <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Últimos acessos</h3>
+                    </div>
+                    <div className="space-y-2.5">
                       {recentUsers.length > 0 ? (
                         recentUsers.map((user) => (
-                          <div key={user.id} className="flex items-center gap-2 pb-1.5 border-b border-slate-100 last:border-0 last:pb-0">
-                            <div className="relative flex-shrink-0">
-                              <Avatar className="h-6 w-6">
-                                <AvatarFallback className="text-[10px] bg-blue-100 text-blue-700">{user.avatar}</AvatarFallback>
+                          <div key={user.id} className="flex items-center gap-2.5">
+                            <div className="relative shrink-0">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{user.avatar}</AvatarFallback>
                               </Avatar>
                               {user.isOnline && (
-                                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 border border-white" />
+                                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-800" />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-slate-900 truncate">{user.name}</p>
-                              <p className="text-[10px] text-slate-500">{user.time}</p>
+                              <p className="text-xs font-medium text-slate-900 dark:text-white truncate">{user.name}</p>
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">{user.time}</p>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-slate-500 py-2 text-center">Nenhum usuário cadastrado</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 py-3 text-center">Nenhum usuário cadastrado</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Card: Usuários online agora */}
-                  <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col items-center justify-center">
-                    <h3 className="text-xs font-semibold text-slate-700 mb-2 w-full">Online agora</h3>
-                    <div className="flex flex-col items-center justify-center flex-1">
-                      <div className="text-4xl font-bold text-blue-600">{onlineCount}</div>
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        de {companyUsers.length} usuário{companyUsers.length !== 1 ? "s" : ""}
-                      </p>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                        <BarChart3 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Módulos mais usados</h3>
                     </div>
+                    <ResponsiveContainer width="100%" height={155}>
+                      <BarChart data={moduleUsageData} layout="vertical" margin={{ top: 0, right: 16, left: 68, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="nome" type="category" tick={{ fontSize: 9 }} width={64} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "none", borderRadius: "4px", color: "#fff", fontSize: "11px" }} />
+                        <Bar dataKey="uso" fill="#3b82f6" radius={2} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Módulos Mais Usados - Full Width Chart */}
-                <div className="bg-white rounded-lg p-3 border border-slate-200">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-2">Módulos mais usados</h4>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <BarChart data={moduleUsageData} layout="vertical" margin={{ top: 0, right: 30, left: 80, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} />
-                      <YAxis dataKey="nome" type="category" tick={{ fontSize: 9 }} width={75} />
-                      <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "none", borderRadius: "4px", color: "#fff", fontSize: "11px" }} />
-                      <Bar dataKey="uso" fill="#3b82f6" radius={2} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                {/* Informações Principais */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <Building2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Informações Principais</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+                    {[
+                      { label: "ID",       value: <code className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-[10px] font-mono text-slate-700 dark:text-slate-300">{company.id}</code> },
+                      { label: "Tipo",     value: <Badge className="bg-blue-600 text-[10px] px-1.5 py-0">{getTypeLabel(company.type)}</Badge> },
+                      { label: "Status",   value: <Badge variant={getStatusColor(company.status)} className="text-[10px] px-1.5 py-0">{getStatusLabel(company.status)}</Badge> },
+                      { label: "Cadastro", value: <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{new Date(company.created_at).toLocaleDateString("pt-BR")}</span> },
+                      { label: "E-mail",   value: <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate max-w-[180px] block">{company.email}</span> },
+                      { label: "Telefone", value: <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{company.phone || "—"}</span> },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+                        {value}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Informações Principais - Accordion */}
-                <Accordion type="multiple" value={visaoOpenAccordions.filter(a => a === "info-principais")} onValueChange={(vals) => setVisaoOpenAccordions(prev => [...prev.filter(a => a !== "info-principais"), ...vals])} className="space-y-3">
-                  <AccordionItem value="info-principais" className="border border-slate-200 rounded-lg">
-                    <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-blue-600" />
-                        <span className="font-semibold text-slate-900">Informações Principais</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-3 py-2 border-t border-slate-100 pb-0">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">ID</span>
-                          <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700">{company.id}</code>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">Tipo</span>
-                          <Badge className="bg-blue-600 text-[10px] px-1.5 py-0">{getTypeLabel(company.type)}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">Status</span>
-                          <Badge variant={getStatusColor(company.status)} className="text-[10px] px-1.5 py-0">{getStatusLabel(company.status)}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">Cadastro</span>
-                          <span className="text-[10px] font-medium text-slate-700">{new Date(company.created_at).toLocaleDateString("pt-BR")}</span>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
               </div>
             </TabsContent>
 
@@ -1650,7 +1605,7 @@ export function CompanyViewSlidePanel({ open, onClose, company, onCompanyUpdate 
 
             {/* Usuários Tab */}
             <TabsContent value="usuarios" className="flex-1 overflow-y-auto bg-slate-200 pb-[80px]">
-              <CompanyUsersTab companyId={company.id} companyName={company.name} />
+              <CompanyUsersTab companyId={company._apiId ?? company.id} companyName={company.name} />
             </TabsContent>
 
             {/* Redes Sociais Tab */}
@@ -3377,4 +3332,5 @@ function CompanyLgpdTab({ company }: { company: any }) {
     </TabsContent>
   )
 }
+
 

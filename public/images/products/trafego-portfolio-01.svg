@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f5c;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1a2a6f;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="bar1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f472b6"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
+    </linearGradient>
+    <filter id="glow2"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="shadow2"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.4"/></filter>
+  </defs>
+
+  <!-- BG -->
+  <rect width="800" height="450" fill="url(#bg1)"/>
+  <!-- Subtle grid lines -->
+  <line x1="0" y1="112" x2="800" y2="112" stroke="#ffffff08" stroke-width="1"/>
+  <line x1="0" y1="224" x2="800" y2="224" stroke="#ffffff08" stroke-width="1"/>
+  <line x1="0" y1="336" x2="800" y2="336" stroke="#ffffff08" stroke-width="1"/>
+
+  <!-- Header label -->
+  <rect x="30" y="22" width="220" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">RELATÓRIO DE PERFORMANCE</text>
+
+  <!-- Title -->
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Resultado do Mês — Abril</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Campanhas: Meta Ads + Google Ads · Cliente: Loja Fictícia</text>
+
+  <!-- Divider -->
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- KPI cards row -->
+  <!-- Card 1: Investimento -->
+  <rect x="30" y="128" width="168" height="80" rx="10" fill="#ffffff0d" stroke="#ffffff15" stroke-width="1" filter="url(#shadow2)"/>
+  <text x="42" y="150" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.8">INVESTIMENTO</text>
+  <text x="42" y="174" font-family="system-ui,sans-serif" font-size="22" fill="#60a5fa" font-weight="800">R$ 3.200</text>
+  <text x="42" y="196" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80">↑ dentro do orçamento</text>
+
+  <!-- Card 2: Cliques -->
+  <rect x="212" y="128" width="168" height="80" rx="10" fill="#ffffff0d" stroke="#ffffff15" stroke-width="1" filter="url(#shadow2)"/>
+  <text x="224" y="150" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.8">CLIQUES TOTAIS</text>
+  <text x="224" y="174" font-family="system-ui,sans-serif" font-size="22" fill="#f472b6" font-weight="800">14.830</text>
+  <text x="224" y="196" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80">↑ +22% vs. mês anterior</text>
+
+  <!-- Card 3: Conversões -->
+  <rect x="394" y="128" width="168" height="80" rx="10" fill="#ffffff0d" stroke="#ffffff15" stroke-width="1" filter="url(#shadow2)"/>
+  <text x="406" y="150" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.8">CONVERSÕES</text>
+  <text x="406" y="174" font-family="system-ui,sans-serif" font-size="22" fill="#a78bfa" font-weight="800">312</text>
+  <text x="406" y="196" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80">↑ +18% vs. mês anterior</text>
+
+  <!-- Card 4: ROAS -->
+  <rect x="576" y="128" width="168" height="80" rx="10" fill="#ffffff0d" stroke="#ffffff15" stroke-width="1" filter="url(#shadow2)"/>
+  <text x="588" y="150" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" font-weight="600" letter-spacing="0.8">ROAS MÉDIO</text>
+  <text x="588" y="174" font-family="system-ui,sans-serif" font-size="22" fill="#4ade80" font-weight="800">4,8×</text>
+  <text x="588" y="196" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80">↑ meta superada em 20%</text>
+
+  <!-- Bar chart section -->
+  <text x="30" y="238" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="0.5">CLIQUES POR SEMANA</text>
+
+  <!-- Week bars -->
+  <!-- Semana 1 -->
+  <rect x="60" y="330" width="100" height="0" fill="none"/>
+  <rect x="60" y="296" width="100" height="66" rx="6" fill="url(#bar2)" opacity="0.9" filter="url(#glow2)"/>
+  <text x="110" y="282" font-family="system-ui,sans-serif" font-size="12" fill="#60a5fa" font-weight="700" text-anchor="middle">3.420</text>
+  <text x="110" y="378" font-family="system-ui,sans-serif" font-size="11" fill="#64748b" text-anchor="middle">Sem. 1</text>
+
+  <rect x="210" y="280" width="100" height="82" rx="6" fill="url(#bar1)" opacity="0.9" filter="url(#glow2)"/>
+  <text x="260" y="266" font-family="system-ui,sans-serif" font-size="12" fill="#f472b6" font-weight="700" text-anchor="middle">4.180</text>
+  <text x="260" y="378" font-family="system-ui,sans-serif" font-size="11" fill="#64748b" text-anchor="middle">Sem. 2</text>
+
+  <rect x="360" y="272" width="100" height="90" rx="6" fill="url(#bar2)" opacity="0.9" filter="url(#glow2)"/>
+  <text x="410" y="258" font-family="system-ui,sans-serif" font-size="12" fill="#60a5fa" font-weight="700" text-anchor="middle">4.610</text>
+  <text x="410" y="378" font-family="system-ui,sans-serif" font-size="11" fill="#64748b" text-anchor="middle">Sem. 3</text>
+
+  <rect x="510" y="260" width="100" height="102" rx="6" fill="url(#bar1)" opacity="0.9" filter="url(#glow2)"/>
+  <text x="560" y="246" font-family="system-ui,sans-serif" font-size="12" fill="#f472b6" font-weight="700" text-anchor="middle">5.210</text>
+  <text x="560" y="378" font-family="system-ui,sans-serif" font-size="11" fill="#64748b" text-anchor="middle">Sem. 4</text>
+
+  <!-- Baseline -->
+  <line x1="30" y1="362" x2="770" y2="362" stroke="#ffffff10" stroke-width="1"/>
+
+  <!-- Stamp: Temporário -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

@@ -22,6 +22,7 @@ import partnersRouter from "./routes/partners";
 import campaignsRouter from "./routes/campaigns";
 import permissionsRouter from "./routes/permissions";
 import reportsRouter from "./routes/reports";
+import levelsRouter from "./routes/levels";
 import { errorHandler } from "./middleware/error";
 
 const app = express();
@@ -80,6 +81,7 @@ app.use("/api/partners", partnersRouter);
 app.use("/api/campaigns", campaignsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/levels", levelsRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

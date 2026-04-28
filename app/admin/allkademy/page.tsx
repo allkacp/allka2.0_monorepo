@@ -202,7 +202,7 @@ export default function AdminAllkademyPage() {
       field: "instructor",
       headerName: "Instrutor",
       width: 150,
-      render: (course: Course) => course.instructor.name,
+      render: (course: Course) => course.instructor?.name,
     },
     {
       field: "level",
@@ -232,7 +232,7 @@ export default function AdminAllkademyPage() {
       field: "enrollments",
       headerName: "Inscrições",
       width: 100,
-      render: (course: Course) => course.stats.total_enrollments,
+      render: (course: Course) => course.stats?.total_enrollments,
     },
     {
       field: "rating",
@@ -241,7 +241,7 @@ export default function AdminAllkademyPage() {
       render: (course: Course) => (
         <div className="flex items-center">
           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
-          {course.stats.average_rating}
+          {course.stats?.average_rating}
         </div>
       ),
     },
@@ -402,7 +402,7 @@ export default function AdminAllkademyPage() {
                           {course.description}
                         </CardDescription>
                         <div className="flex items-center gap-2 mt-2">
-                          <Badge>{course.category.name}</Badge>
+                          <Badge>{course.category?.name ?? "—"}</Badge>
                           <Badge variant="outline">{course.level}</Badge>
                           <Badge variant="secondary">
                             <Clock className="h-3 w-3 mr-1" />
@@ -471,7 +471,7 @@ export default function AdminAllkademyPage() {
                                 <div>
                                   <Label htmlFor="category">Categoria</Label>
                                   <Select
-                                    defaultValue={selectedCourse?.category.id.toString()}
+                                    defaultValue={selectedCourse?.category?.id?.toString()}
                                   >
                                     <SelectTrigger>
                                       <SelectValue placeholder="Selecione uma categoria" />
@@ -480,7 +480,7 @@ export default function AdminAllkademyPage() {
                                       {categories.map((category) => (
                                         <SelectItem
                                           key={category.id}
-                                          value={category.id.toString()}
+                                          value={category.id?.toString() ?? ""}
                                         >
                                           {category.icon} {category.name}
                                         </SelectItem>
@@ -519,7 +519,7 @@ export default function AdminAllkademyPage() {
                                     id="duration"
                                     type="number"
                                     placeholder="120"
-                                    defaultValue={selectedCourse?.duration_minutes.toString()}
+                                    defaultValue={selectedCourse?.duration_minutes?.toString()}
                                   />
                                 </div>
 
@@ -529,7 +529,7 @@ export default function AdminAllkademyPage() {
                                     id="price"
                                     type="number"
                                     placeholder="299"
-                                    defaultValue={selectedCourse?.price.toString()}
+                                    defaultValue={selectedCourse?.price?.toString()}
                                   />
                                 </div>
                               </div>
@@ -563,7 +563,7 @@ export default function AdminAllkademyPage() {
                                 <Input
                                   id="instructor"
                                   placeholder="Nome do instrutor"
-                                  defaultValue={selectedCourse?.instructor.name}
+                                  defaultValue={selectedCourse?.instructor?.name}
                                 />
                               </div>
 
@@ -574,7 +574,7 @@ export default function AdminAllkademyPage() {
                                 <Textarea
                                   id="instructor_bio"
                                   placeholder="Experiência e qualificações..."
-                                  defaultValue={selectedCourse?.instructor.bio}
+                                  defaultValue={selectedCourse?.instructor?.bio}
                                 />
                               </div>
 
@@ -584,7 +584,7 @@ export default function AdminAllkademyPage() {
                                   <div className="flex items-center space-x-2">
                                     <Switch
                                       id="req_empresas"
-                                      defaultChecked={selectedCourse?.access_requirements.some(
+                                      defaultChecked={selectedCourse?.access_requirements?.some(
                                         (req) => req.value === "empresas",
                                       )}
                                     />
@@ -595,7 +595,7 @@ export default function AdminAllkademyPage() {
                                   <div className="flex items-center space-x-2">
                                     <Switch
                                       id="req_agencias"
-                                      defaultChecked={selectedCourse?.access_requirements.some(
+                                      defaultChecked={selectedCourse?.access_requirements?.some(
                                         (req) => req.value === "agencias",
                                       )}
                                     />
@@ -606,7 +606,7 @@ export default function AdminAllkademyPage() {
                                   <div className="flex items-center space-x-2">
                                     <Switch
                                       id="req_nomades"
-                                      defaultChecked={selectedCourse?.access_requirements.some(
+                                      defaultChecked={selectedCourse?.access_requirements?.some(
                                         (req) => req.value === "nomades",
                                       )}
                                     />
@@ -617,7 +617,7 @@ export default function AdminAllkademyPage() {
                                   <div className="flex items-center space-x-2">
                                     <Switch
                                       id="req_premium"
-                                      defaultChecked={selectedCourse?.access_requirements.some(
+                                      defaultChecked={selectedCourse?.access_requirements?.some(
                                         (req) => req.value === "premium",
                                       )}
                                     />
@@ -689,7 +689,7 @@ export default function AdminAllkademyPage() {
                             </Button>
                           </div>
                           <div className="space-y-2 ml-4">
-                            {module.lessons.map((lesson) => (
+                            {(module.lessons ?? []).map((lesson) => (
                               <div
                                 key={lesson.id}
                                 className="flex items-center justify-between p-2 bg-gray-50 rounded"

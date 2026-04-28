@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#0d1630"/>
+    </linearGradient>
+    <linearGradient id="accentTop" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="docGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <rect x="0" y="0" width="800" height="3" fill="url(#accentTop)"/>
+
+  <!-- Header -->
+  <text x="40" y="36" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280" letter-spacing="2">RELATÓRIO DE ENTREGA</text>
+  <text x="40" y="58" font-family="system-ui, sans-serif" font-size="20" font-weight="800" fill="#f1f5f9">PA0005-REL-UX — Diagnóstico e Recomendações</text>
+  <line x1="40" y1="72" x2="760" y2="72" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- TOP — Score summary row -->
+  <rect x="40" y="82" width="225" height="72" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="152" y="102" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" text-anchor="middle" letter-spacing="1">VELOCIDADE</text>
+  <text x="152" y="130" font-family="system-ui, sans-serif" font-size="30" font-weight="800" fill="#f59e0b" text-anchor="middle">72</text>
+  <text x="152" y="148" font-family="system-ui, sans-serif" font-size="9" fill="#f59e0b" text-anchor="middle">/ 100 — Moderado</text>
+  <rect x="48" y="107" width="6" height="30" rx="3" fill="#f59e0b" opacity="0.6"/>
+
+  <rect x="287" y="82" width="225" height="72" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="399" y="102" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" text-anchor="middle" letter-spacing="1">USABILIDADE</text>
+  <text x="399" y="130" font-family="system-ui, sans-serif" font-size="30" font-weight="800" fill="#22c55e" text-anchor="middle">84</text>
+  <text x="399" y="148" font-family="system-ui, sans-serif" font-size="9" fill="#22c55e" text-anchor="middle">/ 100 — Bom</text>
+  <rect x="295" y="107" width="6" height="30" rx="3" fill="#22c55e" opacity="0.6"/>
+
+  <rect x="534" y="82" width="226" height="72" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="647" y="102" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" text-anchor="middle" letter-spacing="1">TAGUEAMENTO</text>
+  <text x="647" y="130" font-family="system-ui, sans-serif" font-size="30" font-weight="800" fill="#ef4444" text-anchor="middle">40</text>
+  <text x="647" y="148" font-family="system-ui, sans-serif" font-size="9" fill="#ef4444" text-anchor="middle">/ 100 — Crítico</text>
+  <rect x="542" y="107" width="6" height="30" rx="3" fill="#ef4444" opacity="0.6"/>
+
+  <!-- THREE COLUMNS -->
+  <!-- COL 1 — Problemas críticos -->
+  <rect x="40" y="168" width="225" height="230" rx="10" fill="url(#docGrad)" stroke="#1e293b" stroke-width="1"/>
+  <rect x="40" y="168" width="225" height="28" rx="10" fill="#ef4444" opacity="0.1"/>
+  <rect x="40" y="180" width="225" height="16" fill="#ef4444" opacity="0.1"/>
+  <text x="52" y="188" font-family="system-ui, sans-serif" font-size="11" fill="#ef4444" font-weight="700" letter-spacing="0.5">● PROBLEMAS CRÍTICOS</text>
+  
+  <text x="52" y="214" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" font-weight="600">IMPACTO ALTO — CORRIGIR PRIMEIRO</text>
+  
+  <rect x="52" y="222" width="6" height="6" rx="1" fill="#ef4444"/>
+  <text x="65" y="231" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Botão WhatsApp inativo</text>
+  <text x="65" y="243" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">/contato — não abre no mobile</text>
+  <text x="65" y="254" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Impacto: perda direta de leads</text>
+
+  <line x1="52" y1="263" x2="240" y2="263" stroke="#1e293b" stroke-width="1"/>
+
+  <rect x="52" y="271" width="6" height="6" rx="1" fill="#ef4444"/>
+  <text x="65" y="280" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Formulário sem ação</text>
+  <text x="65" y="292" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">/contato — botão "Enviar" não</text>
+  <text x="65" y="303" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">dispara envio do formulário</text>
+
+  <line x1="52" y1="313" x2="240" y2="313" stroke="#1e293b" stroke-width="1"/>
+
+  <rect x="52" y="321" width="6" height="6" rx="1" fill="#ef4444"/>
+  <text x="65" y="330" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Meta Pixel ausente</text>
+  <text x="65" y="342" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Nenhuma tag de remarketing</text>
+  <text x="65" y="353" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">instalada no site</text>
+
+  <!-- COL 2 — Melhorias sugeridas -->
+  <rect x="287" y="168" width="225" height="230" rx="10" fill="url(#docGrad)" stroke="#1e293b" stroke-width="1"/>
+  <rect x="287" y="168" width="225" height="28" rx="10" fill="#f59e0b" opacity="0.1"/>
+  <rect x="287" y="180" width="225" height="16" fill="#f59e0b" opacity="0.1"/>
+  <text x="299" y="188" font-family="system-ui, sans-serif" font-size="11" fill="#f59e0b" font-weight="700" letter-spacing="0.5">● MELHORIAS SUGERIDAS</text>
+  
+  <text x="299" y="214" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" font-weight="600">IMPACTO MODERADO — PRIORIZAR</text>
+
+  <rect x="299" y="222" width="6" height="6" rx="1" fill="#f59e0b"/>
+  <text x="312" y="231" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Otimizar imagens (−1.8s)</text>
+  <text x="312" y="243" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Homepage: 4 imagens acima de 500KB</text>
+
+  <line x1="299" y1="252" x2="487" y2="252" stroke="#1e293b" stroke-width="1"/>
+  <rect x="299" y="258" width="6" height="6" rx="1" fill="#f59e0b"/>
+  <text x="312" y="267" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Link Instagram quebrado</text>
+  <text x="312" y="279" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Rodapé direciona para página inexistente</text>
+
+  <line x1="299" y1="288" x2="487" y2="288" stroke="#1e293b" stroke-width="1"/>
+  <rect x="299" y="294" width="6" height="6" rx="1" fill="#f59e0b"/>
+  <text x="312" y="303" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">CLS acima de 0.1</text>
+  <text x="312" y="315" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Elementos se movem durante carregamento</text>
+
+  <line x1="299" y1="324" x2="487" y2="324" stroke="#1e293b" stroke-width="1"/>
+  <rect x="299" y="330" width="6" height="6" rx="1" fill="#f59e0b"/>
+  <text x="312" y="339" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Botão "Orçamento" redireciona</text>
+  <text x="312" y="351" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">para /home em vez de /contato</text>
+
+  <!-- COL 3 — Pontos positivos -->
+  <rect x="534" y="168" width="226" height="230" rx="10" fill="url(#docGrad)" stroke="#1e293b" stroke-width="1"/>
+  <rect x="534" y="168" width="226" height="28" rx="10" fill="#22c55e" opacity="0.1"/>
+  <rect x="534" y="180" width="226" height="16" fill="#22c55e" opacity="0.1"/>
+  <text x="546" y="188" font-family="system-ui, sans-serif" font-size="11" fill="#22c55e" font-weight="700" letter-spacing="0.5">● PONTOS POSITIVOS</text>
+  
+  <text x="546" y="214" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280" font-weight="600">FUNCIONANDO CORRETAMENTE</text>
+
+  <rect x="546" y="222" width="6" height="6" rx="1" fill="#22c55e"/>
+  <text x="559" y="231" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">GA4 ativo e disparando</text>
+  <text x="559" y="243" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Page_view confirmado em todas as páginas</text>
+
+  <line x1="546" y1="252" x2="734" y2="252" stroke="#1e293b" stroke-width="1"/>
+  <rect x="546" y="258" width="6" height="6" rx="1" fill="#22c55e"/>
+  <text x="559" y="267" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">TTFB dentro do limite</text>
+  <text x="559" y="279" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">0.7s — servidor com boa resposta</text>
+
+  <line x1="546" y1="288" x2="734" y2="288" stroke="#1e293b" stroke-width="1"/>
+  <rect x="546" y="294" width="6" height="6" rx="1" fill="#22c55e"/>
+  <text x="559" y="303" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Navegação principal OK</text>
+  <text x="559" y="315" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">Menu funciona corretamente em desktop</text>
+
+  <line x1="546" y1="324" x2="734" y2="324" stroke="#1e293b" stroke-width="1"/>
+  <rect x="546" y="330" width="6" height="6" rx="1" fill="#22c55e"/>
+  <text x="559" y="339" font-family="system-ui, sans-serif" font-size="9.5" font-weight="600" fill="#f1f5f9">Score desktop satisfatório</text>
+  <text x="559" y="351" font-family="system-ui, sans-serif" font-size="8.5" fill="#6b7280">81/100 no PageSpeed — acima da média</text>
+
+  <!-- Footer bar -->
+  <rect x="40" y="410" width="720" height="28" rx="6" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+  <text x="60" y="428" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">Relatório gerado pela plataforma allka  |  PA0005-REL-UX</text>
+  <rect x="550" y="418" width="100" height="12" rx="6" fill="#22d3ee" opacity="0.15"/>
+  <text x="600" y="428" font-family="system-ui, sans-serif" font-size="9" fill="#22d3ee" text-anchor="middle">Aprovação pendente</text>
+  <text x="750" y="428" font-family="system-ui, sans-serif" font-size="9" fill="#374151" text-anchor="end">allka.com.br</text>
+</svg>

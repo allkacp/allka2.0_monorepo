@@ -180,8 +180,8 @@ export default function NotificationsManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Módulo de Notificações</h1>
-          <p className="text-muted-foreground">Central de automação de comunicação da Allka</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Módulo de Notificações</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Central de automação de comunicação da Allka</p>
         </div>
         <div className="flex space-x-2">
           <Button variant="outline" onClick={() => setShowHistoryModal(true)}>

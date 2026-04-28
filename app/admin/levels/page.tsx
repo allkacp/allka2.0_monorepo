@@ -82,11 +82,10 @@ export default function LevelsManagementPage() {
     <div className="container mx-auto pt-6 px-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Trophy className="h-8 w-8" />
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Gerenciamento de Níveis
           </h1>
-          <p className="text-gray-600">Configure os níveis dos programas de incentivo para agências e partners</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure os níveis dos programas de incentivo para agências e partners</p>
         </div>
       </div>
 

@@ -134,10 +134,10 @@ export default function UsuariosInternosPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Usuários Internos
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-1">Gerencie os usuários internos da plataforma</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie os usuários internos da plataforma</p>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

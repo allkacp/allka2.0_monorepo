@@ -43,6 +43,8 @@ export interface EmpresaProject {
   tasksDone: number;
   tasksTotal: number;
   nomadeCount: number;
+  nomadeNames?: string[];
+  teamMembers?: { name: string; role: string }[];
   products?: EmpresaContractedProduct[];
   checkoutLinks?: { self: string; client: string };
   payerMode?: "self" | "client";
@@ -96,6 +98,7 @@ interface EmpresaContextType {
   loading: boolean;
   addProject: (project: EmpresaProject) => void;
   confirmProjectPayment: (projectId: string) => void;
+  refetch: () => void;
 }
 
 const EmpresaContext = createContext<EmpresaContextType | undefined>(undefined);
@@ -107,70 +110,147 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
   const [invoices, setInvoices] = useState<EmpresaInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [companiesRes, projectsRes, invoicesRes] =
-          await Promise.allSettled([
-            apiClient.getCompanies({ limit: "1" }),
-            apiClient.getProjects({ limit: "100" }),
-            apiClient.getInvoices({ limit: "100" }),
-          ]);
-        if (cancelled) return;
-        if (companiesRes.status === "fulfilled") {
-          const data: any = companiesRes.value;
-          const list = data.data || (Array.isArray(data) ? data : []);
-          if (list[0])
-            setProfile({
-              id: String(list[0].id),
-              name: list[0].name || "",
-              cnpj: list[0].document || "",
-              email: list[0].email || "",
-              phone: list[0].phone || "",
-              address: list[0].address || "",
-              plan: list[0].plan || "",
-              status: list[0].status || "active",
-              createdAt: list[0].created_at || list[0].createdAt || "",
-              totalInvested: list[0].totalInvested || 0,
-              activeProjects: list[0].activeProjects || 0,
-            });
-        }
-        if (projectsRes.status === "fulfilled") {
-          const data: any = projectsRes.value;
-          const list = data.data || (Array.isArray(data) ? data : []);
-          setProjects(
-            list.map((p: any) => ({
-              id: String(p.id),
-              name: p.name || "",
-              category: p.type || p.category || "",
-              status: p.status || "briefing",
-              value: p.budget || p.value || 0,
-              startDate: p.startDate || p.start_date || "",
-              deliveryDate: p.deliveryDate || p.delivery_date || "",
-              completedDate: p.completedDate || "",
-              tasksDone: p.tasksDone || 0,
-              tasksTotal: p.tasksTotal || 0,
-              nomadeCount: p.nomadeCount || 0,
-            })),
-          );
-        }
-        if (invoicesRes.status === "fulfilled") {
-          const data: any = invoicesRes.value;
-          const list = data.data || (Array.isArray(data) ? data : []);
-          setInvoices(list);
-        }
-      } catch (err) {
-        console.error("[EmpresaProvider] Failed to load:", err);
-      } finally {
-        if (!cancelled) setLoading(false);
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Step 1: load company profile first to know the company ID
+      const companiesRes = await apiClient.getCompanies({ limit: "1" });
+
+      let companyId = "1";
+      const cData: any = companiesRes;
+      const cList = cData.data || (Array.isArray(cData) ? cData : []);
+      if (cList[0]) {
+        companyId = String(cList[0].id);
+        setProfile({
+          id: companyId,
+          name: cList[0].name || "",
+          cnpj: cList[0].document || "",
+          email: cList[0].email || "",
+          phone: cList[0].phone || "",
+          address: cList[0].address || "",
+          plan: cList[0].plan || "",
+          status: cList[0].status || "active",
+          createdAt: cList[0].created_at || cList[0].createdAt || "",
+          totalInvested: cList[0].totalInvested || 0,
+          activeProjects: cList[0].activeProjects || 0,
+        });
       }
+
+      // Step 2: load projects (filtered by company) + invoices in parallel
+      const [projectsRes, invoicesRes, tasksRes] = await Promise.allSettled([
+        apiClient.getProjects({ limit: "100", client_id: companyId }),
+        apiClient.getInvoices({ limit: "100" }),
+        apiClient.getTasks({ limit: "500" }),
+      ]);
+
+      let companyProjectIds: string[] = [];
+
+      if (projectsRes.status === "fulfilled") {
+        const pData: any = projectsRes.value;
+        const pList = pData.data || (Array.isArray(pData) ? pData : []);
+        companyProjectIds = pList.map((p: any) => String(p.id));
+        setProjects(
+          pList.map((p: any) => ({
+            id: String(p.id),
+            name: p.title || p.name || "",
+            category: p.type || p.category || "",
+            status: p.status || "briefing",
+            value: p.budget || p.value || 0,
+            startDate: p.start_date || p.startDate || "",
+            deliveryDate: p.end_date || p.deliveryDate || p.delivery_date || "",
+            completedDate: p.completedDate || "",
+            tasksDone: p._count?.task_executions || p.tasksDone || 0,
+            tasksTotal: p.tasksTotal || 0,
+            nomadeCount: p.nomadeCount || 0,
+            nomadeNames: (() => {
+              try {
+                return JSON.parse(p.nomades || "[]");
+              } catch {
+                return [];
+              }
+            })(),
+            teamMembers: p.teamMembers || [],
+            products: (p.products || []).map((prod: any) => ({
+              id: String(prod.id),
+              name: prod.name || "",
+              category: prod.category || "",
+              quantity: prod.quantity ?? 1,
+              value: prod.price ?? prod.value ?? 0,
+            })),
+          })),
+        );
+      }
+
+      if (invoicesRes.status === "fulfilled") {
+        const iData: any = invoicesRes.value;
+        const iList = iData.data || (Array.isArray(iData) ? iData : []);
+        setInvoices(iList);
+      }
+
+      // Step 3: filter tasks that belong to this company's projects
+      if (tasksRes.status === "fulfilled" && companyProjectIds.length > 0) {
+        const tData: any = tasksRes.value;
+        const tList = tData.data || (Array.isArray(tData) ? tData : []);
+        const companyTasks = tList.filter((t: any) =>
+          companyProjectIds.includes(String(t.project_id)),
+        );
+
+        // Map task status from API shape to EmpresaTask shape
+        const statusMap: Record<string, EmpresaTask["status"]> = {
+          pending: "available",
+          available: "available",
+          in_progress: "in_progress",
+          review: "review",
+          completed: "done",
+          done: "done",
+          cancelled: "cancelled",
+          canceled: "cancelled",
+        };
+
+        setTasks(
+          companyTasks.map((t: any) => ({
+            id: String(t.id),
+            projectId: String(t.project_id),
+            projectName:
+              projectsRes.status === "fulfilled"
+                ? (() => {
+                    const pData: any = projectsRes.value;
+                    const pList =
+                      pData.data || (Array.isArray(pData) ? pData : []);
+                    return (
+                      pList.find(
+                        (p: any) => String(p.id) === String(t.project_id),
+                      )?.title ||
+                      pList.find(
+                        (p: any) => String(p.id) === String(t.project_id),
+                      )?.name ||
+                      ""
+                    );
+                  })()
+                : "",
+            name: t.title || t.name || "",
+            category: t.type || t.category || "",
+            status: statusMap[t.status] || "available",
+            nomadeName: t.assigned_to_name || undefined,
+            value: t.value || 0,
+            dueDate: t.due_date || t.dueDate || "",
+            deliveredAt:
+              t.status === "done" || t.status === "completed"
+                ? t.updated_at || t.delivered_at || undefined
+                : undefined,
+          })),
+        );
+      }
+    } catch (err) {
+      console.error("[EmpresaProvider] Failed to load:", err);
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   const addProject = useCallback((project: EmpresaProject) => {
     setProjects((prev) => [project, ...prev]);
@@ -207,6 +287,7 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
         loading,
         addProject,
         confirmProjectPayment,
+        refetch,
       }}
     >
       {children}

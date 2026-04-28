@@ -33,6 +33,8 @@ const createSchema = z.object({
   visibility: z.string().optional(),
   image: z.string().optional(),
   demonstrations: z.string().optional(),
+  completion_time: z.string().optional(),
+  metadata: z.string().optional(),
   is_active: z.boolean().default(true),
   variations: z.array(variationSchema).optional(),
   addons: z.array(addonSchema).optional(),
@@ -101,46 +103,68 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/products
-router.post("/", verifyToken, validate(createSchema), async (req, res, next) => {
-  try {
-    const { variations, addons, ...rest } = req.body as {
-      variations?: { name: string; description?: string; price_modifier: number; features?: string }[];
-      addons?: { name: string; description?: string; price: number; category?: string }[];
-      [key: string]: unknown;
-    };
+router.post(
+  "/",
+  verifyToken,
+  validate(createSchema),
+  async (req, res, next) => {
+    try {
+      const { variations, addons, ...rest } = req.body as {
+        variations?: {
+          name: string;
+          description?: string;
+          price_modifier: number;
+          features?: string;
+        }[];
+        addons?: {
+          name: string;
+          description?: string;
+          price: number;
+          category?: string;
+        }[];
+        [key: string]: unknown;
+      };
 
-    const product = await prisma.product.create({
-      data: {
-        ...(rest as object),
-        variations: variations
-          ? { create: variations }
-          : undefined,
-        addons: addons ? { create: addons } : undefined,
-      },
-      include: { variations: true, addons: true },
-    });
+      const product = await prisma.product.create({
+        data: {
+          ...(rest as object),
+          variations: variations ? { create: variations } : undefined,
+          addons: addons ? { create: addons } : undefined,
+        },
+        include: { variations: true, addons: true },
+      });
 
-    res.status(201).json(product);
-  } catch (err) {
-    next(err);
-  }
-});
+      res.status(201).json(product);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // PUT /api/products/:id
-router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
-  try {
-    const { variations: _v, addons: _a, ...rest } = req.body as Record<string, unknown>;
+router.put(
+  "/:id",
+  verifyToken,
+  validate(updateSchema),
+  async (req, res, next) => {
+    try {
+      const {
+        variations: _v,
+        addons: _a,
+        ...rest
+      } = req.body as Record<string, unknown>;
 
-    const product = await prisma.product.update({
-      where: { id: req.params.id },
-      data: rest as Parameters<typeof prisma.product.update>[0]["data"],
-      include: { variations: true, addons: true },
-    });
-    res.json(product);
-  } catch (err) {
-    next(err);
-  }
-});
+      const product = await prisma.product.update({
+        where: { id: req.params.id },
+        data: rest as Parameters<typeof prisma.product.update>[0]["data"],
+        include: { variations: true, addons: true },
+      });
+      res.json(product);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/products/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
@@ -153,16 +177,21 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/products/:id/variations
-router.post("/:id/variations", verifyToken, validate(variationSchema), async (req, res, next) => {
-  try {
-    const variation = await prisma.productVariation.create({
-      data: { ...req.body, product_id: req.params.id },
-    });
-    res.status(201).json(variation);
-  } catch (err) {
-    next(err);
-  }
-});
+router.post(
+  "/:id/variations",
+  verifyToken,
+  validate(variationSchema),
+  async (req, res, next) => {
+    try {
+      const variation = await prisma.productVariation.create({
+        data: { ...req.body, product_id: req.params.id },
+      });
+      res.status(201).json(variation);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/products/:id/variations/:vid
 router.delete("/:id/variations/:vid", verifyToken, async (req, res, next) => {
@@ -175,16 +204,21 @@ router.delete("/:id/variations/:vid", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/products/:id/addons
-router.post("/:id/addons", verifyToken, validate(addonSchema), async (req, res, next) => {
-  try {
-    const addon = await prisma.productAddon.create({
-      data: { ...req.body, product_id: req.params.id },
-    });
-    res.status(201).json(addon);
-  } catch (err) {
-    next(err);
-  }
-});
+router.post(
+  "/:id/addons",
+  verifyToken,
+  validate(addonSchema),
+  async (req, res, next) => {
+    try {
+      const addon = await prisma.productAddon.create({
+        data: { ...req.body, product_id: req.params.id },
+      });
+      res.status(201).json(addon);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/products/:id/addons/:aid
 router.delete("/:id/addons/:aid", verifyToken, async (req, res, next) => {

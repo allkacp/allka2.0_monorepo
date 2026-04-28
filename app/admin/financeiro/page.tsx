@@ -178,16 +178,16 @@ export default function AdminFinanceiroPage() {
     <div className="container mx-auto space-y-6 px-0 py-0">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-2xl">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Gestão Financeira
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Controle completo das finanças da plataforma
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 bg-transparent">
-            <Download className="h-4 w-4" />
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400">
+            <Download className="h-3.5 w-3.5" />
             Exportar
           </Button>
           <Button className="gap-2">
@@ -782,8 +782,8 @@ export default function AdminFinanceiroPage() {
                 <Filter className="h-4 w-4" />
                 Filtrar
               </Button>
-              <Button variant="outline" className="gap-2 bg-transparent">
-                <Download className="h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400">
+                <Download className="h-3.5 w-3.5" />
                 Exportar
               </Button>
             </div>

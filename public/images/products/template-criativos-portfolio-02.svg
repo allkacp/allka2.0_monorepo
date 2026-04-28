@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">5 Templates em Múltiplos Formatos</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Feed · Stories · LinkedIn · Banner · Card</text>
+
+  <!-- Format row labels -->
+  <text x="50" y="100" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.35)" letter-spacing="1.5">FORMATOS DISPONÍVEIS</text>
+
+  <!-- Format: Feed (square) -->
+  <g>
+    <rect x="44" y="112" width="130" height="130" rx="10" fill="rgba(200,26,127,0.12)" stroke="rgba(200,26,127,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="44" y="112" width="130" height="85" rx="10" fill="rgba(200,26,127,0.18)"/>
+    <text x="109" y="163" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1080 × 1080</text>
+    <rect x="64" y="108" width="90" height="20" rx="10" fill="rgba(200,26,127,0.7)"/>
+    <text x="109" y="121" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">Feed</text>
+    <text x="109" y="213" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Instagram / Facebook</text>
+    <text x="109" y="228" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">formato quadrado</text>
+  </g>
+
+  <!-- Format: Stories (vertical) -->
+  <g>
+    <rect x="192" y="112" width="82" height="130" rx="10" fill="rgba(249,115,22,0.1)" stroke="rgba(249,115,22,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="192" y="112" width="82" height="80" rx="10" fill="rgba(249,115,22,0.18)"/>
+    <text x="233" y="160" font-family="system-ui,sans-serif" font-size="8" fill="rgba(255,255,255,0.4)" text-anchor="middle">1080×1920</text>
+    <rect x="193" y="108" width="80" height="20" rx="10" fill="rgba(249,115,22,0.7)"/>
+    <text x="233" y="121" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">Stories</text>
+    <text x="233" y="213" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Instagram</text>
+    <text x="233" y="228" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">vertical</text>
+  </g>
+
+  <!-- Format: LinkedIn (landscape) -->
+  <g>
+    <rect x="292" y="112" width="170" height="100" rx="10" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="292" y="112" width="170" height="65" rx="10" fill="rgba(59,130,246,0.18)"/>
+    <text x="377" y="153" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1200 × 627</text>
+    <rect x="293" y="108" width="100" height="20" rx="10" fill="rgba(59,130,246,0.7)"/>
+    <text x="343" y="121" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">LinkedIn</text>
+    <text x="377" y="193" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">LinkedIn Post</text>
+    <text x="377" y="207" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">formato paisagem</text>
+    <text x="377" y="228" font-family="system-ui,sans-serif" font-size="8" fill="rgba(255,255,255,0.25)" text-anchor="middle">+120 +100 ← espaço</text>
+  </g>
+
+  <!-- Format: Banner -->
+  <g>
+    <rect x="480" y="112" width="160" height="80" rx="10" fill="rgba(139,92,246,0.1)" stroke="rgba(139,92,246,0.25)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="480" y="112" width="160" height="50" rx="10" fill="rgba(139,92,246,0.18)"/>
+    <text x="560" y="145" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">1200 × 628</text>
+    <rect x="481" y="108" width="90" height="20" rx="10" fill="rgba(139,92,246,0.7)"/>
+    <text x="526" y="121" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">Banner</text>
+    <text x="560" y="175" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Banner Promocional</text>
+    <text x="560" y="207" font-family="system-ui,sans-serif" font-size="8" fill="rgba(255,255,255,0.25)" text-anchor="middle">espaço livre abaixo</text>
+    <text x="560" y="228" font-family="system-ui,sans-serif" font-size="8" fill="rgba(255,255,255,0.15)" text-anchor="middle">↑</text>
+  </g>
+
+  <!-- Format: Email Card -->
+  <g>
+    <rect x="656" y="112" width="100" height="130" rx="10" fill="rgba(74,222,128,0.07)" stroke="rgba(74,222,128,0.2)" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="656" y="112" width="100" height="80" rx="10" fill="rgba(74,222,128,0.15)"/>
+    <text x="706" y="160" font-family="system-ui,sans-serif" font-size="8" fill="rgba(255,255,255,0.4)" text-anchor="middle">600 × 800</text>
+    <rect x="657" y="108" width="98" height="20" rx="10" fill="rgba(74,222,128,0.4)"/>
+    <text x="706" y="121" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">E-mail</text>
+    <text x="706" y="213" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">E-mail / Card</text>
+    <text x="706" y="228" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)" text-anchor="middle">vertical</text>
+  </g>
+
+  <!-- Bottom info panel -->
+  <rect x="44" y="258" width="712" height="110" rx="12" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="64" y="283" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.35)" letter-spacing="1.5">COMO FUNCIONA</text>
+  <!-- Steps -->
+  <text x="64" y="308" font-family="system-ui,sans-serif" font-size="12" fill="rgba(200,26,127,0.9)" font-weight="700">01</text>
+  <text x="86" y="308" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.65)">Você informa os formatos desejados no briefing (até 3 por template)</text>
+  <text x="64" y="330" font-family="system-ui,sans-serif" font-size="12" fill="rgba(200,26,127,0.9)" font-weight="700">02</text>
+  <text x="86" y="330" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.65)">Aplicamos sua identidade visual: cores, fontes, logo e elementos da marca</text>
+  <text x="64" y="352" font-family="system-ui,sans-serif" font-size="12" fill="rgba(200,26,127,0.9)" font-weight="700">03</text>
+  <text x="86" y="352" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.65)">Entregamos 5 templates prontos para editar e publicar em 4 dias úteis</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Template para Criativos — allka</text>
+</svg>

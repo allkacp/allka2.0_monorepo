@@ -26,6 +26,7 @@ import { DevRoleSwitcher } from "@/components/dev-role-switcher";
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
 import { AgenciaProvider } from "@/contexts/agencia-context";
+import { ProjectBasketProvider } from "@/contexts/project-basket-context";
 
 // ─── Admin Pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = React.lazy(
@@ -43,6 +44,9 @@ const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
 const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"));
+const AdminCatalogoProdutosPage = React.lazy(
+  () => import("@/app/admin/catalogo-produtos/page"),
+);
 const AdminPrecificacaoPage = React.lazy(
   () => import("@/app/admin/precificacao/page"),
 );
@@ -141,16 +145,19 @@ const ParceiroSaquesPage = React.lazy(
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
 const EmpresaDashboardPage = React.lazy(
-  () => import("@/app/empresa/dashboard/page"),
+  () => import("@/app/company/dashboard/page"),
 );
 const EmpresaProjetosPage = React.lazy(
-  () => import("@/app/empresa/projetos/page"),
+  () => import("@/app/company/projetos/page"),
 );
 const EmpresaTarefasPage = React.lazy(
-  () => import("@/app/empresa/tarefas/page"),
+  () => import("@/app/company/tarefas/page"),
 );
 const EmpresaFaturasPage = React.lazy(
-  () => import("@/app/empresa/faturas/page"),
+  () => import("@/app/company/faturas/page"),
+);
+const EmpresaProdutosPage = React.lazy(
+  () => import("@/app/company/produtos/page"),
 );
 
 // ─── Agência Pages ─────────────────────────────────────────────────────────
@@ -173,7 +180,7 @@ const AgenciaCatalogoPage = React.lazy(
 // ─── Login Pages ─────────────────────────────────────────────────────────
 const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
 const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
-const EmpresaLoginPage = React.lazy(() => import("@/app/empresa/login/page"));
+const EmpresaLoginPage = React.lazy(() => import("@/app/company/login/page"));
 const AgenciaLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
 const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 
@@ -295,50 +302,52 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     <SpecialtyProvider>
                       <PricingProvider>
                         <ProductProvider>
-                          <MobileLayoutWrapper>
-                            <div className="flex h-screen bg-gray-50 dark:bg-background overflow-visible font-sans">
-                              <div
-                                className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
-                                id="sidebar-overlay"
-                              />
-                              <div className="hidden lg:flex">
-                                <Sidebar />
-                              </div>
-                              <div
-                                className="lg:hidden fixed inset-y-0 left-0 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out"
-                                id="mobile-sidebar"
-                              >
-                                <Sidebar />
-                              </div>
-                              <div className="flex-1 flex flex-col overflow-visible min-w-0">
-                                <PageErrorBoundary>
-                                  <Header />
-                                </PageErrorBoundary>
-                                <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-12 px-14 pb-mobile-nav">
+                          <ProjectBasketProvider>
+                            <MobileLayoutWrapper>
+                              <div className="flex h-screen bg-gray-50 dark:bg-background overflow-visible font-sans">
+                                <div
+                                  className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
+                                  id="sidebar-overlay"
+                                />
+                                <div className="hidden lg:flex">
+                                  <Sidebar />
+                                </div>
+                                <div
+                                  className="lg:hidden fixed inset-y-0 left-0 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out"
+                                  id="mobile-sidebar"
+                                >
+                                  <Sidebar />
+                                </div>
+                                <div className="flex-1 flex flex-col overflow-visible min-w-0">
                                   <PageErrorBoundary>
-                                    <Suspense fallback={<PageLoader />}>
-                                      {children}
-                                    </Suspense>
+                                    <Header />
                                   </PageErrorBoundary>
-                                </main>
-                                <Footer />
+                                  <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-12 px-14 pb-mobile-nav">
+                                    <PageErrorBoundary>
+                                      <Suspense fallback={<PageLoader />}>
+                                        {children}
+                                      </Suspense>
+                                    </PageErrorBoundary>
+                                  </main>
+                                  <Footer />
+                                </div>
                               </div>
-                            </div>
-                          </MobileLayoutWrapper>
-                          {/* Gate de aceite de termos — posição fixed, bloqueia toda a UI */}
-                          {!termsAccepted && (
-                            <TermAcceptanceGate
-                              pendingTerms={pendingTerms}
-                              user={{
-                                name: "Administrador Master",
-                                email: "admin@empresa.com",
-                                is_master: true,
-                              }}
-                              onAllAccepted={handleAllAccepted}
-                            />
-                          )}
-                          {/* Chat widget flutuante */}
-                          <ChatWidget />
+                            </MobileLayoutWrapper>
+                            {/* Gate de aceite de termos — posição fixed, bloqueia toda a UI */}
+                            {!termsAccepted && (
+                              <TermAcceptanceGate
+                                pendingTerms={pendingTerms}
+                                user={{
+                                  name: "Administrador Master",
+                                  email: "admin@empresa.com",
+                                  is_master: true,
+                                }}
+                                onAllAccepted={handleAllAccepted}
+                              />
+                            )}
+                            {/* Chat widget flutuante */}
+                            <ChatWidget />
+                          </ProjectBasketProvider>
                         </ProductProvider>
                       </PricingProvider>
                     </SpecialtyProvider>
@@ -375,7 +384,7 @@ export default function App() {
           }
         />
         <Route
-          path="/empresa/login"
+          path="/company/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <EmpresaLoginPage />
@@ -442,6 +451,10 @@ export default function App() {
                   <Route
                     path="/admin/produtos"
                     element={<AdminProdutosPage />}
+                  />
+                  <Route
+                    path="/admin/catalogo-produtos"
+                    element={<AdminCatalogoProdutosPage />}
                   />
                   <Route
                     path="/admin/precificacao"
@@ -582,20 +595,24 @@ export default function App() {
 
                   {/* ─── Empresa ──────────────────────────────────────────── */}
                   <Route
-                    path="/empresa/dashboard"
+                    path="/company/dashboard"
                     element={<EmpresaDashboardPage />}
                   />
                   <Route
-                    path="/empresa/projetos"
+                    path="/company/projetos"
                     element={<EmpresaProjetosPage />}
                   />
                   <Route
-                    path="/empresa/tarefas"
+                    path="/company/tarefas"
                     element={<EmpresaTarefasPage />}
                   />
                   <Route
-                    path="/empresa/faturas"
+                    path="/company/faturas"
                     element={<EmpresaFaturasPage />}
+                  />
+                  <Route
+                    path="/company/produtos"
+                    element={<EmpresaProdutosPage />}
                   />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}

@@ -66,10 +66,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
     // Apply font size
     const fontSizeMap = {
-      small: "14px",
-      medium: "16px",
-      large: "18px",
-      "extra-large": "20px",
+      small: "15px",
+      medium: "17px",
+      large: "19px",
+      "extra-large": "21px",
     }
     root.style.fontSize = fontSizeMap[fontSize]
 

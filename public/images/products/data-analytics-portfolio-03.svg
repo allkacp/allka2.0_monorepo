@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#112b55;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="funnelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:0.7"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="720" cy="80" r="130" fill="#22d3ee" fill-opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="240" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">FUNIL DE CONVERSÃO — GA4</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Jornada do Usuário</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Rastreamento de conversão · últimos 30 dias</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Funnel steps (left side) -->
+  <!-- Step 1 — Visita -->
+  <rect x="30"  y="140" width="400" height="46" rx="8" fill="rgba(34,211,238,0.15)" stroke="rgba(34,211,238,0.3)" stroke-width="1"/>
+  <text x="50"  y="168" font-family="system-ui,sans-serif" font-size="13" fill="#22d3ee" font-weight="700">1. Visita ao site (page_view)</text>
+  <text x="380" y="168" font-family="system-ui,sans-serif" font-size="16" fill="#22d3ee" font-weight="800" text-anchor="end" filter="url(#glow)">8.421</text>
+  <rect x="30" y="186" width="400" height="3" rx="2" fill="rgba(34,211,238,0.1)"/>
+
+  <!-- Step 2 — Produto -->
+  <rect x="50"  y="196" width="360" height="40" rx="8" fill="rgba(34,211,238,0.1)" stroke="rgba(34,211,238,0.2)" stroke-width="1"/>
+  <text x="68"  y="220" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)">2. Visualização de produto (view_item)</text>
+  <text x="360" y="220" font-family="system-ui,sans-serif" font-size="14" fill="#60a5fa" font-weight="700" text-anchor="end">3.084</text>
+  <text x="430" y="220" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.35)">36,6%</text>
+
+  <!-- Step 3 — Carrinho -->
+  <rect x="70"  y="244" width="320" height="40" rx="8" fill="rgba(168,85,247,0.1)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+  <text x="88"  y="268" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)">3. Adicionar ao carrinho</text>
+  <text x="340" y="268" font-family="system-ui,sans-serif" font-size="14" fill="#c084fc" font-weight="700" text-anchor="end">891</text>
+  <text x="430" y="268" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.35)">10,6%</text>
+
+  <!-- Step 4 — Checkout -->
+  <rect x="90"  y="292" width="280" height="40" rx="8" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.2)" stroke-width="1"/>
+  <text x="108" y="316" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.8)">4. Início do checkout</text>
+  <text x="320" y="316" font-family="system-ui,sans-serif" font-size="14" fill="#fbbf24" font-weight="700" text-anchor="end">412</text>
+  <text x="430" y="316" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.35)">4,9%</text>
+
+  <!-- Step 5 — Compra -->
+  <rect x="110" y="340" width="240" height="40" rx="8" fill="rgba(74,222,128,0.15)" stroke="rgba(74,222,128,0.35)" stroke-width="1.5"/>
+  <text x="128" y="364" font-family="system-ui,sans-serif" font-size="12" fill="#4ade80" font-weight="700">5. Compra finalizada (purchase)</text>
+  <text x="300" y="364" font-family="system-ui,sans-serif" font-size="14" fill="#4ade80" font-weight="800" text-anchor="end" filter="url(#glow)">247</text>
+  <text x="430" y="364" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" font-weight="700">2,93%</text>
+
+  <!-- Side panel — Channel attribution -->
+  <rect x="476" y="140" width="294" height="280" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="496" y="168" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.5)" font-weight="600">ORIGEM DO TRÁFEGO</text>
+
+  <!-- Channel rows -->
+  <!-- Organic -->
+  <text x="496" y="200" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)">Orgânico (Google)</text>
+  <rect x="496" y="206" width="240" height="10" rx="5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="496" y="206" width="120" height="10" rx="5" fill="#22d3ee" opacity="0.8"/>
+  <text x="745" y="216" font-family="system-ui,sans-serif" font-size="11" fill="#22d3ee" text-anchor="end">50%</text>
+
+  <!-- Paid -->
+  <text x="496" y="238" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)">Google Ads (pago)</text>
+  <rect x="496" y="244" width="240" height="10" rx="5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="496" y="244" width="62" height="10" rx="5" fill="#fbbf24" opacity="0.8"/>
+  <text x="745" y="254" font-family="system-ui,sans-serif" font-size="11" fill="#fbbf24" text-anchor="end">26%</text>
+
+  <!-- Social -->
+  <text x="496" y="276" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)">Social (Meta / TikTok)</text>
+  <rect x="496" y="282" width="240" height="10" rx="5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="496" y="282" width="38" height="10" rx="5" fill="#60a5fa" opacity="0.8"/>
+  <text x="745" y="292" font-family="system-ui,sans-serif" font-size="11" fill="#60a5fa" text-anchor="end">16%</text>
+
+  <!-- Direct -->
+  <text x="496" y="314" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.75)">Direto</text>
+  <rect x="496" y="320" width="240" height="10" rx="5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="496" y="320" width="20" height="10" rx="5" fill="#a855f7" opacity="0.8"/>
+  <text x="745" y="330" font-family="system-ui,sans-serif" font-size="11" fill="#a855f7" text-anchor="end">8%</text>
+
+  <line x1="496" y1="348" x2="756" y2="348" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+
+  <!-- Revenue metric -->
+  <text x="496" y="370" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)">RECEITA ATRIBUÍDA (30 dias)</text>
+  <text x="496" y="400" font-family="system-ui,sans-serif" font-size="26" fill="#4ade80" font-weight="800" filter="url(#glow)">R$ 74.380</text>
+  <text x="700" y="400" font-family="system-ui,sans-serif" font-size="11" fill="#4ade80" text-anchor="end">↑ +28%</text>
+
+  <text x="400" y="430" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.25)" text-anchor="end">Funil de Conversão · allka</text>
+</svg>

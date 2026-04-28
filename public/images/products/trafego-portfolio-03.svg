@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f5c;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1a2a6f;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <!-- BG dots pattern -->
+  <circle cx="700" cy="80" r="120" fill="#7c3aed" fill-opacity="0.06"/>
+  <circle cx="100" cy="400" r="80" fill="#2563eb" fill-opacity="0.07"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="190" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">ESTRUTURA DE CAMPANHAS</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Arquitetura das Campanhas Ativas</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Campanha · Conjunto de anúncios · Criativos</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Meta Ads column -->
+  <!-- Platform badge -->
+  <rect x="30" y="132" width="360" height="30" rx="8" fill="#2563eb" fill-opacity="0.18" stroke="#2563eb40" stroke-width="1"/>
+  <text x="210" y="152" font-family="system-ui,sans-serif" font-size="13" fill="#60a5fa" font-weight="700" text-anchor="middle">META ADS</text>
+
+  <!-- Campaign rows -->
+  <rect x="30" y="172" width="360" height="46" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <rect x="30" y="172" width="3" height="46" rx="1" fill="#f472b6"/>
+  <text x="44" y="190" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb" font-weight="700">Campanha 1 — Conversão (Venda)</text>
+  <text x="44" y="207" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">3 conjuntos · 9 criativos · Orçamento R$ 1.200/mês</text>
+
+  <rect x="30" y="226" width="360" height="46" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <rect x="30" y="226" width="3" height="46" rx="1" fill="#60a5fa"/>
+  <text x="44" y="244" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb" font-weight="700">Campanha 2 — Tráfego (Site)</text>
+  <text x="44" y="261" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">2 conjuntos · 6 criativos · Orçamento R$ 600/mês</text>
+
+  <rect x="30" y="280" width="360" height="46" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <rect x="30" y="280" width="3" height="46" rx="1" fill="#a78bfa"/>
+  <text x="44" y="298" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb" font-weight="700">Campanha 3 — Remarketing</text>
+  <text x="44" y="315" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">1 conjunto · 4 criativos · Orçamento R$ 400/mês</text>
+
+  <!-- Google Ads column -->
+  <rect x="410" y="132" width="360" height="30" rx="8" fill="#4ade80" fill-opacity="0.12" stroke="#4ade8030" stroke-width="1"/>
+  <text x="590" y="152" font-family="system-ui,sans-serif" font-size="13" fill="#4ade80" font-weight="700" text-anchor="middle">GOOGLE ADS</text>
+
+  <rect x="410" y="172" width="360" height="46" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <rect x="410" y="172" width="3" height="46" rx="1" fill="#4ade80"/>
+  <text x="424" y="190" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb" font-weight="700">Campanha 1 — Search (Palavras-chave)</text>
+  <text x="424" y="207" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">4 grupos · 12 anúncios · Orçamento R$ 600/mês</text>
+
+  <rect x="410" y="226" width="360" height="46" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+  <rect x="410" y="226" width="3" height="46" rx="1" fill="#f59e0b"/>
+  <text x="424" y="244" font-family="system-ui,sans-serif" font-size="12" fill="#f9fafb" font-weight="700">Campanha 2 — Display (Remarketing)</text>
+  <text x="424" y="261" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">2 grupos · 8 banners · Orçamento R$ 200/mês</text>
+
+  <!-- Summary bar -->
+  <rect x="30" y="344" width="740" height="60" rx="10" fill="#7c3aed" fill-opacity="0.15" stroke="#7c3aed30" stroke-width="1"/>
+  <text x="52" y="368" font-family="system-ui,sans-serif" font-size="12" fill="#e9d5ff" font-weight="700">TOTAIS DO MÊS</text>
+  <text x="52" y="388" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">5 campanhas ativas  ·  16 conjuntos de anúncios  ·  39 criativos  ·  Orçamento total: R$ 3.000</text>
+  <!-- Status dot -->
+  <circle cx="740" cy="374" r="7" fill="#4ade80" filter="url(#glow)"/>
+  <text x="728" y="395" font-family="system-ui,sans-serif" font-size="9" fill="#4ade80" text-anchor="middle">ATIVO</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

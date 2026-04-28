@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0c2340;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0f3460;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="progbar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#4ade80"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="180" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">LINK BUILDING — DA</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Construção de Autoridade</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Backlinks conquistados · Evolução do Domain Authority</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- DA evolution chart -->
+  <text x="30" y="142" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="0.5">EVOLUÇÃO DO DA — 6 MESES</text>
+
+  <!-- Chart area -->
+  <rect x="30" y="152" width="440" height="160" rx="10" fill="#ffffff06" stroke="#ffffff0f" stroke-width="1"/>
+
+  <!-- Grid -->
+  <line x1="30" y1="192" x2="470" y2="192" stroke="#ffffff08" stroke-width="1"/>
+  <line x1="30" y1="232" x2="470" y2="232" stroke="#ffffff08" stroke-width="1"/>
+  <line x1="30" y1="272" x2="470" y2="272" stroke="#ffffff08" stroke-width="1"/>
+  <text x="16" y="196" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="end">50</text>
+  <text x="16" y="236" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="end">40</text>
+  <text x="16" y="276" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="end">30</text>
+
+  <!-- Line chart points: DA values (30→33→36→38→40→42) -->
+  <!-- Plotted on 160px height, values 25-50 range = 125 span, 160/125 ~= 1.28px per unit -->
+  <!-- x positions: 65, 135, 205, 275, 345, 415 -->
+  <!-- y = 312 - (val-25)*1.28 -->
+  <!-- 30→y=305.6, 33→y=301.8, 36→y=297.9, 38→y=295.3, 40→y=292.8, 42→y=290.1 -->
+  <polyline points="65,300 135,296 205,292 275,289 345,285 415,280"
+    fill="none" stroke="url(#progbar)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <!-- Fill area under line -->
+  <polygon points="65,300 135,296 205,292 275,289 345,285 415,280 415,312 65,312"
+    fill="url(#progbar)" fill-opacity="0.10"/>
+  <!-- Dots -->
+  <circle cx="65" cy="300" r="5" fill="#2563eb" filter="url(#glow)"/>
+  <circle cx="135" cy="296" r="5" fill="#2d7ae5"/>
+  <circle cx="205" cy="292" r="5" fill="#38a3d0"/>
+  <circle cx="275" cy="289" r="5" fill="#3ebfb0"/>
+  <circle cx="345" cy="285" r="5" fill="#44d694"/>
+  <circle cx="415" cy="280" r="7" fill="#4ade80" filter="url(#glow)"/>
+  <!-- Labels -->
+  <text x="65" y="287" font-family="system-ui,sans-serif" font-size="9" fill="#60a5fa" text-anchor="middle">DA 30</text>
+  <text x="135" y="284" font-family="system-ui,sans-serif" font-size="9" fill="#60a5fa" text-anchor="middle">DA 33</text>
+  <text x="205" y="280" font-family="system-ui,sans-serif" font-size="9" fill="#60a5fa" text-anchor="middle">DA 36</text>
+  <text x="275" y="277" font-family="system-ui,sans-serif" font-size="9" fill="#60a5fa" text-anchor="middle">DA 38</text>
+  <text x="345" y="274" font-family="system-ui,sans-serif" font-size="9" fill="#4ade80" text-anchor="middle">DA 40</text>
+  <text x="415" y="268" font-family="system-ui,sans-serif" font-size="9" fill="#4ade80" font-weight="700" text-anchor="middle">DA 42</text>
+  <!-- Month labels -->
+  <text x="65" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="middle">Nov</text>
+  <text x="135" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="middle">Dez</text>
+  <text x="205" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="middle">Jan</text>
+  <text x="275" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="middle">Fev</text>
+  <text x="345" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#475569" text-anchor="middle">Mar</text>
+  <text x="415" y="325" font-family="system-ui,sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle" font-weight="600">Abr</text>
+
+  <!-- Backlinks panel -->
+  <rect x="490" y="132" width="280" height="188" rx="12" fill="#ffffff08" stroke="#ffffff10" stroke-width="1"/>
+  <text x="630" y="156" font-family="system-ui,sans-serif" font-size="13" fill="#bfdbfe" font-weight="700" text-anchor="middle">BACKLINKS DO MÊS</text>
+
+  <!-- Backlink sources -->
+  <text x="510" y="182" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Portal de notícias — DA 68</text>
+  <rect x="510" y="188" width="180" height="6" rx="3" fill="#ffffff10"/>
+  <rect x="510" y="188" width="162" height="6" rx="3" fill="url(#progbar)"/>
+
+  <text x="510" y="212" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Blog de marketing — DA 54</text>
+  <rect x="510" y="218" width="180" height="6" rx="3" fill="#ffffff10"/>
+  <rect x="510" y="218" width="130" height="6" rx="3" fill="url(#progbar)"/>
+
+  <text x="510" y="242" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Diretório de empresas — DA 47</text>
+  <rect x="510" y="248" width="180" height="6" rx="3" fill="#ffffff10"/>
+  <rect x="510" y="248" width="110" height="6" rx="3" fill="url(#progbar)"/>
+
+  <text x="510" y="272" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Parceiro editorial — DA 38</text>
+  <rect x="510" y="278" width="180" height="6" rx="3" fill="#ffffff10"/>
+  <rect x="510" y="278" width="90" height="6" rx="3" fill="url(#progbar)"/>
+
+  <text x="510" y="302" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Guest post — DA 29</text>
+  <rect x="510" y="308" width="180" height="6" rx="3" fill="#ffffff10"/>
+  <rect x="510" y="308" width="68" height="6" rx="3" fill="url(#progbar)"/>
+
+  <!-- Summary bar -->
+  <rect x="30" y="345" width="740" height="60" rx="10" fill="#4ade80" fill-opacity="0.08" stroke="#4ade8025" stroke-width="1"/>
+  <text x="50" y="367" font-family="system-ui,sans-serif" font-size="12" fill="#86efac" font-weight="700">Resultado acumulado em 6 meses</text>
+  <text x="50" y="387" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">DA: 30 → 42  (+40%)  ·  Backlinks totais: 1.840  ·  Domínios referenciadores: 312  ·  Spam Score: 2%</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

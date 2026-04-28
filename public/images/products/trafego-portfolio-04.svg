@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f5c;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="lineA" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#f472b6"/>
+    </linearGradient>
+    <linearGradient id="lineB" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1d4ed8"/>
+      <stop offset="100%" style="stop-color:#60a5fa"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect x="30" y="22" width="180" height="26" rx="6" fill="#ffffff12"/>
+  <text x="42" y="39" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8" font-weight="600" letter-spacing="1">TESTES A/B — CRIATIVOS</text>
+  <text x="30" y="78" font-family="system-ui,sans-serif" font-size="26" fill="#ffffff" font-weight="700">Otimização Contínua de Anúncios</text>
+  <text x="30" y="100" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Comparativo de variações de criativo — Meta Ads</text>
+  <line x1="30" y1="116" x2="770" y2="116" stroke="#ffffff15" stroke-width="1"/>
+
+  <!-- Variant A card -->
+  <rect x="30" y="132" width="340" height="200" rx="12" fill="#7c3aed" fill-opacity="0.12" stroke="#7c3aed40" stroke-width="1.5"/>
+  <text x="50" y="158" font-family="system-ui,sans-serif" font-size="16" fill="#e9d5ff" font-weight="800">VARIANTE A — Vídeo 15s</text>
+  <text x="50" y="176" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Copy: "Resultado em 30 dias ou devolvemos"</text>
+
+  <text x="50" y="210" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">CTR</text>
+  <text x="50" y="228" font-family="system-ui,sans-serif" font-size="22" fill="#f472b6" font-weight="800">3,8%</text>
+
+  <text x="180" y="210" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">CPC Médio</text>
+  <text x="180" y="228" font-family="system-ui,sans-serif" font-size="22" fill="#a78bfa" font-weight="800">R$ 1,24</text>
+
+  <text x="50" y="262" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Impressões</text>
+  <text x="50" y="280" font-family="system-ui,sans-serif" font-size="16" fill="#f9fafb" font-weight="700">48.200</text>
+
+  <text x="180" y="262" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Conversões</text>
+  <text x="180" y="280" font-family="system-ui,sans-serif" font-size="16" fill="#f9fafb" font-weight="700">142</text>
+
+  <rect x="50" y="298" width="120" height="22" rx="5" fill="#7c3aed" fill-opacity="0.5"/>
+  <text x="110" y="313" font-family="system-ui,sans-serif" font-size="11" fill="#e9d5ff" text-anchor="middle" font-weight="700">VENCEDORA ✓</text>
+
+  <!-- VS divider -->
+  <circle cx="400" cy="232" r="24" fill="#ffffff10" stroke="#ffffff20" stroke-width="1.5"/>
+  <text x="400" y="238" font-family="system-ui,sans-serif" font-size="16" fill="#ffffff" text-anchor="middle" font-weight="900">VS</text>
+
+  <!-- Variant B card -->
+  <rect x="430" y="132" width="340" height="200" rx="12" fill="#1d4ed8" fill-opacity="0.12" stroke="#2563eb30" stroke-width="1.5"/>
+  <text x="450" y="158" font-family="system-ui,sans-serif" font-size="16" fill="#bfdbfe" font-weight="800">VARIANTE B — Imagem Estática</text>
+  <text x="450" y="176" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Copy: "Aumente suas vendas agora"</text>
+
+  <text x="450" y="210" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">CTR</text>
+  <text x="450" y="228" font-family="system-ui,sans-serif" font-size="22" fill="#60a5fa" font-weight="800">2,1%</text>
+
+  <text x="580" y="210" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">CPC Médio</text>
+  <text x="580" y="228" font-family="system-ui,sans-serif" font-size="22" fill="#93c5fd" font-weight="800">R$ 2,18</text>
+
+  <text x="450" y="262" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Impressões</text>
+  <text x="450" y="280" font-family="system-ui,sans-serif" font-size="16" fill="#f9fafb" font-weight="700">51.300</text>
+
+  <text x="580" y="262" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Conversões</text>
+  <text x="580" y="280" font-family="system-ui,sans-serif" font-size="16" fill="#f9fafb" font-weight="700">73</text>
+
+  <rect x="450" y="298" width="120" height="22" rx="5" fill="#1e3a5f"/>
+  <text x="510" y="313" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">em teste</text>
+
+  <!-- Insight bar -->
+  <rect x="30" y="352" width="740" height="68" rx="10" fill="#4ade80" fill-opacity="0.08" stroke="#4ade8025" stroke-width="1"/>
+  <text x="50" y="374" font-family="system-ui,sans-serif" font-size="12" fill="#4ade80" font-weight="700">💡 Insight da Otimização</text>
+  <text x="50" y="394" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">Variante A (vídeo) apresenta CTR 81% maior e CPC 43% menor. Recomendamos pausar B e</text>
+  <text x="50" y="410" font-family="system-ui,sans-serif" font-size="12" fill="#94a3b8">escalar o orçamento de A para R$ 1.600/mês no próximo período.</text>
+
+  <!-- Stamp -->
+  <rect x="666" y="22" width="104" height="22" rx="5" fill="#ffffff12" stroke="#ffffff20" stroke-width="1"/>
+  <text x="718" y="36" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">⚠ MOCK VISUAL</text>
+</svg>

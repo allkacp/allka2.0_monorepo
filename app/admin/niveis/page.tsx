@@ -28,6 +28,9 @@ import {
   Zap,
   Target,
   BarChart3,
+  Trophy,
+  Shield,
+  Gem,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 
@@ -35,83 +38,91 @@ const LEVEL_THEMES: Record<
   string,
   {
     accent: string;
-    headerBg: string;
-    iconBg: string;
     badgeBg: string;
     badgeBorder: string;
     badgeText: string;
     statBg: string;
     statBorder: string;
-    cardBorder: string;
+    statIconColor: string;
+    neonRing: string;
+    glowShadow: string;
   }
 > = {
   Bronze: {
     accent: "border-l-amber-500",
-    headerBg: "bg-gradient-to-r from-amber-50 via-orange-50/60 to-white",
-    iconBg: "bg-amber-100",
-    badgeBg: "bg-amber-50",
-    badgeBorder: "border-amber-200",
-    badgeText: "text-amber-700",
-    statBg: "bg-amber-50/70",
-    statBorder: "border-amber-100",
-    cardBorder: "border-slate-200 hover:border-amber-300",
+    badgeBg: "bg-amber-50 dark:bg-amber-950/30",
+    badgeBorder: "border-amber-200 dark:border-amber-700/40",
+    badgeText: "text-amber-700 dark:text-amber-400",
+    statBg: "bg-amber-50/70 dark:bg-amber-950/20",
+    statBorder: "border-amber-100 dark:border-amber-900/40",
+    statIconColor: "text-amber-500",
+    neonRing: "ring-1 ring-amber-300/30 dark:ring-amber-500/20 hover:ring-amber-400/70 dark:hover:ring-amber-400/50",
+    glowShadow: "shadow-sm shadow-amber-400/10 hover:shadow-xl hover:shadow-amber-400/20 dark:shadow-amber-400/15 dark:hover:shadow-amber-400/35",
   },
   Silver: {
     accent: "border-l-slate-400",
-    headerBg: "bg-gradient-to-r from-slate-50 via-slate-100/40 to-white",
-    iconBg: "bg-slate-100",
-    badgeBg: "bg-slate-50",
-    badgeBorder: "border-slate-300",
-    badgeText: "text-slate-600",
-    statBg: "bg-slate-50/70",
-    statBorder: "border-slate-200",
-    cardBorder: "border-slate-200 hover:border-slate-400",
+    badgeBg: "bg-slate-50 dark:bg-slate-800/50",
+    badgeBorder: "border-slate-300 dark:border-slate-600/50",
+    badgeText: "text-slate-600 dark:text-slate-300",
+    statBg: "bg-slate-50/70 dark:bg-slate-800/30",
+    statBorder: "border-slate-200 dark:border-slate-700/40",
+    statIconColor: "text-slate-500 dark:text-slate-400",
+    neonRing: "ring-1 ring-slate-300/40 dark:ring-slate-500/25 hover:ring-slate-400/70 dark:hover:ring-slate-400/50",
+    glowShadow: "shadow-sm shadow-slate-400/10 hover:shadow-xl hover:shadow-slate-400/15 dark:shadow-slate-400/15 dark:hover:shadow-slate-400/25",
   },
   Gold: {
     accent: "border-l-yellow-500",
-    headerBg: "bg-gradient-to-r from-yellow-50 via-amber-50/60 to-white",
-    iconBg: "bg-yellow-100",
-    badgeBg: "bg-yellow-50",
-    badgeBorder: "border-yellow-200",
-    badgeText: "text-yellow-700",
-    statBg: "bg-yellow-50/70",
-    statBorder: "border-yellow-100",
-    cardBorder: "border-slate-200 hover:border-yellow-300",
+    badgeBg: "bg-yellow-50 dark:bg-yellow-950/30",
+    badgeBorder: "border-yellow-200 dark:border-yellow-700/40",
+    badgeText: "text-yellow-700 dark:text-yellow-400",
+    statBg: "bg-yellow-50/70 dark:bg-yellow-950/20",
+    statBorder: "border-yellow-100 dark:border-yellow-900/40",
+    statIconColor: "text-yellow-500",
+    neonRing: "ring-1 ring-yellow-300/30 dark:ring-yellow-500/20 hover:ring-yellow-400/70 dark:hover:ring-yellow-400/50",
+    glowShadow: "shadow-sm shadow-yellow-400/10 hover:shadow-xl hover:shadow-yellow-400/20 dark:shadow-yellow-400/15 dark:hover:shadow-yellow-400/35",
   },
   Platinum: {
     accent: "border-l-sky-500",
-    headerBg: "bg-gradient-to-r from-sky-50 via-blue-50/40 to-white",
-    iconBg: "bg-sky-100",
-    badgeBg: "bg-sky-50",
-    badgeBorder: "border-sky-200",
-    badgeText: "text-sky-700",
-    statBg: "bg-sky-50/70",
-    statBorder: "border-sky-100",
-    cardBorder: "border-slate-200 hover:border-sky-300",
+    badgeBg: "bg-sky-50 dark:bg-sky-950/30",
+    badgeBorder: "border-sky-200 dark:border-sky-700/40",
+    badgeText: "text-sky-700 dark:text-sky-400",
+    statBg: "bg-sky-50/70 dark:bg-sky-950/20",
+    statBorder: "border-sky-100 dark:border-sky-900/40",
+    statIconColor: "text-sky-500",
+    neonRing: "ring-1 ring-sky-300/30 dark:ring-sky-500/20 hover:ring-sky-400/70 dark:hover:ring-sky-400/50",
+    glowShadow: "shadow-sm shadow-sky-400/10 hover:shadow-xl hover:shadow-sky-400/20 dark:shadow-sky-400/15 dark:hover:shadow-sky-400/35",
   },
   Diamond: {
     accent: "border-l-violet-500",
-    headerBg: "bg-gradient-to-r from-violet-50 via-purple-50/40 to-white",
-    iconBg: "bg-violet-100",
-    badgeBg: "bg-violet-50",
-    badgeBorder: "border-violet-200",
-    badgeText: "text-violet-700",
-    statBg: "bg-violet-50/70",
-    statBorder: "border-violet-100",
-    cardBorder: "border-slate-200 hover:border-violet-300",
+    badgeBg: "bg-violet-50 dark:bg-violet-950/30",
+    badgeBorder: "border-violet-200 dark:border-violet-700/40",
+    badgeText: "text-violet-700 dark:text-violet-400",
+    statBg: "bg-violet-50/70 dark:bg-violet-950/20",
+    statBorder: "border-violet-100 dark:border-violet-900/40",
+    statIconColor: "text-violet-500",
+    neonRing: "ring-1 ring-violet-300/30 dark:ring-violet-500/20 hover:ring-violet-400/70 dark:hover:ring-violet-400/50",
+    glowShadow: "shadow-sm shadow-violet-400/10 hover:shadow-xl hover:shadow-violet-400/20 dark:shadow-violet-400/15 dark:hover:shadow-violet-400/35",
   },
 };
 
 const DEFAULT_THEME = {
   accent: "border-l-blue-500",
-  headerBg: "bg-gradient-to-r from-blue-50 via-indigo-50/40 to-white",
-  iconBg: "bg-blue-100",
-  badgeBg: "bg-blue-50",
-  badgeBorder: "border-blue-200",
-  badgeText: "text-blue-700",
-  statBg: "bg-blue-50/70",
-  statBorder: "border-blue-100",
-  cardBorder: "border-slate-200 hover:border-blue-300",
+  badgeBg: "bg-blue-50 dark:bg-blue-950/30",
+  badgeBorder: "border-blue-200 dark:border-blue-700/40",
+  badgeText: "text-blue-700 dark:text-blue-400",
+  statBg: "bg-blue-50/70 dark:bg-blue-950/20",
+  statBorder: "border-blue-100 dark:border-blue-900/40",
+  statIconColor: "text-blue-500",
+  neonRing: "ring-1 ring-blue-300/30 dark:ring-blue-500/20 hover:ring-blue-400/70 dark:hover:ring-blue-400/50",
+  glowShadow: "shadow-sm shadow-blue-400/10 hover:shadow-xl hover:shadow-blue-400/20 dark:shadow-blue-400/15 dark:hover:shadow-blue-400/35",
+};
+
+const LEVEL_ICON_MAP: Record<string, { gradient: string; Icon: any }> = {
+  Bronze:   { gradient: "from-amber-500 to-orange-600",  Icon: Award   },
+  Silver:   { gradient: "from-slate-400 to-slate-600",   Icon: Star    },
+  Gold:     { gradient: "from-yellow-400 to-amber-500",  Icon: Trophy  },
+  Platinum: { gradient: "from-sky-400 to-blue-600",      Icon: Shield  },
+  Diamond:  { gradient: "from-violet-500 to-purple-700", Icon: Gem     },
 };
 
 // Levels are loaded from API in the component
@@ -126,25 +137,43 @@ export default function NiveisPage() {
     id: number | null;
     name: string;
   }>({ open: false, id: null, name: "" });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Load levels from API
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res: any = await apiClient.getLevels();
-        if (cancelled) return;
-        const data = res.data || (Array.isArray(res) ? res : []);
-        setPartnerLevels(data);
-      } catch (err) {
-        console.error("[NiveisPage] Failed to load levels:", err);
-      }
+  const loadLevels = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res: any = await apiClient.getLevels();
+      const raw = res.data || (Array.isArray(res) ? res : []);
+      const data = raw.map((l: any) => ({
+        ...l,
+        benefits:
+          typeof l.benefits === "string"
+            ? (() => {
+                try {
+                  const p = JSON.parse(l.benefits);
+                  return Array.isArray(p) ? p : [];
+                } catch {
+                  return [];
+                }
+              })()
+            : Array.isArray(l.benefits)
+              ? l.benefits
+              : [],
+      }));
+      setPartnerLevels(data);
+    } catch (err: any) {
+      console.error("[NiveisPage] Failed to load levels:", err);
+      setLoadError(err?.message || "Erro ao carregar níveis. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadLevels();
+  }, [loadLevels]);
 
   const handleSaveLevel = async (levelData: any) => {
     try {
@@ -234,192 +263,193 @@ export default function NiveisPage() {
       />
 
       <div className="grid gap-4">
-        {partnerLevels.map((level, index) => {
+        {loading && (
+          <div className="flex items-center justify-center py-20 text-slate-400">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-violet-500" />
+              <span className="text-sm">Carregando níveis...</span>
+            </div>
+          </div>
+        )}
+
+        {!loading && loadError && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="rounded-xl bg-red-50 border border-red-200 px-6 py-5 max-w-md text-center">
+              <p className="text-sm font-semibold text-red-700 mb-1">Erro ao carregar níveis</p>
+              <p className="text-xs text-red-500 font-mono">{loadError}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={loadLevels} className="gap-2">
+              <TrendingUp className="h-3.5 w-3.5" />
+              Tentar novamente
+            </Button>
+          </div>
+        )}
+
+        {!loading && !loadError && partnerLevels.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+            <Award className="h-10 w-10 opacity-30" />
+            <p className="text-sm">Nenhum nível cadastrado ainda.</p>
+            <Button size="sm" onClick={() => openEditDialog()} className="btn-brand gap-2">
+              <Plus className="h-3.5 w-3.5" />
+              Criar primeiro nível
+            </Button>
+          </div>
+        )}
+
+        {!loading && !loadError && partnerLevels.map((level, index) => {
           const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
+          const levelConfig = LEVEL_ICON_MAP[level.name] ?? { gradient: "from-blue-500 to-indigo-600", Icon: Award };
+          const LevelIcon = levelConfig.Icon;
           return (
             <div
               key={level.id}
               className="animate-in fade-in slide-in-from-bottom duration-500"
               style={{ animationDelay: `${index * 80}ms` }}
             >
-              <Card
-                className={`overflow-hidden bg-white border border-l-4 ${theme.accent} ${theme.cardBorder} shadow-sm hover:shadow-md transition-all duration-200`}
-              >
-                <CardHeader
-                  className={`p-4 pb-3 ${theme.headerBg} border-b border-slate-100`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`shrink-0 w-11 h-11 rounded-xl ${theme.iconBg} flex items-center justify-center text-xl shadow-sm`}
-                      >
-                        {level.icon}
+              <Card className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}>
+
+                {/* ── HEADER ── */}
+                <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-4 min-w-0">
+
+                      {/* Modern gradient icon badge */}
+                      <div className="relative shrink-0">
+                        <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}>
+                          <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
+                        </div>
+                        <span
+                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
+                          style={{ backgroundColor: level.color ?? "#6B7280" }}
+                        >
+                          {level.sort_order ?? index + 1}
+                        </span>
                       </div>
+
+                      {/* Name + badges + description */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base font-semibold text-slate-800">
-                            {level.name}
-                          </h3>
-                          {level.requires_partner ? (
-                            <Badge
-                              className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                            >
+                          <h3 className="text-base font-bold text-slate-800 dark:text-white">{level.name}</h3>
+                          {level.requires_partner && (
+                            <Badge className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
                               <Crown className="h-3 w-3 mr-1" />
                               Requer Partner
                             </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-xs text-slate-500 border-slate-200 bg-white"
-                            >
-                              Todas as agências
-                            </Badge>
                           )}
                           {level.receives_leads_premium && (
-                            <Badge className="border text-xs font-medium bg-emerald-50 border-emerald-200 text-emerald-700">
+                            <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
                               <Zap className="h-3 w-3 mr-1" />
                               Leads Premium
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-slate-500 mt-0.5">
-                          {level.description}
-                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{level.description}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(level)}
-                        className="h-8 w-8 p-0 border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-800"
-                      >
+
+                    {/* Actions */}
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(level)}
+                        className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100">
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => confirmDelete(level.id, level.name)}
-                        className="h-8 w-8 p-0 border-red-100 bg-white hover:bg-red-50 text-red-400 hover:text-red-600"
-                      >
+                      <Button variant="outline" size="sm" onClick={() => confirmDelete(level.id, level.name)}
+                        className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-4 pt-3 space-y-4">
-                  {/* Critérios de progressão */}
+                <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
+
+                  {/* ── CRITÉRIOS DE PROGRESSÃO ── */}
                   <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
                       Critérios de Progressão
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div
-                        className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <DollarSign className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                            MRR Consumo
-                          </span>
+                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <DollarSign className={`h-3 w-3 ${theme.statIconColor}`} />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">MRR Consumo</span>
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">
-                          {formatMrrRange(level.min_mrr, level.max_mrr)}
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">{formatMrrRange(level.min_mrr, level.max_mrr)}</p>
+                      </div>
+                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <Users className={`h-3 w-3 ${theme.statIconColor}`} />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Ag. Lideradas</span>
+                        </div>
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                          {level.led_agencies_min > 0 ? `${level.led_agencies_min} ativas` : "—"}
                         </p>
                       </div>
-                      <div
-                        className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Users className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                            Ag. Lideradas
-                          </span>
+                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <BarChart3 className={`h-3 w-3 ${theme.statIconColor}`} />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">MRR Lideradas</span>
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">
-                          {level.led_agencies_min > 0
-                            ? `${level.led_agencies_min} ativas`
-                            : "—"}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <BarChart3 className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                            MRR Lideradas
-                          </span>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-700">
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
                           {level.led_agencies_mrr_min > 0
                             ? `R$ ${level.led_agencies_mrr_min.toLocaleString("pt-BR")}`
                             : "—"}
                         </p>
                       </div>
-                      <div
-                        className={`rounded-lg p-3 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Target className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                            Proj. Premium
-                          </span>
+                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <Target className={`h-3 w-3 ${theme.statIconColor}`} />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Proj. Premium</span>
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">
-                          {formatPremiumLimit(level)}
-                        </p>
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">{formatPremiumLimit(level)}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Perks */}
-                  <div className="flex flex-wrap gap-2">
-                    {level.commission_rate > 0 && (
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                      >
-                        <TrendingUp className="h-3 w-3" />
-                        {level.commission_rate}% comissão sobre MRR das
-                        lideradas
-                      </span>
-                    )}
-                    {level.extra_discount > 0 && (
-                      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium bg-emerald-50 border-emerald-200 text-emerald-700">
-                        <Percent className="h-3 w-3" />+{level.extra_discount}%
-                        desconto adicional nas contratações
-                      </span>
-                    )}
-                    {level.level_up_bonus_credits > 0 && (
-                      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium bg-purple-50 border-purple-200 text-purple-700">
-                        <Gift className="h-3 w-3" />
-                        R${" "}
-                        {level.level_up_bonus_credits.toLocaleString(
-                          "pt-BR",
-                        )}{" "}
-                        em créditos ao atingir nível
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Benefícios */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                      Benefícios desbloqueados
-                    </p>
+                  {/* ── PERKS ── */}
+                  {(level.commission_rate > 0 || level.extra_discount > 0 || level.level_up_bonus_credits > 0) && (
                     <div className="flex flex-wrap gap-1.5">
-                      {level.benefits.map((benefit, i) => (
-                        <span
-                          key={i}
-                          className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                        >
-                          <CheckCircle2 className="h-3 w-3 opacity-60" />
-                          {benefit}
+                      {level.commission_rate > 0 && (
+                        <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                          <TrendingUp className="h-2.5 w-2.5" />
+                          {level.commission_rate}% comissão sobre MRR das lideradas
                         </span>
-                      ))}
+                      )}
+                      {level.extra_discount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
+                          <Percent className="h-2.5 w-2.5" />
+                          +{level.extra_discount}% desconto adicional nas contratações
+                        </span>
+                      )}
+                      {level.level_up_bonus_credits > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
+                          <Gift className="h-2.5 w-2.5" />
+                          R$ {level.level_up_bonus_credits.toLocaleString("pt-BR")} em créditos ao atingir nível
+                        </span>
+                      )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
+                  {(level.benefits ?? []).length > 0 && (
+                    <div>
+                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                        Benefícios Desbloqueados
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(level.benefits ?? []).map((benefit, i) => (
+                          <span
+                            key={i}
+                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                          >
+                            <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                            {benefit}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </CardContent>
               </Card>
             </div>

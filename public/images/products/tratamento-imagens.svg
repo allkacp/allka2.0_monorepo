@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
+      <stop offset="60%" style="stop-color:#1a2a5e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c81a7f"/>
+      <stop offset="100%" style="stop-color:#7b1850"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6"/>
+      <stop offset="100%" style="stop-color:#0f766e"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="rgba(0,0,0,0.5)"/></filter>
+    <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <g opacity="0.05" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="90" x2="800" y2="90"/>
+    <line x1="0" y1="225" x2="800" y2="225"/>
+    <line x1="0" y1="360" x2="800" y2="360"/>
+    <line x1="200" y1="0" x2="200" y2="450"/>
+    <line x1="400" y1="0" x2="400" y2="450"/>
+    <line x1="600" y1="0" x2="600" y2="450"/>
+  </g>
+  <circle cx="720" cy="80" r="110" fill="none" stroke="rgba(20,184,166,0.12)" stroke-width="2"/>
+  <circle cx="80" cy="390" r="80" fill="none" stroke="rgba(200,26,127,0.1)" stroke-width="2"/>
+
+  <!-- Title -->
+  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">Tratamento de até 10 Imagens</text>
+  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Correção profissional de cores, nitidez, exposição e imperfeições</text>
+
+  <!-- Before/After image mockup -->
+  <!-- Before -->
+  <rect x="44" y="90" width="320" height="260" rx="10" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="60" y="114" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" letter-spacing="2">ANTES</text>
+  <!-- Simulated low quality image (dark, low contrast) -->
+  <rect x="60" y="122" width="288" height="180" rx="6" fill="rgba(80,60,40,0.4)"/>
+  <g opacity="0.3">
+    <rect x="80" y="140" width="80" height="80" rx="4" fill="rgba(100,80,60,0.6)"/>
+    <rect x="180" y="150" width="100" height="60" rx="4" fill="rgba(90,70,50,0.5)"/>
+    <rect x="120" y="200" width="140" height="40" rx="4" fill="rgba(70,55,40,0.4)"/>
+  </g>
+  <!-- Noise dots -->
+  <g fill="rgba(255,255,255,0.1)">
+    <circle cx="90" cy="160" r="1.5"/>
+    <circle cx="150" cy="145" r="1"/>
+    <circle cx="220" cy="175" r="1.5"/>
+    <circle cx="290" cy="155" r="1"/>
+    <circle cx="110" cy="220" r="1.5"/>
+    <circle cx="260" cy="235" r="1"/>
+    <circle cx="180" cy="195" r="1"/>
+    <circle cx="320" cy="185" r="1.5"/>
+  </g>
+  <rect x="60" y="122" width="288" height="180" rx="6" fill="rgba(0,0,0,0.25)"/>
+  <text x="204" y="222" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.25)" text-anchor="middle">baixo contraste · ruído · escura</text>
+  <!-- Imperfection markers -->
+  <circle cx="130" cy="170" r="12" fill="none" stroke="rgba(248,113,113,0.7)" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <circle cx="250" cy="195" r="10" fill="none" stroke="rgba(248,113,113,0.7)" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+  <!-- After -->
+  <rect x="436" y="90" width="320" height="260" rx="10" fill="rgba(20,184,166,0.07)" stroke="rgba(20,184,166,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="452" y="114" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" letter-spacing="2">DEPOIS</text>
+  <!-- Simulated high quality image (bright, vivid) -->
+  <rect x="452" y="122" width="288" height="180" rx="6" fill="rgba(20,80,120,0.35)"/>
+  <linearGradient id="imgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#14b8a6;stop-opacity:0.2"/>
+    <stop offset="100%" style="stop-color:#c81a7f;stop-opacity:0.15"/>
+  </linearGradient>
+  <rect x="452" y="122" width="288" height="180" rx="6" fill="url(#imgGrad)"/>
+  <rect x="472" y="140" width="80" height="80" rx="4" fill="rgba(20,184,166,0.3)"/>
+  <rect x="572" y="150" width="100" height="60" rx="4" fill="rgba(59,130,246,0.25)"/>
+  <rect x="512" y="200" width="140" height="40" rx="4" fill="rgba(200,26,127,0.2)"/>
+  <text x="596" y="222" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.5)" text-anchor="middle">cores vívidas · nítido · equilibrado</text>
+  <!-- Quality check marks -->
+  <circle cx="522" cy="172" r="12" fill="rgba(74,222,128,0.15)" stroke="rgba(74,222,128,0.5)" stroke-width="1.5"/>
+  <text x="522" y="177" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle">✓</text>
+  <circle cx="642" cy="185" r="10" fill="rgba(74,222,128,0.15)" stroke="rgba(74,222,128,0.5)" stroke-width="1.5"/>
+  <text x="642" y="190" font-family="system-ui,sans-serif" font-size="9" fill="#4ade80" text-anchor="middle">✓</text>
+
+  <!-- Arrow between -->
+  <text x="394" y="228" font-family="system-ui,sans-serif" font-size="28" fill="url(#pink)" text-anchor="middle" opacity="0.8">→</text>
+
+  <!-- Corrections applied chips -->
+  <text x="452" y="318" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" letter-spacing="1">CORREÇÕES APLICADAS</text>
+  <rect x="452" y="326" width="88" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="496" y="341" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Exposição</text>
+  <rect x="548" y="326" width="72" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="584" y="341" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Cores</text>
+  <rect x="628" y="326" width="72" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="664" y="341" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Nitidez</text>
+  <rect x="452" y="354" width="84" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="494" y="369" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Imperfeições</text>
+  <rect x="544" y="354" width="60" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="574" y="369" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Ruído</text>
+  <rect x="612" y="354" width="100" height="22" rx="11" fill="rgba(20,184,166,0.15)" stroke="rgba(20,184,166,0.3)" stroke-width="1"/>
+  <text x="662" y="369" font-family="system-ui,sans-serif" font-size="10" fill="#14b8a6" text-anchor="middle">Contraste</text>
+
+  <!-- Left corrections info -->
+  <text x="60" y="318" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" letter-spacing="1">ENTREGA</text>
+  <text x="60" y="338" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.6)">Até 10 imagens por ciclo</text>
+  <text x="60" y="356" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.6)">.PNG + .PSD + .XMP</text>
+  <text x="60" y="374" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.6)">3 dias úteis</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
+  <rect x="50" y="414" width="100" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="100" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">Photoshop/LR</text>
+  <rect x="162" y="414" width="80" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="202" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">3 dias úteis</text>
+  <rect x="254" y="414" width="80" height="22" rx="11" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="294" y="429" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" text-anchor="middle">Até 10 imgs</text>
+  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Tratamento de Imagens — allka</text>
+</svg>

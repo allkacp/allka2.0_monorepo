@@ -44,6 +44,7 @@ const UI: Record<Locale, {
   restricted: string
   errorFill: string
   errorLogin: string
+  errorNetwork: string
   socialSoon: string
 }> = {
   pt: {
@@ -56,6 +57,7 @@ const UI: Record<Locale, {
     restricted: "Acesso restrito · Plataforma Allka",
     errorFill: "Preencha email e senha.",
     errorLogin: "Email ou senha incorretos.",
+    errorNetwork: "Não foi possível conectar ao servidor. Verifique sua conexão.",
     socialSoon: "Em breve · Integração OAuth em configuração.",
   },
   en: {
@@ -68,6 +70,7 @@ const UI: Record<Locale, {
     restricted: "Restricted access · Allka Platform",
     errorFill: "Please fill in email and password.",
     errorLogin: "Incorrect email or password.",
+    errorNetwork: "Could not connect to server. Please check your connection.",
     socialSoon: "Coming soon · OAuth integration in setup.",
   },
   es: {
@@ -80,6 +83,7 @@ const UI: Record<Locale, {
     restricted: "Acceso restringido · Plataforma Allka",
     errorFill: "Ingresa tu email y contraseña.",
     errorLogin: "Email o contraseña incorrectos.",
+    errorNetwork: "No se pudo conectar al servidor. Verifica tu conexión.",
     socialSoon: "Próximamente · Integración OAuth en configuración.",
   },
   zh: {
@@ -91,8 +95,7 @@ const UI: Record<Locale, {
     divider: "或通过以下方式继续",
     restricted: "受限访问 · Allka 平台",
     errorFill: "请填写邮箱和密码。",
-    errorLogin: "邮箱或密码不正确。",
-    socialSoon: "即将推出 · OAuth 集成配置中。",
+    errorLogin: "邮箱或密码不正确。",    errorNetwork: "无法连接到服务器，请检查您的网络连接。",    socialSoon: "即将推出 · OAuth 集成配置中。",
   },
 }
 
@@ -118,15 +121,9 @@ export function LoginPageTemplate({ config }: Props) {
   useEffect(() => {
     // Se existe token válido → direto pro dashboard
     const token = localStorage.getItem("allka_token")
-    if (token) {
+    if (token && token !== "mock-jwt-1") {
       navigate(config.redirectPath, { replace: true })
       return
-    }
-    // Auto-login só acontece se o usuário NÃO deslogou explicitamente
-    const loggedOut = localStorage.getItem("allka_logged_out") === "true"
-    if (config.devUser && !loggedOut) {
-      localStorage.setItem("allka_token", "mock-jwt-1")
-      navigate(config.redirectPath, { replace: true })
     }
   }, [navigate, config.redirectPath])
 
@@ -142,10 +139,29 @@ export function LoginPageTemplate({ config }: Props) {
       setErrorMsg(ui.errorFill)
       return
     }
-    // Login sempre aceita — grava token, limpa flag de logout e redireciona
-    localStorage.setItem("allka_token", "mock-jwt-1")
-    localStorage.removeItem("allka_logged_out")
-    navigate(config.redirectPath, { replace: true })
+    setLoading(true)
+    try {
+      const res: any = await apiClient.login(email, password)
+      if (res?.token) {
+        localStorage.setItem("allka_token", res.token)
+        if (res.user) localStorage.setItem("allka_user", JSON.stringify(res.user))
+        localStorage.removeItem("allka_logged_out")
+        navigate(config.redirectPath, { replace: true })
+      } else {
+        setErrorMsg(ui.errorLogin)
+      }
+    } catch (err: any) {
+      const msg = err?.message || ""
+      if (msg === "Failed to fetch" || msg.includes("fetch") || msg.includes("network") || msg.includes("ECONNREFUSED")) {
+        setErrorMsg(ui.errorNetwork)
+      } else if (msg.includes("401") || msg.toLowerCase().includes("inválido") || msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("credencial")) {
+        setErrorMsg(ui.errorLogin)
+      } else {
+        setErrorMsg(ui.errorLogin)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
