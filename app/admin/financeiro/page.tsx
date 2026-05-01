@@ -44,6 +44,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useState, useEffect } from "react";
 import { useFinancial } from "@/hooks/useFinancial";
 import { useBilling } from "@/hooks/useBilling";
+import { PageLoader } from "@/components/ui/loading";
 
 // Default empty data structure — overridden once API responds
 const emptyFinancialData = {
@@ -174,6 +175,10 @@ export default function AdminFinanceiroPage() {
     setRejectingId(null);
   }
 
+  if (fLoading || bLoading) {
+    return <PageLoader text="Carregando financeiro…" />;
+  }
+
   return (
     <div className="container mx-auto space-y-6 px-0 py-0">
       <div className="flex items-center justify-between">
@@ -186,7 +191,11 @@ export default function AdminFinanceiroPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400"
+          >
             <Download className="h-3.5 w-3.5" />
             Exportar
           </Button>
@@ -782,7 +791,11 @@ export default function AdminFinanceiroPage() {
                 <Filter className="h-4 w-4" />
                 Filtrar
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400"
+              >
                 <Download className="h-3.5 w-3.5" />
                 Exportar
               </Button>

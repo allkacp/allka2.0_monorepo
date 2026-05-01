@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ import {
   Clock,
   BarChart3,
   Trash2,
-  Loader2,
   AlertCircle,
   Edit,
   Key,
@@ -1050,9 +1049,26 @@ export default function UsuariosPage() {
   };
 
   if (usersLoading) {
+    return <PageLoader text="Carregando usuários…" />;
+  }
+
+  if (usersError) {
     return (
-      <div className="space-y-5">
-        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={6} />
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar usuários
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {usersError}
+          </p>
+        </div>
+        <Button onClick={refetchUsers} className="btn-brand">
+          Tentar novamente
+        </Button>
       </div>
     );
   }
@@ -2920,10 +2936,7 @@ export default function UsuariosPage() {
                   disabled={isDeleteLoading || !deletionReason.trim()}
                 >
                   {isDeleteLoading ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Excluindo...
-                    </>
+                    <ButtonLoader text="Excluindo..." />
                   ) : (
                     <>
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" />

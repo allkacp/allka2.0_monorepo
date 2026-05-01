@@ -8,6 +8,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/ui/loading";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -59,6 +60,10 @@ export default function EmpresaTarefas() {
   });
 
   const sorted = sortData(filtered);
+
+  if (loading) {
+    return <PageLoader text="Carregando tarefas…" />;
+  }
 
   return (
     <div className="p-6 space-y-6">

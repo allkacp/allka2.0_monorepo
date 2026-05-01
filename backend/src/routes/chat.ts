@@ -95,7 +95,7 @@ router.get("/conversations/:id/messages", verifyToken, async (req, res, next) =>
     const participant = await prisma.chatParticipant.findUnique({
       where: {
         conversation_id_user_id: {
-          conversation_id: req.params.id,
+          conversation_id: (req.params.id as string),
           user_id: req.user!.id,
         },
       },
@@ -107,9 +107,9 @@ router.get("/conversations/:id/messages", verifyToken, async (req, res, next) =>
     }
 
     const [total, messages] = await Promise.all([
-      prisma.chatMessage.count({ where: { conversation_id: req.params.id } }),
+      prisma.chatMessage.count({ where: { conversation_id: (req.params.id as string) } }),
       prisma.chatMessage.findMany({
-        where: { conversation_id: req.params.id },
+        where: { conversation_id: (req.params.id as string) },
         include: {
           sender: { select: { id: true, name: true, avatar: true } },
         },
@@ -122,7 +122,7 @@ router.get("/conversations/:id/messages", verifyToken, async (req, res, next) =>
     // Mark messages as read
     await prisma.chatMessage.updateMany({
       where: {
-        conversation_id: req.params.id,
+        conversation_id: (req.params.id as string),
         sender_id: { not: req.user!.id },
         is_read: false,
       },
@@ -146,7 +146,7 @@ router.post(
       const participant = await prisma.chatParticipant.findUnique({
         where: {
           conversation_id_user_id: {
-            conversation_id: req.params.id,
+            conversation_id: (req.params.id as string),
             user_id: req.user!.id,
           },
         },
@@ -159,7 +159,7 @@ router.post(
 
       const message = await prisma.chatMessage.create({
         data: {
-          conversation_id: req.params.id,
+          conversation_id: (req.params.id as string),
           sender_id: req.user!.id,
           content: (req.body as { content: string }).content,
         },
@@ -170,7 +170,7 @@ router.post(
 
       // Update conversation timestamp
       await prisma.conversation.update({
-        where: { id: req.params.id },
+        where: { id: (req.params.id as string) },
         data: { updated_at: new Date() },
       });
 

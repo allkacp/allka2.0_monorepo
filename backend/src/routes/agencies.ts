@@ -62,7 +62,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const agency = await prisma.agency.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         user: { select: { id: true, email: true, name: true } },
         match_queue_entry: true,
@@ -97,7 +97,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
   try {
     const agency = await prisma.agency.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(agency);
@@ -109,7 +109,7 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
 // DELETE /api/agencies/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.agency.delete({ where: { id: req.params.id } });
+    await prisma.agency.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

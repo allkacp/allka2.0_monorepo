@@ -40,7 +40,7 @@ router.get("/profiles", verifyToken, requireRole("admin"), async (_req, res, nex
 router.get("/profiles/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     const profile = await prisma.adminProfile.findUnique({
-      where: { id: req.params.id },
+      where: { id: (((req.params.id as string) as string) as string) },
       include: { permissions: true },
     });
     if (!profile) {
@@ -67,7 +67,7 @@ router.post("/profiles", verifyToken, requireRole("admin"), validate(profileSche
 router.put("/profiles/:id", verifyToken, requireRole("admin"), validate(profileSchema.partial()), async (req, res, next) => {
   try {
     const profile = await prisma.adminProfile.update({
-      where: { id: req.params.id },
+      where: { id: (((req.params.id as string) as string) as string) },
       data: req.body,
       include: { permissions: true },
     });
@@ -80,7 +80,7 @@ router.put("/profiles/:id", verifyToken, requireRole("admin"), validate(profileS
 // DELETE /api/permissions/profiles/:id
 router.delete("/profiles/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
-    await prisma.adminProfile.delete({ where: { id: req.params.id } });
+    await prisma.adminProfile.delete({ where: { id: (((req.params.id as string) as string) as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -110,14 +110,14 @@ router.put(
       };
 
       await prisma.$transaction([
-        prisma.adminPermission.deleteMany({ where: { profile_id: req.params.id } }),
+        prisma.adminPermission.deleteMany({ where: { profile_id: (((req.params.id as string) as string) as string) } }),
         prisma.adminPermission.createMany({
-          data: permissions.map((p) => ({ ...p, profile_id: req.params.id })),
+          data: permissions.map((p) => ({ ...p, profile_id: (((req.params.id as string) as string) as string) })),
         }),
       ]);
 
       const profile = await prisma.adminProfile.findUnique({
-        where: { id: req.params.id },
+        where: { id: (((req.params.id as string) as string) as string) },
         include: { permissions: true },
       });
 
@@ -131,7 +131,7 @@ router.put(
 // DELETE /api/permissions/:id
 router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
-    await prisma.adminPermission.delete({ where: { id: req.params.id } });
+    await prisma.adminPermission.delete({ where: { id: (((req.params.id as string) as string) as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

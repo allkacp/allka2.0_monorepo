@@ -63,7 +63,7 @@ router.get("/withdrawals", verifyToken, async (req, res, next) => {
 router.get("/withdrawals/:id", verifyToken, async (req, res, next) => {
   try {
     const withdrawal = await prisma.withdrawalRequest.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: { nomade: true },
     });
 
@@ -110,7 +110,7 @@ router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, 
     if (status === "pagamento_efetuado") data["paid_at"] = new Date();
 
     const withdrawal = await prisma.withdrawalRequest.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data,
       include: { nomade: { select: { id: true, name: true } } },
     });
@@ -124,7 +124,7 @@ router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, 
 // DELETE /api/financial/withdrawals/:id
 router.delete("/withdrawals/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.withdrawalRequest.delete({ where: { id: req.params.id } });
+    await prisma.withdrawalRequest.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

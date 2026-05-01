@@ -35,6 +35,6 @@ export function validateQuery(schema: ZodSchema) {
 /** Extracts pagination from req.query: page, limit */
 export function parsePagination(query: Record<string, unknown>) {
   const page = Math.max(1, Number(query.page) || 1);
-  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+  const limit = Math.min(500, Math.max(1, Number(query.limit) || 20));
   return { page, limit, skip: (page - 1) * limit };
 }

@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
+const BASKET_KEY = "allka_catalog_cart";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface BasketItemCommission {
+  tipoComissao: "PERCENTUAL" | "VALOR_FIXO";
+  /** Used when tipoComissao === "PERCENTUAL" */
+  percentualComissao: number;
+  /** Used when tipoComissao === "VALOR_FIXO" — value added per unit */
+  valorComissao: number;
+  /** Who pays at checkout */
+  pagador: "AGENCIA" | "CLIENTE";
+}
 
 export interface BasketItem {
   /** Unique ID: `productId` for simple products, `productId--variationId` for variants */
@@ -16,6 +28,8 @@ export interface BasketItem {
     name: string;
     priceModifier?: number;
   };
+  /** Commission/margin set by the agency for this basket item */
+  commissionData?: BasketItemCommission;
   /** Full product object — passed as-is to ProjectCreateSlidePanel */
   product: any;
 }
@@ -28,9 +42,13 @@ interface ProjectBasketContextType {
   addItem: (product: any) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
+  updateCommission: (id: string, data: Partial<BasketItemCommission>) => void;
   clearBasket: () => void;
   getTotalItems: () => number;
+  /** Sum of base prices (agency cost), ignoring commissions */
   getTotalPrice: () => number;
+  /** Sum factoring in commissions per payer: client-pays items use client price, agency-pays items use base price */
+  getClientTotal: () => number;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -50,25 +68,25 @@ export function ProjectBasketProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [items, setItems] = useState<BasketItem[]>([]);
-  const [isOpen, setOpen] = useState(false);
-
-  // Restore from localStorage on mount
-  useEffect(() => {
+  // Synchronous lazy initializer — reads localStorage BEFORE the first render,
+  // so the persist effect never sees a stale empty array on mount.
+  const [items, setItems] = useState<BasketItem[]>(() => {
     try {
-      const saved = localStorage.getItem("project-basket");
+      const saved = localStorage.getItem(BASKET_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setItems(parsed);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {
       // ignore malformed data
     }
-  }, []);
+    return [];
+  });
+  const [isOpen, setOpen] = useState(false);
 
   // Persist to localStorage on every change
   useEffect(() => {
-    localStorage.setItem("project-basket", JSON.stringify(items));
+    localStorage.setItem(BASKET_KEY, JSON.stringify(items));
   }, [items]);
 
   const addItem = (product: any) => {
@@ -125,11 +143,44 @@ export function ProjectBasketProvider({
     );
   };
 
+  const updateCommission = (
+    id: string,
+    data: Partial<BasketItemCommission>,
+  ) => {
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              commissionData: {
+                tipoComissao: "PERCENTUAL",
+                percentualComissao: 0,
+                valorComissao: 0,
+                pagador: "AGENCIA",
+                ...(i.commissionData ?? {}),
+                ...data,
+              },
+            }
+          : i,
+      ),
+    );
+  };
+
   const clearBasket = () => setItems([]);
 
   const getTotalItems = () => items.reduce((s, i) => s + i.quantity, 0);
   const getTotalPrice = () =>
     items.reduce((s, i) => s + i.finalPrice * i.quantity, 0);
+
+  const getClientTotal = () =>
+    items.reduce((s, i) => {
+      const base = i.finalPrice * i.quantity;
+      const c = i.commissionData;
+      if (!c || c.pagador === "AGENCIA") return s + base;
+      if (c.tipoComissao === "PERCENTUAL")
+        return s + base + (base * c.percentualComissao) / 100;
+      return s + base + c.valorComissao * i.quantity;
+    }, 0);
 
   return (
     <ProjectBasketContext.Provider
@@ -140,9 +191,11 @@ export function ProjectBasketProvider({
         addItem,
         removeItem,
         updateQuantity,
+        updateCommission,
         clearBasket,
         getTotalItems,
         getTotalPrice,
+        getClientTotal,
       }}
     >
       {children}

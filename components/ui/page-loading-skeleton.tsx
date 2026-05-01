@@ -1,17 +1,20 @@
-import { Skeleton } from "@/components/ui/skeleton"
-import { TableSkeleton } from "@/components/ui/table-skeleton"
+import { Skeleton } from "@/components/ui/skeleton";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
+import { Spinner } from "@/components/ui/loading";
 
 interface PageLoadingSkeletonProps {
   /** Number of stat cards at the top */
-  statCards?: number
+  statCards?: number;
   /** Number of table rows */
-  tableRows?: number
+  tableRows?: number;
   /** Number of table columns */
-  tableColumns?: number
+  tableColumns?: number;
   /** Show stat cards section */
-  showStats?: boolean
+  showStats?: boolean;
   /** Show table section */
-  showTable?: boolean
+  showTable?: boolean;
+  /** Optional label shown below spinner */
+  text?: string;
 }
 
 export function PageLoadingSkeleton({
@@ -20,9 +23,29 @@ export function PageLoadingSkeleton({
   tableColumns = 6,
   showStats = true,
   showTable = true,
+  text = "Carregando dados…",
 }: PageLoadingSkeletonProps) {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Allka brand loading indicator */}
+      <div className="flex items-center gap-3 pb-2">
+        <Spinner size="sm" />
+        <span className="text-sm font-medium text-slate-500 dark:text-slate-400 tracking-wide">
+          {text}
+        </span>
+        <span className="flex gap-1 ml-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-1 w-1 rounded-full bg-gradient-to-br from-blue-500 to-purple-600"
+              style={{
+                animation: `allka-pulse-dot 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }}
+            />
+          ))}
+        </span>
+      </div>
+
       {/* Page header skeleton */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">
@@ -68,5 +91,5 @@ export function PageLoadingSkeleton({
         </>
       )}
     </div>
-  )
+  );
 }

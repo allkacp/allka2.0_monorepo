@@ -289,6 +289,8 @@ export interface Product {
   questionnaire?: Questionnaire | null;
   // apresentação pública (catálogo, painel de detalhes, futura página de produto)
   presentation?: ProductPresentation | null;
+  // IDs reais de produtos complementares (vínculo efetivo para cesta)
+  complementaryProductIds?: string[];
   // features herdadas por todas as variações — base estrutural imutável
   baseFeatures?: string[];
   // imagens de portfólio / demonstrações do produto (URLs relativas ou absolutas)

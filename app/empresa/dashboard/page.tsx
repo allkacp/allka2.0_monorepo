@@ -2,7 +2,7 @@
 import type React from "react";
 
 import { useState, useEffect, useMemo } from "react";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -593,6 +593,8 @@ export default function EmpresaDashboard() {
     stats: apiStats,
     activities: apiActivities,
     loading: dashboardLoading,
+    error: dashboardError,
+    refetch: refetchDashboard,
   } = useDashboard();
 
   const [globalPeriod, setGlobalPeriod] = useState<{
@@ -6994,14 +6996,26 @@ export default function EmpresaDashboard() {
   };
 
   if (dashboardLoading) {
+    return <PageLoader text="Carregando painel…" />;
+  }
+
+  if (dashboardError) {
     return (
-      <div className="container mx-auto space-y-4 px-0 py-0">
-        <PageLoadingSkeleton
-          statCards={4}
-          tableRows={6}
-          tableColumns={5}
-          showTable={false}
-        />
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar o painel
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {dashboardError}
+          </p>
+        </div>
+        <Button onClick={refetchDashboard} className="btn-brand">
+          Tentar novamente
+        </Button>
       </div>
     );
   }

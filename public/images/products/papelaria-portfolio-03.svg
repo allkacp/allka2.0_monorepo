@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e"/>
+      <stop offset="60%" style="stop-color:#1a2a5e"/>
+      <stop offset="100%" style="stop-color:#2d1a5e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c9a84c"/>
+      <stop offset="100%" style="stop-color:#7a5c12"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="rgba(0,0,0,0.65)"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="700" cy="380" r="120" fill="rgba(201,168,76,0.04)" stroke="rgba(201,168,76,0.07)" stroke-width="1.5"/>
+
+  <rect x="30" y="22" width="135" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">ENVELOPE</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Envelope Corporativo</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Envelope DL e Ofício com identidade visual aplicada</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Envelope body -->
+  <g filter="url(#shadow)">
+    <rect x="160" y="150" width="480" height="220" rx="6" fill="#f2ede0"/>
+    <!-- left accent strip -->
+    <rect x="160" y="150" width="8" height="220" rx="6" fill="url(#gold)"/>
+    <!-- bottom strip -->
+    <rect x="160" y="346" width="480" height="24" rx="0" fill="#1a1a2e" opacity="0.85"/>
+    <!-- flap triangle (top fold) -->
+    <polygon points="160,150 640,150 400,270" fill="#e8e0cc" opacity="0.85"/>
+    <polygon points="160,150 640,150 400,270" fill="none" stroke="#d4c897" stroke-width="1.5" opacity="0.6"/>
+    <!-- Flap crease line -->
+    <line x1="160" y1="150" x2="400" y2="280" stroke="#d4c897" stroke-width="0.8" opacity="0.4"/>
+    <line x1="640" y1="150" x2="400" y2="280" stroke="#d4c897" stroke-width="0.8" opacity="0.4"/>
+    <!-- Logo seal on flap -->
+    <circle cx="400" cy="212" r="22" fill="url(#gold)" opacity="0.9"/>
+    <text x="400" y="218" font-family="system-ui,sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="900">A</text>
+    <!-- Address area -->
+    <rect x="280" y="295" width="160" height="5" rx="2" fill="#8a8060" opacity="0.5"/>
+    <rect x="310" y="305" width="100" height="4" rx="2" fill="#8a8060" opacity="0.35"/>
+    <rect x="325" y="315" width="70" height="4" rx="2" fill="#8a8060" opacity="0.3"/>
+    <!-- Stamp placeholder -->
+    <rect x="570" y="165" width="56" height="44" rx="3" fill="none" stroke="#c9a84c" stroke-width="1.5" opacity="0.5" stroke-dasharray="3,2"/>
+    <rect x="574" y="169" width="48" height="36" rx="2" fill="rgba(201,168,76,0.08)"/>
+    <!-- Company address bottom strip -->
+    <rect x="185" y="352" width="120" height="3" rx="1.5" fill="rgba(201,168,76,0.5)"/>
+    <rect x="185" y="359" width="90" height="2" rx="1" fill="rgba(255,255,255,0.2)"/>
+  </g>
+
+  <!-- Badges -->
+  <rect x="30" y="392" width="110" height="26" rx="13" fill="rgba(201,168,76,0.15)" stroke="rgba(201,168,76,0.35)" stroke-width="1"/>
+  <text x="85" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#c9a84c" text-anchor="middle" font-weight="600">Formato DL/Ofício</text>
+  <rect x="152" y="392" width="124" height="26" rx="13" fill="rgba(124,58,237,0.15)" stroke="rgba(124,58,237,0.35)" stroke-width="1"/>
+  <text x="214" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#a78bfa" text-anchor="middle" font-weight="600">Frente e verso</text>
+  <rect x="288" y="392" width="130" height="26" rx="13" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="353" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="600">Logotipo aplicado</text>
+</svg>

@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { PageLoader } from "@/components/ui/loading";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -33,11 +34,8 @@ export default function PartnerDashboard() {
   const [copied, setCopied] = useState(false);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-      </div>
-    );
+    return <PageLoader text="Carregando painel…" />;
+  }
   }
 
   if (!profile || !stats) {

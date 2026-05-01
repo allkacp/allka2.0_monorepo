@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e"/>
+      <stop offset="60%" style="stop-color:#1a2a5e"/>
+      <stop offset="100%" style="stop-color:#2d1a5e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c9a84c"/>
+      <stop offset="100%" style="stop-color:#7a5c12"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="rgba(0,0,0,0.6)"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="700" cy="60" r="150" fill="rgba(201,168,76,0.04)" stroke="rgba(201,168,76,0.07)" stroke-width="1.5"/>
+  <circle cx="100" cy="400" r="100" fill="rgba(124,58,237,0.05)" stroke="rgba(124,58,237,0.07)" stroke-width="1"/>
+
+  <rect x="30" y="22" width="200" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">KIT COMPLETO DE PAPELARIA</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Conjunto Completo de Identidade</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Cartão · Papel Timbrado · Envelope com consistência visual</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Paper timbrado (back, tilted) -->
+  <g filter="url(#shadow)" transform="rotate(-8, 300, 270)">
+    <rect x="130" y="140" width="200" height="260" rx="4" fill="#eee9db"/>
+    <rect x="130" y="140" width="200" height="40" rx="4" fill="url(#gold)" opacity="0.9"/>
+    <rect x="145" y="190" width="170" height="4" rx="2" fill="#ccc5b0"/>
+    <rect x="145" y="200" width="155" height="3" rx="1.5" fill="#ccc5b0"/>
+    <rect x="145" y="210" width="165" height="3" rx="1.5" fill="#ccc5b0"/>
+    <rect x="145" y="224" width="170" height="3" rx="1.5" fill="#ccc5b0"/>
+    <rect x="145" y="234" width="130" height="3" rx="1.5" fill="#ccc5b0"/>
+    <rect x="130" y="368" width="200" height="32" rx="0" fill="#1a1a2e" opacity="0.85"/>
+  </g>
+
+  <!-- Envelope (middle) -->
+  <g filter="url(#shadow)" transform="rotate(3, 400, 270)">
+    <rect x="280" y="195" width="240" height="140" rx="5" fill="#f0ebe0"/>
+    <polygon points="280,195 520,195 400,265" fill="#e4ddd0" opacity="0.9"/>
+    <line x1="280" y1="195" x2="400" y2="270" stroke="#d4c897" stroke-width="0.8" opacity="0.5"/>
+    <line x1="520" y1="195" x2="400" y2="270" stroke="#d4c897" stroke-width="0.8" opacity="0.5"/>
+    <circle cx="400" cy="230" r="14" fill="url(#gold)" opacity="0.9"/>
+    <text x="400" y="235" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="900">A</text>
+    <rect x="280" y="315" width="240" height="20" rx="0" fill="#1a1a2e" opacity="0.8"/>
+  </g>
+
+  <!-- Business card (front, top) -->
+  <g filter="url(#shadow)">
+    <rect x="480" y="148" width="200" height="115" rx="8" fill="#1e1e2e"/>
+    <rect x="480" y="148" width="6" height="115" rx="8" fill="url(#gold)"/>
+    <circle cx="510" cy="178" r="14" fill="rgba(201,168,76,0.2)" stroke="rgba(201,168,76,0.5)" stroke-width="1.5"/>
+    <text x="510" y="183" font-family="system-ui,sans-serif" font-size="10" fill="#c9a84c" text-anchor="middle" font-weight="900">A</text>
+    <text x="534" y="174" font-family="system-ui,sans-serif" font-size="11" fill="#ffffff" font-weight="700">Empresa Exemplo</text>
+    <text x="534" y="186" font-family="system-ui,sans-serif" font-size="9" fill="#c9a84c">Marketing &amp; Branding</text>
+    <line x1="494" y1="198" x2="666" y2="198" stroke="rgba(201,168,76,0.2)" stroke-width="0.8"/>
+    <rect x="494" y="208" width="80" height="3" rx="1.5" fill="#ffffff20"/>
+    <rect x="494" y="216" width="100" height="3" rx="1.5" fill="#ffffff15"/>
+    <rect x="494" y="224" width="70" height="3" rx="1.5" fill="#ffffff15"/>
+    <rect x="580" y="234" width="80" height="18" rx="3" fill="rgba(201,168,76,0.2)" stroke="rgba(201,168,76,0.4)" stroke-width="1"/>
+    <text x="620" y="246" font-family="system-ui,sans-serif" font-size="8" fill="#c9a84c" text-anchor="middle">empresa.com.br</text>
+  </g>
+
+  <!-- Consistency badge -->
+  <rect x="520" y="316" width="220" height="50" rx="8" fill="rgba(201,168,76,0.12)" stroke="rgba(201,168,76,0.3)" stroke-width="1"/>
+  <text x="630" y="337" font-family="system-ui,sans-serif" font-size="11" fill="#c9a84c" text-anchor="middle" font-weight="700">✓ Consistência Visual</text>
+  <text x="630" y="354" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">Mesma paleta · tipografia · logo</text>
+
+  <!-- Badges -->
+  <rect x="30" y="392" width="100" height="26" rx="13" fill="rgba(201,168,76,0.15)" stroke="rgba(201,168,76,0.35)" stroke-width="1"/>
+  <text x="80" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#c9a84c" text-anchor="middle" font-weight="600">3 peças</text>
+  <rect x="142" y="392" width="130" height="26" rx="13" fill="rgba(124,58,237,0.15)" stroke="rgba(124,58,237,0.35)" stroke-width="1"/>
+  <text x="207" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#a78bfa" text-anchor="middle" font-weight="600">Mockup incluso</text>
+  <rect x="284" y="392" width="140" height="26" rx="13" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="354" y="409" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="600">Arquivos AI abertos</text>
+</svg>

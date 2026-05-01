@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0b1640"/>
+      <stop offset="55%" style="stop-color:#14205e"/>
+      <stop offset="100%" style="stop-color:#1e0e5c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2558FF"/>
+      <stop offset="100%" style="stop-color:#6E2C96"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.7)"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="650" cy="80" r="120" fill="rgba(37,88,255,0.05)" stroke="rgba(37,88,255,0.07)" stroke-width="1.5"/>
+
+  <rect x="30" y="22" width="140" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">VERSÃO MOBILE</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Design Responsivo Mobile</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Adaptação perfeita para smartphones e tablets</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Multiple phone mockups -->
+  <!-- Phone 1 - Home/Landing -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="130" width="150" height="278" rx="20" fill="#1e2235" stroke="#ffffff18" stroke-width="2"/>
+    <rect x="90" y="130" width="150" height="20" rx="20" fill="#252840"/>
+    <rect x="90" y="140" width="150" height="10" rx="0" fill="#252840"/>
+    <circle cx="165" cy="140" r="5" fill="#1a1d30"/>
+    <!-- Screen content -->
+    <!-- Hero with gradient -->
+    <rect x="93" y="150" width="144" height="75" fill="url(#accent)" opacity="0.85"/>
+    <rect x="103" y="158" width="50" height="6" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="103" y="168" width="80" height="9" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="103" y="182" width="65" height="6" rx="2" fill="rgba(255,255,255,0.6)"/>
+    <rect x="103" y="195" width="55" height="18" rx="9" fill="rgba(255,255,255,0.9)"/>
+    <!-- Cards stacked -->
+    <rect x="100" y="232" width="130" height="42" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <circle cx="119" cy="253" r="11" fill="url(#accent)" opacity="0.7"/>
+    <rect x="136" y="247" width="78" height="6" rx="2" fill="#ffffff25"/>
+    <rect x="136" y="257" width="60" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="100" y="280" width="130" height="42" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <circle cx="119" cy="301" r="11" fill="#10b981" opacity="0.7"/>
+    <rect x="136" y="295" width="78" height="6" rx="2" fill="#ffffff25"/>
+    <rect x="136" y="305" width="60" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="100" y="328" width="130" height="42" rx="8" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <circle cx="119" cy="349" r="11" fill="#f59e0b" opacity="0.7"/>
+    <rect x="136" y="343" width="78" height="6" rx="2" fill="#ffffff25"/>
+    <rect x="136" y="353" width="60" height="4" rx="2" fill="#ffffff15"/>
+    <!-- Bottom nav -->
+    <rect x="93" y="376" width="144" height="32" rx="0" fill="#0d1126"/>
+    <rect x="93" y="390" width="144" height="18" rx="20" fill="#0d1126"/>
+    <circle cx="130" cy="390" r="6" fill="#2558FF" opacity="0.6"/>
+    <circle cx="165" cy="390" r="6" fill="#ffffff20"/>
+    <circle cx="200" cy="390" r="6" fill="#ffffff20"/>
+  </g>
+
+  <!-- Phone 2 - Produto/Detalhes -->
+  <g filter="url(#shadow)">
+    <rect x="310" y="130" width="150" height="278" rx="20" fill="#1e2235" stroke="#ffffff18" stroke-width="2"/>
+    <rect x="310" y="130" width="150" height="20" rx="20" fill="#252840"/>
+    <rect x="310" y="140" width="150" height="10" rx="0" fill="#252840"/>
+    <circle cx="385" cy="140" r="5" fill="#1a1d30"/>
+    <!-- Product image -->
+    <rect x="313" y="150" width="144" height="90" fill="#ffffff08"/>
+    <rect x="313" y="150" width="144" height="90" fill="url(#accent)" opacity="0.35"/>
+    <text x="385" y="200" font-family="system-ui,sans-serif" font-size="10" fill="#ffffff60" text-anchor="middle">📷 Imagem do Produto</text>
+    <!-- Product info -->
+    <rect x="323" y="248" width="120" height="10" rx="3" fill="#ffffff30"/>
+    <rect x="323" y="264" width="80" height="7" rx="2" fill="#ffffff20"/>
+    <!-- Price -->
+    <rect x="323" y="278" width="70" height="14" rx="3" fill="url(#accent)" opacity="0.5"/>
+    <rect x="323" y="298" width="130" height="5" rx="2" fill="#ffffff15"/>
+    <rect x="323" y="308" width="110" height="5" rx="2" fill="#ffffff12"/>
+    <rect x="323" y="318" width="120" height="5" rx="2" fill="#ffffff12"/>
+    <!-- CTA button -->
+    <rect x="323" y="336" width="130" height="26" rx="13" fill="url(#accent)" opacity="0.85"/>
+    <text x="388" y="353" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="600">Contratar</text>
+    <!-- Bottom nav -->
+    <rect x="313" y="376" width="144" height="32" rx="0" fill="#0d1126"/>
+    <rect x="313" y="390" width="144" height="18" rx="20" fill="#0d1126"/>
+    <circle cx="350" cy="390" r="6" fill="#ffffff20"/>
+    <circle cx="385" cy="390" r="6" fill="#2558FF" opacity="0.6"/>
+    <circle cx="420" cy="390" r="6" fill="#ffffff20"/>
+  </g>
+
+  <!-- Phone 3 - Contato -->
+  <g filter="url(#shadow)">
+    <rect x="530" y="130" width="150" height="278" rx="20" fill="#1e2235" stroke="#ffffff18" stroke-width="2"/>
+    <rect x="530" y="130" width="150" height="20" rx="20" fill="#252840"/>
+    <rect x="530" y="140" width="150" height="10" rx="0" fill="#252840"/>
+    <circle cx="605" cy="140" r="5" fill="#1a1d30"/>
+    <!-- Page title area -->
+    <rect x="533" y="150" width="144" height="45" fill="url(#accent)" opacity="0.7"/>
+    <text x="605" y="168" font-family="system-ui,sans-serif" font-size="11" fill="#fff" text-anchor="middle" font-weight="700">Entre em Contato</text>
+    <rect x="555" y="178" width="100" height="5" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <!-- Form fields -->
+    <rect x="540" y="204" width="130" height="24" rx="6" fill="#ffffff08" stroke="#ffffff18" stroke-width="1"/>
+    <text x="548" y="220" font-family="system-ui,sans-serif" font-size="8" fill="#4b5563">Nome completo</text>
+    <rect x="540" y="234" width="130" height="24" rx="6" fill="#ffffff08" stroke="#ffffff18" stroke-width="1"/>
+    <text x="548" y="250" font-family="system-ui,sans-serif" font-size="8" fill="#4b5563">E-mail</text>
+    <rect x="540" y="264" width="130" height="24" rx="6" fill="#ffffff08" stroke="#ffffff18" stroke-width="1"/>
+    <text x="548" y="280" font-family="system-ui,sans-serif" font-size="8" fill="#4b5563">Telefone</text>
+    <rect x="540" y="294" width="130" height="52" rx="6" fill="#ffffff08" stroke="#ffffff18" stroke-width="1"/>
+    <text x="548" y="310" font-family="system-ui,sans-serif" font-size="8" fill="#4b5563">Mensagem...</text>
+    <!-- Submit -->
+    <rect x="540" y="354" width="130" height="26" rx="13" fill="url(#accent)" opacity="0.85"/>
+    <text x="605" y="371" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle" font-weight="600">Enviar mensagem</text>
+    <!-- Bottom nav -->
+    <rect x="533" y="376" width="144" height="32" rx="0" fill="#0d1126"/>
+    <rect x="533" y="390" width="144" height="18" rx="20" fill="#0d1126"/>
+    <circle cx="570" cy="390" r="6" fill="#ffffff20"/>
+    <circle cx="605" cy="390" r="6" fill="#ffffff20"/>
+    <circle cx="640" cy="390" r="6" fill="#2558FF" opacity="0.6"/>
+  </g>
+
+  <!-- Responsive indicator -->
+  <rect x="30" y="398" width="115" height="26" rx="13" fill="rgba(37,88,255,0.15)" stroke="rgba(37,88,255,0.35)" stroke-width="1"/>
+  <text x="87" y="415" font-family="system-ui,sans-serif" font-size="11" fill="#60a5fa" text-anchor="middle" font-weight="600">Mobile First</text>
+  <rect x="157" y="398" width="120" height="26" rx="13" fill="rgba(110,44,150,0.15)" stroke="rgba(110,44,150,0.35)" stroke-width="1"/>
+  <text x="217" y="415" font-family="system-ui,sans-serif" font-size="11" fill="#c084fc" text-anchor="middle" font-weight="600">3 telas prontas</text>
+</svg>

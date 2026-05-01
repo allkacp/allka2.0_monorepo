@@ -1,13 +1,17 @@
-﻿
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+﻿import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   TrendingUp,
   DollarSign,
@@ -27,8 +31,13 @@ import {
   Target,
   Scale,
   BarChart3,
-} from "lucide-react"
-import { Sheet, SheetContent, SheetTitle, SheetClose } from "@/components/ui/sheet"
+} from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetClose,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,27 +47,44 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { toast } from "@/hooks/use-toast"
-import { usePricing, type PricingComponent, type CommissionApplyOn, type ProductCategory } from "@/hooks/use-pricing"
-import { useSpecialties } from "@/lib/contexts/specialty-context"
-import { useSidebar } from "@/contexts/sidebar-context"
-import PageHeader from "@/components/page-header"
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
+import {
+  usePricing,
+  type PricingComponent,
+  type CommissionApplyOn,
+  type ProductCategory,
+} from "@/hooks/use-pricing";
+import { useSpecialties } from "@/lib/contexts/specialty-context";
+import { useSidebar } from "@/contexts/sidebar-context";
+import PageHeader from "@/components/page-header";
 
 const PrecificacaoPage = () => {
-  const { sidebarWidth } = useSidebar()
-  const { pricingComponents, addComponent, updateComponent, deleteComponent, getActiveComponents } = usePricing()
-  const { specialties } = useSpecialties()
-  const [activeTab, setActiveTab] = useState("rates")
-  const [isOpen, setIsOpen] = useState(false)
-  const [showTypeModal, setShowTypeModal] = useState(false)
-  const [selectedType, setSelectedType] = useState<"commission" | "fee" | "tax" | "margin" | null>(null)
-  const [editingItem, setEditingItem] = useState<PricingComponent | null>(null)
-  const [companyType, setCompanyType] = useState<"partners" | "nomades" | null>(null)
-  const [showSpecialtiesModal, setShowSpecialtiesModal] = useState(false)
-  const [editingSpecialty, setEditingSpecialty] = useState<any>(null)
-  const [isSpecialtySaving, setIsSpecialtySaving] = useState(false)
-  const [deleteSpecialtyConfirm, setDeleteSpecialtyConfirm] = useState<{ isOpen: boolean; specialty: any | null }>({ isOpen: false, specialty: null })
+  const { sidebarWidth } = useSidebar();
+  const {
+    pricingComponents,
+    addComponent,
+    updateComponent,
+    deleteComponent,
+    getActiveComponents,
+  } = usePricing();
+  const { specialties } = useSpecialties();
+  const [activeTab, setActiveTab] = useState("rates");
+  const [isOpen, setIsOpen] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [selectedType, setSelectedType] = useState<
+    "commission" | "fee" | "tax" | "margin" | null
+  >(null);
+  const [editingItem, setEditingItem] = useState<PricingComponent | null>(null);
+  const [companyType, setCompanyType] = useState<"partners" | "nomades" | null>(
+    null,
+  );
+  const [showSpecialtiesModal, setShowSpecialtiesModal] = useState(false);
+  const [editingSpecialty, setEditingSpecialty] = useState<any>(null);
+  const [deleteSpecialtyConfirm, setDeleteSpecialtyConfirm] = useState<{
+    isOpen: boolean;
+    specialty: any | null;
+  }>({ isOpen: false, specialty: null });
   const [specialtyFormData, setSpecialtyFormData] = useState({
     name: "",
     iniciante: "",
@@ -67,29 +93,33 @@ const PrecificacaoPage = () => {
     senior: "",
     aiEnabled: false,
     aiFixedValue: "",
-  })
-const [formData, setFormData] = useState({
-  name: "",
-  value: 0,
-  valueType: "percentage" as "percentage" | "fixed",
-  appliesTo: [] as string[],
-  description: "",
-  isActive: true,
-  applyOn: "final_value" as CommissionApplyOn,
-  productCategories: ["all"] as ProductCategory[],
-  })
+  });
+  const [formData, setFormData] = useState({
+    name: "",
+    value: 0,
+    valueType: "percentage" as "percentage" | "fixed",
+    appliesTo: [] as string[],
+    description: "",
+    isActive: true,
+    applyOn: "final_value" as CommissionApplyOn,
+    productCategories: ["all"] as ProductCategory[],
+  });
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    isOpen: boolean
-    id: string
-    name: string
-  }>({ isOpen: false, id: "", name: "" })
+    isOpen: boolean;
+    id: string;
+    name: string;
+  }>({ isOpen: false, id: "", name: "" });
 
-  const specialtyLevels = ["Iniciante", "Júnior", "Pleno", "Sênior"]
-  const partnerLevels = ["Bronze", "Prata", "Ouro", "Platina", "Diamante"]
-  const nomadeLevels = ["Nível 1", "Nível 2", "Nível 3", "Nível 4", "Nível 5"]
+  const specialtyLevels = ["Iniciante", "Júnior", "Pleno", "Sênior"];
+  const partnerLevels = ["Bronze", "Prata", "Ouro", "Platina", "Diamante"];
+  const nomadeLevels = ["Nível 1", "Nível 2", "Nível 3", "Nível 4", "Nível 5"];
 
   const availableLevels =
-    selectedType === "commission" ? (companyType === "partners" ? partnerLevels : nomadeLevels) : specialtyLevels
+    selectedType === "commission"
+      ? companyType === "partners"
+        ? partnerLevels
+        : nomadeLevels
+      : specialtyLevels;
 
   const levelOptions =
     selectedType === "commission"
@@ -98,72 +128,86 @@ const [formData, setFormData] = useState({
         : companyType === "nomades"
           ? nomadeLevels
           : []
-      : specialtyLevels
+      : specialtyLevels;
 
   const handleOpenSheet = (item?: PricingComponent, type?: string) => {
     if (item) {
-      setEditingItem(item)
-      const isPartner = partnerLevels.some((level) => item.appliesTo.includes(level))
-      const isNomade = nomadeLevels.some((level) => item.appliesTo.includes(level))
-      setCompanyType(isPartner ? "partners" : isNomade ? "nomades" : null)
-      setSelectedType(item.type)
-setFormData({
-  name: item.name,
-  value: item.value,
-  valueType: item.valueType,
-  appliesTo: item.appliesTo,
-  description: item.description,
-  isActive: item.isActive,
-  applyOn: item.applyOn || "final_value",
-  productCategories: item.productCategories || ["all"],
-  })
-      setShowTypeModal(false)
-      setIsOpen(true)
+      setEditingItem(item);
+      const isPartner = partnerLevels.some((level) =>
+        item.appliesTo.includes(level),
+      );
+      const isNomade = nomadeLevels.some((level) =>
+        item.appliesTo.includes(level),
+      );
+      setCompanyType(isPartner ? "partners" : isNomade ? "nomades" : null);
+      setSelectedType(item.type);
+      setFormData({
+        name: item.name,
+        value: item.value,
+        valueType: item.valueType,
+        appliesTo: item.appliesTo,
+        description: item.description,
+        isActive: item.isActive,
+        applyOn: item.applyOn || "final_value",
+        productCategories: item.productCategories || ["all"],
+      });
+      setShowTypeModal(false);
+      setIsOpen(true);
     } else {
       if (!type) {
-        setShowTypeModal(true)
-        return
+        setShowTypeModal(true);
+        return;
       }
-      setSelectedType(type as "commission" | "fee" | "tax")
-setEditingItem(null)
-  setCompanyType(null)
-  setFormData({
-  name: "",
-  value: 0,
-  valueType: "percentage",
-  appliesTo: [],
-  description: "",
-  isActive: true,
-  applyOn: "final_value",
-  productCategories: ["all"],
-  })
-  setShowTypeModal(false)
-  setIsOpen(true)
+      setSelectedType(type as "commission" | "fee" | "tax");
+      setEditingItem(null);
+      setCompanyType(null);
+      setFormData({
+        name: "",
+        value: 0,
+        valueType: "percentage",
+        appliesTo: [],
+        description: "",
+        isActive: true,
+        applyOn: "final_value",
+        productCategories: ["all"],
+      });
+      setShowTypeModal(false);
+      setIsOpen(true);
     }
-  }
+  };
 
-  const handleTypeSelect = (type: "commission" | "fee" | "tax" | "margin" | "comissao" | "taxa" | "imposto" | "margem") => {
-    let actualType: "commission" | "fee" | "tax" | "margin"
+  const handleTypeSelect = (
+    type:
+      | "commission"
+      | "fee"
+      | "tax"
+      | "margin"
+      | "comissao"
+      | "taxa"
+      | "imposto"
+      | "margem",
+  ) => {
+    let actualType: "commission" | "fee" | "tax" | "margin";
     switch (type) {
       case "comissao":
-        actualType = "commission"
-        break
+        actualType = "commission";
+        break;
       case "taxa":
-        actualType = "fee"
-        break
+        actualType = "fee";
+        break;
       case "imposto":
-        actualType = "tax"
-        break
+        actualType = "tax";
+        break;
       case "margem":
-        actualType = "margin"
-        break
+        actualType = "margin";
+        break;
       default:
-        actualType = type
+        actualType = type;
     }
-    setSelectedType(actualType)
-    setShowTypeModal(false)
-    setIsOpen(true)
-  }
+    setSelectedType(actualType);
+    setShowTypeModal(false);
+    setIsOpen(true);
+  };
 
   const handleSave = () => {
     if (!formData.name || formData.value === 0) {
@@ -171,8 +215,8 @@ setEditingItem(null)
         title: "Campos obrigatórios",
         description: "Preencha o nome e o valor",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (formData.appliesTo.length === 0) {
@@ -180,96 +224,108 @@ setEditingItem(null)
         title: "Nível obrigatório",
         description: "Selecione pelo menos um nível",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     const componentType =
-      selectedType || (activeTab === "commissions" ? "commission" : activeTab === "fees" ? "fee" : "tax")
+      selectedType ||
+      (activeTab === "commissions"
+        ? "commission"
+        : activeTab === "fees"
+          ? "fee"
+          : "tax");
 
-const newComponent: PricingComponent = {
-  id: editingItem?.id || Date.now().toString(),
-  name: formData.name,
-  type: componentType,
-  value: formData.value,
-  valueType: formData.valueType,
-  appliesTo: formData.appliesTo,
-  description: formData.description,
-  isActive: formData.isActive,
-  ...(componentType === "commission" && { applyOn: formData.applyOn }),
-  ...(componentType === "margin" && { productCategories: formData.productCategories }),
-  }
+    const newComponent: PricingComponent = {
+      id: editingItem?.id || Date.now().toString(),
+      name: formData.name,
+      type: componentType,
+      value: formData.value,
+      valueType: formData.valueType,
+      appliesTo: formData.appliesTo,
+      description: formData.description,
+      isActive: formData.isActive,
+      ...(componentType === "commission" && { applyOn: formData.applyOn }),
+      ...(componentType === "margin" && {
+        productCategories: formData.productCategories,
+      }),
+    };
 
     if (editingItem) {
-      updateComponent(editingItem.id, newComponent)
+      updateComponent(editingItem.id, newComponent);
       toast({
         title: "Componente atualizado",
         description: `${formData.name} foi atualizado com sucesso`,
-      })
+      });
     } else {
-      addComponent(newComponent)
+      addComponent(newComponent);
       toast({
         title: "Componente criado",
         description: `${formData.name} foi criado com sucesso`,
-      })
+      });
     }
 
-setIsOpen(false)
-  setShowTypeModal(false)
-  setSelectedType(null)
-  setEditingItem(null)
-  setCompanyType(null)
-  setFormData({
-  name: "",
-  value: 0,
-  valueType: "percentage",
-  appliesTo: [],
-  description: "",
-  isActive: true,
-  applyOn: "final_value",
-  productCategories: ["all"],
-  })
-  }
+    setIsOpen(false);
+    setShowTypeModal(false);
+    setSelectedType(null);
+    setEditingItem(null);
+    setCompanyType(null);
+    setFormData({
+      name: "",
+      value: 0,
+      valueType: "percentage",
+      appliesTo: [],
+      description: "",
+      isActive: true,
+      applyOn: "final_value",
+      productCategories: ["all"],
+    });
+  };
 
   const handleDelete = (id: string, name: string) => {
-    deleteComponent(id)
+    deleteComponent(id);
     toast({
       title: "Componente removido",
       description: `${name} foi removido com sucesso`,
-    })
-    setDeleteConfirm({ isOpen: false, id: "", name: "" })
-  }
+    });
+    setDeleteConfirm({ isOpen: false, id: "", name: "" });
+  };
 
   const handleToggleActive = (component: PricingComponent) => {
-    updateComponent(component.id, { ...component, isActive: !component.isActive })
+    updateComponent(component.id, {
+      ...component,
+      isActive: !component.isActive,
+    });
     toast({
-      title: component.isActive ? "Componente desativado" : "Componente ativado",
+      title: component.isActive
+        ? "Componente desativado"
+        : "Componente ativado",
       description: `${component.name} foi ${component.isActive ? "desativado" : "ativado"}`,
-    })
-  }
+    });
+  };
 
   const handleEdit = (component: PricingComponent) => {
-    handleOpenSheet(component)
-  }
+    handleOpenSheet(component);
+  };
 
   const getFilteredComponents = (type: string) => {
-    return pricingComponents.filter((item) => item.type === type)
-  }
+    return pricingComponents.filter((item) => item.type === type);
+  };
 
   const getTypeLabel = (type: string) => {
     switch (type) {
       case "commission":
-        return "Comissões"
+        return "Comissões";
       case "fee":
-        return "Taxas"
+        return "Taxas";
       case "tax":
-        return "Impostos"
+        return "Impostos";
       case "margin":
-        return "Margens"
+        return "Margens";
       default:
-        return ""
+        return "";
     }
-  }
+  };
 
   const renderComponentCard = (component: PricingComponent) => (
     <Card
@@ -286,8 +342,12 @@ setIsOpen(false)
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 text-sm mb-0.5 truncate">{component.name}</h3>
-          <p className="text-xs text-gray-600 line-clamp-2">{component.description}</p>
+          <h3 className="font-semibold text-gray-900 text-sm mb-0.5 truncate">
+            {component.name}
+          </h3>
+          <p className="text-xs text-gray-600 line-clamp-2">
+            {component.description}
+          </p>
         </div>
         <div className="flex flex-col gap-1.5 items-end shrink-0">
           <Switch
@@ -307,7 +367,13 @@ setIsOpen(false)
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setDeleteConfirm({ isOpen: true, id: component.id, name: component.name })}
+              onClick={() =>
+                setDeleteConfirm({
+                  isOpen: true,
+                  id: component.id,
+                  name: component.name,
+                })
+              }
               className="h-7 w-7 p-0 hover:bg-red-100"
             >
               <Trash2 className="h-3.5 w-3.5 text-red-600" />
@@ -319,7 +385,11 @@ setIsOpen(false)
       <div className="flex items-center justify-between gap-2 pt-2 border-t">
         <div className="flex flex-wrap gap-1">
           {component.appliesTo.slice(0, 2).map((level) => (
-            <Badge key={level} variant="secondary" className="text-xs px-1.5 py-0">
+            <Badge
+              key={level}
+              variant="secondary"
+              className="text-xs px-1.5 py-0"
+            >
               {level}
             </Badge>
           ))}
@@ -352,7 +422,7 @@ setIsOpen(false)
         </Badge>
       </div>
     </Card>
-  )
+  );
 
   return (
     <div className="flex flex-col space-y-3">
@@ -366,7 +436,9 @@ setIsOpen(false)
           <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-4 py-3 transition-colors">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-600" />
-              <span className="font-semibold text-blue-900">Estatísticas e Métricas</span>
+              <span className="font-semibold text-blue-900">
+                Estatísticas e Métricas
+              </span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pt-3">
@@ -374,8 +446,9 @@ setIsOpen(false)
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-600 shrink-0" />
                 <p className="text-blue-800 text-xs">
-                  <strong>Importante:</strong> Todas as alterações afetam automaticamente o cálculo de preços.
-                  Componentes inativos não serão aplicados.
+                  <strong>Importante:</strong> Todas as alterações afetam
+                  automaticamente o cálculo de preços. Componentes inativos não
+                  serão aplicados.
                 </p>
               </div>
             </div>
@@ -384,46 +457,70 @@ setIsOpen(false)
               <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-900">Comissões Ativas</span>
+                  <span className="text-xs font-medium text-blue-900">
+                    Comissões Ativas
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-blue-700">
-                  {getFilteredComponents("commission").filter((c) => c.isActive).length}
+                  {
+                    getFilteredComponents("commission").filter(
+                      (c) => c.isActive,
+                    ).length
+                  }
                 </p>
               </Card>
 
               <Card className="p-3 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
                 <div className="flex items-center gap-2 mb-1">
                   <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="text-xs font-medium text-green-900">Taxas Ativas</span>
+                  <span className="text-xs font-medium text-green-900">
+                    Taxas Ativas
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-green-700">
-                  {getFilteredComponents("fee").filter((c) => c.isActive).length}
+                  {
+                    getFilteredComponents("fee").filter((c) => c.isActive)
+                      .length
+                  }
                 </p>
               </Card>
 
               <Card className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
                 <div className="flex items-center gap-2 mb-1">
                   <Receipt className="h-4 w-4 text-purple-600" />
-                  <span className="text-xs font-medium text-purple-900">Impostos Ativos</span>
+                  <span className="text-xs font-medium text-purple-900">
+                    Impostos Ativos
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-purple-700">
-                  {getFilteredComponents("tax").filter((c) => c.isActive).length}
+                  {
+                    getFilteredComponents("tax").filter((c) => c.isActive)
+                      .length
+                  }
                 </p>
               </Card>
 
               <Card className="p-3 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
                 <div className="flex items-center gap-2 mb-1">
                   <Award className="h-4 w-4 text-orange-600" />
-                  <span className="text-xs font-medium text-orange-900">Total Componentes</span>
+                  <span className="text-xs font-medium text-orange-900">
+                    Total Componentes
+                  </span>
                 </div>
-                <p className="text-2xl font-bold text-orange-700">{pricingComponents.length}</p>
+                <p className="text-2xl font-bold text-orange-700">
+                  {pricingComponents.length}
+                </p>
               </Card>
             </div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-3"
+      >
         <div className="relative">
           <TabsList className="w-max grid grid-cols-2 gap-1 bg-transparent p-0 h-auto">
             <TabsTrigger
@@ -452,8 +549,12 @@ setIsOpen(false)
                     <TrendingUp className="h-4 w-4 text-green-600" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Comissões</h3>
-                    <p className="text-xs text-gray-600">{getFilteredComponents("commission").length} itens</p>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Comissões
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      {getFilteredComponents("commission").length} itens
+                    </p>
                   </div>
                 </div>
                 <Button
@@ -479,8 +580,12 @@ setIsOpen(false)
                     <DollarSign className="h-4 w-4 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Taxas</h3>
-                    <p className="text-xs text-gray-600">{getFilteredComponents("fee").length} itens</p>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Taxas
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      {getFilteredComponents("fee").length} itens
+                    </p>
                   </div>
                 </div>
                 <Button
@@ -506,8 +611,12 @@ setIsOpen(false)
                     <Scale className="h-4 w-4 text-purple-600" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Impostos</h3>
-                    <p className="text-xs text-gray-600">{getFilteredComponents("tax").length} itens</p>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Impostos
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      {getFilteredComponents("tax").length} itens
+                    </p>
                   </div>
                 </div>
                 <Button
@@ -533,8 +642,12 @@ setIsOpen(false)
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-blue-600 shrink-0" />
               <p className="text-blue-800 text-xs">
-                <strong>Visualização de Especialidades:</strong> Esta aba exibe as especialidades cadastradas em{" "}
-                <a href="/admin/especialidades" className="underline font-semibold hover:text-blue-900">
+                <strong>Visualização de Especialidades:</strong> Esta aba exibe
+                as especialidades cadastradas em{" "}
+                <a
+                  href="/admin/especialidades"
+                  className="underline font-semibold hover:text-blue-900"
+                >
                   Gestão de Especialidades
                 </a>
                 . Para adicionar, editar ou remover, acesse a página de gestão.
@@ -545,9 +658,12 @@ setIsOpen(false)
           <Card className="p-4 bg-white shadow-md">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Custo por Hora das Especialidades</h3>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Custo por Hora das Especialidades
+                </h3>
                 <p className="text-xs text-gray-600 mt-0.5">
-                  Valores de referência utilizados no cálculo de preços dos produtos
+                  Valores de referência utilizados no cálculo de preços dos
+                  produtos
                 </p>
               </div>
               <Button
@@ -567,31 +683,43 @@ setIsOpen(false)
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                    <th className="text-left p-3 font-semibold text-xs">Especialidade</th>
+                    <th className="text-left p-3 font-semibold text-xs">
+                      Especialidade
+                    </th>
                     <th className="text-center p-3 font-semibold text-xs">
                       Iniciante
                       <br />
-                      <span className="text-xs font-normal opacity-90">R$/h</span>
+                      <span className="text-xs font-normal opacity-90">
+                        R$/h
+                      </span>
                     </th>
                     <th className="text-center p-3 font-semibold text-xs">
                       Júnior
                       <br />
-                      <span className="text-xs font-normal opacity-90">R$/h</span>
+                      <span className="text-xs font-normal opacity-90">
+                        R$/h
+                      </span>
                     </th>
                     <th className="text-center p-3 font-semibold text-xs">
                       Pleno
                       <br />
-                      <span className="text-xs font-normal opacity-90">R$/h</span>
+                      <span className="text-xs font-normal opacity-90">
+                        R$/h
+                      </span>
                     </th>
                     <th className="text-center p-3 font-semibold text-xs">
                       Sênior
                       <br />
-                      <span className="text-xs font-normal opacity-90">R$/h</span>
+                      <span className="text-xs font-normal opacity-90">
+                        R$/h
+                      </span>
                     </th>
                     <th className="text-center p-3 font-semibold text-xs">
                       Nômades
                       <br />
-                      <span className="text-xs font-normal opacity-90">Ativos</span>
+                      <span className="text-xs font-normal opacity-90">
+                        Ativos
+                      </span>
                     </th>
                   </tr>
                 </thead>
@@ -637,27 +765,39 @@ setIsOpen(false)
               </h4>
               <ul className="text-xs text-blue-800 space-y-1.5">
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">1.</span>
+                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">
+                    1.
+                  </span>
                   <span>
-                    <strong>Custo Base:</strong> Valor hora da especialidade × Horas estimadas da etapa
+                    <strong>Custo Base:</strong> Valor hora da especialidade ×
+                    Horas estimadas da etapa
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">2.</span>
+                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">
+                    2.
+                  </span>
                   <span>
-                    <strong>Comissões:</strong> Aplicadas automaticamente conforme nível da especialidade
+                    <strong>Comissões:</strong> Aplicadas automaticamente
+                    conforme nível da especialidade
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">3.</span>
+                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">
+                    3.
+                  </span>
                   <span>
-                    <strong>Taxas e Impostos:</strong> Adicionados ao subtotal para compor o preço final
+                    <strong>Taxas e Impostos:</strong> Adicionados ao subtotal
+                    para compor o preço final
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">4.</span>
+                  <span className="text-blue-600 font-bold mt-0.5 shrink-0">
+                    4.
+                  </span>
                   <span>
-                    <strong>Atualização Automática:</strong> Alterações aqui recalculam os preços de todos os produtos
+                    <strong>Atualização Automática:</strong> Alterações aqui
+                    recalculam os preços de todos os produtos
                   </span>
                 </li>
               </ul>
@@ -682,9 +822,15 @@ setIsOpen(false)
             <div className="relative px-6 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
               <SheetTitle className="text-xl font-bold text-white">
                 {editingItem ? "Editar" : "Adicionar"}{" "}
-                {selectedType === "commission" ? "Comissão" : selectedType === "fee" ? "Taxa" : "Imposto"}
+                {selectedType === "commission"
+                  ? "Comissão"
+                  : selectedType === "fee"
+                    ? "Taxa"
+                    : "Imposto"}
               </SheetTitle>
-              <p className="text-xs text-blue-100 mt-1">Preencha as informações do componente de precificação</p>
+              <p className="text-xs text-blue-100 mt-1">
+                Preencha as informações do componente de precificação
+              </p>
               <SheetClose className="absolute right-4 top-4 rounded-full bg-white/10 hover:bg-white/20 p-1.5 transition-colors">
                 <X className="h-4 w-4 text-white" />
               </SheetClose>
@@ -709,7 +855,9 @@ setIsOpen(false)
                       <Input
                         id="name"
                         value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
                         placeholder="Ex: Comissão padrão"
                         className="mt-1 h-9 text-sm"
                       />
@@ -741,7 +889,10 @@ setIsOpen(false)
                       </div>
                     </div>
                     <div className="col-span-2">
-                      <Label htmlFor="description" className="text-xs font-medium">
+                      <Label
+                        htmlFor="description"
+                        className="text-xs font-medium"
+                      >
                         Descrição
                       </Label>
                       <Input
@@ -770,7 +921,8 @@ setIsOpen(false)
                       Tipo de Empresa
                     </h3>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                      Selecione o tipo de empresa para mostrar os níveis corretos
+                      Selecione o tipo de empresa para mostrar os níveis
+                      corretos
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <button
@@ -783,7 +935,9 @@ setIsOpen(false)
                         }`}
                       >
                         <div className="text-center">
-                          <div className="text-sm font-semibold">Agências Partners</div>
+                          <div className="text-sm font-semibold">
+                            Agências Partners
+                          </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             Bronze, Prata, Ouro, Platina, Diamante
                           </div>
@@ -800,7 +954,9 @@ setIsOpen(false)
                       >
                         <div className="text-center">
                           <div className="text-sm font-semibold">Nômades</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Nível 1, 2, 3, 4, 5</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Nível 1, 2, 3, 4, 5
+                          </div>
                         </div>
                       </button>
                     </div>
@@ -822,7 +978,9 @@ setIsOpen(false)
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, applyOn: "final_value" })}
+                        onClick={() =>
+                          setFormData({ ...formData, applyOn: "final_value" })
+                        }
                         className={`p-3 rounded-lg border-2 transition-all text-left ${
                           formData.applyOn === "final_value"
                             ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
@@ -836,42 +994,63 @@ setIsOpen(false)
                       </button>
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, applyOn: "value_without_fees_taxes" })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            applyOn: "value_without_fees_taxes",
+                          })
+                        }
                         className={`p-3 rounded-lg border-2 transition-all text-left ${
                           formData.applyOn === "value_without_fees_taxes"
                             ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                         }`}
                       >
-                        <div className="text-sm font-semibold">Valor sem Taxas e Impostos</div>
+                        <div className="text-sm font-semibold">
+                          Valor sem Taxas e Impostos
+                        </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           Preco base com margem apenas
                         </div>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, applyOn: "value_without_taxes" })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            applyOn: "value_without_taxes",
+                          })
+                        }
                         className={`p-3 rounded-lg border-2 transition-all text-left ${
                           formData.applyOn === "value_without_taxes"
                             ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                         }`}
                       >
-                        <div className="text-sm font-semibold">Valor sem Impostos</div>
+                        <div className="text-sm font-semibold">
+                          Valor sem Impostos
+                        </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           Preco com margem e taxas, sem impostos
                         </div>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, applyOn: "specialist_value" })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            applyOn: "specialist_value",
+                          })
+                        }
                         className={`p-3 rounded-lg border-2 transition-all text-left ${
                           formData.applyOn === "specialist_value"
                             ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                         }`}
                       >
-                        <div className="text-sm font-semibold">Valor do Especialista</div>
+                        <div className="text-sm font-semibold">
+                          Valor do Especialista
+                        </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           Valor que o especialista recebe
                         </div>
@@ -911,18 +1090,24 @@ setIsOpen(false)
                               setFormData({
                                 ...formData,
                                 appliesTo: [...formData.appliesTo, level],
-                              })
+                              });
                             } else {
                               setFormData({
                                 ...formData,
-                                appliesTo: formData.appliesTo.filter((l) => l !== level),
-                              })
+                                appliesTo: formData.appliesTo.filter(
+                                  (l) => l !== level,
+                                ),
+                              });
                             }
                           }}
-                          disabled={selectedType === "commission" && !companyType}
+                          disabled={
+                            selectedType === "commission" && !companyType
+                          }
                           className="w-3.5 h-3.5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                         />
-                        <span className="text-xs font-medium capitalize">{level}</span>
+                        <span className="text-xs font-medium capitalize">
+                          {level}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -938,7 +1123,9 @@ setIsOpen(false)
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
                   <label className="flex items-center justify-between cursor-pointer group">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-0.5">Status Ativo</h3>
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-0.5">
+                        Status Ativo
+                      </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-400">
                         Ativar este componente imediatamente após criação
                       </p>
@@ -947,7 +1134,12 @@ setIsOpen(false)
                       <input
                         type="checkbox"
                         checked={formData.isActive}
-                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            isActive: e.target.checked,
+                          })
+                        }
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -959,7 +1151,11 @@ setIsOpen(false)
 
             {/* Footer com botões */}
             <div className="border-t bg-white dark:bg-gray-800 px-6 py-3 flex justify-end gap-2.5 shadow-lg">
-              <Button variant="outline" onClick={() => setIsOpen(false)} className="px-5 h-9 text-sm">
+              <Button
+                variant="outline"
+                onClick={() => setIsOpen(false)}
+                className="px-5 h-9 text-sm"
+              >
                 Cancelar
               </Button>
               <Button
@@ -977,13 +1173,16 @@ setIsOpen(false)
       {/* AlertDialog para confirmação de exclusão */}
       <AlertDialog
         open={deleteConfirm.isOpen}
-        onOpenChange={(open) => !open && setDeleteConfirm({ isOpen: false, id: "", name: "" })}
+        onOpenChange={(open) =>
+          !open && setDeleteConfirm({ isOpen: false, id: "", name: "" })
+        }
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir "{deleteConfirm.name}"? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir "{deleteConfirm.name}"? Esta ação
+              não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -998,7 +1197,7 @@ setIsOpen(false)
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
+  );
+};
 
-export default PrecificacaoPage
+export default PrecificacaoPage;

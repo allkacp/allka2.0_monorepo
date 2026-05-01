@@ -22,6 +22,7 @@ import {
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal";
+import { apiClient } from "@/lib/api-client";
 import {
   LayoutDashboard,
   Users,
@@ -289,18 +290,11 @@ const navigationConfig = {
           href: "/admin/projetos",
           icon: FolderOpen,
           current: false,
-          badge: "156",
         },
         {
           name: "Tarefas",
           href: "/admin/tarefas",
           icon: CheckSquare,
-          current: false,
-        },
-        {
-          name: "Modelo de Tarefas",
-          href: "/admin/modelo-tarefas",
-          icon: ClipboardList,
           current: false,
         },
       ],
@@ -326,6 +320,12 @@ const navigationConfig = {
           name: "Precificação",
           href: "/admin/precificacao",
           icon: Calculator,
+          current: false,
+        },
+        {
+          name: "Modelos de Tarefas",
+          href: "/admin/modelos-tarefas",
+          icon: ClipboardList,
           current: false,
         },
       ],
@@ -426,6 +426,9 @@ export function Sidebar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [hasMoreContent, setHasMoreContent] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [adminProjectCount, setAdminProjectCount] = useState<number | null>(
+    null,
+  );
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [dragOverItem, setDragOverItem] = useState<number | null>(null);
   const [draggedSubitem, setDraggedSubitem] = useState<{
@@ -501,10 +504,47 @@ export function Sidebar() {
     }
   }, [accountType]);
 
+  useEffect(() => {
+    if (accountType !== "admin") return;
+    let cancelled = false;
+    apiClient
+      .getProjects({ limit: "1" })
+      .then((res: any) => {
+        if (!cancelled && res?.total !== undefined) {
+          setAdminProjectCount(res.total);
+        }
+      })
+      .catch(() => {
+        /* silent: badge omitted on API error */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountType]);
+
   const getNavigationItems = () => {
     // Admin users see all menu items
     if (accountType === "admin") {
-      return navigationConfig.admin;
+      return navigationConfig.admin.map((item: any) => {
+        if (item.name === "Projetos e Tarefas" && item.subitems) {
+          return {
+            ...item,
+            subitems: item.subitems.map((sub: any) => {
+              if (sub.href === "/admin/projetos") {
+                return {
+                  ...sub,
+                  badge:
+                    adminProjectCount !== null
+                      ? String(adminProjectCount)
+                      : undefined,
+                };
+              }
+              return sub;
+            }),
+          };
+        }
+        return item;
+      });
     }
 
     // Regular users see only their account type menu

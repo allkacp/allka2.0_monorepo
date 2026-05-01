@@ -94,7 +94,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const task = await prisma.taskExecution.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         nomade: true,
         template: true,
@@ -133,7 +133,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
   try {
     const task = await prisma.taskExecution.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
       include: {
         nomade: { select: { id: true, name: true } },
@@ -163,7 +163,7 @@ router.put("/:id/status", verifyToken, validate(statusSchema), async (req, res, 
     }
 
     const task = await prisma.taskExecution.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data,
     });
 
@@ -176,7 +176,7 @@ router.put("/:id/status", verifyToken, validate(statusSchema), async (req, res, 
 // DELETE /api/tasks/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.taskExecution.delete({ where: { id: req.params.id } });
+    await prisma.taskExecution.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

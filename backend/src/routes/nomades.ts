@@ -75,7 +75,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const nomade = await prisma.nomade.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         qualifications: true,
         bank_account: true,
@@ -109,7 +109,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
   try {
     const nomade = await prisma.nomade.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(nomade);
@@ -121,7 +121,7 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
 // DELETE /api/nomades/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.nomade.delete({ where: { id: req.params.id } });
+    await prisma.nomade.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -134,7 +134,7 @@ router.get("/:id/wallet", verifyToken, async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req.query);
 
     const nomade = await prisma.nomade.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       select: { id: true, name: true },
     });
 
@@ -145,14 +145,14 @@ router.get("/:id/wallet", verifyToken, async (req, res, next) => {
 
     const [transactions, balanceData] = await Promise.all([
       prisma.walletTransaction.findMany({
-        where: { nomade_id: req.params.id },
+        where: { nomade_id: (req.params.id as string) },
         orderBy: { date: "desc" },
         skip,
         take: limit,
       }),
       prisma.walletTransaction.groupBy({
         by: ["type"],
-        where: { nomade_id: req.params.id },
+        where: { nomade_id: (req.params.id as string) },
         _sum: { amount: true },
       }),
     ]);
@@ -178,7 +178,7 @@ router.get("/:id/wallet", verifyToken, async (req, res, next) => {
 router.get("/:id/qualifications", verifyToken, async (req, res, next) => {
   try {
     const qualifications = await prisma.qualification.findMany({
-      where: { nomade_id: req.params.id },
+      where: { nomade_id: (req.params.id as string) },
       orderBy: { created_at: "desc" },
     });
     res.json(qualifications);
@@ -206,7 +206,7 @@ router.put(
       }
 
       const qual = await prisma.qualification.update({
-        where: { id: req.params.qid },
+        where: { id: (req.params.qid as string) },
         data: parsed.data,
       });
       res.json(qual);

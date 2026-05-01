@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { PageLoader } from "@/components/ui/loading";
 import {
   Edit,
   Plus,
@@ -56,8 +57,10 @@ const LEVEL_THEMES: Record<
     statBg: "bg-amber-50/70 dark:bg-amber-950/20",
     statBorder: "border-amber-100 dark:border-amber-900/40",
     statIconColor: "text-amber-500",
-    neonRing: "ring-1 ring-amber-300/30 dark:ring-amber-500/20 hover:ring-amber-400/70 dark:hover:ring-amber-400/50",
-    glowShadow: "shadow-sm shadow-amber-400/10 hover:shadow-xl hover:shadow-amber-400/20 dark:shadow-amber-400/15 dark:hover:shadow-amber-400/35",
+    neonRing:
+      "ring-1 ring-amber-300/30 dark:ring-amber-500/20 hover:ring-amber-400/70 dark:hover:ring-amber-400/50",
+    glowShadow:
+      "shadow-sm shadow-amber-400/10 hover:shadow-xl hover:shadow-amber-400/20 dark:shadow-amber-400/15 dark:hover:shadow-amber-400/35",
   },
   Silver: {
     accent: "border-l-slate-400",
@@ -67,8 +70,10 @@ const LEVEL_THEMES: Record<
     statBg: "bg-slate-50/70 dark:bg-slate-800/30",
     statBorder: "border-slate-200 dark:border-slate-700/40",
     statIconColor: "text-slate-500 dark:text-slate-400",
-    neonRing: "ring-1 ring-slate-300/40 dark:ring-slate-500/25 hover:ring-slate-400/70 dark:hover:ring-slate-400/50",
-    glowShadow: "shadow-sm shadow-slate-400/10 hover:shadow-xl hover:shadow-slate-400/15 dark:shadow-slate-400/15 dark:hover:shadow-slate-400/25",
+    neonRing:
+      "ring-1 ring-slate-300/40 dark:ring-slate-500/25 hover:ring-slate-400/70 dark:hover:ring-slate-400/50",
+    glowShadow:
+      "shadow-sm shadow-slate-400/10 hover:shadow-xl hover:shadow-slate-400/15 dark:shadow-slate-400/15 dark:hover:shadow-slate-400/25",
   },
   Gold: {
     accent: "border-l-yellow-500",
@@ -78,8 +83,10 @@ const LEVEL_THEMES: Record<
     statBg: "bg-yellow-50/70 dark:bg-yellow-950/20",
     statBorder: "border-yellow-100 dark:border-yellow-900/40",
     statIconColor: "text-yellow-500",
-    neonRing: "ring-1 ring-yellow-300/30 dark:ring-yellow-500/20 hover:ring-yellow-400/70 dark:hover:ring-yellow-400/50",
-    glowShadow: "shadow-sm shadow-yellow-400/10 hover:shadow-xl hover:shadow-yellow-400/20 dark:shadow-yellow-400/15 dark:hover:shadow-yellow-400/35",
+    neonRing:
+      "ring-1 ring-yellow-300/30 dark:ring-yellow-500/20 hover:ring-yellow-400/70 dark:hover:ring-yellow-400/50",
+    glowShadow:
+      "shadow-sm shadow-yellow-400/10 hover:shadow-xl hover:shadow-yellow-400/20 dark:shadow-yellow-400/15 dark:hover:shadow-yellow-400/35",
   },
   Platinum: {
     accent: "border-l-sky-500",
@@ -89,8 +96,10 @@ const LEVEL_THEMES: Record<
     statBg: "bg-sky-50/70 dark:bg-sky-950/20",
     statBorder: "border-sky-100 dark:border-sky-900/40",
     statIconColor: "text-sky-500",
-    neonRing: "ring-1 ring-sky-300/30 dark:ring-sky-500/20 hover:ring-sky-400/70 dark:hover:ring-sky-400/50",
-    glowShadow: "shadow-sm shadow-sky-400/10 hover:shadow-xl hover:shadow-sky-400/20 dark:shadow-sky-400/15 dark:hover:shadow-sky-400/35",
+    neonRing:
+      "ring-1 ring-sky-300/30 dark:ring-sky-500/20 hover:ring-sky-400/70 dark:hover:ring-sky-400/50",
+    glowShadow:
+      "shadow-sm shadow-sky-400/10 hover:shadow-xl hover:shadow-sky-400/20 dark:shadow-sky-400/15 dark:hover:shadow-sky-400/35",
   },
   Diamond: {
     accent: "border-l-violet-500",
@@ -100,8 +109,10 @@ const LEVEL_THEMES: Record<
     statBg: "bg-violet-50/70 dark:bg-violet-950/20",
     statBorder: "border-violet-100 dark:border-violet-900/40",
     statIconColor: "text-violet-500",
-    neonRing: "ring-1 ring-violet-300/30 dark:ring-violet-500/20 hover:ring-violet-400/70 dark:hover:ring-violet-400/50",
-    glowShadow: "shadow-sm shadow-violet-400/10 hover:shadow-xl hover:shadow-violet-400/20 dark:shadow-violet-400/15 dark:hover:shadow-violet-400/35",
+    neonRing:
+      "ring-1 ring-violet-300/30 dark:ring-violet-500/20 hover:ring-violet-400/70 dark:hover:ring-violet-400/50",
+    glowShadow:
+      "shadow-sm shadow-violet-400/10 hover:shadow-xl hover:shadow-violet-400/20 dark:shadow-violet-400/15 dark:hover:shadow-violet-400/35",
   },
 };
 
@@ -113,16 +124,18 @@ const DEFAULT_THEME = {
   statBg: "bg-blue-50/70 dark:bg-blue-950/20",
   statBorder: "border-blue-100 dark:border-blue-900/40",
   statIconColor: "text-blue-500",
-  neonRing: "ring-1 ring-blue-300/30 dark:ring-blue-500/20 hover:ring-blue-400/70 dark:hover:ring-blue-400/50",
-  glowShadow: "shadow-sm shadow-blue-400/10 hover:shadow-xl hover:shadow-blue-400/20 dark:shadow-blue-400/15 dark:hover:shadow-blue-400/35",
+  neonRing:
+    "ring-1 ring-blue-300/30 dark:ring-blue-500/20 hover:ring-blue-400/70 dark:hover:ring-blue-400/50",
+  glowShadow:
+    "shadow-sm shadow-blue-400/10 hover:shadow-xl hover:shadow-blue-400/20 dark:shadow-blue-400/15 dark:hover:shadow-blue-400/35",
 };
 
 const LEVEL_ICON_MAP: Record<string, { gradient: string; Icon: any }> = {
-  Bronze:   { gradient: "from-amber-500 to-orange-600",  Icon: Award   },
-  Silver:   { gradient: "from-slate-400 to-slate-600",   Icon: Star    },
-  Gold:     { gradient: "from-yellow-400 to-amber-500",  Icon: Trophy  },
-  Platinum: { gradient: "from-sky-400 to-blue-600",      Icon: Shield  },
-  Diamond:  { gradient: "from-violet-500 to-purple-700", Icon: Gem     },
+  Bronze: { gradient: "from-amber-500 to-orange-600", Icon: Award },
+  Silver: { gradient: "from-slate-400 to-slate-600", Icon: Star },
+  Gold: { gradient: "from-yellow-400 to-amber-500", Icon: Trophy },
+  Platinum: { gradient: "from-sky-400 to-blue-600", Icon: Shield },
+  Diamond: { gradient: "from-violet-500 to-purple-700", Icon: Gem },
 };
 
 // Levels are loaded from API in the component
@@ -249,6 +262,37 @@ export default function NiveisPage() {
     return `até R$ ${level.premium_project_limit.toLocaleString("pt-BR")}`;
   };
 
+  if (loading) {
+    return <PageLoader text="Carregando níveis…" />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <TrendingUp className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar níveis
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {loadError}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadLevels}
+          className="gap-2"
+        >
+          <TrendingUp className="h-3.5 w-3.5" />
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pt-0 pl-0 pr-0">
       <PageHeader
@@ -263,42 +307,27 @@ export default function NiveisPage() {
       />
 
       <div className="grid gap-4">
-        {loading && (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-violet-500" />
-              <span className="text-sm">Carregando níveis...</span>
-            </div>
-          </div>
-        )}
-
-        {!loading && loadError && (
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <div className="rounded-xl bg-red-50 border border-red-200 px-6 py-5 max-w-md text-center">
-              <p className="text-sm font-semibold text-red-700 mb-1">Erro ao carregar níveis</p>
-              <p className="text-xs text-red-500 font-mono">{loadError}</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={loadLevels} className="gap-2">
-              <TrendingUp className="h-3.5 w-3.5" />
-              Tentar novamente
-            </Button>
-          </div>
-        )}
-
-        {!loading && !loadError && partnerLevels.length === 0 && (
+        {partnerLevels.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
             <Award className="h-10 w-10 opacity-30" />
             <p className="text-sm">Nenhum nível cadastrado ainda.</p>
-            <Button size="sm" onClick={() => openEditDialog()} className="btn-brand gap-2">
+            <Button
+              size="sm"
+              onClick={() => openEditDialog()}
+              className="btn-brand gap-2"
+            >
               <Plus className="h-3.5 w-3.5" />
               Criar primeiro nível
             </Button>
           </div>
         )}
 
-        {!loading && !loadError && partnerLevels.map((level, index) => {
+        {partnerLevels.map((level, index) => {
           const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
-          const levelConfig = LEVEL_ICON_MAP[level.name] ?? { gradient: "from-blue-500 to-indigo-600", Icon: Award };
+          const levelConfig = LEVEL_ICON_MAP[level.name] ?? {
+            gradient: "from-blue-500 to-indigo-600",
+            Icon: Award,
+          };
           const LevelIcon = levelConfig.Icon;
           return (
             <div
@@ -306,16 +335,18 @@ export default function NiveisPage() {
               className="animate-in fade-in slide-in-from-bottom duration-500"
               style={{ animationDelay: `${index * 80}ms` }}
             >
-              <Card className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}>
-
+              <Card
+                className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}
+              >
                 {/* ── HEADER ── */}
                 <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-4 min-w-0">
-
                       {/* Modern gradient icon badge */}
                       <div className="relative shrink-0">
-                        <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}>
+                        <div
+                          className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}
+                        >
                           <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
                         </div>
                         <span
@@ -329,9 +360,13 @@ export default function NiveisPage() {
                       {/* Name + badges + description */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base font-bold text-slate-800 dark:text-white">{level.name}</h3>
+                          <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                            {level.name}
+                          </h3>
                           {level.requires_partner && (
-                            <Badge className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                            <Badge
+                              className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                            >
                               <Crown className="h-3 w-3 mr-1" />
                               Requer Partner
                             </Badge>
@@ -343,18 +378,28 @@ export default function NiveisPage() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{level.description}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {level.description}
+                        </p>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="flex gap-1.5 shrink-0">
-                      <Button variant="outline" size="sm" onClick={() => openEditDialog(level)}
-                        className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(level)}
+                        className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
+                      >
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => confirmDelete(level.id, level.name)}
-                        className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => confirmDelete(level.id, level.name)}
+                        className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600"
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -362,33 +407,52 @@ export default function NiveisPage() {
                 </CardHeader>
 
                 <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
-
                   {/* ── CRITÉRIOS DE PROGRESSÃO ── */}
                   <div>
                     <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
                       Critérios de Progressão
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                      <div
+                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                      >
                         <div className="flex items-center gap-1 mb-1">
-                          <DollarSign className={`h-3 w-3 ${theme.statIconColor}`} />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">MRR Consumo</span>
-                        </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">{formatMrrRange(level.min_mrr, level.max_mrr)}</p>
-                      </div>
-                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
-                        <div className="flex items-center gap-1 mb-1">
-                          <Users className={`h-3 w-3 ${theme.statIconColor}`} />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Ag. Lideradas</span>
+                          <DollarSign
+                            className={`h-3 w-3 ${theme.statIconColor}`}
+                          />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                            MRR Consumo
+                          </span>
                         </div>
                         <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                          {level.led_agencies_min > 0 ? `${level.led_agencies_min} ativas` : "—"}
+                          {formatMrrRange(level.min_mrr, level.max_mrr)}
                         </p>
                       </div>
-                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                      <div
+                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                      >
                         <div className="flex items-center gap-1 mb-1">
-                          <BarChart3 className={`h-3 w-3 ${theme.statIconColor}`} />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">MRR Lideradas</span>
+                          <Users className={`h-3 w-3 ${theme.statIconColor}`} />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                            Ag. Lideradas
+                          </span>
+                        </div>
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                          {level.led_agencies_min > 0
+                            ? `${level.led_agencies_min} ativas`
+                            : "—"}
+                        </p>
+                      </div>
+                      <div
+                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                      >
+                        <div className="flex items-center gap-1 mb-1">
+                          <BarChart3
+                            className={`h-3 w-3 ${theme.statIconColor}`}
+                          />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                            MRR Lideradas
+                          </span>
                         </div>
                         <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
                           {level.led_agencies_mrr_min > 0
@@ -396,35 +460,53 @@ export default function NiveisPage() {
                             : "—"}
                         </p>
                       </div>
-                      <div className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}>
+                      <div
+                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                      >
                         <div className="flex items-center gap-1 mb-1">
-                          <Target className={`h-3 w-3 ${theme.statIconColor}`} />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Proj. Premium</span>
+                          <Target
+                            className={`h-3 w-3 ${theme.statIconColor}`}
+                          />
+                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                            Proj. Premium
+                          </span>
                         </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">{formatPremiumLimit(level)}</p>
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                          {formatPremiumLimit(level)}
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   {/* ── PERKS ── */}
-                  {(level.commission_rate > 0 || level.extra_discount > 0 || level.level_up_bonus_credits > 0) && (
+                  {(level.commission_rate > 0 ||
+                    level.extra_discount > 0 ||
+                    level.level_up_bonus_credits > 0) && (
                     <div className="flex flex-wrap gap-1.5">
                       {level.commission_rate > 0 && (
-                        <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                        >
                           <TrendingUp className="h-2.5 w-2.5" />
-                          {level.commission_rate}% comissão sobre MRR das lideradas
+                          {level.commission_rate}% comissão sobre MRR das
+                          lideradas
                         </span>
                       )}
                       {level.extra_discount > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
-                          <Percent className="h-2.5 w-2.5" />
-                          +{level.extra_discount}% desconto adicional nas contratações
+                          <Percent className="h-2.5 w-2.5" />+
+                          {level.extra_discount}% desconto adicional nas
+                          contratações
                         </span>
                       )}
                       {level.level_up_bonus_credits > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
                           <Gift className="h-2.5 w-2.5" />
-                          R$ {level.level_up_bonus_credits.toLocaleString("pt-BR")} em créditos ao atingir nível
+                          R${" "}
+                          {level.level_up_bonus_credits.toLocaleString(
+                            "pt-BR",
+                          )}{" "}
+                          em créditos ao atingir nível
                         </span>
                       )}
                     </div>
@@ -449,7 +531,6 @@ export default function NiveisPage() {
                       </div>
                     </div>
                   )}
-
                 </CardContent>
               </Card>
             </div>

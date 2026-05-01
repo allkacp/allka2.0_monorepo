@@ -20,7 +20,7 @@ import {
   Edit,
   Trash2,
   Eye,
-  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useClients } from "@/hooks/useClients";
+import { PageLoader } from "@/components/ui/loading";
 
 export default function ClientesPage() {
   const { clients: allApiClients, loading, error } = useClients();
@@ -104,10 +105,24 @@ export default function ClientesPage() {
     },
   ];
 
-  if (loading)
+  if (loading) return <PageLoader text="Carregando clientes…" />;
+
+  if (error)
     return (
-      <div className="min-h-screen p-6 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar clientes
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {typeof error === "string"
+              ? error
+              : "Não foi possível carregar os clientes."}
+          </p>
+        </div>
       </div>
     );
 

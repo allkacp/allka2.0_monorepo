@@ -80,6 +80,8 @@ interface ProductMetadata {
   questionnaire?: Questionnaire | null;
   // apresentação pública do produto
   presentation?: ProductPresentation | null;
+  // IDs reais de produtos complementares (vínculo efetivo)
+  complementaryProductIds?: string[];
   // features que toda variação herda — base estrutural imutável
   baseFeatures?: string[];
   // dados internos por variação (código, prazo público, horas, etc.)
@@ -155,6 +157,7 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     nomadTests: meta.nomadTests ?? [],
     questionnaire: meta.questionnaire ?? null,
     presentation: meta.presentation ?? null,
+    complementaryProductIds: meta.complementaryProductIds ?? [],
     baseFeatures: meta.baseFeatures ?? [],
     variationsInternal: meta.variationsInternal ?? {},
     demonstrations: safeParseJSON<string[]>(b.demonstrations, []),
@@ -185,6 +188,7 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
     nomadTests: (p as any).nomadTests,
     questionnaire: (p as any).questionnaire,
     presentation: (p as any).presentation,
+    complementaryProductIds: (p as any).complementaryProductIds,
     baseFeatures: (p as any).baseFeatures,
     variationsInternal: (p as any).variationsInternal,
     portfolioImages: (p as any).portfolioImages,

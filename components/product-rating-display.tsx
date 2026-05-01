@@ -29,8 +29,8 @@ export function ProductRatingDisplay({
 
   const sizeMap = {
     xs: { star: "h-2.5 w-2.5", num: "text-[11px]", sub: "text-[10px]" },
-    sm: { star: "h-3 w-3",     num: "text-xs",     sub: "text-[10px]" },
-    md: { star: "h-3.5 w-3.5", num: "text-sm",     sub: "text-xs"     },
+    sm: { star: "h-3 w-3", num: "text-xs", sub: "text-[10px]" },
+    md: { star: "h-3.5 w-3.5", num: "text-sm", sub: "text-xs" },
   };
 
   const s = sizeMap[size];
@@ -53,8 +53,8 @@ export function ProductRatingDisplay({
     );
   }
 
-  const full  = Math.floor(rating);
-  const half  = rating - full >= 0.5;
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.5;
 
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
@@ -70,12 +70,12 @@ export function ProductRatingDisplay({
                   ? "fill-amber-300 text-amber-300"
                   : "fill-amber-400 text-amber-400"
                 : i === full && half
-                ? variant === "white"
-                  ? "fill-amber-200 text-amber-300"
-                  : "fill-amber-200 text-amber-400"
-                : variant === "white"
-                ? "fill-white/15 text-white/25"
-                : "fill-muted text-muted-foreground/25",
+                  ? variant === "white"
+                    ? "fill-amber-200 text-amber-300"
+                    : "fill-amber-200 text-amber-400"
+                  : variant === "white"
+                    ? "fill-white/15 text-white/25"
+                    : "fill-muted text-muted-foreground/25",
             )}
           />
         ))}

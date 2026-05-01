@@ -53,7 +53,7 @@ router.get("/invoices", verifyToken, async (req, res, next) => {
 router.get("/invoices/:id", verifyToken, async (req, res, next) => {
   try {
     const invoice = await prisma.invoice.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         company: true,
         project: true,
@@ -96,7 +96,7 @@ router.put("/invoices/:id", verifyToken, validate(updateSchema), async (req, res
     }
 
     const invoice = await prisma.invoice.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data,
       include: {
         company: { select: { id: true, name: true } },
@@ -111,7 +111,7 @@ router.put("/invoices/:id", verifyToken, validate(updateSchema), async (req, res
 // DELETE /api/billing/invoices/:id
 router.delete("/invoices/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.invoice.delete({ where: { id: req.params.id } });
+    await prisma.invoice.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

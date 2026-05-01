@@ -49,7 +49,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         commissions: {
           include: {
@@ -89,7 +89,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(campaign);
@@ -101,7 +101,7 @@ router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, re
 // DELETE /api/campaigns/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.campaign.delete({ where: { id: req.params.id } });
+    await prisma.campaign.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

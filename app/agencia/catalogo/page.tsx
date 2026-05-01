@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ShoppingCart,
   Store,
@@ -36,57 +36,53 @@ export default function AgenciaCatalogo() {
 
   const basket = useProjectBasket();
 
-  const [selectedProducts, setSelectedProducts] = useState<
-    CatalogSelectedProduct[]
-  >([]);
-  const [productQuantities, setProductQuantities] = useState<
-    Record<string, number>
-  >({});
   const [cartOpen, setCartOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+
+  // Derive from basket context — single source of truth
+  const selectedProducts = useMemo<CatalogSelectedProduct[]>(
+    () =>
+      basket.items.map((item) => ({
+        ...item.product,
+        id: item.productId,
+        finalPrice: item.finalPrice,
+        quantity: item.quantity,
+        customizations: {},
+      })),
+    [basket.items],
+  );
+
+  const productQuantities = useMemo<Record<string, number>>(
+    () =>
+      basket.items.reduce(
+        (acc, item) => {
+          acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
+    [basket.items],
+  );
 
   /* ── cart helpers ─────────────────────────────────────── */
   const handleAdd = (product: Product) => {
     basket.addItem(product);
-    const exists = selectedProducts.find((p) => p.id === product.id);
-    if (!exists) {
-      setSelectedProducts((prev) => [
-        ...prev,
-        { ...product, quantity: 1, customizations: {} },
-      ]);
-      setProductQuantities((prev) => ({ ...prev, [product.id]: 1 }));
-    } else {
-      handleIncrease(product.id);
-    }
   };
 
   const handleRemove = (productId: string) => {
-    setSelectedProducts((prev) => prev.filter((p) => p.id !== productId));
-    setProductQuantities((prev) => {
-      const next = { ...prev };
-      delete next[productId];
-      return next;
-    });
+    const item = basket.items.find((i) => i.productId === productId);
+    if (item) basket.removeItem(item.id);
   };
 
   const handleIncrease = (productId: string) => {
-    const qty = productQuantities[productId] || 1;
-    setProductQuantities((prev) => ({ ...prev, [productId]: qty + 1 }));
-    setSelectedProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, quantity: qty + 1 } : p)),
-    );
+    const item = basket.items.find((i) => i.productId === productId);
+    if (item) basket.updateQuantity(item.id, item.quantity + 1);
   };
 
   const handleDecrease = (productId: string) => {
-    const qty = productQuantities[productId] || 1;
-    if (qty <= 1) {
-      handleRemove(productId);
-    } else {
-      setProductQuantities((prev) => ({ ...prev, [productId]: qty - 1 }));
-      setSelectedProducts((prev) =>
-        prev.map((p) => (p.id === productId ? { ...p, quantity: qty - 1 } : p)),
-      );
-    }
+    const item = basket.items.find((i) => i.productId === productId);
+    if (!item) return;
+    basket.updateQuantity(item.id, item.quantity - 1);
   };
 
   const cartTotal = selectedProducts.reduce(
@@ -103,10 +99,7 @@ export default function AgenciaCatalogo() {
   };
 
   const handlePanelSubmit = (project: any) => {
-    // Clear both local cart state and the global basket
     basket.clearBasket();
-    setSelectedProducts([]);
-    setProductQuantities({});
     setPanelOpen(false);
   };
 
@@ -345,8 +338,7 @@ export default function AgenciaCatalogo() {
           <button
             type="button"
             onClick={() => {
-              setSelectedProducts([]);
-              setProductQuantities({});
+              basket.clearBasket();
             }}
             className="w-full text-xs text-slate-400 hover:text-red-400 transition-colors text-center"
           >

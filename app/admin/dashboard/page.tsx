@@ -2,7 +2,7 @@
 import type React from "react";
 
 import { useState, useEffect, useMemo } from "react";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,115 +104,238 @@ import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (_from?: any, _to?: any): any => ({
   revenue: {
-    total: 270800, growth: 18.1, totalGrowth: 18.1, series: [],
+    total: 270800,
+    growth: 18.1,
+    totalGrowth: 18.1,
+    series: [],
     trendData: [180000, 205000, 215000, 230000, 248000, 270800],
-    creditPlan: 114000, creditPlanGrowth: 18,
-    recurring: 97600, recurringGrowth: 8,
-    oneTime: 59200, oneTimeGrowth: 14,
+    creditPlan: 114000,
+    creditPlanGrowth: 18,
+    recurring: 97600,
+    recurringGrowth: 8,
+    oneTime: 59200,
+    oneTimeGrowth: 14,
   },
   activeProjects: {
-    total: 127, growth: 5.2, series: [],
-    agencies: 48, agenciesGrowth: 7,
-    leadPremium: 63, leadPremiumGrowth: 9,
-    nomades: 16, nomadesGrowth: 3,
-    newTotal: 22, newAgencies: 9, newLeadPremium: 10, newNomades: 3,
+    total: 127,
+    growth: 5.2,
+    series: [],
+    agencies: 48,
+    agenciesGrowth: 7,
+    leadPremium: 63,
+    leadPremiumGrowth: 9,
+    nomades: 16,
+    nomadesGrowth: 3,
+    newTotal: 22,
+    newAgencies: 9,
+    newLeadPremium: 10,
+    newNomades: 3,
   },
   creditPlans: {
-    total: 114000, growth: 18, series: [],
-    basic:   { revenue: 38000, newContracts: 12, growth: 8 },
-    partner: { revenue: 45000, newContracts: 9,  growth: 22 },
-    premium: { revenue: 31000, newContracts: 5,  growth: 14 },
+    total: 114000,
+    growth: 18,
+    series: [],
+    basic: { revenue: 38000, newContracts: 12, growth: 8 },
+    partner: { revenue: 45000, newContracts: 9, growth: 22 },
+    premium: { revenue: 31000, newContracts: 5, growth: 14 },
   },
   mrr: {
-    total: 97600, growth: 8, series: [],
-    newMrr: 12400, expansion: 5200, contraction: 1800,
-    churnRevenue: 3100, baseMrr: 89600, netChange: 12700,
+    total: 97600,
+    growth: 8,
+    series: [],
+    newMrr: 12400,
+    expansion: 5200,
+    contraction: 1800,
+    churnRevenue: 3100,
+    baseMrr: 89600,
+    netChange: 12700,
     trendData: [72000, 78000, 82000, 86000, 91000, 97600],
   },
   churn: {
-    total: 0, growth: 0, series: [],
-    inactiveAccounts: 23, inactiveGrowth: 4,
-    agencies: 8, leadPremium: 5, nomades: 7, free: 3,
-    cancelledProjects: 11, cancelledGrowth: 2,
-    revenueChurn: 9300, revenueChurnRate: 3.2,
+    total: 0,
+    growth: 0,
+    series: [],
+    inactiveAccounts: 23,
+    inactiveGrowth: 4,
+    agencies: 8,
+    leadPremium: 5,
+    nomades: 7,
+    free: 3,
+    cancelledProjects: 11,
+    cancelledGrowth: 2,
+    revenueChurn: 9300,
+    revenueChurnRate: 3.2,
   },
   averageTicket: {
-    total: 0, growth: 5, series: [],
-    general: 1213, generalGrowth: 5,
-    perProject: 2840, perProjectGrowth: 7,
+    total: 0,
+    growth: 5,
+    series: [],
+    general: 1213,
+    generalGrowth: 5,
+    perProject: 2840,
+    perProjectGrowth: 7,
     trendData: [980, 1050, 1100, 1180, 1210, 1213],
   },
   ltv: {
-    total: 0, growth: 12, series: [],
+    total: 0,
+    growth: 12,
+    series: [],
     value: 8740,
-    agencies: 14200, agenciesGrowth: 9,
-    leadPremium: 11500, leadPremiumGrowth: 15,
-    nomades: 3800, nomadesGrowth: 6,
-    hist0to1k: 120, hist1kto5k: 280, hist5kto15k: 95, hist15kplus: 30,
+    agencies: 14200,
+    agenciesGrowth: 9,
+    leadPremium: 11500,
+    leadPremiumGrowth: 15,
+    nomades: 3800,
+    nomadesGrowth: 6,
+    hist0to1k: 120,
+    hist1kto5k: 280,
+    hist5kto15k: 95,
+    hist15kplus: 30,
   },
   accountsReceivable: {
-    total: 187400, growth: 12, series: [],
-    creditPlans: 98200, postPaid: 54700, others: 34500, received: 143600,
+    total: 187400,
+    growth: 12,
+    series: [],
+    creditPlans: 98200,
+    postPaid: 54700,
+    others: 34500,
+    received: 143600,
   },
   platformActivities: {
-    activeAgencies: 34, avgSessionMinutes: 47, mau: 1240, dau: 312,
-    sessions: 8740, actionsExecuted: 52300,
+    activeAgencies: 34,
+    avgSessionMinutes: 47,
+    mau: 1240,
+    dau: 312,
+    sessions: 8740,
+    actionsExecuted: 52300,
     trendData: [420, 510, 480, 630, 590, 710, 680],
   },
   nomads: {
-    total: 148, growth: 6, active: 112, activeGrowth: 9,
-    inactive: 36, inactiveChange: -3, newInPeriod: 14, churn: 5, retention30d: 82,
+    total: 148,
+    growth: 6,
+    active: 112,
+    activeGrowth: 9,
+    inactive: 36,
+    inactiveChange: -3,
+    newInPeriod: 14,
+    churn: 5,
+    retention30d: 82,
     trendData: [95, 100, 104, 108, 110, 112],
   },
   nomadsIndicators: {
-    deliveryRate: 94.3, avgRating: 4.7, avgTimePerTask: 3.2, certified: 68, retention90d: 79,
+    deliveryRate: 94.3,
+    avgRating: 4.7,
+    avgTimePerTask: 3.2,
+    certified: 68,
+    retention90d: 79,
   },
   nomadsRanking: { items: [] },
   agenciesRanking: [
-    { id: "1", name: "Digital Works",  rating: 4.9, projects: 23, contribution: "R$ 48k" },
-    { id: "2", name: "Criativa Lab",   rating: 4.8, projects: 18, contribution: "R$ 37k" },
-    { id: "3", name: "Inovax Agency",  rating: 4.7, projects: 15, contribution: "R$ 31k" },
-    { id: "4", name: "PixelForge",     rating: 4.6, projects: 12, contribution: "R$ 24k" },
-    { id: "5", name: "BluePrint Co.",  rating: 4.5, projects: 10, contribution: "R$ 19k" },
+    {
+      id: "1",
+      name: "Digital Works",
+      rating: 4.9,
+      projects: 23,
+      contribution: "R$ 48k",
+    },
+    {
+      id: "2",
+      name: "Criativa Lab",
+      rating: 4.8,
+      projects: 18,
+      contribution: "R$ 37k",
+    },
+    {
+      id: "3",
+      name: "Inovax Agency",
+      rating: 4.7,
+      projects: 15,
+      contribution: "R$ 31k",
+    },
+    {
+      id: "4",
+      name: "PixelForge",
+      rating: 4.6,
+      projects: 12,
+      contribution: "R$ 24k",
+    },
+    {
+      id: "5",
+      name: "BluePrint Co.",
+      rating: 4.5,
+      projects: 10,
+      contribution: "R$ 19k",
+    },
   ],
   statusOverview: {
-    projects: { ongoing: 42, approved: 18, completed: 156, cancelled: 7, delayed: 11 },
-    tasks:    { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
-    leads:    { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
+    projects: {
+      ongoing: 42,
+      approved: 18,
+      completed: 156,
+      cancelled: 7,
+      delayed: 11,
+    },
+    tasks: { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
+    leads: { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
   },
   tasks: {
-    total: 552, items: [],
-    completed: 412, completedGrowth: 8,
-    inProgress: 57, inProgressGrowth: 4,
-    contracted: 83, contractedGrowth: 12,
-    cancelled: 14, cancelledChange: -2,
+    total: 552,
+    items: [],
+    completed: 412,
+    completedGrowth: 8,
+    inProgress: 57,
+    inProgressGrowth: 4,
+    contracted: 83,
+    contractedGrowth: 12,
+    cancelled: 14,
+    cancelledChange: -2,
     slaCompliance: 91.4,
   },
   activeUsers: {
     total: 284,
-    empresas: 92, empresasGrowth: 5,
-    agencias: 61, agenciasGrowth: 7,
-    nomades: 112, nomadesGrowth: 9,
-    admins: 19, adminsGrowth: 3,
+    empresas: 92,
+    empresasGrowth: 5,
+    agencias: 61,
+    agenciasGrowth: 7,
+    nomades: 112,
+    nomadesGrowth: 9,
+    admins: 19,
+    adminsGrowth: 3,
     series: [],
   },
   partnerProgram: {
-    total: 38, items: [],
-    invitesSent: 124, pending: 47, accepted: 38,
-    diamond: 3, platinum: 6, gold: 11, silver: 12, bronze: 6,
+    total: 38,
+    items: [],
+    invitesSent: 124,
+    pending: 47,
+    accepted: 38,
+    diamond: 3,
+    platinum: 6,
+    gold: 11,
+    silver: 12,
+    bronze: 6,
     mrrGenerated: 22400,
   },
   cmv: {
-    totalCosts: 87400, revenue: 270800,
-    cmvPercent: 32.3, prevCmvPercent: 34.1,
-    nomades:   { value: 42800, percent: 49 },
-    impostos:  { value: 18200, percent: 21 },
+    totalCosts: 87400,
+    revenue: 270800,
+    cmvPercent: 32.3,
+    prevCmvPercent: 34.1,
+    nomades: { value: 42800, percent: 49 },
+    impostos: { value: 18200, percent: 21 },
     comissoes: { value: 14900, percent: 17 },
-    outros:    { value: 11500, percent: 13 },
+    outros: { value: 11500, percent: 13 },
     variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
   },
-  metrics: {}, activity: [], alerts: [], performers: [], userDistribution: [],
-  systemAlerts: [], adminProfiles: [], permissionMatrix: [], managementTools: [],
+  metrics: {},
+  activity: [],
+  alerts: [],
+  performers: [],
+  userDistribution: [],
+  systemAlerts: [],
+  adminProfiles: [],
+  permissionMatrix: [],
+  managementTools: [],
 });
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
@@ -470,6 +593,8 @@ export default function AdminDashboardPage() {
     stats: apiStats,
     activities: apiActivities,
     loading: dashboardLoading,
+    error: dashboardError,
+    refetch: refetchDashboard,
   } = useDashboard();
 
   const [globalPeriod, setGlobalPeriod] = useState<{
@@ -2615,7 +2740,8 @@ export default function AdminDashboardPage() {
         bgColor = "from-emerald-400 to-emerald-600";
         gradientFrom = "from-emerald-600/10";
         cardBgGradient = "from-emerald-500 to-teal-600";
-        borderClass = "border-2 border-emerald-300/70 dark:border-emerald-300/50";
+        borderClass =
+          "border-2 border-emerald-300/70 dark:border-emerald-300/50";
         shadowClass = "";
         break;
       case "companies":
@@ -3869,10 +3995,11 @@ export default function AdminDashboardPage() {
               {/* Revenue Total */}
               <div className="pb-4 border-b">
                 <div className="flex items-baseline gap-2">
-                  <h3 className="text-3xl font-bold">R$ {(rv.total / 1000).toFixed(1)}k</h3>
+                  <h3 className="text-3xl font-bold">
+                    R$ {(rv.total / 1000).toFixed(1)}k
+                  </h3>
                   <span className="flex items-center gap-1 text-sm text-success font-semibold">
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    +{rv.totalGrowth}%
+                    <TrendingUp className="h-3.5 w-3.5" />+{rv.totalGrowth}%
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -4236,7 +4363,9 @@ export default function AdminDashboardPage() {
                 {/* Total Revenue from Credit Plans */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">R$ {cpW.total.toLocaleString('pt-BR')}</h3>
+                    <h3 className="text-3xl font-bold">
+                      R$ {cpW.total.toLocaleString("pt-BR")}
+                    </h3>
                     <span className="text-sm font-medium flex items-center gap-1 text-success">
                       <TrendingUp className="h-3.5 w-3.5" />
                       {cpW.growth}%
@@ -4265,7 +4394,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-bold text-foreground">
-                        R$ {cpW.basic.revenue.toLocaleString('pt-BR')}
+                        R$ {cpW.basic.revenue.toLocaleString("pt-BR")}
                       </div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingUp className="h-3 w-3 text-success" />
@@ -4291,7 +4420,9 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">R$ {cpW.partner.revenue.toLocaleString('pt-BR')}</div>
+                      <div className="text-lg font-bold">
+                        R$ {cpW.partner.revenue.toLocaleString("pt-BR")}
+                      </div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingUp className="h-3 w-3 text-success" />
                         <span className="text-xs font-medium text-success">
@@ -4316,7 +4447,9 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">R$ {cpW.premium.revenue.toLocaleString('pt-BR')}</div>
+                      <div className="text-lg font-bold">
+                        R$ {cpW.premium.revenue.toLocaleString("pt-BR")}
+                      </div>
                       <div className="flex items-center gap-1 text-xs justify-end">
                         <TrendingDown className="h-3 w-3 text-destructive" />
                         <span className="text-xs font-medium text-destructive">
@@ -4417,10 +4550,11 @@ export default function AdminDashboardPage() {
                 {/* MRR Total */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">R$ {mrrW.total.toLocaleString('pt-BR')}</h3>
+                    <h3 className="text-3xl font-bold">
+                      R$ {mrrW.total.toLocaleString("pt-BR")}
+                    </h3>
                     <div className="flex items-center gap-2 text-sm font-medium text-success">
-                      <ArrowUpRight className="w-4 h-4" />
-                      +{mrrW.growth}%
+                      <ArrowUpRight className="w-4 h-4" />+{mrrW.growth}%
                     </div>
                     <span className="text-sm text-muted-foreground">
                       vs período anterior
@@ -4445,7 +4579,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-success">
-                      +R$ {mrrW.newMrr.toLocaleString('pt-BR')}
+                      +R$ {mrrW.newMrr.toLocaleString("pt-BR")}
                     </div>
                   </div>
 
@@ -4464,7 +4598,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-info">
-                      +R$ {mrrW.expansion.toLocaleString('pt-BR')}
+                      +R$ {mrrW.expansion.toLocaleString("pt-BR")}
                     </div>
                   </div>
 
@@ -4483,7 +4617,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-warning">
-                      -R$ {mrrW.contraction.toLocaleString('pt-BR')}
+                      -R$ {mrrW.contraction.toLocaleString("pt-BR")}
                     </div>
                   </div>
 
@@ -4502,7 +4636,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="text-lg font-semibold text-destructive">
-                      -R$ {mrrW.churnRevenue.toLocaleString('pt-BR')}
+                      -R$ {mrrW.churnRevenue.toLocaleString("pt-BR")}
                     </div>
                   </div>
                 </div>
@@ -4540,7 +4674,9 @@ export default function AdminDashboardPage() {
                     <div className="text-sm text-muted-foreground">
                       ARR estimado
                     </div>
-                    <div className="text-xl font-bold">R$ {(mrrW.total * 12).toLocaleString('pt-BR')}</div>
+                    <div className="text-xl font-bold">
+                      R$ {(mrrW.total * 12).toLocaleString("pt-BR")}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       (MRR × 12)
                     </div>
@@ -4580,8 +4716,11 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                    <span>Base: R$ {mrrW.baseMrr.toLocaleString('pt-BR')}</span>
-                    <span>Net Change: {mrrW.netChange >= 0 ? '+' : ''}R$ {mrrW.netChange.toLocaleString('pt-BR')}</span>
+                    <span>Base: R$ {mrrW.baseMrr.toLocaleString("pt-BR")}</span>
+                    <span>
+                      Net Change: {mrrW.netChange >= 0 ? "+" : ""}R${" "}
+                      {mrrW.netChange.toLocaleString("pt-BR")}
+                    </span>
                   </div>
                 </div>
 
@@ -4601,15 +4740,16 @@ export default function AdminDashboardPage() {
                         variant="outline"
                         className="bg-green-50 text-green-700 border-green-200 text-xs"
                       >
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        +{mrrW.trendGrowth}%
+                        <TrendingUp className="h-3 w-3 mr-1" />+
+                        {mrrW.trendGrowth}%
                       </Badge>
                     </div>
 
                     {/* Enhanced Bar Chart */}
                     <div className="flex items-end justify-between gap-1.5 h-20 bg-gradient-to-b from-blue-50 to-transparent p-3 rounded-lg border border-blue-100">
                       {mrrW.trendData.map((data, idx) => {
-                        const maxValue = mrrW.trendData[mrrW.trendData.length - 1];
+                        const maxValue =
+                          mrrW.trendData[mrrW.trendData.length - 1];
                         const height = (data / Math.max(1, maxValue)) * 100;
                         const isLast = idx === 5;
                         return (
@@ -4627,7 +4767,7 @@ export default function AdminDashboardPage() {
                               style={{ height: `${height}%` }}
                             />
                             <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                              {["Jun","Jul","Ago","Set","Out","Nov"][idx]}
+                              {["Jun", "Jul", "Ago", "Set", "Out", "Nov"][idx]}
                             </span>
                             <span className="text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6">
                               R$ {(data / 1000).toFixed(0)}k
@@ -4641,15 +4781,27 @@ export default function AdminDashboardPage() {
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="bg-green-50 border border-green-200 rounded p-2">
                         <p className="text-muted-foreground">Menor</p>
-                        <p className="font-semibold">R$ {(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k</p>
+                        <p className="font-semibold">
+                          R$ {(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k
+                        </p>
                       </div>
                       <div className="bg-blue-50 border border-blue-200 rounded p-2">
                         <p className="text-muted-foreground">Médio</p>
-                        <p className="font-semibold">R$ {(mrrW.trendData.reduce((a, b) => a + b, 0) / mrrW.trendData.length / 1000).toFixed(1)}k</p>
+                        <p className="font-semibold">
+                          R${" "}
+                          {(
+                            mrrW.trendData.reduce((a, b) => a + b, 0) /
+                            mrrW.trendData.length /
+                            1000
+                          ).toFixed(1)}
+                          k
+                        </p>
                       </div>
                       <div className="bg-blue-50 border border-blue-200 rounded p-2">
                         <p className="text-muted-foreground">Atual</p>
-                        <p className="font-semibold text-blue-600">R$ {(mrrW.total / 1000).toFixed(1)}k</p>
+                        <p className="font-semibold text-blue-600">
+                          R$ {(mrrW.total / 1000).toFixed(1)}k
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -4694,10 +4846,12 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{churnW.inactiveAccounts}</span>
+                    <span className="text-2xl font-bold">
+                      {churnW.inactiveAccounts}
+                    </span>
                     <Badge variant="destructive" className="gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      +{churnW.inactiveGrowth}%
+                      <TrendingUp className="h-3 w-3" />+{churnW.inactiveGrowth}
+                      %
                     </Badge>
                   </div>
                 </div>
@@ -4739,10 +4893,12 @@ export default function AdminDashboardPage() {
                     <span className="font-semibold">Projetos Cancelados</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">{churnW.cancelledProjects}</span>
+                    <span className="text-xl font-bold">
+                      {churnW.cancelledProjects}
+                    </span>
                     <Badge variant="destructive" className="gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      +{churnW.cancelledGrowth}%
+                      <TrendingUp className="h-3 w-3" />+
+                      {churnW.cancelledGrowth}%
                     </Badge>
                   </div>
                 </div>
@@ -4759,7 +4915,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-xl font-bold text-destructive">
-                      R$ {churnW.revenueChurn.toLocaleString('pt-BR')}
+                      R$ {churnW.revenueChurn.toLocaleString("pt-BR")}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       Churn Rate:{" "}
@@ -4855,11 +5011,15 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-muted-foreground mb-1">
                       Ticket Médio Geral
                     </p>
-                    <p className="text-3xl font-bold text-success">R$ {atW.general.toLocaleString('pt-BR')}</p>
+                    <p className="text-3xl font-bold text-success">
+                      R$ {atW.general.toLocaleString("pt-BR")}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 text-success">
                     <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">+{atW.generalGrowth}%</span>
+                    <span className="text-lg font-semibold">
+                      +{atW.generalGrowth}%
+                    </span>
                   </div>
                 </div>
               </div>
@@ -4949,11 +5109,15 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-muted-foreground mb-1">
                       Ticket Médio por Projeto
                     </p>
-                    <p className="text-2xl font-bold text-success">R$ {atW.perProject.toLocaleString('pt-BR')}</p>
+                    <p className="text-2xl font-bold text-success">
+                      R$ {atW.perProject.toLocaleString("pt-BR")}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 text-success">
                     <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">+{atW.perProjectGrowth}%</span>
+                    <span className="text-lg font-semibold">
+                      +{atW.perProjectGrowth}%
+                    </span>
                   </div>
                 </div>
               </div>
@@ -5012,7 +5176,9 @@ export default function AdminDashboardPage() {
               {/* LTV Geral */}
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-3xl font-bold">R$ {ltvW.value.toLocaleString('pt-BR')}</div>
+                  <div className="text-3xl font-bold">
+                    R$ {ltvW.value.toLocaleString("pt-BR")}
+                  </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                     <span>Tempo médio: 24 meses</span>
                     <span>•</span>
@@ -5021,7 +5187,9 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="flex items-center gap-1 text-sm">
                   <ArrowUp className="h-4 w-4 text-success" />
-                  <span className="text-success font-semibold">+{ltvW.growth}%</span>
+                  <span className="text-success font-semibold">
+                    +{ltvW.growth}%
+                  </span>
                 </div>
               </div>
 
@@ -5057,10 +5225,14 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ {ltvW.agencies.toLocaleString('pt-BR')}</div>
+                    <div className="text-lg font-bold">
+                      R$ {ltvW.agencies.toLocaleString("pt-BR")}
+                    </div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">+{ltvW.agenciesGrowth}%</span>
+                      <span className="text-success font-semibold">
+                        +{ltvW.agenciesGrowth}%
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -5077,10 +5249,14 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ {ltvW.leadPremium.toLocaleString('pt-BR')}</div>
+                    <div className="text-lg font-bold">
+                      R$ {ltvW.leadPremium.toLocaleString("pt-BR")}
+                    </div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">+{ltvW.leadPremiumGrowth}%</span>
+                      <span className="text-success font-semibold">
+                        +{ltvW.leadPremiumGrowth}%
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -5097,10 +5273,14 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">R$ {ltvW.nomades.toLocaleString('pt-BR')}</div>
+                    <div className="text-lg font-bold">
+                      R$ {ltvW.nomades.toLocaleString("pt-BR")}
+                    </div>
                     <div className="flex items-center gap-1 text-xs justify-end">
                       <ArrowDown className="h-3 w-3 text-warning" />
-                      <span className="text-warning">{ltvW.nomadesGrowth}%</span>
+                      <span className="text-warning">
+                        {ltvW.nomadesGrowth}%
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -5137,7 +5317,9 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-muted-foreground h-full"
-                        style={{ width: `${Math.min(100, (ltvW.hist0to1k / 400) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (ltvW.hist0to1k / 400) * 100)}%`,
+                        }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
@@ -5151,7 +5333,9 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-info h-full"
-                        style={{ width: `${Math.min(100, (ltvW.hist1kto5k / 400) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (ltvW.hist1kto5k / 400) * 100)}%`,
+                        }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
@@ -5165,7 +5349,9 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-chart-4 h-full"
-                        style={{ width: `${Math.min(100, (ltvW.hist5kto15k / 400) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (ltvW.hist5kto15k / 400) * 100)}%`,
+                        }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
@@ -5179,7 +5365,9 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-success h-full"
-                        style={{ width: `${Math.min(100, (ltvW.hist15kplus / 400) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (ltvW.hist15kplus / 400) * 100)}%`,
+                        }}
                       />
                     </div>
                     <div className="text-xs font-medium w-12 text-right">
@@ -5413,7 +5601,9 @@ export default function AdminDashboardPage() {
                       Agências Ativas
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">{paW.activeAgencies}</span>
+                      <span className="text-2xl font-bold">
+                        {paW.activeAgencies}
+                      </span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
                         +7%
@@ -5425,7 +5615,9 @@ export default function AdminDashboardPage() {
                       Tempo médio/dia
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">{paW.avgSessionMinutes} min</span>
+                      <span className="text-2xl font-bold">
+                        {paW.avgSessionMinutes} min
+                      </span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
                         +4%
@@ -5451,13 +5643,17 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Sessões</p>
-                    <span className="text-lg font-semibold">{paW.sessions.toLocaleString('pt-BR')}</span>
+                    <span className="text-lg font-semibold">
+                      {paW.sessions.toLocaleString("pt-BR")}
+                    </span>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">
                       Ações executadas
                     </p>
-                    <span className="text-lg font-semibold">{paW.actionsExecuted.toLocaleString('pt-BR')}</span>
+                    <span className="text-lg font-semibold">
+                      {paW.actionsExecuted.toLocaleString("pt-BR")}
+                    </span>
                   </div>
                 </div>
 
@@ -5471,7 +5667,9 @@ export default function AdminDashboardPage() {
                       <div
                         key={idx}
                         className="flex-1 bg-info rounded-t"
-                        style={{ height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%` }}
+                        style={{
+                          height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%`,
+                        }}
                         title={`Dia ${idx + 1}: ${value} ações`}
                       />
                     ))}
@@ -5567,10 +5765,11 @@ export default function AdminDashboardPage() {
                   TOTAL DE NÔMADES
                 </p>
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-4xl font-bold text-chart-2">{nmW.total}</span>
+                  <span className="text-4xl font-bold text-chart-2">
+                    {nmW.total}
+                  </span>
                   <span className="flex items-center gap-1 text-base text-success font-semibold">
-                    <TrendingUp className="h-4 w-4" />
-                    +{nmW.growth}%
+                    <TrendingUp className="h-4 w-4" />+{nmW.growth}%
                   </span>
                 </div>
               </div>
@@ -5590,8 +5789,7 @@ export default function AdminDashboardPage() {
                       {nmW.active}
                     </span>
                     <span className="flex items-center text-sm text-success font-semibold">
-                      <TrendingUp className="h-3 w-3" />
-                      +{nmW.activeGrowth}%
+                      <TrendingUp className="h-3 w-3" />+{nmW.activeGrowth}%
                     </span>
                   </div>
                   <p className="text-xs text-success mt-1">
@@ -5629,19 +5827,25 @@ export default function AdminDashboardPage() {
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Novos no período
                     </p>
-                    <p className="text-xl font-bold text-info">{nmW.newInPeriod}</p>
+                    <p className="text-xl font-bold text-info">
+                      {nmW.newInPeriod}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Churn
                     </p>
-                    <p className="text-xl font-bold text-destructive">{nmW.churn}</p>
+                    <p className="text-xl font-bold text-destructive">
+                      {nmW.churn}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Retenção 30d
                     </p>
-                    <p className="text-xl font-bold text-success">{nmW.retention30d}%</p>
+                    <p className="text-xl font-bold text-success">
+                      {nmW.retention30d}%
+                    </p>
                   </div>
                 </div>
               </div>
@@ -5653,7 +5857,8 @@ export default function AdminDashboardPage() {
                 </p>
                 <div className="flex items-end justify-between gap-1 h-16">
                   {nmW.trendData.map((value, idx) => {
-                    const percentage = (value / Math.max(1, Math.max(...nmW.trendData))) * 100;
+                    const percentage =
+                      (value / Math.max(1, Math.max(...nmW.trendData))) * 100;
                     return (
                       <div
                         key={idx}
@@ -6128,7 +6333,7 @@ export default function AdminDashboardPage() {
                     </Badge>
                   </div>
                   <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                    R$ {arW.total.toLocaleString('pt-BR')},00
+                    R$ {arW.total.toLocaleString("pt-BR")},00
                   </div>
                 </div>
 
@@ -6147,7 +6352,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                      R$ {arW.creditPlans.toLocaleString('pt-BR')},00
+                      R$ {arW.creditPlans.toLocaleString("pt-BR")},00
                     </span>
                   </div>
 
@@ -6160,7 +6365,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                      R$ {arW.postPaid.toLocaleString('pt-BR')},00
+                      R$ {arW.postPaid.toLocaleString("pt-BR")},00
                     </span>
                   </div>
 
@@ -6173,7 +6378,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                      R$ {arW.others.toLocaleString('pt-BR')},00
+                      R$ {arW.others.toLocaleString("pt-BR")},00
                     </span>
                   </div>
                 </div>
@@ -6185,7 +6390,7 @@ export default function AdminDashboardPage() {
                       Recebido no período
                     </span>
                     <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                      R$ {arW.received.toLocaleString('pt-BR')},00
+                      R$ {arW.received.toLocaleString("pt-BR")},00
                     </span>
                   </div>
                 </div>
@@ -6272,7 +6477,9 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-muted-foreground">
                     SLA — dentro do prazo
                   </p>
-                  <span className="text-sm font-bold text-success">{tasksW.slaCompliance.toFixed(1).replace('.', ',')}%</span>
+                  <span className="text-sm font-bold text-success">
+                    {tasksW.slaCompliance.toFixed(1).replace(".", ",")}%
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -6301,19 +6508,19 @@ export default function AdminDashboardPage() {
               {[
                 {
                   label: "Taxa de Entrega",
-                  value: `${niW.deliveryRate.toFixed(1).replace('.', ',')}%`,
+                  value: `${niW.deliveryRate.toFixed(1).replace(".", ",")}%`,
                   icon: CheckSquare,
                   color: "text-success",
                 },
                 {
                   label: "Avaliação Média",
-                  value: `${niW.avgRating.toFixed(1).replace('.', ',')} ★`,
+                  value: `${niW.avgRating.toFixed(1).replace(".", ",")} ★`,
                   icon: Star,
                   color: "text-warning",
                 },
                 {
                   label: "Tempo Médio / Tarefa",
-                  value: `${niW.avgTimePerTask.toFixed(1).replace('.', ',')} dias`,
+                  value: `${niW.avgTimePerTask.toFixed(1).replace(".", ",")} dias`,
                   icon: Clock,
                   color: "text-info",
                 },
@@ -6415,7 +6622,9 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-muted-foreground">
                   Total ativo hoje
                 </p>
-                <p className="text-sm font-bold">{auW.total.toLocaleString('pt-BR')}</p>
+                <p className="text-sm font-bold">
+                  {auW.total.toLocaleString("pt-BR")}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -6469,8 +6678,16 @@ export default function AdminDashboardPage() {
                     value: ppW.invitesSent,
                     color: "text-foreground",
                   },
-                  { label: "Pendentes", value: ppW.pending, color: "text-warning" },
-                  { label: "Aceitos", value: ppW.accepted, color: "text-success" },
+                  {
+                    label: "Pendentes",
+                    value: ppW.pending,
+                    color: "text-warning",
+                  },
+                  {
+                    label: "Aceitos",
+                    value: ppW.accepted,
+                    color: "text-success",
+                  },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -6551,7 +6768,7 @@ export default function AdminDashboardPage() {
                   MRR gerado por Partners
                 </p>
                 <span className="text-sm font-bold text-success">
-                  R$ {ppW.mrrGenerated.toLocaleString('pt-BR')}
+                  R$ {ppW.mrrGenerated.toLocaleString("pt-BR")}
                 </span>
               </div>
             </CardContent>
@@ -6748,14 +6965,26 @@ export default function AdminDashboardPage() {
   };
 
   if (dashboardLoading) {
+    return <PageLoader text="Carregando painel…" />;
+  }
+
+  if (dashboardError) {
     return (
-      <div className="container mx-auto space-y-4 px-0 py-0">
-        <PageLoadingSkeleton
-          statCards={4}
-          tableRows={6}
-          tableColumns={5}
-          showTable={false}
-        />
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar o painel
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {dashboardError}
+          </p>
+        </div>
+        <Button onClick={refetchDashboard} className="btn-brand">
+          Tentar novamente
+        </Button>
       </div>
     );
   }
@@ -7130,7 +7359,6 @@ export default function AdminDashboardPage() {
           <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
           {globalPeriod.label}
         </span>
-
       </div>
 
       {/* Export capture area: metrics + widgets */}

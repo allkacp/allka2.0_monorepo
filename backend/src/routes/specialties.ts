@@ -48,7 +48,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const specialty = await prisma.specialty.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
     });
     if (!specialty) {
       res.status(404).json({ error: "Especialidade não encontrada" });
@@ -74,7 +74,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, res, next) => {
   try {
     const specialty = await prisma.specialty.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(specialty);
@@ -86,7 +86,7 @@ router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, re
 // DELETE /api/specialties/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.specialty.delete({ where: { id: req.params.id } });
+    await prisma.specialty.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

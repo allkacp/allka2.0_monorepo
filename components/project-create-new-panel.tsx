@@ -36,8 +36,8 @@ import {
   UserCheck,
   FileDown,
   Loader2,
+  ChevronRight,
 } from "lucide-react";
-import { useCompanyData } from "@/lib/mock-companies";
 import type { MockClientItem, MockCompanyItem } from "@/lib/mock-companies";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel";
@@ -50,6 +50,7 @@ import {
 } from "@/lib/proposal-export";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
+import { ButtonLoader } from "@/components/ui/loading";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,11 @@ import {
 } from "@/components/product-catalog-view";
 import { CheckoutFlow } from "@/components/checkout-flow";
 import type { CheckoutData } from "@/components/checkout-flow";
+import {
+  SendApprovalModal,
+  type ApprovalContact,
+  type SendApprovalOptions,
+} from "@/components/send-approval-modal";
 
 // ── Project status types & config ─────────────────────────────────────────────
 type ProjectStatus =
@@ -201,13 +207,23 @@ interface ProjectCreateNewPanelProps {
   /** When set, empresa field is shown as read-only with this name (company-modal mode) */
   companyName?: string;
   /** When set, empresa field is shown as read-only and maps to this id */
-  companyId?: number;
+  companyId?: string | number;
   /** When true, empresa field becomes a dropdown (admin-projetos mode) */
   allowCompanySelect?: boolean;
   /** Resume a draft: pre-load these products into the catalog step */
   draftProducts?: CatalogSelectedProduct[];
   draftProductQuantities?: Record<string, number>;
   draftCommissions?: Record<string, number>;
+  /** Full commission objects from basket — hydrates productCommissionData */
+  draftCommissionData?: Record<
+    string,
+    {
+      tipoComissao: "PERCENTUAL" | "VALOR_FIXO";
+      percentualComissao: number;
+      valorComissao: number;
+      pagador: "AGENCIA" | "CLIENTE";
+    }
+  >;
   /** The backend project ID of the draft being resumed */
   draftProjectId?: string | number;
   /** If true, skip straight to checkout step */
@@ -265,13 +281,19 @@ export function ProjectCreateNewPanel({
   draftProducts,
   draftProductQuantities,
   draftCommissions,
+  draftCommissionData,
   draftProjectId,
   resumeToCheckout,
 }: ProjectCreateNewPanelProps) {
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings } = useSidebar();
   const [loading, setLoading] = useState(false);
+  /** Tracks which footer action triggered loading, so each button shows its own label. */
+  const [loadingAction, setLoadingAction] = useState<"draft" | "submit" | null>(
+    null,
+  );
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const ALL_ACCORDIONS = [
@@ -284,9 +306,9 @@ export function ProjectCreateNewPanel({
   const [openAccordions, setOpenAccordions] = useState<string[]>(["dados"]);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Company-scoping state
-  const [resolvedCompanyId, setResolvedCompanyId] = useState<number | null>(
-    companyIdProp ?? null,
+  // Company-scoping state (string | null — Company.id is a CUID string)
+  const [resolvedCompanyId, setResolvedCompanyId] = useState<string | null>(
+    companyIdProp != null ? String(companyIdProp) : null,
   );
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string>(
     companyName ?? "",
@@ -312,7 +334,7 @@ export function ProjectCreateNewPanel({
 
   // Company creation
   const [showCreateCompany, setShowCreateCompany] = useState(false);
-  const [localCompanies, setLocalCompanies] = useState<MockCompanyItem[]>([]);
+  // (localCompanies defined above with the API companies state)
 
   // Project name uniqueness
   const { projects: existingProjects } = useProjects();
@@ -321,12 +343,12 @@ export function ProjectCreateNewPanel({
   );
   const [warnings, setWarnings] = useState<Record<string, string>>({});
 
-  // Company data from API
-  const {
-    companies: mockCompaniesList,
-    clientsByCompany: mockClientsByCompany,
-    usersByCompany: mockUsersByCompany,
-  } = useCompanyData();
+  // Company data from API — lazy-loaded when panel opens
+  const [apiCompanies, setApiCompanies] = useState<MockCompanyItem[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
+  // Custom companies added inline (after "Cadastrar empresa")
+  const [localCompanies, setLocalCompanies] = useState<MockCompanyItem[]>([]);
 
   // Products catalog + cart state
   const [showProductsStep, setShowProductsStep] = useState(false);
@@ -341,10 +363,26 @@ export function ProjectCreateNewPanel({
   const [productCommissions, setProductCommissions] = useState<
     Record<string, number>
   >({});
+  const [productCommissionData, setProductCommissionData] = useState<
+    Record<
+      string,
+      {
+        tipoComissao: "PERCENTUAL" | "VALOR_FIXO";
+        percentualComissao: number;
+        valorComissao: number;
+        pagador: "AGENCIA" | "CLIENTE";
+      }
+    >
+  >({});
+  const [showEditProducts, setShowEditProducts] = useState(false);
   const [activeReviewTab, setActiveReviewTab] = useState<
     "resumo" | "comissoes"
   >("resumo");
   const [showNextStepModal, setShowNextStepModal] = useState(false);
+  const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
+  // Tracks whether the Review was opened from the project-form (via NextStepModal)
+  // vs. from inside the Products catalog. Used to restore the correct screen on close.
+  const [reviewFromForm, setReviewFromForm] = useState(false);
 
   // Avatar / crop states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -393,9 +431,15 @@ export function ProjectCreateNewPanel({
       setShowAvatarMenu(false);
       setOpenAccordions(["dados"]);
       // Reset company-scoping
-      setResolvedCompanyId(companyIdProp ?? null);
+      setResolvedCompanyId(
+        companyIdProp != null ? String(companyIdProp) : null,
+      );
       setResolvedCompanyName(companyName ?? "");
       setLocalClients([]);
+      setLocalCompanies([]);
+      setApiCompanies([]);
+      setLoadingCompanies(false);
+      setCompaniesError(null);
       setShowNewClientForm(false);
       setNewClientName("");
       setNewClientEmail("");
@@ -407,13 +451,18 @@ export function ProjectCreateNewPanel({
       setSelectedProducts([]);
       setProductQuantities({});
       setProductCommissions({});
+      setProductCommissionData({});
+      setShowEditProducts(false);
       setActiveReviewTab("resumo");
       setShowNextStepModal(false);
+      setReviewFromForm(false);
+      setSavedDraftId(draftProjectId ? String(draftProjectId) : null);
       // Hydrate from draft props if resuming
       if (draftProducts && draftProducts.length > 0) {
         setSelectedProducts(draftProducts);
         setProductQuantities(draftProductQuantities ?? {});
         setProductCommissions(draftCommissions ?? {});
+        setProductCommissionData(draftCommissionData ?? {});
         // Only auto-jump to products step when resuming an existing draft (has projectId).
         // Basket items (no projectId) stay on the main form so the user fills project details first.
         if (draftProjectId) {
@@ -427,30 +476,110 @@ export function ProjectCreateNewPanel({
     }
   }, [open]);
 
+  // Fetch companies lazily when panel opens (and allowCompanySelect is on)
+  // ESC closes the Review overlay and returns to the correct previous screen
+  useEffect(() => {
+    if (!showReview) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowReview(false);
+        if (reviewFromForm) {
+          setShowProductsStep(false);
+          setReviewFromForm(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showReview, reviewFromForm]);
+
+  // Runs once on open; company state is fully reset in useEffect([open]) above
+  // so this effect only runs when `open` truly transitions false→true.
+  useEffect(() => {
+    if (!open || !allowCompanySelect) return;
+    // Only fetch if list is still empty (reset in the open-sync effect above)
+    let cancelled = false;
+    setLoadingCompanies(true);
+    setCompaniesError(null);
+    apiClient
+      .getCompanies({ limit: "1000" })
+      .then((res: any) => {
+        if (cancelled) return;
+        const data: any[] = res.data || (Array.isArray(res) ? res : []);
+        setApiCompanies(
+          data.map((c: any) => ({ id: String(c.id), name: c.name })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled)
+          setCompaniesError("Não foi possível carregar empresas.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCompanies(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, allowCompanySelect]);
+
   // Fetch consultants whenever the resolved company changes
+  // Guard: only run when panel is open and resolvedCompanyId has stabilised.
+  // Also populates the "Cliente" dropdown from the same company users
+  // (each Company.user is both a possible client contact AND consultant).
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     setLocalConsultants([]);
     const filters: Record<string, string> = { limit: "500" };
-    if (resolvedCompanyId) filters.company_id = String(resolvedCompanyId);
+    if (resolvedCompanyId) filters.company_id = resolvedCompanyId;
     setLoadingConsultants(true);
     apiClient
       .getUsers(filters)
       .then((res: any) => {
+        if (cancelled) return;
         const data: any[] = res.data || (Array.isArray(res) ? res : []);
+        const activeUsers = data.filter((u) => u.is_active !== false);
+
         setLocalConsultants(
-          data
-            .filter((u) => u.is_active !== false)
-            .map((u) => ({
-              id: String(u.id),
-              name: u.name,
-              email: u.email || "",
-              role: u.role || "",
-            })),
+          activeUsers.map((u) => ({
+            id: String(u.id),
+            name: u.name,
+            email: u.email || "",
+            role: u.role || "",
+          })),
         );
+
+        // Populate the client dropdown with the same company users.
+        // Only auto-fill when a company is actually selected so generic
+        // (no-company) opens don't leak global users into the list.
+        if (resolvedCompanyId) {
+          const clientItems: MockClientItem[] = activeUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email || "",
+          }));
+          setLocalClients(clientItems);
+
+          // If exactly one client → auto-select it
+          if (clientItems.length === 1) {
+            const only = clientItems[0];
+            setFormData((prev) => ({
+              ...prev,
+              cliente: only.name,
+              clienteCnpj: prev.clienteCnpj,
+            }));
+          }
+        }
       })
-      .catch(() => setLocalConsultants([]))
-      .finally(() => setLoadingConsultants(false));
+      .catch(() => {
+        if (!cancelled) setLocalConsultants([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingConsultants(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, resolvedCompanyId]);
 
   // ── Helpers ──
@@ -534,40 +663,55 @@ export function ProjectCreateNewPanel({
     status: string,
     products?: { name: string; price: number; qty: number }[],
   ) => {
+    const isDraft = status === "draft";
     setLoading(true);
-    setShowProductsStep(false);
-    setShowReview(false);
-    setShowCheckout(false);
+    if (!isDraft) {
+      setShowProductsStep(false);
+      setShowReview(false);
+      setShowCheckout(false);
+    }
     try {
+      const toISODate = (d: string | undefined): string | undefined => {
+        if (!d) return undefined;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d}T00:00:00.000Z`;
+        return d;
+      };
       const budgetValue =
         parseFloat(
           formData.orcamento.replace(/[^\d.,]/g, "").replace(",", "."),
         ) || 0;
       const payload: any = {
         title: formData.nome,
-        type: formData.tipo,
-        agency: resolvedCompanyName || formData.agencia,
-        consultant: formData.consultor,
-        consultant_email: formData.emailConsultor,
-        start_date: formData.dataInicio,
-        end_date: formData.prazo,
+        type: formData.tipo || undefined,
+        agency: resolvedCompanyName || formData.agencia || undefined,
+        consultant: formData.consultor || undefined,
+        consultant_email: formData.emailConsultor || undefined,
+        start_date: toISODate(formData.dataInicio),
+        end_date: toISODate(formData.prazo),
         budget: budgetValue,
         value: budgetValue,
         portfolio_permission: formData.permitePortfolio,
         bitrix_sync: formData.sincronizadoBitrix,
-        description: formData.descricao,
+        description: formData.descricao || undefined,
         status,
         lifecycle: "avulso",
         client_id: resolvedCompanyId ?? undefined,
       };
-      const created: any = await apiClient.createProject(payload);
-      // Persist draft state to localStorage so the banner can restore it
+      const existingId =
+        savedDraftId ?? (draftProjectId ? String(draftProjectId) : null);
+      let created: any;
+      if (isDraft && existingId) {
+        created = await apiClient.updateProject(existingId, payload);
+      } else {
+        created = await apiClient.createProject(payload);
+        if (isDraft) setSavedDraftId(String(created?.id));
+      }
       if (
         status === "draft" ||
         status === "awaiting-payment" ||
         status === "pending-approval"
       ) {
-        const storageKey = `allka-draft-${created?.id ?? draftProjectId ?? Date.now()}`;
+        const storageKey = `allka-draft-${created?.id ?? existingId ?? Date.now()}`;
         try {
           localStorage.setItem(
             storageKey,
@@ -576,6 +720,7 @@ export function ProjectCreateNewPanel({
               selectedProducts,
               productQuantities,
               productCommissions,
+              productCommissionData,
               projectId: created?.id,
               status,
             }),
@@ -584,20 +729,37 @@ export function ProjectCreateNewPanel({
           /* quota exceeded – ignore */
         }
       }
-      toast({
-        title: "Sucesso",
-        description: cloneMode ? "Projeto clonado!" : "Projeto criado!",
-      });
-      onCreate(created);
-      handleClose();
+      if (isDraft) {
+        toast({
+          title: "Rascunho salvo",
+          description: "Rascunho salvo com sucesso.",
+          variant: "success",
+        });
+      } else {
+        const description =
+          status === "pending-approval"
+            ? "Projeto enviado para aprovação."
+            : cloneMode
+              ? "Projeto clonado com sucesso!"
+              : "Projeto criado com sucesso!";
+        toast({ title: "Sucesso", description, variant: "success" });
+        onCreate(created);
+        handleClose();
+      }
     } catch (err: any) {
+      console.error("[confirmSubmit]", err);
       toast({
-        title: "Erro",
-        description: err.message || "Falha ao criar projeto",
+        title: "Erro ao salvar projeto",
+        description: isDraft
+          ? "Não foi possível salvar o rascunho. Verifique os dados e tente novamente."
+          : status === "pending-approval"
+            ? "Não foi possível enviar para aprovação."
+            : "Falha ao criar o projeto. Verifique os dados e tente novamente.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -663,6 +825,37 @@ export function ProjectCreateNewPanel({
       return sum + p.finalPrice * qty;
     }, 0);
 
+  // Returns the reason the "Enviar para Aprovação" action is blocked, or null
+  // if everything is ready. Used to show inline hints near the button.
+  const approvalBlockReason: string | null = (() => {
+    if (!formData.nome?.trim()) return "Informe o nome do projeto.";
+    if (!resolvedCompanyId && !formData.agencia?.trim())
+      return "Selecione uma empresa.";
+    if (!formData.cliente?.trim()) return "Selecione um cliente.";
+    if (selectedProducts.length === 0) return "Adicione pelo menos um produto.";
+    return null;
+  })();
+
+  // Returns the reason draft saving is blocked, or null when ready.
+  // Only the project name is required for a draft — all other fields are optional.
+  const draftBlockReason: string | null = formData.nome?.trim()
+    ? null
+    : "Informe pelo menos o nome do projeto.";
+
+  // Export PDF requires at least one product and a project name.
+  const exportBlockReason: string | null = (() => {
+    if (!formData.nome?.trim()) return "Informe o nome do projeto.";
+    if (selectedProducts.length === 0) return "Adicione pelo menos um produto.";
+    return null;
+  })();
+
+  // Checkout requires name + at least one product.
+  const checkoutBlockReason: string | null = (() => {
+    if (!formData.nome?.trim()) return "Informe o nome do projeto.";
+    if (selectedProducts.length === 0) return "Adicione pelo menos um produto.";
+    return null;
+  })();
+
   const handleSaveForApproval = () => {
     if (!formData.nome.trim()) {
       toast({
@@ -672,12 +865,140 @@ export function ProjectCreateNewPanel({
       });
       return;
     }
-    const products = selectedProducts.map((p) => ({
-      name: p.name,
-      price: p.finalPrice,
-      qty: productQuantities[String(p.id)] || p.quantity || 1,
-    }));
+    if (selectedProducts.length === 0) {
+      toast({
+        title: "Adicione produtos",
+        description:
+          "O projeto precisa ter pelo menos um produto antes de enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const products = selectedProducts.map((p) => {
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      const c = getProductCommission(id);
+      const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
+      const clientUnitPrice =
+        c.pagador === "CLIENTE" ? p.finalPrice + commValue / qty : p.finalPrice;
+      return { name: p.name, price: clientUnitPrice, qty };
+    });
     confirmSubmit("pending-approval", products);
+  };
+
+  // Opens the Send Approval modal after full validation. Auto-saves as draft
+  // if the project hasn't been persisted yet.
+  const handleOpenSendApproval = async () => {
+    if (!formData.nome.trim()) {
+      toast({
+        title: "Nome obrigatório",
+        description: "Informe o nome do projeto para enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!resolvedCompanyId && !formData.agencia?.trim()) {
+      toast({
+        title: "Empresa não selecionada",
+        description: "Selecione uma empresa antes de enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!formData.cliente?.trim()) {
+      toast({
+        title: "Cliente não selecionado",
+        description: "Selecione um cliente para enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (selectedProducts.length === 0) {
+      toast({
+        title: "Adicione produtos",
+        description:
+          "Adicione pelo menos um produto antes de enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Auto-save as draft if the project hasn't been saved yet
+    if (!savedDraftId) {
+      try {
+        setLoading(true);
+        const budgetValue =
+          parseFloat(
+            formData.orcamento.replace(/[^\d.,]/g, "").replace(",", "."),
+          ) || 0;
+        const toISODate = (d: string | undefined): string | undefined => {
+          if (!d) return undefined;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d}T00:00:00.000Z`;
+          return d;
+        };
+        const draftPayload: any = {
+          title: formData.nome,
+          type: formData.tipo || undefined,
+          agency: resolvedCompanyName || formData.agencia || undefined,
+          consultant: formData.consultor || undefined,
+          consultant_email: formData.emailConsultor || undefined,
+          start_date: toISODate(formData.dataInicio),
+          end_date: toISODate(formData.prazo),
+          budget: budgetValue,
+          value: budgetValue,
+          portfolio_permission: formData.permitePortfolio,
+          bitrix_sync: formData.sincronizadoBitrix,
+          description: formData.descricao || undefined,
+          status: "draft",
+          lifecycle: "avulso",
+          client_id: resolvedCompanyId ?? undefined,
+        };
+        const created = await apiClient.createProject(draftPayload);
+        if (created?.id) setSavedDraftId(String(created.id));
+      } catch (_) {
+        // Non-fatal: continue to modal even if draft save fails
+      } finally {
+        setLoading(false);
+      }
+    }
+    setShowNextStepModal(false);
+    setShowSendApprovalModal(true);
+  };
+
+  // Called when user confirms "Enviar agora" in the modal
+  const handleConfirmSendApproval = (opts: SendApprovalOptions) => {
+    // Save send log to localStorage (best-effort)
+    try {
+      const logEntry = {
+        projectName: formData.nome,
+        projectId: savedDraftId ?? null,
+        sentAt: new Date().toISOString(),
+        channels: opts.channels,
+        recipientMode: opts.recipientMode,
+        recipients: opts.selectedContactIds,
+        message: opts.message,
+      };
+      localStorage.setItem(
+        `allka-approval-send-${Date.now()}`,
+        JSON.stringify(logEntry),
+      );
+    } catch (_) {}
+    setShowSendApprovalModal(false);
+    handleSaveForApproval();
+  };
+
+  // Save draft of send configuration (channels + message + recipients)
+  const handleSaveApprovalDraft = (opts: SendApprovalOptions) => {
+    try {
+      localStorage.setItem(
+        `allka-approval-draft-${formData.nome}`,
+        JSON.stringify(opts),
+      );
+      toast({
+        title: "Rascunho de envio salvo",
+        description: "Configurações de envio salvas localmente.",
+        variant: "success",
+      });
+    } catch (_) {}
   };
 
   const handleSaveDraftNow = () => {
@@ -694,27 +1015,75 @@ export function ProjectCreateNewPanel({
       price: p.finalPrice,
       qty: productQuantities[String(p.id)] || p.quantity || 1,
     }));
+    setLoadingAction("draft");
     confirmSubmit("draft", products);
   };
 
   const handleOpenReview = () => {
     setActiveReviewTab("resumo");
+    setReviewFromForm(false); // opened from inside the catalog
     setShowReview(true);
+  };
+
+  // Closes the Review and returns to the correct previous screen:
+  // - if opened from the project form (via NextStepModal) → collapse the
+  //   products panel too so the user lands back on the form.
+  // - if opened from inside the catalog → just hide the review overlay.
+  const handleCloseReview = () => {
+    setShowReview(false);
+    if (reviewFromForm) {
+      setShowProductsStep(false);
+      setReviewFromForm(false);
+    }
   };
 
   const handleExportPresentation = async () => {
     setExportingPDF(true);
     try {
-      const totalValue = selectedProducts.reduce((acc, p) => {
-        const qty = productQuantities[String(p.id)] || p.quantity || 1;
-        return acc + (p.finalPrice || 0) * qty;
-      }, 0);
+      // Proposal uses client-facing prices (base + commission for CLIENTE products)
       const produtos = selectedProducts.map((p) => {
-        const qty = productQuantities[String(p.id)] || p.quantity || 1;
-        const unit = p.finalPrice || 0;
+        const id = String(p.id);
+        const qty = productQuantities[id] || p.quantity || 1;
+        const c = getProductCommission(id);
+        const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
+        // CLIENTE: client pays base + commission; AGENCIA: client sees base price
+        const unit =
+          c.pagador === "CLIENTE"
+            ? p.finalPrice + commValue / qty
+            : p.finalPrice;
         const total = unit * qty;
         return {
           PRODUTO_NOME: p.name,
+          ...(p.code ? { PRODUTO_CODIGO: p.code } : {}),
+          ...(p.category ? { PRODUTO_CATEGORIA: p.category } : {}),
+          ...(p.recurrence ? { PRODUTO_RECORRENCIA: p.recurrence } : {}),
+          ...(p.deliveryDays
+            ? { PRODUTO_PRAZO: `${p.deliveryDays} dias` }
+            : {}),
+          // Short description — prefer summaryDescription, fall back to truncated description
+          ...(() => {
+            const raw: string | undefined =
+              p.summaryDescription || p.description;
+            if (!raw) return {};
+            const desc = raw.length > 200 ? raw.substring(0, 197) + "…" : raw;
+            return { PRODUTO_DESCRICAO: desc };
+          })(),
+          // What is included — up to 5 bullet points, client-visible only
+          ...(() => {
+            const items: string[] = [];
+            const incl = p.presentation?.whatIsIncluded;
+            if (Array.isArray(incl) && incl.length > 0) {
+              incl.slice(0, 5).forEach((item: any) => {
+                if (item?.title) items.push(item.title);
+              });
+            } else if (
+              Array.isArray(p.baseFeatures) &&
+              p.baseFeatures.length > 0
+            ) {
+              p.baseFeatures.slice(0, 5).forEach((f: string) => items.push(f));
+            }
+            return items.length > 0 ? { PRODUTO_INCLUSOS: items } : {};
+          })(),
           PRODUTO_QTD: qty,
           PRODUTO_VALOR_UNIT: unit.toLocaleString("pt-BR", {
             style: "currency",
@@ -726,6 +1095,8 @@ export function ProjectCreateNewPanel({
           }),
         };
       });
+      // Total shown to client = sum of all client-facing product totals
+      const totalValue = calculateClientPayTotal() + calculateAgencyPayTotal();
       const effectiveCompanyName =
         resolvedCompanyName || formData.agencia || companyName || "";
       const proposalData: ProposalData = {
@@ -757,6 +1128,7 @@ export function ProjectCreateNewPanel({
       toast({
         title: "PDF gerado!",
         description: "A proposta foi baixada com sucesso.",
+        variant: "success",
       });
     } catch {
       toast({
@@ -769,15 +1141,55 @@ export function ProjectCreateNewPanel({
     }
   };
 
-  const calculateCommissionTotal = () =>
+  // ── Commission helpers ──
+  const getProductCommission = (id: string) =>
+    productCommissionData[id] ?? {
+      tipoComissao: "PERCENTUAL" as const,
+      percentualComissao: productCommissions[id] || 0,
+      valorComissao: 0,
+      pagador: "CLIENTE" as const,
+    };
+
+  const calcProductCommissionValue = (
+    id: string,
+    basePrice: number,
+    qty: number,
+  ) => {
+    const c = getProductCommission(id);
+    return c.tipoComissao === "PERCENTUAL"
+      ? (basePrice * qty * c.percentualComissao) / 100
+      : c.valorComissao * qty;
+  };
+
+  const calculateAgencyPayTotal = () =>
     selectedProducts.reduce((sum, p) => {
-      const qty = productQuantities[String(p.id)] || p.quantity || 1;
-      const pct = productCommissions[String(p.id)] || 0;
-      return sum + (p.finalPrice * qty * pct) / 100;
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      const c = getProductCommission(id);
+      return c.pagador === "AGENCIA" ? sum + p.finalPrice * qty : sum;
     }, 0);
 
-  const calculateClientTotal = () =>
-    calculateTotal() + calculateCommissionTotal();
+  const calculateClientPayTotal = () =>
+    selectedProducts.reduce((sum, p) => {
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      const c = getProductCommission(id);
+      if (c.pagador !== "CLIENTE") return sum;
+      return (
+        sum +
+        p.finalPrice * qty +
+        calcProductCommissionValue(id, p.finalPrice, qty)
+      );
+    }, 0);
+
+  const calculateCommissionTotal = () =>
+    selectedProducts.reduce((sum, p) => {
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      return sum + calcProductCommissionValue(id, p.finalPrice, qty);
+    }, 0);
+
+  const calculateClientTotal = () => calculateClientPayTotal();
 
   const getWeightedCommissionRate = () => {
     const total = calculateTotal();
@@ -793,38 +1205,51 @@ export function ProjectCreateNewPanel({
   });
 
   const convertProductsToCartItems = () =>
-    selectedProducts.map((p) => ({
-      id: String(p.id),
-      product: {
-        id: String(p.id),
-        name: p.name,
-        description: p.description || "",
-        shortDescription: p.description || "",
-        category: p.category || "",
-        tags: [],
-        basePrice: p.finalPrice || 0,
-        complexity: "basic" as const,
-        visibility: {
-          company: true,
-          agency: true,
-          partner: true,
-          inHouse: true,
+    selectedProducts.map((p) => {
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      const c = getProductCommission(id);
+      const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
+      // Checkout uses client-facing price: CLIENTE pays base+commission, AGENCIA pays base
+      const checkoutPrice =
+        c.pagador === "CLIENTE" ? p.finalPrice + commValue / qty : p.finalPrice;
+      return {
+        id,
+        product: {
+          id,
+          name: p.name,
+          description: p.description || "",
+          shortDescription: p.description || "",
+          category: p.category || "",
+          tags: [],
+          basePrice: checkoutPrice,
+          complexity: "basic" as const,
+          visibility: {
+            company: true,
+            agency: true,
+            partner: true,
+            inHouse: true,
+          },
+          variations: [],
+          addons: [],
+          stats: { contractCount: 0, averageRating: 0, completionTime: "" },
+          demonstrations: [],
+          image: p.image || "",
         },
-        variations: [],
-        addons: [],
-        stats: { contractCount: 0, averageRating: 0, completionTime: "" },
-        demonstrations: [],
-        image: p.image || "",
-      },
-      quantity: productQuantities[String(p.id)] || p.quantity || 1,
-    }));
+        quantity: qty,
+      };
+    });
 
   const handleCheckoutComplete = (_data: CheckoutData) => {
-    const products = selectedProducts.map((p) => ({
-      name: p.name,
-      price: p.finalPrice,
-      qty: productQuantities[String(p.id)] || p.quantity || 1,
-    }));
+    const products = selectedProducts.map((p) => {
+      const id = String(p.id);
+      const qty = productQuantities[id] || p.quantity || 1;
+      const c = getProductCommission(id);
+      const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
+      const clientUnitPrice =
+        c.pagador === "CLIENTE" ? p.finalPrice + commValue / qty : p.finalPrice;
+      return { name: p.name, price: clientUnitPrice, qty };
+    });
     confirmSubmit("awaiting-payment", products);
   };
 
@@ -1320,24 +1745,20 @@ export function ProjectCreateNewPanel({
                           </div>
                         ) : allowCompanySelect ? (
                           <SearchableSelect
-                            items={[
-                              ...mockCompaniesList,
-                              ...localCompanies,
-                            ].map((c) => ({
-                              value: String(c.id),
-                              label: c.name,
-                            }))}
-                            value={
-                              resolvedCompanyId ? String(resolvedCompanyId) : ""
-                            }
+                            items={[...apiCompanies, ...localCompanies].map(
+                              (c) => ({
+                                value: String(c.id),
+                                label: c.name,
+                              }),
+                            )}
+                            value={resolvedCompanyId ?? ""}
                             onValueChange={(v) => {
-                              const id = Number(v);
                               const allCos = [
-                                ...mockCompaniesList,
+                                ...apiCompanies,
                                 ...localCompanies,
                               ];
-                              const co = allCos.find((c) => c.id === id);
-                              setResolvedCompanyId(id);
+                              const co = allCos.find((c) => String(c.id) === v);
+                              setResolvedCompanyId(v || null);
                               setResolvedCompanyName(co?.name ?? "");
                               updateField("agencia", co?.name ?? "");
                               updateField("cliente", "");
@@ -1349,6 +1770,9 @@ export function ProjectCreateNewPanel({
                             placeholder="Pesquisar empresa..."
                             searchPlaceholder="Digite para buscar..."
                             emptyMessage="Nenhuma empresa encontrada."
+                            loading={loadingCompanies}
+                            loadingMessage="Carregando empresas..."
+                            errorMessage={companiesError ?? undefined}
                             className={cn(
                               "h-8 text-xs",
                               errors.agencia && "border-red-400",
@@ -1386,24 +1810,16 @@ export function ProjectCreateNewPanel({
                           <>
                             {!showNewClientForm ? (
                               <SearchableSelect
-                                items={[
-                                  ...(mockClientsByCompany[resolvedCompanyId] ??
-                                    []),
-                                  ...localClients,
-                                ].map((c) => ({
+                                items={[...localClients].map((c) => ({
                                   value: c.name,
                                   label: c.name,
                                   sublabel: c.cnpj || c.email || undefined,
                                 }))}
                                 value={formData.cliente}
                                 onValueChange={(v) => {
-                                  const clients = [
-                                    ...(mockClientsByCompany[
-                                      resolvedCompanyId
-                                    ] ?? []),
-                                    ...localClients,
-                                  ];
-                                  const cl = clients.find((c) => c.name === v);
+                                  const cl = localClients.find(
+                                    (c) => c.name === v,
+                                  );
                                   updateField("cliente", v);
                                   if (cl?.cnpj)
                                     updateField("clienteCnpj", cl.cnpj);
@@ -1857,152 +2273,270 @@ export function ProjectCreateNewPanel({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
-            <Button variant="outline" onClick={handleClose} disabled={loading}>
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-start gap-2 sm:gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
               Cancelar
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-1">
               <Button
                 variant="outline"
                 onClick={handleSaveDraftNow}
-                disabled={loading || !formData.nome.trim()}
-                className="gap-1.5"
-              >
-                <Save className="h-4 w-4" />
-                Salvar Rascunho
-              </Button>
-              <Button
-                className="btn-brand"
-                onClick={handleSubmit}
                 disabled={loading}
+                className="gap-1.5 w-full sm:w-auto"
               >
-                {loading
-                  ? "Salvando..."
-                  : cloneMode
-                    ? "Clonar Projeto"
-                    : "Próximo"}
+                {loadingAction === "draft" ? (
+                  <ButtonLoader text="Salvando..." />
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Salvar Rascunho
+                  </>
+                )}
               </Button>
+              {draftBlockReason && (
+                <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {draftBlockReason}
+                </p>
+              )}
             </div>
+            <Button
+              className="btn-brand w-full sm:w-auto"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {cloneMode ? "Clonar Projeto" : "Próximo"}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Decision Modal after "Próximo" */}
-      <AlertDialog open={showNextStepModal} onOpenChange={setShowNextStepModal}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>O que deseja fazer?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Escolha como deseja prosseguir com o projeto.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex flex-col gap-3 py-2">
-            {/* When products are already pre-loaded (e.g. from basket), offer to go straight to review */}
+      <AlertDialog
+        open={showNextStepModal}
+        onOpenChange={(v) => {
+          setShowNextStepModal(v);
+          if (!v) setLoadingAction((prev) => (prev === "submit" ? null : prev));
+        }}
+      >
+        <AlertDialogContent className="max-w-lg p-0 overflow-hidden border-0 shadow-2xl rounded-2xl">
+          {/* ── Header com gradiente Allka ── */}
+          <div
+            className="relative px-6 pt-6 pb-5 overflow-hidden"
+            style={{
+              background:
+                "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+            }}
+          >
+            {/* Glow blobs */}
+            <div className="absolute -top-8 -right-8 w-40 h-40 bg-purple-400/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-6 left-1/3 w-32 h-32 bg-blue-400/15 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative flex items-start gap-3">
+              <div className="p-2.5 bg-white/15 backdrop-blur-sm rounded-xl border border-white/20 shrink-0 mt-0.5">
+                <FolderKanban className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-base font-bold text-white leading-tight">
+                  O que deseja fazer?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-white/60 mt-0.5">
+                  Escolha como deseja prosseguir com o projeto.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Action cards ── */}
+          <div className="px-4 py-4 flex flex-col gap-2 bg-white dark:bg-[#0f1117]">
+            {/* Revisar Projeto — só mostra se já há produtos */}
             {selectedProducts.length > 0 && (
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-3 h-auto py-3 border-violet-200 bg-violet-50 hover:bg-violet-100"
+              <button
+                type="button"
                 onClick={() => {
                   setShowNextStepModal(false);
                   setShowProductsStep(true);
                   setActiveReviewTab("resumo");
+                  setReviewFromForm(true); // remember origin so X returns to form
                   setShowReview(true);
                 }}
+                className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-900/15 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-left"
               >
-                <Eye className="h-5 w-5 text-violet-600" />
-                <div className="text-left">
-                  <div className="font-medium text-violet-700">
-                    Revisar Projeto ({selectedProducts.length}{" "}
-                    {selectedProducts.length === 1 ? "item" : "itens"})
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Ver resumo, exportar proposta ou enviar para aprovação
-                  </div>
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Eye className="h-4.5 w-4.5 text-violet-600 dark:text-violet-400" />
                 </div>
-              </Button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-violet-700 dark:text-violet-300 leading-tight">
+                    Revisar Projeto
+                    <span className="ml-1.5 text-[11px] font-normal text-violet-500/80">
+                      ({selectedProducts.length}{" "}
+                      {selectedProducts.length === 1 ? "item" : "itens"})
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-white/40 mt-0.5 leading-snug">
+                    Ver resumo, exportar proposta ou enviar para aprovação
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-violet-400 shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all" />
+              </button>
             )}
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
+
+            {/* Ver/Editar Produtos */}
+            <button
+              type="button"
               onClick={() => {
                 setShowNextStepModal(false);
                 setShowProductsStep(true);
+                // Open directly on the selected-products review, not the full catalog
+                if (selectedProducts.length > 0) setShowEditProducts(true);
               }}
+              className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-100 dark:border-white/8 bg-slate-50 dark:bg-white/3 hover:bg-slate-100 dark:hover:bg-white/6 hover:border-slate-200 dark:hover:border-white/12 transition-all text-left"
             >
-              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-              <div className="text-left">
-                <div className="font-medium">
+              <div className="shrink-0 w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <ShoppingCart className="h-4.5 w-4.5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 dark:text-white leading-tight">
                   {selectedProducts.length > 0
                     ? `Ver/Editar Produtos (${selectedProducts.length} selecionado${selectedProducts.length !== 1 ? "s" : ""})`
                     : "Adicionar Produtos"}
-                </div>
-                <div className="text-xs text-muted-foreground">
+                </p>
+                <p className="text-xs text-slate-500 dark:text-white/40 mt-0.5 leading-snug">
                   {selectedProducts.length > 0
                     ? "Gerenciar produtos e serviços do projeto"
                     : "Selecionar produtos e serviços para o projeto"}
-                </div>
+                </p>
               </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3 border-amber-200 hover:bg-amber-50"
-              onClick={() => {
-                setShowNextStepModal(false);
-                handleSaveForApproval();
-              }}
-            >
-              <Send className="h-5 w-5 text-amber-500" />
-              <div className="text-left">
-                <div className="font-medium text-amber-700">
-                  Enviar para Aprovação do Cliente
+              <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all" />
+            </button>
+
+            {/* Enviar para Aprovação */}
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                disabled={loading || !!approvalBlockReason}
+                onClick={handleOpenSendApproval}
+                className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-100 dark:border-amber-800/40 bg-amber-50/60 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-200 dark:hover:border-amber-700/50 transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  {loading ? (
+                    <Loader2 className="h-4.5 w-4.5 text-amber-500 animate-spin" />
+                  ) : (
+                    <Send className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Salvar o projeto montado para apresentação e aprovação antes
-                  do pagamento
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-tight">
+                    Enviar para Aprovação do Cliente
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-white/40 mt-0.5 leading-snug">
+                    Salvar para apresentação e aprovação antes do pagamento
+                  </p>
                 </div>
-              </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3 border-slate-200 hover:bg-slate-50"
-              disabled={exportingPDF || selectedProducts.length === 0}
-              onClick={() => {
-                setShowNextStepModal(false);
-                handleExportPresentation();
-              }}
-            >
-              {exportingPDF ? (
-                <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
-              ) : (
-                <FileDown className="h-5 w-5 text-slate-500" />
+                <ChevronRight className="h-4 w-4 text-amber-400 shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all" />
+              </button>
+              {approvalBlockReason && (
+                <div className="flex items-center gap-1.5 px-2 py-1">
+                  <AlertCircle className="h-3 w-3 text-amber-500 shrink-0" />
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
+                    {approvalBlockReason}
+                  </p>
+                </div>
               )}
-              <div className="text-left">
-                <div className="font-medium">Exportar Proposta (PDF)</div>
-                <div className="text-xs text-muted-foreground">
-                  Baixar ficha de apresentação do projeto com produtos e valores
+            </div>
+
+            {/* Exportar Proposta */}
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                disabled={exportingPDF || !!exportBlockReason}
+                onClick={() => {
+                  setShowNextStepModal(false);
+                  handleExportPresentation();
+                }}
+                className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-sky-100 dark:border-sky-800/40 bg-sky-50/60 dark:bg-sky-900/10 hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-700/50 transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  {exportingPDF ? (
+                    <Loader2 className="h-4.5 w-4.5 text-sky-500 animate-spin" />
+                  ) : (
+                    <FileDown className="h-4.5 w-4.5 text-sky-600 dark:text-sky-400" />
+                  )}
                 </div>
-              </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => {
-                setShowNextStepModal(false);
-                handleSaveDraftNow();
-              }}
-            >
-              <Save className="h-5 w-5 text-muted-foreground" />
-              <div className="text-left">
-                <div className="font-medium">Salvar Rascunho</div>
-                <div className="text-xs text-muted-foreground">
-                  Salvar projeto como rascunho e continuar depois
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-sky-700 dark:text-sky-400 leading-tight">
+                    {exportingPDF
+                      ? "Gerando PDF..."
+                      : "Exportar Proposta (PDF)"}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-white/40 mt-0.5 leading-snug">
+                    Baixar ficha de apresentação com produtos e valores
+                  </p>
                 </div>
-              </div>
-            </Button>
+                <ChevronRight className="h-4 w-4 text-sky-400 shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all" />
+              </button>
+              {exportBlockReason && !exportingPDF && (
+                <div className="flex items-center gap-1.5 px-2 py-1">
+                  <AlertCircle className="h-3 w-3 text-sky-400 shrink-0" />
+                  <p className="text-[11px] text-sky-600 dark:text-sky-400 leading-snug">
+                    {exportBlockReason}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Salvar Rascunho */}
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setShowNextStepModal(false);
+                  handleSaveDraftNow();
+                }}
+                className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-100 dark:border-white/8 bg-white dark:bg-white/3 hover:bg-slate-50 dark:hover:bg-white/5 hover:border-slate-200 dark:hover:border-white/12 transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-slate-100 dark:bg-white/8 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  {loadingAction === "draft" ? (
+                    <Loader2 className="h-4.5 w-4.5 text-slate-400 animate-spin" />
+                  ) : (
+                    <Save className="h-4.5 w-4.5 text-slate-500 dark:text-white/50" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-white/80 leading-tight">
+                    {loadingAction === "draft"
+                      ? "Salvando..."
+                      : "Salvar Rascunho"}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-white/40 mt-0.5 leading-snug">
+                    Salvar projeto como rascunho e continuar depois
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all" />
+              </button>
+              {draftBlockReason && (
+                <div className="flex items-center gap-1.5 px-2 py-1">
+                  <AlertCircle className="h-3 w-3 text-amber-500 shrink-0" />
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
+                    {draftBlockReason}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          </AlertDialogFooter>
+
+          {/* ── Footer ── */}
+          <div className="px-4 pb-4 bg-white dark:bg-[#0f1117]">
+            <AlertDialogCancel className="w-full h-8 rounded-lg text-xs font-semibold text-slate-500 dark:text-white/40 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+              Cancelar
+            </AlertDialogCancel>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -2013,32 +2547,59 @@ export function ProjectCreateNewPanel({
           style={{ left: `${sidebarWidth}px`, right: 0 }}
         >
           {/* Header */}
-          <div className="relative h-[90px] flex-shrink-0 bg-linear-to-r from-violet-700 to-indigo-700 flex items-center justify-between px-6">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+          <div
+            className="relative shrink-0 px-6 py-4 overflow-hidden flex items-center justify-between"
+            style={{
+              background:
+                "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+            }}
+          >
+            {/* decorative blobs */}
+            <div className="absolute -top-6 -right-6 w-36 h-36 bg-purple-400/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-4 left-1/3 w-28 h-28 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-white/15 border border-white/20 backdrop-blur-sm">
                 <Package className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">
+                <p className="text-sm font-bold text-white leading-tight">
                   Selecionar Produtos
                 </p>
-                <p className="text-xs text-white/70">
+                <p className="text-xs text-white/55 mt-0.5">
                   {formData.nome || "Novo Projeto"}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-2">
+              {selectedProducts.length > 0 && (
+                <button
+                  onClick={() => setShowEditProducts(true)}
+                  className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-white/12 border border-white/20 text-white text-xs font-medium hover:bg-white/22 transition-all"
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  <span className="tabular-nums">
+                    {selectedProducts.length}
+                  </span>
+                  selecionado{selectedProducts.length !== 1 ? "s" : ""}
+                </button>
+              )}
               <button
                 onClick={handleSaveDraftNow}
-                disabled={loading || !formData.nome.trim()}
-                className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-white/15 border border-white/30 text-white text-xs font-medium hover:bg-white/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={loading}
+                title={draftBlockReason ?? undefined}
+                className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-white/12 border border-white/20 text-white text-xs font-medium hover:bg-white/22 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Save className="h-3.5 w-3.5" />
-                Salvar Rascunho
+                {loadingAction === "draft" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                {loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}
               </button>
               <button
                 onClick={() => setShowProductsStep(false)}
-                className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 border border-white/30 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/12 border border-white/20 text-white/60 hover:bg-white/22 hover:text-white transition-all"
               >
                 <XIcon className="h-4 w-4" />
               </button>
@@ -2062,43 +2623,58 @@ export function ProjectCreateNewPanel({
 
           {/* Review Modal Overlay (inside this panel so z-index works correctly) */}
           {showReview && (
-            <div className="absolute inset-0 z-10 bg-black/50 flex items-center justify-center p-6">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[calc(100%-48px)] flex flex-col overflow-hidden">
-                {/* Review Header */}
-                <div className="flex-shrink-0 bg-linear-to-r from-violet-700 to-indigo-700 px-6 py-5">
-                  <div className="flex items-center justify-between">
+            <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-h-[calc(100%-32px)] flex flex-col overflow-hidden"
+                style={{ maxWidth: "960px" }}
+              >
+                {/* ── Review Header ── */}
+                <div
+                  className="relative shrink-0 px-6 pt-5 pb-0 overflow-hidden"
+                  style={{
+                    background:
+                      "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+                  }}
+                >
+                  {/* decorative blobs */}
+                  <div className="absolute -top-10 -right-10 w-48 h-48 bg-purple-400/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-8 left-1/4 w-36 h-36 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+
+                  <div className="relative flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                      <div className="p-2.5 rounded-xl bg-white/15 border border-white/20 backdrop-blur-sm">
                         <Eye className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-white">
+                        <h2 className="text-base font-bold text-white leading-tight">
                           Revisão do Projeto
                         </h2>
-                        <p className="text-xs text-white/70">
-                          Confira os detalhes antes do checkout
+                        <p className="text-xs text-white/55 mt-0.5">
+                          {formData.nome
+                            ? `"${formData.nome}" — confira antes do checkout`
+                            : "Confira os detalhes antes de prosseguir"}
                         </p>
                       </div>
                     </div>
                     <button
-                      onClick={() => setShowReview(false)}
-                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/15 border border-white/30 text-white/70 hover:bg-white/25 hover:text-white transition-colors"
+                      onClick={handleCloseReview}
+                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/12 border border-white/20 text-white/60 hover:bg-white/22 hover:text-white transition-all"
                     >
                       <XIcon className="h-4 w-4" />
                     </button>
                   </div>
 
-                  {/* Tabs */}
-                  <div className="flex gap-1 mt-4">
+                  {/* Tabs — attached to header bottom */}
+                  <div className="relative flex gap-0.5">
                     {(["resumo", "comissoes"] as const).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveReviewTab(tab)}
                         className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                          "relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-all rounded-t-lg",
                           activeReviewTab === tab
-                            ? "bg-white text-violet-700"
-                            : "text-white/70 hover:text-white hover:bg-white/15",
+                            ? "bg-slate-50 text-violet-700 shadow-sm"
+                            : "text-white/65 hover:text-white hover:bg-white/10",
                         )}
                       >
                         {tab === "resumo" ? (
@@ -2109,7 +2685,7 @@ export function ProjectCreateNewPanel({
                         {tab === "resumo" ? "Resumo" : "Comissões"}
                         {tab === "comissoes" &&
                           calculateCommissionTotal() > 0 && (
-                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-400 text-white text-[10px] font-bold">
+                            <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none">
                               +{formatCurrency(calculateCommissionTotal())}
                             </span>
                           )}
@@ -2118,117 +2694,144 @@ export function ProjectCreateNewPanel({
                   </div>
                 </div>
 
-                {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
+                {/* ── Scrollable Content ── */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50/80">
                   {/* ── TAB: RESUMO ── */}
                   {activeReviewTab === "resumo" && (
                     <>
                       {/* Project Info */}
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                          Dados do Projeto
-                        </p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-[10px] text-slate-400">Nome</p>
-                            <p className="text-sm font-semibold text-slate-800">
-                              {formData.nome || "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-slate-400">Tipo</p>
-                            <p className="text-sm font-medium text-slate-700">
-                              {formData.tipo || "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-slate-400">
-                              Cliente
-                            </p>
-                            <p className="text-sm font-medium text-slate-700">
-                              {formData.cliente || "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-slate-400">
-                              Empresa
-                            </p>
-                            <p className="text-sm font-medium text-slate-700">
-                              {resolvedCompanyName || formData.agencia || "—"}
-                            </p>
-                          </div>
-                          {formData.dataInicio && (
-                            <div>
-                              <p className="text-[10px] text-slate-400">
-                                Início
+                      <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-slate-50 flex items-center gap-2">
+                          <div className="w-1 h-3.5 rounded-full bg-linear-to-b from-[#2558FF] to-[#6E2C96]" />
+                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                            Dados do Projeto
+                          </p>
+                        </div>
+                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                          {[
+                            { label: "Nome", value: formData.nome },
+                            { label: "Tipo", value: formData.tipo },
+                            { label: "Cliente", value: formData.cliente },
+                            {
+                              label: "Empresa",
+                              value: resolvedCompanyName || formData.agencia,
+                            },
+                            ...(formData.dataInicio
+                              ? [
+                                  {
+                                    label: "Início",
+                                    value: formData.dataInicio,
+                                  },
+                                ]
+                              : []),
+                            ...(formData.prazo
+                              ? [{ label: "Prazo", value: formData.prazo }]
+                              : []),
+                          ].map(({ label, value }) => (
+                            <div key={label}>
+                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
+                                {label}
                               </p>
-                              <p className="text-sm font-medium text-slate-700">
-                                {formData.dataInicio}
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {value || "—"}
                               </p>
                             </div>
-                          )}
-                          {formData.prazo && (
-                            <div>
-                              <p className="text-[10px] text-slate-400">
-                                Prazo
-                              </p>
-                              <p className="text-sm font-medium text-slate-700">
-                                {formData.prazo}
-                              </p>
-                            </div>
-                          )}
+                          ))}
                         </div>
                       </div>
 
                       {/* Products list */}
                       {selectedProducts.length > 0 ? (
-                        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
-                            <p className="text-xs font-semibold text-slate-700">
-                              Produtos Selecionados
-                            </p>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold">
+                        <div className="rounded-xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                          <div className="px-4 py-2.5 border-b border-slate-50 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1 h-3.5 rounded-full bg-linear-to-b from-[#6E2C96] to-[#A61E86]" />
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                                Produtos Selecionados
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold">
                               {selectedProducts.length}{" "}
                               {selectedProducts.length === 1 ? "item" : "itens"}
                             </span>
                           </div>
-                          <div className="divide-y divide-slate-100">
+                          <div className="divide-y divide-slate-50">
                             {selectedProducts.map((product) => {
                               const id = String(product.id);
                               const qty =
                                 productQuantities[id] || product.quantity || 1;
-                              const lineTotal = product.finalPrice * qty;
-                              const pct = productCommissions[id] || 0;
-                              const commission = (lineTotal * pct) / 100;
+                              const baseTotal = product.finalPrice * qty;
+                              const comm = getProductCommission(id);
+                              const commVal = calcProductCommissionValue(
+                                id,
+                                product.finalPrice,
+                                qty,
+                              );
+                              const clientTotal =
+                                comm.pagador === "CLIENTE"
+                                  ? baseTotal + commVal
+                                  : baseTotal;
                               return (
                                 <div
                                   key={id}
-                                  className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                                  className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/80 transition-colors group"
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
-                                      <Package className="h-4 w-4 text-violet-500" />
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="h-9 w-9 rounded-lg bg-linear-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center shrink-0 overflow-hidden">
+                                      {product.image ? (
+                                        <img
+                                          src={product.image}
+                                          alt={product.name}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <Package className="h-4 w-4 text-violet-400" />
+                                      )}
                                     </div>
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-800">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-slate-800 truncate">
                                         {product.name}
                                       </p>
-                                      <p className="text-xs text-slate-400">
-                                        {product.category} &middot; Qtd: {qty}
-                                      </p>
+                                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                        {product.category && (
+                                          <span className="text-[11px] text-slate-400">
+                                            {product.category}
+                                          </span>
+                                        )}
+                                        <span className="text-slate-200 text-xs select-none">
+                                          ·
+                                        </span>
+                                        <span className="text-[11px] text-slate-400">
+                                          Qtd:{" "}
+                                          <strong className="text-slate-600">
+                                            {qty}
+                                          </strong>
+                                        </span>
+                                        {comm.pagador === "AGENCIA" && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-semibold">
+                                            Agência paga
+                                          </span>
+                                        )}
+                                        {comm.pagador === "CLIENTE" &&
+                                          commVal > 0 && (
+                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">
+                                              <TrendingUp className="h-2.5 w-2.5" />
+                                              +{formatCurrency(commVal)}
+                                            </span>
+                                          )}
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="text-right">
-                                    <p className="text-sm font-semibold text-slate-800">
-                                      {formatCurrency(lineTotal)}
+                                  <div className="text-right shrink-0 ml-4">
+                                    <p className="text-sm font-bold text-slate-800">
+                                      {formatCurrency(baseTotal)}
                                     </p>
-                                    {pct > 0 && (
-                                      <p className="text-xs text-emerald-600 font-medium">
-                                        +{pct}% comissão (
-                                        {formatCurrency(commission)})
+                                    {commVal > 0 && (
+                                      <p className="text-[11px] text-emerald-600 font-semibold">
+                                        Cliente: {formatCurrency(clientTotal)}
                                       </p>
                                     )}
-                                    <p className="text-xs text-slate-400">
+                                    <p className="text-[11px] text-slate-400">
                                       unit. {formatCurrency(product.finalPrice)}
                                     </p>
                                   </div>
@@ -2238,23 +2841,33 @@ export function ProjectCreateNewPanel({
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center bg-white">
-                          <Package className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                          <p className="text-sm text-slate-400">
+                        <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center bg-white">
+                          <Package className="h-9 w-9 mx-auto mb-2 text-slate-200" />
+                          <p className="text-sm font-medium text-slate-400">
                             Nenhum produto adicionado
+                          </p>
+                          <p className="text-xs text-slate-300 mt-0.5">
+                            Volte para adicionar produtos ao projeto
                           </p>
                         </div>
                       )}
 
                       {/* Financial Summary */}
                       {selectedProducts.length > 0 && (
-                        <div className="rounded-xl overflow-hidden border border-indigo-200">
-                          <div className="px-4 py-3 bg-linear-to-r from-indigo-600 to-violet-600">
-                            <p className="text-xs font-semibold text-white uppercase tracking-wider">
+                        <div className="rounded-xl overflow-hidden border border-indigo-100 shadow-sm">
+                          <div
+                            className="px-4 py-3 flex items-center gap-2"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                            }}
+                          >
+                            <DollarSign className="h-4 w-4 text-white/80" />
+                            <p className="text-xs font-bold text-white uppercase tracking-widest">
                               Resumo Financeiro
                             </p>
                           </div>
-                          <div className="p-4 space-y-2 bg-linear-to-br from-indigo-50 to-violet-50">
+                          <div className="p-4 space-y-1.5 bg-white">
                             {selectedProducts.map((p) => {
                               const id = String(p.id);
                               const qty =
@@ -2262,43 +2875,55 @@ export function ProjectCreateNewPanel({
                               return (
                                 <div
                                   key={id}
-                                  className="flex items-center justify-between text-xs text-indigo-800"
+                                  className="flex items-center justify-between text-xs text-slate-600"
                                 >
-                                  <span className="truncate mr-2">
-                                    {p.name} × {qty}
+                                  <span className="truncate mr-2 text-slate-500">
+                                    {p.name}{" "}
+                                    <span className="text-slate-300">×</span>{" "}
+                                    {qty}
                                   </span>
-                                  <span className="font-medium shrink-0">
+                                  <span className="font-semibold text-slate-700 shrink-0">
                                     {formatCurrency(p.finalPrice * qty)}
                                   </span>
                                 </div>
                               );
                             })}
                             {calculateCommissionTotal() > 0 && (
-                              <div className="flex items-center justify-between text-xs text-emerald-700 border-t border-indigo-200 pt-2 mt-1">
-                                <span>Comissões</span>
-                                <span className="font-semibold">
+                              <div className="flex items-center justify-between text-xs text-emerald-600 border-t border-slate-100 pt-2 mt-1">
+                                <span className="flex items-center gap-1">
+                                  <TrendingUp className="h-3 w-3" />
+                                  Comissões
+                                </span>
+                                <span className="font-bold">
                                   +{formatCurrency(calculateCommissionTotal())}
                                 </span>
                               </div>
                             )}
-                            <div className="pt-2 mt-1 border-t border-indigo-200 space-y-1">
+                            <div className="pt-2 mt-1 border-t border-slate-100 space-y-1.5">
                               {calculateCommissionTotal() > 0 && (
-                                <div className="flex items-center justify-between text-sm text-indigo-700">
-                                  <span className="font-medium">
-                                    Total Agência
-                                  </span>
-                                  <span className="font-semibold">
+                                <div className="flex items-center justify-between text-xs text-slate-500">
+                                  <span>Total Agência</span>
+                                  <span className="font-semibold text-slate-700">
                                     {formatCurrency(calculateTotal())}
                                   </span>
                                 </div>
                               )}
-                              <div className="flex items-center justify-between">
-                                <span className="text-base font-bold text-indigo-900">
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-sm font-bold text-slate-700">
                                   {calculateCommissionTotal() > 0
                                     ? "Total Cliente"
                                     : "Total Geral"}
                                 </span>
-                                <span className="text-xl font-bold text-indigo-900">
+                                <span
+                                  className="text-xl font-extrabold"
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    backgroundClip: "text",
+                                  }}
+                                >
                                   {formatCurrency(calculateClientTotal())}
                                 </span>
                               </div>
@@ -2314,29 +2939,28 @@ export function ProjectCreateNewPanel({
                     <>
                       {selectedProducts.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center bg-white">
-                          <Percent className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                          <p className="text-sm text-slate-400">
+                          <Percent className="h-9 w-9 mx-auto mb-2 text-slate-200" />
+                          <p className="text-sm font-medium text-slate-400">
                             Nenhum produto para configurar comissão
                           </p>
                         </div>
                       ) : (
                         <>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 px-0.5">
                             Defina a porcentagem de comissão por produto. O
-                            valor da comissão será adicionado ao preço cobrado
-                            do cliente.
+                            valor será adicionado ao preço cobrado do cliente.
                           </p>
 
                           {/* Per-product commission rows */}
-                          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                              <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          <div className="rounded-xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/80">
+                              <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                 <span className="col-span-4">Produto</span>
                                 <span className="col-span-2 text-right">
                                   Custo
                                 </span>
                                 <span className="col-span-2 text-center">
-                                  Comissão %
+                                  Com. %
                                 </span>
                                 <span className="col-span-2 text-right">
                                   Valor Com.
@@ -2346,7 +2970,7 @@ export function ProjectCreateNewPanel({
                                 </span>
                               </div>
                             </div>
-                            <div className="divide-y divide-slate-100">
+                            <div className="divide-y divide-slate-50">
                               {selectedProducts.map((product) => {
                                 const id = String(product.id);
                                 const qty =
@@ -2354,20 +2978,28 @@ export function ProjectCreateNewPanel({
                                   product.quantity ||
                                   1;
                                 const baseCost = product.finalPrice * qty;
-                                const pct = productCommissions[id] || 0;
-                                const commissionValue = (baseCost * pct) / 100;
-                                const clientPrice = baseCost + commissionValue;
+                                const comm = getProductCommission(id);
+                                const commissionValue =
+                                  calcProductCommissionValue(
+                                    id,
+                                    product.finalPrice,
+                                    qty,
+                                  );
+                                const clientPrice =
+                                  comm.pagador === "CLIENTE"
+                                    ? baseCost + commissionValue
+                                    : baseCost;
                                 return (
                                   <div
                                     key={id}
-                                    className="grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-slate-50 transition-colors"
+                                    className="grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-slate-50/80 transition-colors"
                                   >
                                     <div className="col-span-4 flex items-center gap-2 min-w-0">
-                                      <div className="h-7 w-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
-                                        <Package className="h-3.5 w-3.5 text-violet-500" />
+                                      <div className="h-7 w-7 rounded-lg bg-linear-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center shrink-0">
+                                        <Package className="h-3.5 w-3.5 text-violet-400" />
                                       </div>
                                       <div className="min-w-0">
-                                        <p className="text-xs font-medium text-slate-800 truncate">
+                                        <p className="text-xs font-semibold text-slate-800 truncate">
                                           {product.name}
                                         </p>
                                         <p className="text-[10px] text-slate-400">
@@ -2381,26 +3013,49 @@ export function ProjectCreateNewPanel({
                                       </p>
                                     </div>
                                     <div className="col-span-2 flex items-center justify-center">
-                                      <div className="relative w-full max-w-[72px]">
+                                      <div className="relative w-full max-w-18">
                                         <input
                                           type="number"
                                           min={0}
                                           max={200}
                                           step={0.5}
-                                          value={pct === 0 ? "" : pct}
+                                          value={
+                                            comm.tipoComissao === "PERCENTUAL"
+                                              ? comm.percentualComissao || ""
+                                              : comm.valorComissao || ""
+                                          }
                                           placeholder="0"
                                           onChange={(e) => {
                                             const v =
                                               parseFloat(e.target.value) || 0;
-                                            setProductCommissions((prev) => ({
-                                              ...prev,
-                                              [id]: v,
-                                            }));
+                                            const field =
+                                              comm.tipoComissao === "PERCENTUAL"
+                                                ? "percentualComissao"
+                                                : "valorComissao";
+                                            setProductCommissionData(
+                                              (prev) => ({
+                                                ...prev,
+                                                [id]: {
+                                                  ...getProductCommission(id),
+                                                  [field]: v,
+                                                },
+                                              }),
+                                            );
+                                            if (
+                                              comm.tipoComissao === "PERCENTUAL"
+                                            ) {
+                                              setProductCommissions((prev) => ({
+                                                ...prev,
+                                                [id]: v,
+                                              }));
+                                            }
                                           }}
                                           className="w-full h-7 text-xs text-center rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-4"
                                         />
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
-                                          %
+                                          {comm.tipoComissao === "PERCENTUAL"
+                                            ? "%"
+                                            : "R$"}
                                         </span>
                                       </div>
                                     </div>
@@ -2410,7 +3065,7 @@ export function ProjectCreateNewPanel({
                                           "text-xs font-semibold",
                                           commissionValue > 0
                                             ? "text-emerald-600"
-                                            : "text-slate-400",
+                                            : "text-slate-300",
                                         )}
                                       >
                                         {commissionValue > 0
@@ -2430,38 +3085,41 @@ export function ProjectCreateNewPanel({
                           </div>
 
                           {/* Commission Summary */}
-                          <div className="rounded-xl overflow-hidden border border-emerald-200">
-                            <div className="px-4 py-3 bg-linear-to-r from-emerald-600 to-teal-600 flex items-center gap-2">
+                          <div className="rounded-xl overflow-hidden border border-emerald-100 shadow-sm">
+                            <div className="px-4 py-3 flex items-center gap-2 bg-linear-to-r from-emerald-600 to-teal-600">
                               <TrendingUp className="h-4 w-4 text-white" />
-                              <p className="text-xs font-semibold text-white uppercase tracking-wider">
+                              <p className="text-xs font-bold text-white uppercase tracking-widest">
                                 Resumo de Comissões
                               </p>
                             </div>
-                            <div className="p-4 bg-linear-to-br from-emerald-50 to-teal-50 space-y-2">
-                              <div className="flex items-center justify-between text-xs text-slate-600">
+                            <div className="p-4 bg-white space-y-2">
+                              <div className="flex items-center justify-between text-xs text-slate-500">
                                 <span>Total Custo (Agência)</span>
-                                <span className="font-semibold text-slate-800">
+                                <span className="font-semibold text-slate-700">
                                   {formatCurrency(calculateTotal())}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between text-xs text-emerald-700">
-                                <span>Total Comissões</span>
-                                <span className="font-semibold">
+                              <div className="flex items-center justify-between text-xs text-emerald-600">
+                                <span className="flex items-center gap-1">
+                                  <TrendingUp className="h-3 w-3" />
+                                  Total Comissões
+                                </span>
+                                <span className="font-bold">
                                   +{formatCurrency(calculateCommissionTotal())}
                                 </span>
                               </div>
-                              <div className="pt-2 border-t border-emerald-200 flex items-center justify-between">
-                                <span className="text-sm font-bold text-slate-900">
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="text-sm font-bold text-slate-800">
                                   Total Cliente
                                 </span>
-                                <span className="text-lg font-bold text-emerald-700">
+                                <span className="text-lg font-extrabold text-emerald-600">
                                   {formatCurrency(calculateClientTotal())}
                                 </span>
                               </div>
                               {calculateCommissionTotal() > 0 && (
-                                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                                <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
                                   <span>Margem média</span>
-                                  <span className="font-semibold text-emerald-600">
+                                  <span className="font-semibold text-emerald-500">
                                     {(
                                       (calculateCommissionTotal() /
                                         calculateTotal()) *
@@ -2479,67 +3137,508 @@ export function ProjectCreateNewPanel({
                   )}
                 </div>
 
-                {/* Footer Actions */}
-                <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t bg-white">
-                  <button
-                    onClick={() => setShowReview(false)}
-                    className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Voltar ao Catálogo
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleExportPresentation}
-                      disabled={exportingPDF || selectedProducts.length === 0}
-                      className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50"
+                {/* ── Footer Actions ── */}
+                <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    {/* Left: secondary actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => setShowEditProducts(true)}
+                        className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-all"
+                      >
+                        <Package className="h-3.5 w-3.5" />
+                        Editar Produtos
+                      </button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportPresentation}
+                        disabled={exportingPDF || !!exportBlockReason}
+                        title={
+                          !exportingPDF && exportBlockReason
+                            ? exportBlockReason
+                            : undefined
+                        }
+                        className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        {exportingPDF ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <FileDown className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {exportingPDF ? "Gerando..." : "Exportar PDF"}
+                        </span>
+                      </Button>
+                    </div>
+
+                    {/* Spacer */}
+                    <div className="flex-1" />
+
+                    {/* Right: primary actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveDraftNow}
+                        disabled={loading}
+                        title={draftBlockReason ?? undefined}
+                        className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                      >
+                        {loadingAction === "draft" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {loadingAction === "draft"
+                            ? "Salvando..."
+                            : "Rascunho"}
+                        </span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenSendApproval}
+                        disabled={loading || !!approvalBlockReason}
+                        title={approvalBlockReason ?? undefined}
+                        className="h-8 text-xs gap-1.5 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300 disabled:opacity-40"
+                      >
+                        {loading && !loadingAction ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          Enviar Aprovação
+                        </span>
+                        <span className="sm:hidden">Aprovação</span>
+                      </Button>
+                      <button
+                        disabled={!!checkoutBlockReason}
+                        title={checkoutBlockReason ?? undefined}
+                        onClick={() => {
+                          setShowReview(false);
+                          setShowCheckout(true);
+                        }}
+                        className="h-8 px-4 flex items-center gap-1.5 text-xs font-bold text-white rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.97]"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)",
+                        }}
+                      >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Confirmar e ir ao Checkout
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Edit Products Overlay ── */}
+          {showEditProducts && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
+              <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-h-[calc(100%-32px)] flex flex-col overflow-hidden"
+                style={{ maxWidth: "920px" }}
+              >
+                {/* Header */}
+                <div
+                  className="shrink-0 px-6 py-5"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Package className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white">
+                          Editar Produtos
+                        </h2>
+                        <p className="text-xs text-white/70">
+                          {selectedProducts.length}{" "}
+                          {selectedProducts.length === 1
+                            ? "produto"
+                            : "produtos"}{" "}
+                          &middot; {formData.nome || "Novo Projeto"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowEditProducts(false)}
+                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 border border-white/30 text-white/70 hover:bg-white/25 hover:text-white transition-colors"
                     >
-                      {exportingPDF ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <FileDown className="h-3.5 w-3.5" />
-                      )}
-                      Exportar Proposta
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setShowReview(false);
-                        handleSaveDraftNow();
-                      }}
-                      disabled={loading}
-                      className="gap-1.5"
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Product cards */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50">
+                  {selectedProducts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <Package className="h-12 w-12 text-slate-200 mb-3" />
+                      <p className="text-sm text-slate-400 mb-1">
+                        Nenhum produto adicionado ainda.
+                      </p>
+                      <p className="text-xs text-slate-400 mb-4">
+                        Use o catálogo para encontrar e adicionar produtos a
+                        este projeto.
+                      </p>
+                      <button
+                        onClick={() => setShowEditProducts(false)}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Ir ao catálogo de produtos
+                      </button>
+                    </div>
+                  ) : (
+                    selectedProducts.map((product) => {
+                      const id = String(product.id);
+                      const qty =
+                        productQuantities[id] || product.quantity || 1;
+                      const commission = getProductCommission(id);
+                      const commissionValue = calcProductCommissionValue(
+                        id,
+                        product.finalPrice,
+                        qty,
+                      );
+                      const finalClientPrice =
+                        commission.pagador === "CLIENTE"
+                          ? product.finalPrice * qty + commissionValue
+                          : product.finalPrice * qty;
+                      return (
+                        <div
+                          key={id}
+                          className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm"
+                        >
+                          {/* Product info row */}
+                          <div className="flex items-start gap-4 p-4">
+                            {/* Thumbnail */}
+                            <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-linear-to-br from-indigo-50 to-violet-100">
+                              {product.image ? (
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-7 w-7 text-indigo-300" />
+                              )}
+                            </div>
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  {(product as any).code && (
+                                    <span className="inline-block text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded mb-1">
+                                      {(product as any).code}
+                                    </span>
+                                  )}
+                                  <p className="text-sm font-semibold text-slate-800 leading-tight">
+                                    {product.name}
+                                  </p>
+                                  {(product as any).variation && (
+                                    <p className="text-xs text-indigo-600 mt-0.5 font-medium">
+                                      Variação: {(product as any).variation}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                    {product.category && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                        {product.category}
+                                      </span>
+                                    )}
+                                    {(product as any).recurrence && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-semibold border border-amber-100">
+                                        {(product as any).recurrence}
+                                      </span>
+                                    )}
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 text-[10px] border border-slate-100">
+                                      Qtd: {qty}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveProduct(id)}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
+                                  title="Remover produto"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Commission row */}
+                          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                              {/* Preço base */}
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                                  Preço Base
+                                </p>
+                                <p className="text-sm font-bold text-slate-800">
+                                  {formatCurrency(product.finalPrice * qty)}
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  unit. {formatCurrency(product.finalPrice)} ×{" "}
+                                  {qty}
+                                </p>
+                              </div>
+
+                              {/* Comissão */}
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                                  Comissão
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={commission.tipoComissao}
+                                    onChange={(e) => {
+                                      const tipo = e.target.value as
+                                        | "PERCENTUAL"
+                                        | "VALOR_FIXO";
+                                      setProductCommissionData((prev) => ({
+                                        ...prev,
+                                        [id]: {
+                                          ...getProductCommission(id),
+                                          tipoComissao: tipo,
+                                        },
+                                      }));
+                                    }}
+                                    className="h-7 px-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-indigo-400 cursor-pointer"
+                                  >
+                                    <option value="PERCENTUAL">%</option>
+                                    <option value="VALOR_FIXO">R$</option>
+                                  </select>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={
+                                      commission.tipoComissao === "PERCENTUAL"
+                                        ? 0.5
+                                        : 1
+                                    }
+                                    value={
+                                      commission.tipoComissao === "PERCENTUAL"
+                                        ? commission.percentualComissao || ""
+                                        : commission.valorComissao || ""
+                                    }
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const v = parseFloat(e.target.value) || 0;
+                                      const field =
+                                        commission.tipoComissao === "PERCENTUAL"
+                                          ? "percentualComissao"
+                                          : "valorComissao";
+                                      setProductCommissionData((prev) => ({
+                                        ...prev,
+                                        [id]: {
+                                          ...getProductCommission(id),
+                                          [field]: v,
+                                        },
+                                      }));
+                                      if (
+                                        commission.tipoComissao === "PERCENTUAL"
+                                      ) {
+                                        setProductCommissions((prev) => ({
+                                          ...prev,
+                                          [id]: v,
+                                        }));
+                                      }
+                                    }}
+                                    className="w-20 h-7 px-2 text-xs text-center rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-indigo-400"
+                                  />
+                                </div>
+                                {commissionValue > 0 && (
+                                  <p className="text-[10px] text-emerald-600 font-semibold mt-1">
+                                    +{formatCurrency(commissionValue)}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Pagador */}
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                                  Pagador
+                                </p>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() =>
+                                      setProductCommissionData((prev) => ({
+                                        ...prev,
+                                        [id]: {
+                                          ...getProductCommission(id),
+                                          pagador: "AGENCIA",
+                                        },
+                                      }))
+                                    }
+                                    className={cn(
+                                      "h-7 px-2.5 text-xs font-semibold rounded-lg border transition-all",
+                                      commission.pagador === "AGENCIA"
+                                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                        : "bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600",
+                                    )}
+                                  >
+                                    Agência
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setProductCommissionData((prev) => ({
+                                        ...prev,
+                                        [id]: {
+                                          ...getProductCommission(id),
+                                          pagador: "CLIENTE",
+                                        },
+                                      }))
+                                    }
+                                    className={cn(
+                                      "h-7 px-2.5 text-xs font-semibold rounded-lg border transition-all",
+                                      commission.pagador === "CLIENTE"
+                                        ? "bg-violet-600 text-white border-violet-600 shadow-sm"
+                                        : "bg-white text-slate-500 border-slate-200 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600",
+                                    )}
+                                  >
+                                    Cliente
+                                  </button>
+                                </div>
+                                {commission.pagador === "AGENCIA" && (
+                                  <p className="text-[10px] text-blue-500 mt-1">
+                                    Agência absorve o custo
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Preço final */}
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                                  {commission.pagador === "CLIENTE"
+                                    ? "Cobrado do Cliente"
+                                    : "Custo Agência"}
+                                </p>
+                                <p
+                                  className={cn(
+                                    "text-sm font-bold",
+                                    commission.pagador === "CLIENTE"
+                                      ? "text-violet-700"
+                                      : "text-blue-700",
+                                  )}
+                                >
+                                  {formatCurrency(finalClientPrice)}
+                                </p>
+                                {commission.pagador === "AGENCIA" && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Cliente não vê este valor
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Summary + Footer */}
+                <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 space-y-4">
+                  {selectedProducts.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          Base Total
+                        </p>
+                        <p className="text-base font-bold text-slate-800 mt-0.5">
+                          {formatCurrency(calculateTotal())}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {selectedProducts.length}{" "}
+                          {selectedProducts.length === 1
+                            ? "produto"
+                            : "produtos"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+                        <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">
+                          Total Comissão
+                        </p>
+                        <p className="text-base font-bold text-emerald-700 mt-0.5">
+                          +{formatCurrency(calculateCommissionTotal())}
+                        </p>
+                        <p className="text-[10px] text-emerald-400 mt-0.5">
+                          Margem estimada
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-violet-50 border border-violet-100 p-3">
+                        <p className="text-[10px] font-semibold text-violet-500 uppercase tracking-wider">
+                          Total Cliente
+                        </p>
+                        <p className="text-base font-bold text-violet-700 mt-0.5">
+                          {formatCurrency(calculateClientPayTotal())}
+                        </p>
+                        <p className="text-[10px] text-violet-400 mt-0.5">
+                          O que o cliente paga
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
+                        <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">
+                          Total Agência
+                        </p>
+                        <p className="text-base font-bold text-blue-700 mt-0.5">
+                          {formatCurrency(calculateAgencyPayTotal())}
+                        </p>
+                        <p className="text-[10px] text-blue-400 mt-0.5">
+                          Absorvido pela agência
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setShowEditProducts(false)}
+                      className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
                     >
-                      <Save className="h-3.5 w-3.5" />
-                      Salvar Rascunho
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setShowReview(false);
-                        handleSaveForApproval();
-                      }}
-                      disabled={loading}
-                      className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Enviar para Aprovação
-                    </Button>
-                    <Button
-                      className="btn-brand gap-1.5"
-                      onClick={() => {
-                        setShowReview(false);
-                        setShowCheckout(true);
-                      }}
-                      disabled={selectedProducts.length === 0}
-                    >
-                      <CreditCard className="h-4 w-4" />
-                      Confirmar e ir ao Checkout
-                    </Button>
+                      <Plus className="h-4 w-4" />
+                      Adicionar mais produtos
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowEditProducts(false);
+                          setShowProductsStep(false);
+                        }}
+                        className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Aplicar e Fechar
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setShowEditProducts(false);
+                          setShowProductsStep(false);
+                          if (!showReview) handleOpenReview();
+                        }}
+                        className="gap-1.5 text-white border-none"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                        }}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Continuar Revisão
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2571,7 +3670,7 @@ export function ProjectCreateNewPanel({
         open={showCreateCompany}
         onOpenChange={setShowCreateCompany}
         onCreate={(company: any) => {
-          const allExisting = [...mockCompaniesList, ...localCompanies];
+          const allExisting = [...apiCompanies, ...localCompanies];
           const dupByName = allExisting.some(
             (c) => c.name.toLowerCase() === (company.name || "").toLowerCase(),
           );
@@ -2584,11 +3683,11 @@ export function ProjectCreateNewPanel({
             return;
           }
           const newCo: MockCompanyItem = {
-            id: company.id ?? Date.now(),
+            id: company.id ? String(company.id) : String(Date.now()),
             name: company.name,
           };
           setLocalCompanies((prev) => [...prev, newCo]);
-          setResolvedCompanyId(newCo.id);
+          setResolvedCompanyId(String(newCo.id));
           setResolvedCompanyName(newCo.name);
           updateField("agencia", newCo.name);
           updateField("cliente", "");
@@ -2630,6 +3729,51 @@ export function ProjectCreateNewPanel({
         }}
         companyId={resolvedCompanyId ?? undefined}
         companyName={resolvedCompanyName || companyName}
+      />
+
+      {/* ── Send Approval Modal ── */}
+      <SendApprovalModal
+        open={showSendApprovalModal}
+        onOpenChange={setShowSendApprovalModal}
+        projectName={formData.nome}
+        productCount={selectedProducts.length}
+        totalFormatted={formatCurrency(calculateTotal())}
+        clientName={formData.cliente}
+        companyName={resolvedCompanyName || formData.agencia}
+        contacts={(() => {
+          // Build contacts list: dedup by id, mark primary from formData.cliente
+          const seen = new Set<string>();
+          const list: ApprovalContact[] = localClients
+            .filter((c) => {
+              const key = String(c.id);
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            })
+            .map((c) => ({
+              id: String(c.id),
+              name: c.name,
+              email: c.email || null,
+              phone: null,
+              isPrimary: c.name === formData.cliente,
+            }));
+          // If no contacts found but client name is set, add synthetic
+          if (list.length === 0 && formData.cliente.trim()) {
+            list.push({
+              id: "synthetic-primary",
+              name: formData.cliente,
+              email: null,
+              phone: null,
+              isPrimary: true,
+            });
+          }
+          // Ensure primary is first
+          list.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+          return list;
+        })()}
+        onSend={handleConfirmSendApproval}
+        onSaveDraft={handleSaveApprovalDraft}
+        sending={loading}
       />
     </>
   );

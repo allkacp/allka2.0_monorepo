@@ -48,15 +48,20 @@ router.get("/", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const search = req.query.search as string | undefined;
+    const company_id = req.query.company_id as string | undefined;
+    const account_type = req.query.account_type as string | undefined;
+    const role = req.query.role as string | undefined;
 
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search } },
-            { email: { contains: search } },
-          ],
-        }
-      : {};
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where["OR"] = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+      ];
+    }
+    if (company_id) where["company_id"] = company_id;
+    if (account_type) where["account_type"] = account_type;
+    if (role) where["role"] = role;
 
     const [total, users] = await Promise.all([
       prisma.user.count({ where }),
@@ -79,7 +84,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       select: safeSelect,
     });
 
@@ -136,7 +141,7 @@ router.put("/:id", verifyToken, validate(updateUserSchema), async (req, res, nex
     }
 
     const user = await prisma.user.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data,
       select: safeSelect,
     });
@@ -154,7 +159,7 @@ router.delete(
   requireRole("admin"),
   async (req, res, next) => {
     try {
-      await prisma.user.delete({ where: { id: req.params.id } });
+      await prisma.user.delete({ where: { id: (req.params.id as string) } });
       res.status(204).send();
     } catch (err) {
       next(err);

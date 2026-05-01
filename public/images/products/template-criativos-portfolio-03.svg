@@ -1,97 +1,122 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f1f3e;stop-opacity:1"/>
-      <stop offset="100%" style="stop-color:#7b1850;stop-opacity:1"/>
+      <stop offset="0%" stop-color="#0a0820"/>
+      <stop offset="100%" stop-color="#1e0e50"/>
     </linearGradient>
-    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <filter id="sh"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.55)"/></filter>
   </defs>
   <rect width="800" height="450" fill="url(#bg)"/>
+  <g opacity="0.04" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="225" x2="800" y2="225"/>
+    <line x1="267" y1="0" x2="267" y2="450"/>
+    <line x1="533" y1="0" x2="533" y2="450"/>
+  </g>
 
-  <!-- Title -->
-  <text x="50" y="48" font-family="system-ui,sans-serif" font-size="22" fill="#ffffff" font-weight="700">O que você recebe na entrega</text>
-  <text x="50" y="70" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.45)">Arquivos abertos + exportações prontas para publicar</text>
+  <text x="400" y="35" font-family="system-ui,sans-serif" font-size="18" fill="#ffffff" font-weight="700" text-anchor="middle">Templates de Campanha</text>
+  <text x="400" y="55" font-family="system-ui,sans-serif" font-size="12" fill="rgba(255,255,255,0.38)" text-anchor="middle">Kits prontos para as principais datas e campanhas</text>
 
-  <!-- Left panel: Canva Link delivery -->
-  <rect x="44" y="88" width="220" height="280" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="44" y="88" width="220" height="42" rx="14" fill="rgba(59,130,246,0.18)"/>
-  <rect x="44" y="115" width="220" height="15" rx="0" fill="rgba(59,130,246,0.18)"/>
-  <text x="154" y="115" font-family="system-ui,sans-serif" font-size="12" fill="#fff" text-anchor="middle" font-weight="700">Link Canva</text>
-  <!-- Canva icon hint -->
-  <rect x="60" y="142" width="185" height="55" rx="8" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width="1"/>
-  <text x="70" y="162" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.6)">canva.com/design/...</text>
-  <text x="70" y="178" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)">link compartilhável</text>
-  <text x="70" y="193" font-family="system-ui,sans-serif" font-size="9" fill="rgba(74,222,128,0.8)">✓  edite pelo navegador</text>
-  <!-- Canva features -->
-  <text x="70" y="222" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="85" y="222" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Sem instalar software</text>
-  <text x="70" y="240" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="85" y="240" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Disponível 10 dias</text>
-  <text x="70" y="258" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="85" y="258" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Exporta em PDF / PNG</text>
-  <text x="70" y="276" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="85" y="276" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Requer conta gratuita</text>
-  <!-- Canva badge -->
-  <rect x="70" y="292" width="80" height="22" rx="11" fill="rgba(59,130,246,0.3)"/>
-  <text x="110" y="307" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle">Canva</text>
-  <rect x="162" y="292" width="55" height="22" rx="11" fill="rgba(255,255,255,0.08)"/>
-  <text x="189" y="307" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)" text-anchor="middle">grátis</text>
+  <!-- Card 1: Black Friday -->
+  <g filter="url(#sh)">
+    <rect x="28" y="72" width="230" height="155" rx="12" fill="rgba(0,0,0,0.5)" stroke="rgba(255,220,0,0.35)" stroke-width="1"/>
+    <rect x="28" y="72" width="230" height="52" rx="12" fill="rgba(255,220,0,0.15)"/>
+    <rect x="28" y="106" width="230" height="18" fill="rgba(255,220,0,0.15)"/>
+    <text x="143" y="104" font-family="system-ui,sans-serif" font-size="16" fill="#ffd600" font-weight="900" text-anchor="middle" letter-spacing="1">BLACK FRIDAY</text>
+    <rect x="48" y="138" width="190" height="4" rx="2" fill="rgba(255,220,0,0.4)"/>
+    <rect x="48" y="148" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="48" y="157" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="48" y="170" width="96" height="20" rx="10" fill="rgba(255,220,0,0.3)" stroke="rgba(255,220,0,0.5)" stroke-width="1"/>
+    <text x="96" y="184" font-family="system-ui,sans-serif" font-size="9" fill="#ffd600" text-anchor="middle" font-weight="700">Feed + Stories</text>
+    <rect x="152" y="170" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="192" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">4 pecas</text>
+    <rect x="48" y="200" width="190" height="16" rx="6" fill="rgba(255,220,0,0.08)"/>
+    <text x="143" y="212" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,220,0,0.6)" text-anchor="middle">Canva editavel · cores customizaveis</text>
+  </g>
 
-  <!-- Middle panel: .PSD / .AI files -->
-  <rect x="280" y="88" width="220" height="280" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="280" y="88" width="220" height="42" rx="14" fill="rgba(139,92,246,0.2)"/>
-  <rect x="280" y="115" width="220" height="15" rx="0" fill="rgba(139,92,246,0.2)"/>
-  <text x="390" y="115" font-family="system-ui,sans-serif" font-size="12" fill="#fff" text-anchor="middle" font-weight="700">Arquivos .PSD / .AI</text>
-  <!-- File rows -->
-  <rect x="296" y="142" width="185" height="100" rx="8" fill="rgba(139,92,246,0.08)" stroke="rgba(139,92,246,0.15)" stroke-width="1"/>
-  <text x="310" y="163" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">template_01.psd</text>
-  <text x="310" y="181" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">template_02.ai</text>
-  <text x="310" y="199" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">template_03.psd</text>
-  <text x="310" y="217" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">template_04.ai</text>
-  <text x="310" y="235" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">template_05.psd</text>
-  <!-- Features -->
-  <text x="310" y="262" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="325" y="262" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Camadas organizadas</text>
-  <text x="310" y="280" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="325" y="280" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Edição profissional</text>
-  <text x="310" y="298" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="325" y="298" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Vetores escaláveis</text>
-  <!-- Badges -->
-  <rect x="310" y="310" width="50" height="22" rx="11" fill="rgba(139,92,246,0.3)"/>
-  <text x="335" y="325" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle">.psd</text>
-  <rect x="372" y="310" width="40" height="22" rx="11" fill="rgba(249,115,22,0.3)"/>
-  <text x="392" y="325" font-family="system-ui,sans-serif" font-size="10" fill="#fff" text-anchor="middle">.ai</text>
+  <!-- Card 2: Lancamento -->
+  <g filter="url(#sh)">
+    <rect x="285" y="72" width="230" height="155" rx="12" fill="rgba(200,26,127,0.12)" stroke="rgba(200,26,127,0.35)" stroke-width="1"/>
+    <rect x="285" y="72" width="230" height="52" rx="12" fill="rgba(200,26,127,0.28)"/>
+    <rect x="285" y="106" width="230" height="18" fill="rgba(200,26,127,0.28)"/>
+    <text x="400" y="104" font-family="system-ui,sans-serif" font-size="16" fill="#fff" font-weight="800" text-anchor="middle" letter-spacing="1">LANCAMENTO</text>
+    <rect x="305" y="138" width="190" height="4" rx="2" fill="rgba(200,26,127,0.5)"/>
+    <rect x="305" y="148" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="305" y="157" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="305" y="170" width="96" height="20" rx="10" fill="rgba(200,26,127,0.35)" stroke="rgba(200,26,127,0.5)" stroke-width="1"/>
+    <text x="353" y="184" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">Feed + Carrossel</text>
+    <rect x="409" y="170" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="449" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">6 pecas</text>
+    <rect x="305" y="200" width="190" height="16" rx="6" fill="rgba(255,255,255,0.04)"/>
+    <text x="400" y="212" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">Arquivo aberto Canva + Photoshop</text>
+  </g>
 
-  <!-- Right panel: .PNG .zip -->
-  <rect x="516" y="88" width="240" height="280" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="516" y="88" width="240" height="42" rx="14" fill="rgba(74,222,128,0.15)"/>
-  <rect x="516" y="115" width="240" height="15" rx="0" fill="rgba(74,222,128,0.15)"/>
-  <text x="636" y="115" font-family="system-ui,sans-serif" font-size="12" fill="#fff" text-anchor="middle" font-weight="700">Arquivos .PNG em .zip</text>
-  <!-- Zip icon hint -->
-  <rect x="532" y="142" width="205" height="90" rx="8" fill="rgba(74,222,128,0.07)" stroke="rgba(74,222,128,0.15)" stroke-width="1"/>
-  <text x="546" y="165" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.55)">📦  templates_finais.zip</text>
-  <text x="564" y="183" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)">template_01_feed.png</text>
-  <text x="564" y="197" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)">template_02_stories.png</text>
-  <text x="564" y="211" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.35)">template_03_linkedin.png</text>
-  <text x="564" y="225" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.3)">... + todos os formatos</text>
-  <!-- PNG features -->
-  <text x="546" y="255" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="561" y="255" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Alta resolução (300dpi)</text>
-  <text x="546" y="273" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="561" y="273" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Pronto para publicar</text>
-  <text x="546" y="291" font-family="system-ui,sans-serif" font-size="10" fill="rgba(74,222,128,0.8)">✓</text>
-  <text x="561" y="291" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.5)">Fundo transparente ou sólido</text>
-  <!-- Badge -->
-  <rect x="546" y="304" width="50" height="22" rx="11" fill="rgba(74,222,128,0.25)"/>
-  <text x="571" y="319" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle">.png</text>
-  <rect x="608" y="304" width="50" height="22" rx="11" fill="rgba(251,191,36,0.2)"/>
-  <text x="633" y="319" font-family="system-ui,sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">.zip</text>
+  <!-- Card 3: Promocao -->
+  <g filter="url(#sh)">
+    <rect x="542" y="72" width="230" height="155" rx="12" fill="rgba(249,115,22,0.1)" stroke="rgba(249,115,22,0.32)" stroke-width="1"/>
+    <rect x="542" y="72" width="230" height="52" rx="12" fill="rgba(249,115,22,0.25)"/>
+    <rect x="542" y="106" width="230" height="18" fill="rgba(249,115,22,0.25)"/>
+    <text x="657" y="104" font-family="system-ui,sans-serif" font-size="16" fill="#fff" font-weight="800" text-anchor="middle" letter-spacing="1">PROMOCAO</text>
+    <rect x="562" y="138" width="190" height="4" rx="2" fill="rgba(249,115,22,0.5)"/>
+    <rect x="562" y="148" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="562" y="157" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="562" y="170" width="96" height="20" rx="10" fill="rgba(249,115,22,0.35)" stroke="rgba(249,115,22,0.5)" stroke-width="1"/>
+    <text x="610" y="184" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">Feed + Banner</text>
+    <rect x="666" y="170" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="706" y="184" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">3 pecas</text>
+    <rect x="562" y="200" width="190" height="16" rx="6" fill="rgba(255,255,255,0.04)"/>
+    <text x="657" y="212" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">Canva + Illustrator editavel</text>
+  </g>
 
-  <!-- Delivery badge bottom -->
-  <rect x="44" y="386" width="712" height="0" rx="8" fill="rgba(255,255,255,0.03)"/>
-  <!-- Bottom bar -->
-  <rect x="0" y="400" width="800" height="50" fill="rgba(0,0,0,0.25)"/>
-  <rect x="50" y="414" width="160" height="22" rx="11" fill="rgba(74,222,128,0.12)" stroke="rgba(74,222,128,0.25)" stroke-width="1"/>
-  <text x="130" y="429" font-family="system-ui,sans-serif" font-size="10" fill="#4ade80" text-anchor="middle">Entrega em 4 dias úteis ✓</text>
-  <text x="750" y="429" font-family="system-ui,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">Template para Criativos — allka</text>
+  <!-- Card 4: Institucional -->
+  <g filter="url(#sh)">
+    <rect x="28" y="250" width="230" height="155" rx="12" fill="rgba(37,88,255,0.1)" stroke="rgba(37,88,255,0.32)" stroke-width="1"/>
+    <rect x="28" y="250" width="230" height="52" rx="12" fill="rgba(37,88,255,0.25)"/>
+    <rect x="28" y="284" width="230" height="18" fill="rgba(37,88,255,0.25)"/>
+    <text x="143" y="282" font-family="system-ui,sans-serif" font-size="16" fill="#fff" font-weight="800" text-anchor="middle" letter-spacing="0.5">INSTITUCIONAL</text>
+    <rect x="48" y="316" width="190" height="4" rx="2" fill="rgba(37,88,255,0.5)"/>
+    <rect x="48" y="326" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="48" y="335" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="48" y="348" width="96" height="20" rx="10" fill="rgba(37,88,255,0.35)" stroke="rgba(37,88,255,0.5)" stroke-width="1"/>
+    <text x="96" y="362" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">Feed + LinkedIn</text>
+    <rect x="152" y="348" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="192" y="362" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">5 pecas</text>
+    <rect x="48" y="378" width="190" height="16" rx="6" fill="rgba(255,255,255,0.04)"/>
+    <text x="143" y="390" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">Photoshop + Illustrator</text>
+  </g>
+
+  <!-- Card 5: Stories Engajamento -->
+  <g filter="url(#sh)">
+    <rect x="285" y="250" width="230" height="155" rx="12" fill="rgba(110,44,150,0.12)" stroke="rgba(110,44,150,0.35)" stroke-width="1"/>
+    <rect x="285" y="250" width="230" height="52" rx="12" fill="rgba(110,44,150,0.28)"/>
+    <rect x="285" y="284" width="230" height="18" fill="rgba(110,44,150,0.28)"/>
+    <text x="400" y="282" font-family="system-ui,sans-serif" font-size="16" fill="#fff" font-weight="800" text-anchor="middle" letter-spacing="0.5">STORIES QUIZ</text>
+    <rect x="305" y="316" width="190" height="4" rx="2" fill="rgba(110,44,150,0.5)"/>
+    <rect x="305" y="326" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="305" y="335" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="305" y="348" width="96" height="20" rx="10" fill="rgba(110,44,150,0.4)" stroke="rgba(110,44,150,0.55)" stroke-width="1"/>
+    <text x="353" y="362" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">Stories (9:16)</text>
+    <rect x="409" y="348" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="449" y="362" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">3 variacoes</text>
+    <rect x="305" y="378" width="190" height="16" rx="6" fill="rgba(255,255,255,0.04)"/>
+    <text x="400" y="390" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">Canva editavel com enquetes</text>
+  </g>
+
+  <!-- Card 6: Carrossel Educativo -->
+  <g filter="url(#sh)">
+    <rect x="542" y="250" width="230" height="155" rx="12" fill="rgba(14,159,140,0.1)" stroke="rgba(14,159,140,0.3)" stroke-width="1"/>
+    <rect x="542" y="250" width="230" height="52" rx="12" fill="rgba(14,159,140,0.22)"/>
+    <rect x="542" y="284" width="230" height="18" fill="rgba(14,159,140,0.22)"/>
+    <text x="657" y="282" font-family="system-ui,sans-serif" font-size="16" fill="#fff" font-weight="800" text-anchor="middle" letter-spacing="0.2">CARROSSEL EDU</text>
+    <rect x="562" y="316" width="190" height="4" rx="2" fill="rgba(14,159,140,0.45)"/>
+    <rect x="562" y="326" width="160" height="3" rx="1" fill="rgba(255,255,255,0.2)"/>
+    <rect x="562" y="335" width="140" height="3" rx="1" fill="rgba(255,255,255,0.14)"/>
+    <rect x="562" y="348" width="96" height="20" rx="10" fill="rgba(14,159,140,0.35)" stroke="rgba(14,159,140,0.5)" stroke-width="1"/>
+    <text x="610" y="362" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">4 a 8 slides</text>
+    <rect x="666" y="348" width="80" height="20" rx="10" fill="rgba(255,255,255,0.07)"/>
+    <text x="706" y="362" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">Canva / PS</text>
+    <rect x="562" y="378" width="190" height="16" rx="6" fill="rgba(255,255,255,0.04)"/>
+    <text x="657" y="390" font-family="system-ui,sans-serif" font-size="9" fill="rgba(255,255,255,0.4)" text-anchor="middle">Slides educativos prontos</text>
+  </g>
+
+  <text x="400" y="432" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.15)" text-anchor="middle">allka · kits de campanha para redes sociais</text>
 </svg>

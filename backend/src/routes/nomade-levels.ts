@@ -33,7 +33,7 @@ router.get("/", verifyToken, async (_req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const level = await prisma.nomadeLevel.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
     });
     if (!level) {
       res.status(404).json({ error: "Nível não encontrado" });
@@ -59,7 +59,7 @@ router.post("/", verifyToken, validate(levelSchema), async (req, res, next) => {
 router.put("/:id", verifyToken, validate(levelSchema.partial()), async (req, res, next) => {
   try {
     const level = await prisma.nomadeLevel.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(level);
@@ -71,7 +71,7 @@ router.put("/:id", verifyToken, validate(levelSchema.partial()), async (req, res
 // DELETE /api/nomade-levels/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.nomadeLevel.delete({ where: { id: req.params.id } });
+    await prisma.nomadeLevel.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

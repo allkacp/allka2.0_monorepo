@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 
 const router = Router();
 
@@ -14,6 +15,7 @@ const createSchema = z.object({
     .enum([
       "draft",
       "negotiation",
+      "pending-approval",
       "awaiting-payment",
       "planning",
       "in-progress",
@@ -40,8 +42,14 @@ const createSchema = z.object({
   from_lead: z.boolean().default(false),
   billing_day: z.number().optional(),
   billing_start_date: z.string().optional(),
-  start_date: z.string().datetime({ offset: true }).optional(),
-  end_date: z.string().datetime({ offset: true }).optional(),
+  start_date: z.preprocess(
+    (v) => (!v || v === "" ? undefined : v),
+    z.string().optional(),
+  ),
+  end_date: z.preprocess(
+    (v) => (!v || v === "" ? undefined : v),
+    z.string().optional(),
+  ),
 });
 
 const updateSchema = createSchema.partial();
@@ -83,7 +91,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const project = await prisma.project.findUnique({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       include: {
         client: true,
         _count: { select: { task_executions: true, invoices: true } },
@@ -101,22 +109,41 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
-// GET /api/projects/:id/tasks
+// GET /api/projects/:id/tasks  — operational execution tasks (ProjectTask)
 router.get("/:id/tasks", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
+    const status = req.query.status as string | undefined;
+
+    const where: Record<string, unknown> = {
+      project_id: req.params.id as string,
+    };
+    if (status) where.status = status;
 
     const [total, data] = await Promise.all([
-      prisma.taskExecution.count({ where: { project_id: req.params.id } }),
-      prisma.taskExecution.findMany({
-        where: { project_id: req.params.id },
+      prisma.projectTask.count({ where }),
+      prisma.projectTask.findMany({
+        where,
         include: {
-          nomade: { select: { id: true, name: true, avatar: true } },
-          template: { select: { id: true, name: true } },
+          project_product: {
+            select: {
+              id: true,
+              product_name_snapshot: true,
+              product_code_snapshot: true,
+              product_category_snapshot: true,
+              status: true,
+            },
+          },
+          catalog_task: {
+            select: { id: true, code: true, name: true, category: true },
+          },
+          _count: {
+            select: { stages: true, briefing_answers: true, attachments: true },
+          },
         },
         skip,
         take: limit,
-        orderBy: { created_at: "desc" },
+        orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
       }),
     ]);
 
@@ -126,37 +153,105 @@ router.get("/:id/tasks", verifyToken, async (req, res, next) => {
   }
 });
 
-// POST /api/projects
-router.post("/", verifyToken, validate(createSchema), async (req, res, next) => {
+// POST /api/projects/:id/generate-tasks  — idempotent (re-)generation of tasks from all linked products
+router.post("/:id/generate-tasks", verifyToken, async (req, res, next) => {
   try {
-    const project = await prisma.project.create({
-      data: req.body,
-      include: { client: { select: { id: true, name: true, cnpj: true } } },
+    const result = await gerarTarefasDoProjeto(
+      req.params.id as string as string,
+    );
+    res.status(201).json({
+      ...result,
+      message: `${result.generated} tarefa(s) gerada(s), ${result.skipped} j\u00e1 existia(m).`,
     });
-    res.status(201).json(project);
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message?.includes("n\u00e3o encontrado")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
     next(err);
   }
 });
 
+// POST /api/projects
+router.post(
+  "/",
+  verifyToken,
+  validate(createSchema),
+  async (req, res, next) => {
+    try {
+      const { start_date, end_date, ...rest } = req.body;
+      const toDate = (v: string | undefined) => {
+        if (!v) return undefined;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? undefined : d;
+      };
+      const project = await prisma.project.create({
+        data: {
+          ...rest,
+          start_date: toDate(start_date),
+          end_date: toDate(end_date),
+        },
+        include: { client: { select: { id: true, name: true, cnpj: true } } },
+      });
+      res.status(201).json(project);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // PUT /api/projects/:id
-router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
-  try {
-    const project = await prisma.project.update({
-      where: { id: req.params.id },
-      data: req.body,
-      include: { client: { select: { id: true, name: true, cnpj: true } } },
-    });
-    res.json(project);
-  } catch (err) {
-    next(err);
-  }
-});
+router.put(
+  "/:id",
+  verifyToken,
+  validate(updateSchema),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id as string as string;
+      const { start_date, end_date, ...rest } = req.body;
+      const toDate = (v: string | undefined) => {
+        if (!v) return undefined;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? undefined : d;
+      };
+
+      // Capture previous status before update so we can detect transition to "planning"
+      const before = await prisma.project.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+
+      const project = await prisma.project.update({
+        where: { id },
+        data: {
+          ...rest,
+          start_date: toDate(start_date),
+          end_date: toDate(end_date),
+        },
+        include: { client: { select: { id: true, name: true, cnpj: true } } },
+      });
+
+      // Auto-generate operational tasks when project transitions to "planning"
+      if (rest.status === "planning" && before?.status !== "planning") {
+        gerarTarefasDoProjeto(id).catch((err) =>
+          console.error(
+            `[generate-tasks] Erro ao gerar tarefas para projeto ${id}:`,
+            err,
+          ),
+        );
+      }
+
+      res.json(project);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/projects/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.project.delete({ where: { id: req.params.id } });
+    await prisma.project.delete({ where: { id: req.params.id as string } });
     res.status(204).send();
   } catch (err) {
     next(err);

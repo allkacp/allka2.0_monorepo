@@ -26,6 +26,7 @@ import { GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
+import { PageLoader } from "@/components/ui/loading";
 import {
   usePlatformUsers,
   MOCK_COMPANIES as PLATFORM_COMPANIES,
@@ -121,7 +122,12 @@ interface Coupon {
 // Users and companies loaded from API
 let MOCK_USERS: { id: string; name: string; role: string }[] = [];
 
-let MOCK_COMPANIES: { id: string; name: string; accountType: AccountTypeRestriction; userIds: string[] }[] = [];
+let MOCK_COMPANIES: {
+  id: string;
+  name: string;
+  accountType: AccountTypeRestriction;
+  userIds: string[];
+}[] = [];
 
 const ACCOUNT_TYPE_LABELS: Record<AccountTypeRestriction, string> = {
   empresas: "Empresas",
@@ -245,26 +251,55 @@ export default function CampanhasPage() {
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponDialogOpen, setCouponDialogOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   // Load data from API
   useEffect(() => {
-    apiClient.getCampaigns().then((data: any) => {
-      const list = Array.isArray(data) ? data : data?.data || []
-      setCampaigns(list)
-    }).catch(() => {})
-    apiClient.getCoupons().then((data: any) => {
-      const list = Array.isArray(data) ? data : data?.data || []
-      setCoupons(list)
-    }).catch(() => {})
-    apiClient.getUsers({ limit: '200' }).then((data: any) => {
-      const list = Array.isArray(data) ? data : data?.data || []
-      MOCK_USERS = list.map((u: any) => ({ id: String(u.id), name: u.name, role: u.role || '' }))
-    }).catch(() => {})
-    apiClient.getCompanies({ limit: '200' }).then((data: any) => {
-      const list = Array.isArray(data) ? data : data?.data || []
-      MOCK_COMPANIES = list.map((c: any) => ({ id: String(c.id), name: c.name, accountType: c.account_type || 'empresas', userIds: [] }))
-    }).catch(() => {})
-  }, [])
+    let done = 0;
+    const checkDone = () => {
+      done++;
+      if (done >= 2) setPageLoading(false);
+    };
+    apiClient
+      .getCampaigns()
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : data?.data || [];
+        setCampaigns(list);
+      })
+      .catch(() => {})
+      .finally(checkDone);
+    apiClient
+      .getCoupons()
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : data?.data || [];
+        setCoupons(list);
+      })
+      .catch(() => {})
+      .finally(checkDone);
+    apiClient
+      .getUsers({ limit: "200" })
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : data?.data || [];
+        MOCK_USERS = list.map((u: any) => ({
+          id: String(u.id),
+          name: u.name,
+          role: u.role || "",
+        }));
+      })
+      .catch(() => {});
+    apiClient
+      .getCompanies({ limit: "200" })
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : data?.data || [];
+        MOCK_COMPANIES = list.map((c: any) => ({
+          id: String(c.id),
+          name: c.name,
+          accountType: c.account_type || "empresas",
+          userIds: [],
+        }));
+      })
+      .catch(() => {});
+  }, []);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
   const [couponToggle, setCouponToggle] = useState<{
     coupon: Coupon | null;
@@ -442,25 +477,54 @@ export default function CampanhasPage() {
     };
     try {
       if (editingCampaign) {
-        const updated = await apiClient.updateCampaign(editingCampaign.id, data);
-        setCampaigns((prev) =>
-          prev.map((c) => (c.id === editingCampaign.id ? { ...c, ...data, ...updated } : c)),
+        const updated = await apiClient.updateCampaign(
+          editingCampaign.id,
+          data,
         );
-        toast({ title: "Sucesso", description: "Campanha atualizada com sucesso" });
+        setCampaigns((prev) =>
+          prev.map((c) =>
+            c.id === editingCampaign.id ? { ...c, ...data, ...updated } : c,
+          ),
+        );
+        toast({
+          title: "Sucesso",
+          description: "Campanha atualizada com sucesso",
+        });
       } else {
-        const created = await apiClient.createCampaign({ ...data, activeReferrals: 0, totalEarned: 0, status: "active" });
-        setCampaigns((prev) => [...prev, { ...data, activeReferrals: 0, totalEarned: 0, status: "active" as const, id: created?.id || String(Date.now()), ...created }]);
+        const created = await apiClient.createCampaign({
+          ...data,
+          activeReferrals: 0,
+          totalEarned: 0,
+          status: "active",
+        });
+        setCampaigns((prev) => [
+          ...prev,
+          {
+            ...data,
+            activeReferrals: 0,
+            totalEarned: 0,
+            status: "active" as const,
+            id: created?.id || String(Date.now()),
+            ...created,
+          },
+        ]);
         toast({ title: "Sucesso", description: "Campanha criada com sucesso" });
       }
     } catch (e) {
-      toast({ title: "Erro", description: "Falha ao salvar campanha", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Falha ao salvar campanha",
+        variant: "destructive",
+      });
     }
     closeCampaignDialog();
   };
   const deleteCampaign = async (id: string) => {
-    try { await apiClient.deleteCampaign(id) } catch {}
+    try {
+      await apiClient.deleteCampaign(id);
+    } catch {}
     setCampaigns((prev) => prev.filter((c) => c.id !== id));
-  }
+  };
   const confirmCampaignToggle = () => {
     if (!campaignToggle.campaign) return;
     setCampaigns((prev) =>
@@ -556,26 +620,47 @@ export default function CampanhasPage() {
       if (editingCoupon) {
         const updated = await apiClient.updateCoupon(editingCoupon.id, data);
         setCoupons((prev) =>
-          prev.map((c) => (c.id === editingCoupon.id ? { ...c, ...data, ...updated } : c)),
+          prev.map((c) =>
+            c.id === editingCoupon.id ? { ...c, ...data, ...updated } : c,
+          ),
         );
-        toast({ title: "Sucesso", description: "Cupom atualizado com sucesso" });
+        toast({
+          title: "Sucesso",
+          description: "Cupom atualizado com sucesso",
+        });
       } else {
-        const created = await apiClient.createCoupon({ ...data, usedCount: 0, status: "active" });
+        const created = await apiClient.createCoupon({
+          ...data,
+          usedCount: 0,
+          status: "active",
+        });
         setCoupons((prev) => [
           ...prev,
-          { ...data, usedCount: 0, status: "active" as const, id: created?.id || String(Date.now()), ...created },
+          {
+            ...data,
+            usedCount: 0,
+            status: "active" as const,
+            id: created?.id || String(Date.now()),
+            ...created,
+          },
         ]);
         toast({ title: "Sucesso", description: "Cupom criado com sucesso" });
       }
     } catch {
-      toast({ title: "Erro", description: "Falha ao salvar cupom", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Falha ao salvar cupom",
+        variant: "destructive",
+      });
     }
     closeCouponDrawer();
   };
   const deleteCoupon = async (id: string) => {
-    try { await apiClient.deleteCoupon(id) } catch {}
+    try {
+      await apiClient.deleteCoupon(id);
+    } catch {}
     setCoupons((prev) => prev.filter((c) => c.id !== id));
-  }
+  };
   const confirmCouponToggle = () => {
     if (!couponToggle.coupon) return;
     setCoupons((prev) =>
@@ -929,6 +1014,10 @@ export default function CampanhasPage() {
       toast({ title: "Erro ao exportar PNG", variant: "destructive" });
     }
   };
+
+  if (pageLoading) {
+    return <PageLoader text="Carregando campanhas…" />;
+  }
 
   return (
     <div className="space-y-5" ref={pageRef}>

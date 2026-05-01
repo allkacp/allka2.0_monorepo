@@ -58,6 +58,7 @@ import type {
 } from "@/types/allkademy";
 import { PageHeader } from "@/components/page-header";
 import { useCourses, useEnrollments } from "@/hooks/useCourses";
+import { PageLoader } from "@/components/ui/loading";
 
 interface Module {
   id: number;
@@ -290,11 +291,7 @@ export default function AdminAllkademyPage() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoader text="Carregando Allkademy…" />;
   }
 
   return (
@@ -563,7 +560,9 @@ export default function AdminAllkademyPage() {
                                 <Input
                                   id="instructor"
                                   placeholder="Nome do instrutor"
-                                  defaultValue={selectedCourse?.instructor?.name}
+                                  defaultValue={
+                                    selectedCourse?.instructor?.name
+                                  }
                                 />
                               </div>
 

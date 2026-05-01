@@ -32,7 +32,7 @@ router.get("/", verifyToken, async (_req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const term = await prisma.term.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: { _count: { select: { acceptances: true } } },
     });
     if (!term) {
@@ -59,7 +59,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, res, next) => {
   try {
     const term = await prisma.term.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(term);
@@ -71,7 +71,7 @@ router.put("/:id", verifyToken, validate(createSchema.partial()), async (req, re
 // DELETE /api/terms/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.term.delete({ where: { id: req.params.id } });
+    await prisma.term.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -82,7 +82,7 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
 router.post("/:id/accept", verifyToken, async (req, res, next) => {
   try {
     const term = await prisma.term.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
     });
 
     if (!term || !term.is_active) {
@@ -93,12 +93,12 @@ router.post("/:id/accept", verifyToken, async (req, res, next) => {
     const acceptance = await prisma.termAcceptance.upsert({
       where: {
         term_id_user_id: {
-          term_id: req.params.id,
+          term_id: (req.params.id as string),
           user_id: req.user!.id,
         },
       },
       create: {
-        term_id: req.params.id,
+        term_id: (req.params.id as string),
         user_id: req.user!.id,
         ip_address:
           (req.headers["x-forwarded-for"] as string) ||
@@ -124,7 +124,7 @@ router.get("/:id/accepted", verifyToken, async (req, res, next) => {
     const acceptance = await prisma.termAcceptance.findUnique({
       where: {
         term_id_user_id: {
-          term_id: req.params.id,
+          term_id: (req.params.id as string),
           user_id: req.user!.id,
         },
       },

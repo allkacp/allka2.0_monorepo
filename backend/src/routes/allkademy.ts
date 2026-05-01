@@ -63,7 +63,7 @@ router.get("/courses", verifyToken, async (req, res, next) => {
 router.get("/courses/:id", verifyToken, async (req, res, next) => {
   try {
     const course = await prisma.course.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         modules: {
           include: { lessons: { orderBy: { order: "asc" } } },
@@ -98,7 +98,7 @@ router.post("/courses", verifyToken, validate(courseSchema), async (req, res, ne
 router.put("/courses/:id", verifyToken, validate(courseSchema.partial()), async (req, res, next) => {
   try {
     const course = await prisma.course.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(course);
@@ -110,7 +110,7 @@ router.put("/courses/:id", verifyToken, validate(courseSchema.partial()), async 
 // DELETE /api/allkademy/courses/:id
 router.delete("/courses/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.course.delete({ where: { id: req.params.id } });
+    await prisma.course.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -121,7 +121,7 @@ router.delete("/courses/:id", verifyToken, async (req, res, next) => {
 router.post("/courses/:id/modules", verifyToken, validate(moduleSchema), async (req, res, next) => {
   try {
     const module_ = await prisma.courseModule.create({
-      data: { ...req.body, course_id: req.params.id },
+      data: { ...req.body, course_id: (req.params.id as string) },
       include: { lessons: true },
     });
     res.status(201).json(module_);
@@ -134,7 +134,7 @@ router.post("/courses/:id/modules", verifyToken, validate(moduleSchema), async (
 router.post("/modules/:id/lessons", verifyToken, validate(lessonSchema), async (req, res, next) => {
   try {
     const lesson = await prisma.lesson.create({
-      data: { ...req.body, module_id: req.params.id },
+      data: { ...req.body, module_id: (req.params.id as string) },
     });
     res.status(201).json(lesson);
   } catch (err) {
@@ -148,12 +148,12 @@ router.post("/courses/:id/enroll", verifyToken, async (req, res, next) => {
     const enrollment = await prisma.courseEnrollment.upsert({
       where: {
         course_id_user_id: {
-          course_id: req.params.id,
+          course_id: (req.params.id as string),
           user_id: req.user!.id,
         },
       },
       create: {
-        course_id: req.params.id,
+        course_id: (req.params.id as string),
         user_id: req.user!.id,
       },
       update: {},
@@ -190,7 +190,7 @@ router.put("/enrollments/:course_id/progress", verifyToken,
       const enrollment = await prisma.courseEnrollment.update({
         where: {
           course_id_user_id: {
-            course_id: req.params.course_id,
+            course_id: (req.params.course_id as string),
             user_id: req.user!.id,
           },
         },

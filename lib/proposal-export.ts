@@ -1,6 +1,4 @@
 // @ts-nocheck
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 
 // ── Placeholder Schema ──────────────────────────────────────────────────────────
 
@@ -136,9 +134,18 @@ export interface ProposalData {
   TOTAL_VALOR: string;
   produtos: Array<{
     PRODUTO_NOME: string;
+    PRODUTO_CODIGO?: string;
+    PRODUTO_CATEGORIA?: string;
+    PRODUTO_VARIACAO?: string;
+    PRODUTO_RECORRENCIA?: string;
+    PRODUTO_PRAZO?: string;
     PRODUTO_QTD: number | string;
     PRODUTO_VALOR_UNIT: string;
     PRODUTO_VALOR_TOTAL: string;
+    /** Short description shown to the client */
+    PRODUTO_DESCRICAO?: string;
+    /** Up to 5 bullet points — what is included */
+    PRODUTO_INCLUSOS?: string[];
   }>;
 }
 
@@ -226,32 +233,102 @@ export function buildProposalData(
 
 // ── HTML Builder for PDF ─────────────────────────────────────────────────────────
 
+/** Renders one product card. Pure inline CSS so html-to-image captures it faithfully. */
+function buildProductCard(p: ProposalData["produtos"][0], i: number): string {
+  const qty = Number(p.PRODUTO_QTD);
+  const showUnit = qty > 1;
+
+  // ── tag pills ──────────────────────────────────────────────────────────────
+  const tags: string[] = [];
+  if (p.PRODUTO_CATEGORIA)
+    tags.push(
+      `<span style="display:inline-block;background:#f0f9ff;border:1px solid #bae6fd;border-radius:5px;padding:2px 9px;font-size:9.5px;color:#0369a1;font-weight:600;line-height:1.5;">${p.PRODUTO_CATEGORIA}</span>`,
+    );
+  if (p.PRODUTO_VARIACAO)
+    tags.push(
+      `<span style="display:inline-block;background:#faf5ff;border:1px solid #e9d5ff;border-radius:5px;padding:2px 9px;font-size:9.5px;color:#7c3aed;font-weight:600;line-height:1.5;">${p.PRODUTO_VARIACAO}</span>`,
+    );
+  if (p.PRODUTO_RECORRENCIA)
+    tags.push(
+      `<span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;padding:2px 9px;font-size:9.5px;color:#15803d;font-weight:600;line-height:1.5;">${p.PRODUTO_RECORRENCIA}</span>`,
+    );
+  if (p.PRODUTO_PRAZO)
+    tags.push(
+      `<span style="display:inline-block;background:#fefce8;border:1px solid #fde68a;border-radius:5px;padding:2px 9px;font-size:9.5px;color:#92400e;font-weight:600;line-height:1.5;">Prazo: ${p.PRODUTO_PRAZO}</span>`,
+    );
+  const tagsHtml = tags.length
+    ? `<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:4px;">${tags.join("")}</div>`
+    : "";
+
+  // ── body ──────────────────────────────────────────────────────────────────
+  const descHtml = p.PRODUTO_DESCRICAO
+    ? `<p style="font-size:11.5px;color:#475569;line-height:1.65;margin:0 0 10px 0;">${p.PRODUTO_DESCRICAO}</p>`
+    : "";
+
+  const inclusosHtml =
+    p.PRODUTO_INCLUSOS && p.PRODUTO_INCLUSOS.length > 0
+      ? `<div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;font-weight:700;margin-bottom:7px;">O que está incluso</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>${p.PRODUTO_INCLUSOS.map(
+              (item) =>
+                `<td style="width:50%;vertical-align:top;padding:0 8px 5px 0;">
+                  <div style="display:flex;align-items:flex-start;gap:7px;">
+                    <div style="width:5px;height:5px;min-width:5px;border-radius:50%;background:#6366f1;margin-top:4px;"></div>
+                    <span style="font-size:11px;color:#334155;line-height:1.5;">${item}</span>
+                  </div>
+                </td>`,
+            ).reduce((acc, td, idx) => {
+              // Group into pairs → one <tr> per pair
+              if (idx % 2 === 0) return acc + `</tr><tr>${td}`;
+              return acc + td;
+            }, "")}</tr>
+          </table>
+        </div>`
+      : "";
+
+  const hasBody = !!(descHtml || inclusosHtml);
+
+  return `
+  <div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;">
+    <!-- Card header -->
+    <table style="width:100%;border-collapse:collapse;${hasBody ? "border-bottom:1px solid #f1f5f9;" : ""}">
+      <tr>
+        <!-- Number badge column -->
+        <td style="width:38px;min-width:38px;background:linear-gradient(180deg,#6366f1 0%,#8b5cf6 100%);text-align:center;vertical-align:middle;padding:12px 0;font-size:13px;font-weight:800;color:#fff;">
+          ${i + 1}
+        </td>
+        <!-- Name + meta -->
+        <td style="padding:12px 14px;background:#f8fafc;vertical-align:top;">
+          <div style="font-size:13.5px;font-weight:700;color:#0f172a;line-height:1.25;">${p.PRODUTO_NOME}</div>
+          ${p.PRODUTO_CODIGO ? `<div style="font-size:10px;color:#94a3b8;font-family:monospace;margin-top:3px;">${p.PRODUTO_CODIGO}</div>` : ""}
+          ${tagsHtml}
+        </td>
+        <!-- Price block -->
+        <td style="padding:12px 16px;background:#f8fafc;border-left:1px solid #e2e8f0;text-align:right;width:130px;vertical-align:middle;">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Qtd: ${p.PRODUTO_QTD}</div>
+          <div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.15;">${p.PRODUTO_VALOR_TOTAL}</div>
+          ${showUnit ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px;">${p.PRODUTO_VALOR_UNIT}/un.</div>` : ""}
+        </td>
+      </tr>
+    </table>
+    ${
+      hasBody
+        ? `<!-- Card body -->
+    <div style="padding:12px 14px 14px 52px;">
+      ${descHtml}${inclusosHtml}
+    </div>`
+        : ""
+    }
+  </div>`;
+}
+
 function buildProposalHTML(
   data: ProposalData,
   brandConfig: BrandConfig,
 ): string {
-  // Product rows — numbered, alternating background
-  const productRows = data.produtos
-    .map(
-      (p, i) => `
-    <tr>
-      <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;vertical-align:top;">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-          <div style="min-width:22px;height:22px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#94a3b8;flex-shrink:0;margin-top:1px;">${i + 1}</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;color:#0f172a;line-height:1.3;">${p.PRODUTO_NOME}</div>
-          </div>
-        </div>
-      </td>
-      <td style="padding:13px 16px;text-align:center;border-bottom:1px solid #f1f5f9;vertical-align:middle;">
-        <div style="display:inline-block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;color:#334155;">${p.PRODUTO_QTD}</div>
-      </td>
-      <td style="padding:13px 16px;text-align:right;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:12px;color:#64748b;">${p.PRODUTO_VALOR_UNIT}</td>
-      <td style="padding:13px 16px;text-align:right;border-bottom:1px solid #f1f5f9;vertical-align:middle;">
-        <span style="font-size:13px;font-weight:700;color:#0f172a;">${p.PRODUTO_VALOR_TOTAL}</span>
-      </td>
-    </tr>`,
-    )
+  const productCards = data.produtos
+    .map((p, i) => buildProductCard(p, i))
     .join("");
 
   const hasProducts = data.produtos.length > 0;
@@ -372,19 +449,7 @@ function buildProposalHTML(
         <div style="width:3px;height:18px;background:linear-gradient(to bottom,#0ea5e9,#6366f1);border-radius:2px;flex-shrink:0;"></div>
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#0ea5e9;font-weight:700;">Produtos &amp; Serviços Incluídos</div>
       </div>
-      <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="background:#f8fafc;">
-              <th style="padding:11px 16px;font-size:9px;text-align:left;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid #e2e8f0;">Produto / Serviço</th>
-              <th style="padding:11px 16px;font-size:9px;text-align:center;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid #e2e8f0;width:60px;">Qtd</th>
-              <th style="padding:11px 16px;font-size:9px;text-align:right;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid #e2e8f0;width:110px;">Unit.</th>
-              <th style="padding:11px 16px;font-size:9px;text-align:right;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid #e2e8f0;width:120px;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${productRows}</tbody>
-        </table>
-      </div>
+      ${productCards}
     </div>
 
     <!-- Total em destaque -->
@@ -429,50 +494,96 @@ function buildProposalHTML(
 </div>`;
 }
 
-// ── PDF Export (html2canvas + jsPDF) ─────────────────────────────────────────────
+// ── PDF Export (html-to-image + jsPDF) ───────────────────────────────────────────────
+
+/** Loads an image URL as a base64 data URL to avoid CORS taint in html2canvas.
+ *  Falls back to null if the image cannot be loaded. */
+async function loadImageAsDataURL(src: string): Promise<string | null> {
+  if (!src) return null;
+  try {
+    const response = await fetch(src);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the natural pixel dimensions of a dataURL image. */
+function getImageDimensions(
+  src: string,
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () =>
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 1588, height: 2245 }); // A4 @ 2x fallback
+    img.src = src;
+  });
+}
 
 export async function exportProposalPDF(
   data: ProposalData,
   brandConfig: BrandConfig,
   filename = "proposta.pdf",
 ): Promise<void> {
+  // Pre-load logo as data URL so html2canvas never has to make a cross-origin
+  // request — avoids SecurityError from canvas.toDataURL() on a tainted canvas.
+  const logoDataUrl = await loadImageAsDataURL(brandConfig.logoUrl);
+  const resolvedBrandConfig: BrandConfig = {
+    ...brandConfig,
+    logoUrl: logoDataUrl ?? "",
+  };
+
   const container = document.createElement("div");
   container.style.cssText =
     "position:absolute;left:-9999px;top:0;width:794px;pointer-events:none;";
-  container.innerHTML = buildProposalHTML(data, brandConfig);
+  container.innerHTML = buildProposalHTML(data, resolvedBrandConfig);
   document.body.appendChild(container);
   try {
-    const canvas = await html2canvas(
-      container.firstElementChild as HTMLElement,
-      {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-        windowWidth: 794,
-      },
-    );
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
+    const element = container.firstElementChild as HTMLElement | null;
+    if (!element)
+      throw new Error("Falha ao montar a estrutura HTML da proposta.");
+
+    // Dynamic imports — html-to-image handles modern CSS natively
+    // and is the established rendering engine used across this platform.
+    const [{ toPng }, { jsPDF: JsPDF }] = await Promise.all([
+      import("html-to-image"),
+      import("jspdf"),
+    ]);
+    const dataUrl = await toPng(element, {
+      pixelRatio: 2,
+      backgroundColor: "#ffffff",
+      width: element.offsetWidth || 794,
+      cacheBust: true,
+    });
+    const { width: pxW, height: pxH } = await getImageDimensions(dataUrl);
+    const pdf = new JsPDF({
       orientation: "portrait",
       unit: "pt",
       format: "a4",
     });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgHeight = (canvas.height * pageWidth) / canvas.width;
+    const imgHeight = (pxH / pxW) * pageWidth;
     let heightLeft = imgHeight;
     let position = 0;
-    pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+    pdf.addImage(dataUrl, "PNG", 0, position, pageWidth, imgHeight);
     heightLeft -= pageHeight;
     while (heightLeft > 0) {
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      pdf.addImage(dataUrl, "PNG", 0, position, pageWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    pdf.save(filename);
+    // jsPDF v4: save() returns Promise<void>
+    await pdf.save(filename);
   } finally {
     document.body.removeChild(container);
   }
@@ -518,34 +629,36 @@ export async function customDocxToPDF(
   container.innerHTML = result.value;
   document.body.appendChild(container);
   try {
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
+    const [{ toPng }, { jsPDF: JsPDF }] = await Promise.all([
+      import("html-to-image"),
+      import("jspdf"),
+    ]);
+    const dataUrl = await toPng(container, {
+      pixelRatio: 2,
       backgroundColor: "#ffffff",
-      windowWidth: 794,
+      width: container.offsetWidth || 794,
+      cacheBust: true,
     });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
+    const { width: pxW, height: pxH } = await getImageDimensions(dataUrl);
+    const pdf = new JsPDF({
       orientation: "portrait",
       unit: "pt",
       format: "a4",
     });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgHeight = (canvas.height * pageWidth) / canvas.width;
+    const imgHeight = (pxH / pxW) * pageWidth;
     let heightLeft = imgHeight;
     let position = 0;
-    pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+    pdf.addImage(dataUrl, "PNG", 0, position, pageWidth, imgHeight);
     heightLeft -= pageHeight;
     while (heightLeft > 0) {
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      pdf.addImage(dataUrl, "PNG", 0, position, pageWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    pdf.save(filename);
+    await pdf.save(filename);
   } finally {
     document.body.removeChild(container);
   }

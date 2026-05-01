@@ -988,3 +988,55 @@
 .dark .dark\:border-gray-800 {
   border-color: var(--border) !important;
 }
+
+/* ============================================================
+   ALLKA LOADING SYSTEM — animações e classes utilitárias
+   ============================================================ */
+
+/* Spin contínuo para o anel do spinner */
+@keyframes allka-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Halo pulsante ao redor do spinner grande (PageLoader) */
+@keyframes allka-halo {
+  0%   { opacity: 0.20; transform: scale(0.88); }
+  100% { opacity: 0.45; transform: scale(1.18); }
+}
+
+/* Bounce sequencial dos três pontos do PulseDots */
+@keyframes allka-pulse-dot {
+  0%, 70%, 100% { transform: translateY(0)    scale(0.75); opacity: 0.45; }
+  35%            { transform: translateY(-4px) scale(1);    opacity: 1;   }
+}
+
+/* Shimmer horizontal para skeleton rows */
+@keyframes allka-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Classe utilitária: skeleton shimmer */
+.allka-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.91 0.005 255) 25%,
+    oklch(0.95 0.004 255) 50%,
+    oklch(0.91 0.005 255) 75%
+  );
+  background-size: 200% 100%;
+  animation: allka-shimmer 1.6s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+.dark .allka-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.22 0.022 258) 25%,
+    oklch(0.26 0.020 258) 50%,
+    oklch(0.22 0.022 258) 75%
+  );
+  background-size: 200% 100%;
+  animation: allka-shimmer 1.6s ease-in-out infinite;
+}

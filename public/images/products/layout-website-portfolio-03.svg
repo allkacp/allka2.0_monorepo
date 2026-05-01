@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0b1640"/>
+      <stop offset="55%" style="stop-color:#14205e"/>
+      <stop offset="100%" style="stop-color:#1e0e5c"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2558FF"/>
+      <stop offset="100%" style="stop-color:#6E2C96"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="rgba(0,0,0,0.65)"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="700" cy="60" r="140" fill="rgba(37,88,255,0.05)" stroke="rgba(37,88,255,0.07)" stroke-width="1.5"/>
+
+  <rect x="30" y="22" width="150" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">LANDING PAGE</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Landing Page de Alta Conversão</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Design otimizado para captar leads e converter visitantes</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Landing page desktop mockup (wide) -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="128" width="680" height="290" rx="8" fill="#111827"/>
+    <!-- Browser bar -->
+    <rect x="60" y="128" width="680" height="28" rx="8" fill="#1f2937"/>
+    <rect x="60" y="145" width="680" height="11" rx="0" fill="#1f2937"/>
+    <circle cx="80" cy="142" r="4" fill="#ff5f57"/>
+    <circle cx="94" cy="142" r="4" fill="#ffbd2e"/>
+    <circle cx="108" cy="142" r="4" fill="#28ca41"/>
+    <rect x="160" y="134" width="240" height="14" rx="7" fill="#111827"/>
+
+    <!-- Hero section -->
+    <rect x="60" y="156" width="680" height="130" fill="url(#hero)" opacity="0.88"/>
+    <!-- Nav inside hero -->
+    <rect x="80" y="162" width="55" height="10" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="500" y="164" width="36" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="546" y="164" width="36" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="592" y="164" width="36" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="638" y="160" width="84" height="16" rx="8" fill="rgba(255,255,255,0.95)"/>
+    <text x="680" y="171" font-family="system-ui,sans-serif" font-size="8" fill="#2558FF" text-anchor="middle" font-weight="700">Falar agora →</text>
+    <!-- Hero headline -->
+    <text x="240" y="202" font-family="system-ui,sans-serif" font-size="18" fill="#ffffff" font-weight="800" text-anchor="middle">Transforme seus Resultados</text>
+    <text x="240" y="218" font-family="system-ui,sans-serif" font-size="10" fill="rgba(255,255,255,0.75)" text-anchor="middle">Soluções digitais que impulsionam seu negócio</text>
+    <!-- CTA buttons row -->
+    <rect x="145" y="228" width="100" height="22" rx="11" fill="rgba(255,255,255,0.95)"/>
+    <text x="195" y="243" font-family="system-ui,sans-serif" font-size="9" fill="#2558FF" text-anchor="middle" font-weight="700">Começar agora →</text>
+    <rect x="257" y="228" width="80" height="22" rx="11" fill="transparent" stroke="rgba(255,255,255,0.7)" stroke-width="1.2"/>
+    <text x="297" y="243" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle">Ver portfólio</text>
+    <!-- Hero mockup image side -->
+    <rect x="430" y="168" width="290" height="112" rx="4" fill="rgba(255,255,255,0.08)"/>
+    <rect x="440" y="176" width="270" height="96" rx="3" fill="rgba(255,255,255,0.06)"/>
+    <!-- fake dashboard bars in hero image -->
+    <rect x="455" y="195" width="20" height="60" rx="2" fill="rgba(255,255,255,0.25)"/>
+    <rect x="482" y="210" width="20" height="45" rx="2" fill="rgba(255,255,255,0.2)"/>
+    <rect x="509" y="202" width="20" height="53" rx="2" fill="rgba(255,255,255,0.3)"/>
+    <rect x="536" y="185" width="20" height="70" rx="2" fill="rgba(255,255,255,0.25)"/>
+    <rect x="563" y="215" width="20" height="40" rx="2" fill="rgba(255,255,255,0.2)"/>
+    <rect x="590" y="200" width="20" height="55" rx="2" fill="rgba(255,255,255,0.25)"/>
+    <rect x="617" y="190" width="20" height="65" rx="2" fill="rgba(255,255,255,0.3)"/>
+    <rect x="644" y="222" width="20" height="33" rx="2" fill="rgba(255,255,255,0.2)"/>
+
+    <!-- Social proof strip -->
+    <rect x="60" y="286" width="680" height="36" rx="0" fill="rgba(37,88,255,0.12)" stroke="rgba(37,88,255,0.15)" stroke-width="0.5"/>
+    <text x="200" y="308" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">★★★★★</text>
+    <text x="260" y="308" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">+500 clientes satisfeitos</text>
+    <text x="450" y="308" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">|</text>
+    <text x="510" y="308" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">10 anos de experiência</text>
+    <text x="660" y="308" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">|</text>
+
+    <!-- Feature blocks -->
+    <rect x="80" y="330" width="190" height="72" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <rect x="295" y="330" width="190" height="72" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <rect x="510" y="330" width="200" height="72" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <rect x="95" y="344" width="80" height="7" rx="2" fill="#ffffff20"/>
+    <rect x="95" y="358" width="160" height="4" rx="2" fill="#ffffff10"/>
+    <rect x="95" y="367" width="140" height="4" rx="2" fill="#ffffff08"/>
+    <rect x="310" y="344" width="80" height="7" rx="2" fill="#ffffff20"/>
+    <rect x="310" y="358" width="160" height="4" rx="2" fill="#ffffff10"/>
+    <rect x="310" y="367" width="140" height="4" rx="2" fill="#ffffff08"/>
+    <rect x="526" y="344" width="80" height="7" rx="2" fill="#ffffff20"/>
+    <rect x="526" y="358" width="160" height="4" rx="2" fill="#ffffff10"/>
+    <rect x="526" y="367" width="140" height="4" rx="2" fill="#ffffff08"/>
+
+    <!-- Footer bar -->
+    <rect x="60" y="406" width="680" height="12" rx="0" fill="#0d1126"/>
+    <rect x="60" y="408" width="680" height="10" rx="8" fill="#0d1126"/>
+  </g>
+
+  <!-- Badges -->
+  <rect x="30" y="424" width="130" height="22" rx="11" fill="rgba(37,88,255,0.15)" stroke="rgba(37,88,255,0.35)" stroke-width="1"/>
+  <text x="95" y="439" font-family="system-ui,sans-serif" font-size="10" fill="#60a5fa" text-anchor="middle" font-weight="600">Alta conversão</text>
+  <rect x="172" y="424" width="120" height="22" rx="11" fill="rgba(110,44,150,0.15)" stroke="rgba(110,44,150,0.35)" stroke-width="1"/>
+  <text x="232" y="439" font-family="system-ui,sans-serif" font-size="10" fill="#c084fc" text-anchor="middle" font-weight="600">CTA otimizado</text>
+  <rect x="304" y="424" width="130" height="22" rx="11" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="369" y="439" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="600">Prova social</text>
+</svg>

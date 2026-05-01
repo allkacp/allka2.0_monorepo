@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -127,6 +127,7 @@ export default function AdminProjetosPage() {
   const {
     projects: apiProjects,
     loading: projectsLoading,
+    error: projectsError,
     refetch: refetchProjects,
     setProjects: setApiProjects,
   } = useProjects();
@@ -216,6 +217,7 @@ export default function AdminProjetosPage() {
   );
   const [savedFilterName, setSavedFilterName] = useState("");
   const [isSavingFilter, setIsSavingFilter] = useState(false);
+  const [isCancellingProject, setIsCancellingProject] = useState(false);
 
   // column visibility
   const ALL_COLS = [
@@ -312,11 +314,9 @@ export default function AdminProjetosPage() {
 
   const [projectsData, setProjectsData] = useState<FrontendProject[]>([]);
 
-  // Sync API data into local state when loaded
+  // Sync API data into local state when loaded (including empty array)
   useEffect(() => {
-    if (apiProjects.length > 0) {
-      setProjectsData(apiProjects);
-    }
+    setProjectsData(apiProjects);
   }, [apiProjects]);
 
   const [showColumnDialog, setShowColumnDialog] = useState(false);
@@ -1015,25 +1015,35 @@ export default function AdminProjetosPage() {
       .filter((p) => p.overdue)
       .reduce((sum, p) => sum + (p.budget - p.spent), 0);
 
-    // Calculate MRR (Monthly Recurring Revenue) based on active projects
-    const mrr = Math.round(
-      totalRevenue /
-        (dateRange?.from && dateRange?.to
-          ? Math.ceil(
+    // Calculate MRR: total revenue of active/in-progress projects divided by period months
+    const activeRevenue = statsFilteredProjects
+      .filter((p) => p.status === "in-progress")
+      .reduce((sum, p) => sum + p.budget, 0);
+    const periodMonths =
+      dateRange?.from && dateRange?.to
+        ? Math.max(
+            1,
+            Math.ceil(
               (dateRange.to.getTime() - dateRange.from.getTime()) /
                 (1000 * 60 * 60 * 24),
-            ) / 30
-          : 1) || 45000,
-    );
+            ) / 30,
+          )
+        : 1;
+    const mrr = Math.round(activeRevenue / periodMonths);
 
     // Calculate growth percentages
     const mrrGrowth =
       totalProjects > 0
         ? ((activeProjects / totalProjects) * 100).toFixed(1)
         : 0;
-    const avulsosAtivos = totalProjects * 0.5; // Approximate avulsos
+    // avulsosAtivos: projects without a linked client company (truly one-off)
+    const avulsosAtivos = statsFilteredProjects.filter(
+      (p) => !p.companyId || p.companyId === "" || p.companyId === 0,
+    ).length;
     const avulsosGrowth =
-      totalProjects > 0 ? ((avulsosAtivos / totalProjects) * 10).toFixed(1) : 0;
+      totalProjects > 0
+        ? ((avulsosAtivos / totalProjects) * 100).toFixed(1)
+        : 0;
     const churnRate =
       totalProjects > 0
         ? ((churnProjects / totalProjects) * 100).toFixed(1)
@@ -1166,7 +1176,7 @@ export default function AdminProjetosPage() {
         })),
       },
     };
-  }, [dateRange, filterFromLead]);
+  }, [projectsData, dateRange, filterFromLead]);
 
   const handleEditProject = (project: FrontendProject) => {
     setSelectedProject(project);
@@ -1235,7 +1245,7 @@ export default function AdminProjetosPage() {
 
   const handleConfirmCancel = async () => {
     if (!projectToCancel) return;
-
+    setIsCancellingProject(true);
     try {
       await apiClient.updateProject(projectToCancel.id, {
         status: "cancelled",
@@ -1259,6 +1269,7 @@ export default function AdminProjetosPage() {
     setModalOpen(false);
     setShowCancelWizard(false);
     setProjectToCancel(null);
+    setIsCancellingProject(false);
     setCancelReason("");
     setCancelStep(1);
   };
@@ -1529,9 +1540,27 @@ export default function AdminProjetosPage() {
   };
 
   if (projectsLoading) {
+    return <PageLoader text="Carregando projetos…" />;
+  }
+
+  if (projectsError) {
     return (
       <div className="space-y-5">
-        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={7} />
+        <div className="flex items-center gap-3 p-5 bg-red-50 border border-red-200 rounded-xl text-red-700">
+          <AlertTriangle className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-sm">
+              Não foi possível carregar os projetos
+            </p>
+            <p className="text-xs mt-0.5 text-red-500">{projectsError}</p>
+          </div>
+          <button
+            onClick={refetchProjects}
+            className="shrink-0 text-xs font-medium underline hover:no-underline"
+          >
+            Tentar novamente
+          </button>
+        </div>
       </div>
     );
   }
@@ -1702,9 +1731,9 @@ export default function AdminProjetosPage() {
                         R${(stats.mrr / 1000).toFixed(0)}k
                       </p>
                       <div className="flex items-center gap-1 mt-1.5">
-                        <ArrowUpRight className="h-3 w-3 text-white/80" />
+                        <Zap className="h-3 w-3 text-white/80" />
                         <span className="text-xs font-bold text-white/80">
-                          +{stats.mrrGrowth}%
+                          {stats.activeProjects} em andamento
                         </span>
                       </div>
                     </div>
@@ -4537,14 +4566,20 @@ export default function AdminProjetosPage() {
                       setCancelReason("");
                       setCancelStep(1);
                     }}
+                    disabled={isCancellingProject}
                   >
                     Cancelar Operação
                   </Button>
                   <Button
                     onClick={handleConfirmCancel}
                     className="bg-red-600 hover:bg-red-700"
+                    disabled={isCancellingProject}
                   >
-                    Confirmar Cancelamento
+                    {isCancellingProject ? (
+                      <ButtonLoader text="Cancelando…" />
+                    ) : (
+                      "Confirmar Cancelamento"
+                    )}
                   </Button>
                 </DialogFooter>
               </>

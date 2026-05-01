@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1f3e"/>
+      <stop offset="60%" style="stop-color:#1a2a5e"/>
+      <stop offset="100%" style="stop-color:#2d1a5e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c9a84c"/>
+      <stop offset="100%" style="stop-color:#8b6914"/>
+    </linearGradient>
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e2e"/>
+      <stop offset="100%" style="stop-color:#2d1a4e"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.7)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="680" cy="80" r="140" fill="rgba(201,168,76,0.05)" stroke="rgba(201,168,76,0.08)" stroke-width="1.5"/>
+  <circle cx="120" cy="380" r="100" fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.07)" stroke-width="1"/>
+
+  <!-- Header label -->
+  <rect x="30" y="22" width="180" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">CARTÃO DE VISITA</text>
+
+  <!-- Title -->
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Design de Cartão de Visita</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Frente e verso com identidade visual completa</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Card front (larger, centered left) -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="140" width="280" height="160" rx="10" fill="url(#cardBg)"/>
+    <!-- accent strip left -->
+    <rect x="100" y="140" width="8" height="160" rx="10" fill="url(#gold)"/>
+    <!-- logo area -->
+    <circle cx="152" cy="180" r="20" fill="rgba(201,168,76,0.2)" stroke="rgba(201,168,76,0.5)" stroke-width="1.5"/>
+    <text x="152" y="185" font-family="system-ui,sans-serif" font-size="14" fill="#c9a84c" text-anchor="middle" font-weight="900">A</text>
+    <!-- name -->
+    <text x="185" y="172" font-family="system-ui,sans-serif" font-size="14" fill="#ffffff" font-weight="700">Empresa Exemplo</text>
+    <text x="185" y="188" font-family="system-ui,sans-serif" font-size="11" fill="#c9a84c">Marketing &amp; Branding</text>
+    <!-- divider -->
+    <line x1="120" y1="210" x2="360" y2="210" stroke="rgba(201,168,76,0.2)" stroke-width="1"/>
+    <!-- contact info lines -->
+    <rect x="120" y="222" width="90" height="4" rx="2" fill="#ffffff20"/>
+    <rect x="120" y="234" width="120" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="120" y="246" width="100" height="4" rx="2" fill="#ffffff15"/>
+    <!-- website tag -->
+    <rect x="240" y="255" width="120" height="22" rx="4" fill="rgba(201,168,76,0.15)" stroke="rgba(201,168,76,0.3)" stroke-width="1"/>
+    <text x="300" y="270" font-family="system-ui,sans-serif" font-size="10" fill="#c9a84c" text-anchor="middle">www.empresa.com.br</text>
+  </g>
+
+  <!-- Card back (slightly rotated, behind) -->
+  <g filter="url(#shadow)" transform="rotate(5, 530, 225)">
+    <rect x="420" y="145" width="280" height="160" rx="10" fill="url(#gold)"/>
+    <!-- pattern overlay -->
+    <rect x="420" y="145" width="280" height="160" rx="10" fill="none" stroke="#ffffff08" stroke-width="40"/>
+    <!-- logo big centered -->
+    <circle cx="560" cy="210" r="35" fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+    <text x="560" y="215" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" text-anchor="middle" font-weight="900">A</text>
+    <!-- slogan line -->
+    <rect x="490" y="256" width="140" height="3" rx="1.5" fill="rgba(255,255,255,0.5)"/>
+    <rect x="510" y="264" width="100" height="2" rx="1" fill="rgba(255,255,255,0.3)"/>
+  </g>
+
+  <!-- Badges -->
+  <rect x="30" y="368" width="130" height="26" rx="13" fill="rgba(201,168,76,0.15)" stroke="rgba(201,168,76,0.35)" stroke-width="1"/>
+  <text x="95" y="385" font-family="system-ui,sans-serif" font-size="11" fill="#c9a84c" text-anchor="middle" font-weight="600">PDF alta resolução</text>
+  <rect x="172" y="368" width="120" height="26" rx="13" fill="rgba(124,58,237,0.15)" stroke="rgba(124,58,237,0.35)" stroke-width="1"/>
+  <text x="232" y="385" font-family="system-ui,sans-serif" font-size="11" fill="#a78bfa" text-anchor="middle" font-weight="600">Arquivo AI editável</text>
+  <rect x="304" y="368" width="140" height="26" rx="13" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="374" y="385" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="600">Frente &amp; Verso</text>
+</svg>

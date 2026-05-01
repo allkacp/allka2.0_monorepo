@@ -6,6 +6,7 @@ import {
   type PendingTerm,
 } from "@/components/term-acceptance-gate";
 import { apiClient } from "@/lib/api-client";
+import { PageLoader as BrandPageLoader } from "@/components/ui/loading";
 
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
@@ -49,6 +50,13 @@ const AdminCatalogoProdutosPage = React.lazy(
 );
 const AdminPrecificacaoPage = React.lazy(
   () => import("@/app/admin/precificacao/page"),
+);
+const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
+const AdminModelosTarefasPage = React.lazy(
+  () => import("@/app/admin/modelos-tarefas/page"),
+);
+const AdminTarefasExecucaoPage = React.lazy(
+  () => import("@/app/admin/tarefas-execucao/page"),
 );
 const AdminNiveisPage = React.lazy(() => import("@/app/admin/niveis/page"));
 const AdminNiveisNomades = React.lazy(
@@ -193,11 +201,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const PageLoader = () => (
-  <div className="flex items-center justify-center h-full">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-  </div>
-);
+const PageLoader = () => <BrandPageLoader text="Carregando…" />;
 
 class PageErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -459,6 +463,11 @@ export default function App() {
                   <Route
                     path="/admin/precificacao"
                     element={<AdminPrecificacaoPage />}
+                  />
+                  <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
+                  <Route
+                    path="/admin/modelos-tarefas"
+                    element={<AdminModelosTarefasPage />}
                   />
                   <Route path="/admin/niveis" element={<AdminNiveisPage />} />
                   <Route

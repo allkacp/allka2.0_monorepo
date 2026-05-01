@@ -17,6 +17,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/ui/loading";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -50,13 +51,24 @@ const STATUS_CONFIG = {
 } as const;
 
 export default function ParceiroAgencias() {
-  const { ledAgencies } = usePartner();
+  const { ledAgencies, loading } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
+  const {
+    sortKey,
+    sortDir,
+    handleSort,
+    sortData,
+    columnFilters,
+    toggleColumnFilter,
+    clearColumnFilter,
+  } = useSorting();
 
   const totalMrr = ledAgencies.reduce((s, a) => s + a.mrr, 0);
-  const totalCommission = ledAgencies.reduce((s, a) => s + a.commissionAmount, 0);
+  const totalCommission = ledAgencies.reduce(
+    (s, a) => s + a.commissionAmount,
+    0,
+  );
   const activeCount = ledAgencies.filter((a) => a.status === "active").length;
   const atRiskCount = ledAgencies.filter((a) => a.status === "at_risk").length;
 
@@ -68,6 +80,10 @@ export default function ParceiroAgencias() {
     const matchStatus = statusFilter === "all" || a.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  if (loading) {
+    return <PageLoader text="Carregando agências…" />;
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -86,7 +102,9 @@ export default function ParceiroAgencias() {
             <Users className="h-3.5 w-3.5" />
             Total de Agências
           </div>
-          <p className="text-2xl font-bold text-slate-900">{ledAgencies.length}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {ledAgencies.length}
+          </p>
           <p className="text-xs text-emerald-600 mt-1">{activeCount} ativas</p>
         </div>
 
@@ -95,7 +113,9 @@ export default function ParceiroAgencias() {
             <TrendingUp className="h-3.5 w-3.5" />
             MRR Total
           </div>
-          <p className="text-2xl font-bold text-slate-900">{fmtBRL(totalMrr)}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {fmtBRL(totalMrr)}
+          </p>
           <p className="text-xs text-slate-400 mt-1">consumo mensal</p>
         </div>
 
@@ -104,7 +124,9 @@ export default function ParceiroAgencias() {
             <Building2 className="h-3.5 w-3.5" />
             Comissão Mensal
           </div>
-          <p className="text-2xl font-bold text-slate-900">{fmtBRL(totalCommission)}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {fmtBRL(totalCommission)}
+          </p>
           <p className="text-xs text-slate-400 mt-1">5% sobre MRR</p>
         </div>
 
@@ -115,7 +137,8 @@ export default function ParceiroAgencias() {
           </div>
           <p className="text-2xl font-bold text-slate-900">{atRiskCount}</p>
           <p className="text-xs text-amber-600 mt-1">
-            {ledAgencies.filter((a) => a.status === "onboarding").length} em onboarding
+            {ledAgencies.filter((a) => a.status === "onboarding").length} em
+            onboarding
           </p>
         </div>
       </div>
@@ -142,7 +165,7 @@ export default function ParceiroAgencias() {
             >
               {s === "all"
                 ? "Todos"
-                : STATUS_CONFIG[s as keyof typeof STATUS_CONFIG]?.label ?? s}
+                : (STATUS_CONFIG[s as keyof typeof STATUS_CONFIG]?.label ?? s)}
             </Button>
           ))}
         </div>
@@ -155,32 +178,97 @@ export default function ParceiroAgencias() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Agência" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader
+                    label="Agência"
+                    field="name"
+                    type="text"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Plano" field="plan" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["500","1000","2000"]} />
+                  <SortableHeader
+                    label="Plano"
+                    field="plan"
+                    type="status"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    columnFilters={columnFilters}
+                    onFilter={toggleColumnFilter}
+                    onClearFilter={clearColumnFilter}
+                    filterValues={["500", "1000", "2000"]}
+                  />
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="MRR" field="mrr" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader
+                    label="MRR"
+                    field="mrr"
+                    type="number"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Comissão" field="commissionAmount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader
+                    label="Comissão"
+                    field="commissionAmount"
+                    type="number"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Projetos" field="projectsCount" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader
+                    label="Projetos"
+                    field="projectsCount"
+                    type="number"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["active","onboarding","at_risk","inactive"]} />
+                  <SortableHeader
+                    label="Status"
+                    field="status"
+                    type="status"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    columnFilters={columnFilters}
+                    onFilter={toggleColumnFilter}
+                    onClearFilter={clearColumnFilter}
+                    filterValues={[
+                      "active",
+                      "onboarding",
+                      "at_risk",
+                      "inactive",
+                    ]}
+                  />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <SortableHeader label="Última atividade" field="lastActivity" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader
+                    label="Última atividade"
+                    field="lastActivity"
+                    type="date"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400 text-sm">
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-slate-400 text-sm"
+                  >
                     Nenhuma agência encontrada.
                   </td>
                 </tr>
@@ -189,18 +277,29 @@ export default function ParceiroAgencias() {
                   const cfg = STATUS_CONFIG[agency.status];
                   const StatusIcon = cfg.icon;
                   return (
-                    <tr key={agency.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr
+                      key={agency.id}
+                      className="hover:bg-slate-50/50 transition-colors"
+                    >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900">{agency.name}</p>
+                        <p className="font-medium text-slate-900">
+                          {agency.name}
+                        </p>
                         <p className="text-xs text-slate-400">{agency.email}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-slate-600">
-                          {agency.plan === "0" ? "Freemium" : `R$ ${agency.plan}/mês`}
+                          {agency.plan === "0"
+                            ? "Freemium"
+                            : `R$ ${agency.plan}/mês`}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-slate-900">
-                        {agency.mrr > 0 ? fmtBRL(agency.mrr) : <span className="text-slate-400">—</span>}
+                        {agency.mrr > 0 ? (
+                          fmtBRL(agency.mrr)
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {agency.commissionAmount > 0 ? (
@@ -215,7 +314,9 @@ export default function ParceiroAgencias() {
                         {agency.totalProjects}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge className={`${cfg.bg} border-0 gap-1 text-xs font-medium`}>
+                        <Badge
+                          className={`${cfg.bg} border-0 gap-1 text-xs font-medium`}
+                        >
                           <StatusIcon className="h-3 w-3" />
                           {cfg.label}
                         </Badge>
@@ -233,8 +334,12 @@ export default function ParceiroAgencias() {
 
         {filtered.length > 0 && (
           <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-            <span>{filtered.length} agência{filtered.length !== 1 ? "s" : ""}</span>
-            <span>MRR total: {fmtBRL(filtered.reduce((s, a) => s + a.mrr, 0))}</span>
+            <span>
+              {filtered.length} agência{filtered.length !== 1 ? "s" : ""}
+            </span>
+            <span>
+              MRR total: {fmtBRL(filtered.reduce((s, a) => s + a.mrr, 0))}
+            </span>
           </div>
         )}
       </div>

@@ -136,7 +136,9 @@ export function CompanyCreateSlidePanel({
     "pagamento",
     "admin",
   ];
-  const [createOpenAccordions, setCreateOpenAccordions] = useState<string[]>([]);
+  const [createOpenAccordions, setCreateOpenAccordions] = useState<string[]>(
+    [],
+  );
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -154,6 +156,8 @@ export function CompanyCreateSlidePanel({
   const [isDragOverUpload, setIsDragOverUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cropImgRef = useRef<HTMLImageElement>(null);
+  // Reset scroll to top every time the panel opens
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
   const CROP_SIZE = 192;
 
   const [formData, setFormData] = useState<FormData>({
@@ -186,7 +190,10 @@ export function CompanyCreateSlidePanel({
 
   useEffect(() => {
     if (open) {
-      const id = requestAnimationFrame(() => setIsMounted(true));
+      const id = requestAnimationFrame(() => {
+        setIsMounted(true);
+        if (bodyScrollRef.current) bodyScrollRef.current.scrollTop = 0;
+      });
       return () => cancelAnimationFrame(id);
     }
     if (!isClosing) setIsMounted(false);
@@ -425,7 +432,7 @@ export function CompanyCreateSlidePanel({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed top-0 bottom-0 right-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity duration-[420ms]",
+          "fixed top-0 bottom-0 right-0 z-75 bg-black/20 backdrop-blur-[2px] transition-opacity duration-[420ms]",
           isClosing ? "opacity-0" : "opacity-100",
         )}
         style={{ left: `${sidebarWidth}px` }}
@@ -440,7 +447,7 @@ export function CompanyCreateSlidePanel({
       <div
         data-slot="sheet-content"
         data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-border z-50 shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-border z-80 shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         <div className="relative h-full flex flex-col overflow-hidden">
@@ -653,22 +660,38 @@ export function CompanyCreateSlidePanel({
           )}
 
           {/* Conteúdo com Abas em Accordions */}
-          <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200">
+          <div
+            ref={bodyScrollRef}
+            className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200"
+          >
             {/* ── Logo upload zone ── */}
             {avatarPreview ? (
               <div className="relative mb-5 rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex items-center gap-4">
                 <div className="relative h-16 w-16 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-blue-100 shadow">
-                  <img src={avatarPreview} alt="logo" className="w-full h-full object-cover" />
+                  <img
+                    src={avatarPreview}
+                    alt="logo"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-700">Logo cadastrada</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Imagem do perfil da empresa</p>
+                  <p className="text-sm font-semibold text-slate-700">
+                    Logo cadastrada
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Imagem do perfil da empresa
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {originalRawSrc && (
                     <button
                       type="button"
-                      onClick={() => { setRawImageSrc(originalRawSrc); setCropZoom(1); setCropOffset({ x: 0, y: 0 }); setCropOpen(true); }}
+                      onClick={() => {
+                        setRawImageSrc(originalRawSrc);
+                        setCropZoom(1);
+                        setCropOffset({ x: 0, y: 0 });
+                        setCropOpen(true);
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" /> Editar foto
@@ -683,7 +706,10 @@ export function CompanyCreateSlidePanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setAvatarPreview(null); setOriginalRawSrc(null); }}
+                    onClick={() => {
+                      setAvatarPreview(null);
+                      setOriginalRawSrc(null);
+                    }}
                     className="h-8 w-8 flex items-center justify-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -699,19 +725,31 @@ export function CompanyCreateSlidePanel({
                     : "border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40",
                 )}
                 onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => { e.preventDefault(); setIsDragOverUpload(true); }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOverUpload(true);
+                }}
                 onDragLeave={() => setIsDragOverUpload(false)}
                 onDrop={handleDropUpload}
               >
-                <div className={cn(
-                  "h-14 w-14 rounded-full flex items-center justify-center transition-colors",
-                  isDragOverUpload ? "bg-blue-100" : "bg-slate-100",
-                )}>
-                  <ImagePlus className={cn("h-7 w-7 transition-colors", isDragOverUpload ? "text-blue-500" : "text-slate-400")} />
+                <div
+                  className={cn(
+                    "h-14 w-14 rounded-full flex items-center justify-center transition-colors",
+                    isDragOverUpload ? "bg-blue-100" : "bg-slate-100",
+                  )}
+                >
+                  <ImagePlus
+                    className={cn(
+                      "h-7 w-7 transition-colors",
+                      isDragOverUpload ? "text-blue-500" : "text-slate-400",
+                    )}
+                  />
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-semibold text-slate-600">
-                    {isDragOverUpload ? "Solte para adicionar!" : "Logo da empresa"}
+                    {isDragOverUpload
+                      ? "Solte para adicionar!"
+                      : "Logo da empresa"}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Arraste aqui ou{" "}
@@ -719,7 +757,9 @@ export function CompanyCreateSlidePanel({
                       selecione um arquivo
                     </span>
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-1.5">PNG, JPG ou WEBP · Máx. 5MB</p>
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    PNG, JPG ou WEBP · Máx. 5MB
+                  </p>
                 </div>
               </div>
             )}
@@ -1249,7 +1289,9 @@ export function CompanyCreateSlidePanel({
                           <button
                             key={opt.value}
                             type="button"
-                            onClick={() => updateField("tipoContato", opt.value)}
+                            onClick={() =>
+                              updateField("tipoContato", opt.value)
+                            }
                             className={cn(
                               "flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all duration-150 bg-gradient-to-br to-white",
                               opt.gradient,
@@ -1259,20 +1301,43 @@ export function CompanyCreateSlidePanel({
                                 : "hover:shadow-sm",
                             )}
                           >
-                            <div className={cn(
-                              "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
-                              isSelected ? opt.activeBg : "bg-white/80",
-                            )}>
-                              <opt.Icon className={cn("h-4 w-4", isSelected ? opt.activeText : "text-slate-400")} />
+                            <div
+                              className={cn(
+                                "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                isSelected ? opt.activeBg : "bg-white/80",
+                              )}
+                            >
+                              <opt.Icon
+                                className={cn(
+                                  "h-4 w-4",
+                                  isSelected
+                                    ? opt.activeText
+                                    : "text-slate-400",
+                                )}
+                              />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className={cn("text-xs font-semibold", isSelected ? opt.activeText : "text-slate-700")}>
+                              <p
+                                className={cn(
+                                  "text-xs font-semibold",
+                                  isSelected
+                                    ? opt.activeText
+                                    : "text-slate-700",
+                                )}
+                              >
                                 {opt.label}
                               </p>
-                              <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                                {opt.desc}
+                              </p>
                             </div>
                             {isSelected && (
-                              <Check className={cn("h-4 w-4 flex-shrink-0 mt-0.5", opt.activeText)} />
+                              <Check
+                                className={cn(
+                                  "h-4 w-4 flex-shrink-0 mt-0.5",
+                                  opt.activeText,
+                                )}
+                              />
                             )}
                           </button>
                         );
@@ -1297,20 +1362,92 @@ export function CompanyCreateSlidePanel({
                   <div className="border-t bg-white px-3 py-4">
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { id: "lite",       label: "Lite",       price: "R$ 300/mês",   desc: "Ativa conta agency",          from: "from-slate-50",  border: "border-slate-200",  ring: "ring-slate-400",  badge: "bg-slate-100 text-slate-600",   check: "text-slate-600" },
-                        { id: "start",      label: "Start",      price: "R$ 500/mês",   desc: "5% desconto",                 from: "from-sky-50",    border: "border-sky-200",    ring: "ring-sky-400",    badge: "bg-sky-100 text-sky-700",       check: "text-sky-600" },
-                        { id: "standard",   label: "Standard",   price: "R$ 1.000/mês", desc: "10% desconto",                from: "from-blue-50",   border: "border-blue-200",   ring: "ring-blue-400",   badge: "bg-blue-100 text-blue-700",     check: "text-blue-600" },
-                        { id: "growth",     label: "Growth",     price: "R$ 1.500/mês", desc: "15% desconto",                from: "from-violet-50", border: "border-violet-200", ring: "ring-violet-400", badge: "bg-violet-100 text-violet-700", check: "text-violet-600" },
-                        { id: "scale",      label: "Scale",      price: "R$ 3.000/mês", desc: "20% desconto",                from: "from-purple-50", border: "border-purple-200", ring: "ring-purple-400", badge: "bg-purple-100 text-purple-700", check: "text-purple-600" },
-                        { id: "squad",      label: "Squad",      price: "R$ 5.000/mês", desc: "Agências · 20% + pós pago",   from: "from-pink-50",   border: "border-pink-200",   ring: "ring-pink-400",   badge: "bg-pink-100 text-pink-700",     check: "text-pink-600" },
-                        { id: "enterprise", label: "Enterprise", price: "R$ 5.000/mês", desc: "Empresas · pós pago",         from: "from-rose-50",   border: "border-rose-200",   ring: "ring-rose-400",   badge: "bg-rose-100 text-rose-700",     check: "text-rose-600" },
+                        {
+                          id: "lite",
+                          label: "Lite",
+                          price: "R$ 300/mês",
+                          desc: "Ativa conta agency",
+                          from: "from-slate-50",
+                          border: "border-slate-200",
+                          ring: "ring-slate-400",
+                          badge: "bg-slate-100 text-slate-600",
+                          check: "text-slate-600",
+                        },
+                        {
+                          id: "start",
+                          label: "Start",
+                          price: "R$ 500/mês",
+                          desc: "5% desconto",
+                          from: "from-sky-50",
+                          border: "border-sky-200",
+                          ring: "ring-sky-400",
+                          badge: "bg-sky-100 text-sky-700",
+                          check: "text-sky-600",
+                        },
+                        {
+                          id: "standard",
+                          label: "Standard",
+                          price: "R$ 1.000/mês",
+                          desc: "10% desconto",
+                          from: "from-blue-50",
+                          border: "border-blue-200",
+                          ring: "ring-blue-400",
+                          badge: "bg-blue-100 text-blue-700",
+                          check: "text-blue-600",
+                        },
+                        {
+                          id: "growth",
+                          label: "Growth",
+                          price: "R$ 1.500/mês",
+                          desc: "15% desconto",
+                          from: "from-violet-50",
+                          border: "border-violet-200",
+                          ring: "ring-violet-400",
+                          badge: "bg-violet-100 text-violet-700",
+                          check: "text-violet-600",
+                        },
+                        {
+                          id: "scale",
+                          label: "Scale",
+                          price: "R$ 3.000/mês",
+                          desc: "20% desconto",
+                          from: "from-purple-50",
+                          border: "border-purple-200",
+                          ring: "ring-purple-400",
+                          badge: "bg-purple-100 text-purple-700",
+                          check: "text-purple-600",
+                        },
+                        {
+                          id: "squad",
+                          label: "Squad",
+                          price: "R$ 5.000/mês",
+                          desc: "Agências · 20% + pós pago",
+                          from: "from-pink-50",
+                          border: "border-pink-200",
+                          ring: "ring-pink-400",
+                          badge: "bg-pink-100 text-pink-700",
+                          check: "text-pink-600",
+                        },
+                        {
+                          id: "enterprise",
+                          label: "Enterprise",
+                          price: "R$ 5.000/mês",
+                          desc: "Empresas · pós pago",
+                          from: "from-rose-50",
+                          border: "border-rose-200",
+                          ring: "ring-rose-400",
+                          badge: "bg-rose-100 text-rose-700",
+                          check: "text-rose-600",
+                        },
                       ].map((plan) => {
                         const isSelected = formData.planoCreditoId === plan.id;
                         return (
                           <button
                             key={plan.id}
                             type="button"
-                            onClick={() => updateField("planoCreditoId", plan.id)}
+                            onClick={() =>
+                              updateField("planoCreditoId", plan.id)
+                            }
                             className={cn(
                               "flex flex-col items-start gap-1 p-3 rounded-xl border-2 bg-gradient-to-br to-white text-left transition-all duration-150",
                               plan.from,
@@ -1322,15 +1459,29 @@ export function CompanyCreateSlidePanel({
                             )}
                           >
                             <div className="flex items-center justify-between w-full">
-                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-md", plan.badge)}>
+                              <span
+                                className={cn(
+                                  "text-[10px] font-bold px-1.5 py-0.5 rounded-md",
+                                  plan.badge,
+                                )}
+                              >
                                 {plan.label}
                               </span>
                               {isSelected && (
-                                <Check className={cn("h-4 w-4 flex-shrink-0", plan.check)} />
+                                <Check
+                                  className={cn(
+                                    "h-4 w-4 flex-shrink-0",
+                                    plan.check,
+                                  )}
+                                />
                               )}
                             </div>
-                            <p className="text-sm font-bold text-slate-800 mt-0.5">{plan.price}</p>
-                            <p className="text-[10px] text-slate-500 leading-tight">{plan.desc}</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">
+                              {plan.price}
+                            </p>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              {plan.desc}
+                            </p>
                           </button>
                         );
                       })}

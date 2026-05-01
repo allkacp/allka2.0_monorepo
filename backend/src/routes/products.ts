@@ -87,7 +87,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const product = await prisma.product.findUnique({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string as string as string },
       include: { variations: true, addons: true },
     });
 
@@ -127,7 +127,7 @@ router.post(
 
       const product = await prisma.product.create({
         data: {
-          ...(rest as object),
+          ...(rest as Parameters<typeof prisma.product.create>[0]["data"]),
           variations: variations ? { create: variations } : undefined,
           addons: addons ? { create: addons } : undefined,
         },
@@ -155,7 +155,7 @@ router.put(
       } = req.body as Record<string, unknown>;
 
       const product = await prisma.product.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string as string as string },
         data: rest as Parameters<typeof prisma.product.update>[0]["data"],
         include: { variations: true, addons: true },
       });
@@ -169,7 +169,9 @@ router.put(
 // DELETE /api/products/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.product.delete({ where: { id: req.params.id } });
+    await prisma.product.delete({
+      where: { id: req.params.id as string as string as string },
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -184,7 +186,10 @@ router.post(
   async (req, res, next) => {
     try {
       const variation = await prisma.productVariation.create({
-        data: { ...req.body, product_id: req.params.id },
+        data: {
+          ...req.body,
+          product_id: req.params.id as string as string as string,
+        },
       });
       res.status(201).json(variation);
     } catch (err) {
@@ -196,7 +201,9 @@ router.post(
 // DELETE /api/products/:id/variations/:vid
 router.delete("/:id/variations/:vid", verifyToken, async (req, res, next) => {
   try {
-    await prisma.productVariation.delete({ where: { id: req.params.vid } });
+    await prisma.productVariation.delete({
+      where: { id: req.params.vid as string as string as string },
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -211,7 +218,10 @@ router.post(
   async (req, res, next) => {
     try {
       const addon = await prisma.productAddon.create({
-        data: { ...req.body, product_id: req.params.id },
+        data: {
+          ...req.body,
+          product_id: req.params.id as string as string as string,
+        },
       });
       res.status(201).json(addon);
     } catch (err) {
@@ -223,7 +233,9 @@ router.post(
 // DELETE /api/products/:id/addons/:aid
 router.delete("/:id/addons/:aid", verifyToken, async (req, res, next) => {
   try {
-    await prisma.productAddon.delete({ where: { id: req.params.aid } });
+    await prisma.productAddon.delete({
+      where: { id: req.params.aid as string as string as string },
+    });
     res.status(204).send();
   } catch (err) {
     next(err);

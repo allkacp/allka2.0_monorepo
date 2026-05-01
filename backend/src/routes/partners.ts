@@ -70,7 +70,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const partner = await prisma.partnerProfile.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: {
         user: { select: { id: true, name: true, email: true } },
         commissions: {
@@ -133,7 +133,7 @@ router.put(
   async (req, res, next) => {
     try {
       const partner = await prisma.partnerProfile.update({
-        where: { id: req.params.id },
+        where: { id: (req.params.id as string) },
         data: req.body,
       });
       res.json(partner);
@@ -149,9 +149,9 @@ router.get("/:id/commissions", verifyToken, async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req.query);
 
     const [total, data] = await Promise.all([
-      prisma.partnerCommission.count({ where: { partner_id: req.params.id } }),
+      prisma.partnerCommission.count({ where: { partner_id: (req.params.id as string) } }),
       prisma.partnerCommission.findMany({
-        where: { partner_id: req.params.id },
+        where: { partner_id: (req.params.id as string) },
         include: { campaign: { select: { id: true, name: true } } },
         skip,
         take: limit,

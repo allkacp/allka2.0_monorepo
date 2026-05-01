@@ -37,7 +37,13 @@ import { cn } from "@/lib/utils";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function StarRating({ value, size = "sm" }: { value: number; size?: "sm" | "xs" }) {
+function StarRating({
+  value,
+  size = "sm",
+}: {
+  value: number;
+  size?: "sm" | "xs";
+}) {
   const full = Math.floor(value);
   const half = value - full >= 0.5;
   const sizeClass = size === "xs" ? "h-2.5 w-2.5" : "h-3 w-3";
@@ -51,8 +57,8 @@ function StarRating({ value, size = "sm" }: { value: number; size?: "sm" | "xs" 
             i < full
               ? "fill-amber-400 text-amber-400"
               : i === full && half
-              ? "fill-amber-200 text-amber-400"
-              : "fill-muted text-muted-foreground/30",
+                ? "fill-amber-200 text-amber-400"
+                : "fill-muted text-muted-foreground/30",
           )}
         />
       ))}
@@ -61,7 +67,10 @@ function StarRating({ value, size = "sm" }: { value: number; size?: "sm" | "xs" 
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
+  const map: Record<
+    string,
+    { label: string; icon: React.ElementType; cls: string }
+  > = {
     active: {
       label: "Ativo",
       icon: CheckCircle2,
@@ -99,12 +108,15 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function LevelBadge({ level }: { level: string | null }) {
-  if (!level) return <span className="text-[10px] text-muted-foreground">—</span>;
+  if (!level)
+    return <span className="text-[10px] text-muted-foreground">—</span>;
   const map: Record<string, string> = {
     Junior: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
     Pleno: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-    Senior: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400",
-    Expert: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-500",
+    Senior:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400",
+    Expert:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-500",
   };
   return (
     <span
@@ -124,10 +136,10 @@ function ApprovalBar({ rate }: { rate: number }) {
     rate >= 95
       ? "bg-emerald-500"
       : rate >= 80
-      ? "bg-blue-500"
-      : rate >= 60
-      ? "bg-amber-500"
-      : "bg-red-500";
+        ? "bg-blue-500"
+        : rate >= 60
+          ? "bg-amber-500"
+          : "bg-red-500";
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
@@ -136,7 +148,9 @@ function ApprovalBar({ rate }: { rate: number }) {
           style={{ width: `${rate}%` }}
         />
       </div>
-      <span className="text-[10px] text-muted-foreground tabular-nums">{rate}%</span>
+      <span className="text-[10px] text-muted-foreground tabular-nums">
+        {rate}%
+      </span>
     </div>
   );
 }
@@ -168,8 +182,7 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
         (n.city ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus =
         filterStatus === "all" || n.nomadeStatus === filterStatus;
-      const matchLevel =
-        filterLevel === "all" || n.nomadeLevel === filterLevel;
+      const matchLevel = filterLevel === "all" || n.nomadeLevel === filterLevel;
       return matchSearch && matchStatus && matchLevel;
     });
   }, [nomades, search, filterStatus, filterLevel]);
@@ -193,7 +206,8 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
           Nenhum nômade habilitado
         </p>
         <p className="text-xs text-muted-foreground max-w-xs">
-          Ainda não há nômades habilitados para este produto. Os nômades aparecem aqui após aprovação no teste de habilitação.
+          Ainda não há nômades habilitados para este produto. Os nômades
+          aparecem aqui após aprovação no teste de habilitação.
         </p>
       </div>
     );
@@ -235,7 +249,9 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                 </p>
                 <p className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none">
                   {avgRating}
-                  <span className="text-xs font-normal text-muted-foreground ml-0.5">/5</span>
+                  <span className="text-xs font-normal text-muted-foreground ml-0.5">
+                    /5
+                  </span>
                 </p>
               </div>
             </div>
@@ -274,10 +290,18 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">Todos os status</SelectItem>
-              <SelectItem value="active" className="text-xs">Ativo</SelectItem>
-              <SelectItem value="inactive" className="text-xs">Inativo</SelectItem>
-              <SelectItem value="suspended" className="text-xs">Suspenso</SelectItem>
+              <SelectItem value="all" className="text-xs">
+                Todos os status
+              </SelectItem>
+              <SelectItem value="active" className="text-xs">
+                Ativo
+              </SelectItem>
+              <SelectItem value="inactive" className="text-xs">
+                Inativo
+              </SelectItem>
+              <SelectItem value="suspended" className="text-xs">
+                Suspenso
+              </SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterLevel} onValueChange={setFilterLevel}>
@@ -286,11 +310,21 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
               <SelectValue placeholder="Nível" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">Todos os níveis</SelectItem>
-              <SelectItem value="Junior" className="text-xs">Junior</SelectItem>
-              <SelectItem value="Pleno" className="text-xs">Pleno</SelectItem>
-              <SelectItem value="Senior" className="text-xs">Senior</SelectItem>
-              <SelectItem value="Expert" className="text-xs">Expert</SelectItem>
+              <SelectItem value="all" className="text-xs">
+                Todos os níveis
+              </SelectItem>
+              <SelectItem value="Junior" className="text-xs">
+                Junior
+              </SelectItem>
+              <SelectItem value="Pleno" className="text-xs">
+                Pleno
+              </SelectItem>
+              <SelectItem value="Senior" className="text-xs">
+                Senior
+              </SelectItem>
+              <SelectItem value="Expert" className="text-xs">
+                Expert
+              </SelectItem>
             </SelectContent>
           </Select>
           {filtered.length < nomades.length && (
@@ -336,7 +370,11 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                           : "bg-slate-200 dark:bg-slate-700 text-slate-500",
                       )}
                     >
-                      {nomade.nomadeName.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                      {nomade.nomadeName
+                        .split(" ")
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join("")}
                     </div>
 
                     {/* Info principal */}
@@ -352,7 +390,9 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                         <div className="flex items-center gap-1 mt-0.5">
                           <MapPin className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
                           <span className="text-[10px] text-muted-foreground">
-                            {[nomade.city, nomade.state].filter(Boolean).join(", ")}
+                            {[nomade.city, nomade.state]
+                              .filter(Boolean)
+                              .join(", ")}
                           </span>
                         </div>
                       )}
@@ -364,7 +404,10 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                         <TooltipTrigger asChild>
                           <div className="flex flex-col items-end gap-0.5">
                             <div className="flex items-center gap-1">
-                              <StarRating value={nomade.overallRating} size="xs" />
+                              <StarRating
+                                value={nomade.overallRating}
+                                size="xs"
+                              />
                               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">
                                 {nomade.overallRating.toFixed(1)}
                               </span>
@@ -382,7 +425,8 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                       <div className="flex items-center gap-1">
                         <Package className="h-3 w-3 text-muted-foreground" />
                         <span className="text-[10px] text-muted-foreground">
-                          {nomade.enabledTasks.length} tarefa{nomade.enabledTasks.length !== 1 ? "s" : ""}
+                          {nomade.enabledTasks.length} tarefa
+                          {nomade.enabledTasks.length !== 1 ? "s" : ""}
                         </span>
                       </div>
 
@@ -423,7 +467,10 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
                               <div className="flex items-center gap-1.5">
-                                <StarRating value={task.averageRating} size="xs" />
+                                <StarRating
+                                  value={task.averageRating}
+                                  size="xs"
+                                />
                                 <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
                                   {task.averageRating.toFixed(1)}
                                 </span>
@@ -447,11 +494,14 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-2">
                         Habilitado em{" "}
-                        {new Date(nomade.qualifiedAt).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {new Date(nomade.qualifiedAt).toLocaleDateString(
+                          "pt-BR",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )}
                       </p>
                     </div>
                   )}

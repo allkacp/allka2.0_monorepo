@@ -221,7 +221,8 @@ class ApiClient {
     return this.del(`/projects/${id}`);
   }
 
-  async getProjectTasks(projectId: string | number) {
+  /** @deprecated Use getProjectTasks(filters) via /project-products/tasks instead */
+  async getLegacyProjectTasks(projectId: string | number) {
     return this.get(`/projects/${projectId}/tasks`);
   }
 
@@ -252,11 +253,11 @@ class ApiClient {
 
   // ─── Dashboard ────────────────────────────────────────────────────────────
   async getDashboardStats() {
-    return this.get("/dashboard");
+    return this.get("/dashboard/stats");
   }
 
   async getRecentActivities() {
-    return this.get("/dashboard/activities");
+    return this.get("/dashboard/recent-activities");
   }
 
   async getMyTasks() {
@@ -577,6 +578,142 @@ class ApiClient {
   }
   async deleteLevel(id: string) {
     return this.del(`/levels/${id}`);
+  }
+
+  // ─── Catalog Tasks (Cadastro de Tarefas) ──────────────────────────────────
+  async getCatalogTasks(filters?: Record<string, any>) {
+    return this.get("/task-templates", filters);
+  }
+  async getCatalogTask(id: string) {
+    return this.get(`/task-templates/${id}`);
+  }
+  async createCatalogTask(data: Record<string, any>) {
+    return this.post("/task-templates", data);
+  }
+  async updateCatalogTask(id: string, data: Record<string, any>) {
+    return this.put(`/task-templates/${id}`, data);
+  }
+  async updateCatalogTaskStatus(
+    id: string,
+    status: string,
+    is_active?: boolean,
+  ) {
+    return this.patch(`/task-templates/${id}/status`, { status, is_active });
+  }
+  async deleteCatalogTask(id: string) {
+    return this.del(`/task-templates/${id}`);
+  }
+  async getCatalogTasksByProduct(productId: string) {
+    return this.get(`/task-templates/by-product/${productId}`);
+  }
+  async linkCatalogTaskToProduct(data: {
+    product_id: string;
+    catalog_task_id: string;
+    sort_order?: number;
+    is_mandatory?: boolean;
+    phase?: string;
+    notes?: string;
+  }) {
+    return this.post("/task-templates/links", data);
+  }
+  async unlinkCatalogTask(linkId: string) {
+    return this.del(`/task-templates/links/${linkId}`);
+  }
+
+  // ─── Project Products (vinculação Projeto ↔ Produto) ────────────────────
+  async getProjectProducts(filters?: Record<string, any>) {
+    return this.get("/project-products", filters);
+  }
+  async linkProductToProject(data: {
+    project_id: string;
+    product_id: string;
+    variation_id?: string;
+    recurrence_snapshot?: "avulso" | "mensal";
+    start_date?: string;
+    expected_end_date?: string;
+  }) {
+    return this.post("/project-products", data);
+  }
+  async updateProjectProduct(id: string, data: Record<string, any>) {
+    return this.patch(`/project-products/${id}`, data);
+  }
+  async unlinkProductFromProject(id: string) {
+    return this.del(`/project-products/${id}`);
+  }
+
+  // ─── Project Tasks (tarefas em execução geradas de produtos) ─────────────
+  async getProjectTasks(filters?: Record<string, any>) {
+    return this.get("/project-products/tasks", filters);
+  }
+  async getProjectTask(id: string) {
+    return this.get(`/project-products/tasks/${id}`);
+  }
+  async updateProjectTask(
+    id: string,
+    data: {
+      status?:
+        | "PARA_LANCAMENTO"
+        | "EM_LANCAMENTO"
+        | "AGUARDANDO_INFORMACOES"
+        | "LIBERADA_PARA_EXECUCAO"
+        | "EM_EXECUCAO"
+        | "EM_REVISAO"
+        | "EM_APROVACAO"
+        | "CONCLUIDA"
+        | "CANCELADA"
+        | "AGUARDANDO_NOMADE";
+      priority?: "low" | "medium" | "high" | "urgent";
+      assignee_id?: string | null;
+      responsavel_agencia_id?: string | null;
+      nomade_responsavel_id?: string | null;
+      due_date?: string | null;
+      start_date?: string | null;
+      observations?: string | null;
+    },
+  ) {
+    return this.patch(`/project-tasks/${id}`, data);
+  }
+
+  // ─── Operational task actions (project-tasks router) ─────────────────────
+  async getOperationalTasks(filters?: Record<string, any>) {
+    return this.get("/project-tasks", filters);
+  }
+  async launchProjectTask(id: string) {
+    return this.patch(`/project-tasks/${id}/launch`, {});
+  }
+  async releaseProjectTask(id: string) {
+    return this.patch(`/project-tasks/${id}/release`, {});
+  }
+  async getProjectTaskStages(id: string) {
+    return this.get(`/project-tasks/${id}/stages`);
+  }
+  async getProjectTaskBriefing(id: string) {
+    return this.get(`/project-tasks/${id}/briefing`);
+  }
+  async getProjectTaskAttachments(id: string, type?: string) {
+    return this.get(
+      `/project-tasks/${id}/attachments`,
+      type ? { type } : undefined,
+    );
+  }
+  async saveProjectTaskBriefing(id: string, body: { answers: any[] }) {
+    return this.put(`/project-tasks/${id}/briefing`, body);
+  }
+  async addProjectTaskAttachment(
+    id: string,
+    data: {
+      type: string;
+      name: string;
+      url: string;
+      size?: number;
+      mime_type?: string;
+      observations?: string;
+    },
+  ) {
+    return this.post(`/project-tasks/${id}/attachments`, data);
+  }
+  async deleteProjectTaskAttachment(id: string, attachmentId: string) {
+    return this.del(`/project-tasks/${id}/attachments/${attachmentId}`);
   }
 }
 

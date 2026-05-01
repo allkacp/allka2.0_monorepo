@@ -1,47 +1,80 @@
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PageHeader } from "@/components/page-header"
-import { Users, Target, CheckCircle, AlertCircle } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/page-header";
+import { Users, Target, CheckCircle, AlertCircle } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
+import { PageLoader } from "@/components/ui/loading";
 
 const defaultAvailability = {
   categories: [] as any[],
   weeklySchedule: [] as any[],
-}
+};
 
 export default function AdminDisponibilidadePage() {
-  const [mockAvailability, setAvailability] = useState(defaultAvailability)
+  const [mockAvailability, setAvailability] = useState(defaultAvailability);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiClient.getNomades({ limit: "500" }).then((data: any) => {
-      const nomades = Array.isArray(data) ? data : data?.data || []
-      const specialtyMap: Record<string, any[]> = {}
-      nomades.forEach((n: any) => {
-        const spec = n.specialty || "Geral"
-        if (!specialtyMap[spec]) specialtyMap[spec] = []
-        specialtyMap[spec].push(n)
+    apiClient
+      .getNomades({ limit: "500" })
+      .then((data: any) => {
+        const nomades = Array.isArray(data) ? data : data?.data || [];
+        const specialtyMap: Record<string, any[]> = {};
+        nomades.forEach((n: any) => {
+          const spec = n.specialty || "Geral";
+          if (!specialtyMap[spec]) specialtyMap[spec] = [];
+          specialtyMap[spec].push(n);
+        });
+        const categories = Object.entries(specialtyMap).map(
+          ([name, list], i) => ({
+            id: i + 1,
+            name,
+            totalNomades: list.length,
+            availableNomades: list.filter((n: any) => n.is_active !== false)
+              .length,
+            activeTasks: 0,
+            pendingTasks: 0,
+            avgResponseTime: "-",
+            utilizationRate:
+              list.length > 0
+                ? Math.round(
+                    ((list.length -
+                      list.filter((n: any) => n.is_active !== false).length) /
+                      list.length) *
+                      100,
+                  )
+                : 0,
+          }),
+        );
+        setAvailability({ categories, weeklySchedule: [] });
       })
-      const categories = Object.entries(specialtyMap).map(([name, list], i) => ({
-        id: i + 1,
-        name,
-        totalNomades: list.length,
-        availableNomades: list.filter((n: any) => n.is_active !== false).length,
-        activeTasks: 0,
-        pendingTasks: 0,
-        avgResponseTime: "-",
-        utilizationRate: list.length > 0 ? Math.round(((list.length - list.filter((n: any) => n.is_active !== false).length) / list.length) * 100) : 0,
-      }))
-      setAvailability({ categories, weeklySchedule: [] })
-    }).catch(() => {})
-  }, [])
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  const totalAvailable = mockAvailability.categories.reduce((sum, cat) => sum + cat.availableNomades, 0)
-  const totalNomades = mockAvailability.categories.reduce((sum, cat) => sum + cat.totalNomades, 0)
-  const totalActiveTasks = mockAvailability.categories.reduce((sum, cat) => sum + cat.activeTasks, 0)
-  const totalPendingTasks = mockAvailability.categories.reduce((sum, cat) => sum + cat.pendingTasks, 0)
+  const totalAvailable = mockAvailability.categories.reduce(
+    (sum, cat) => sum + cat.availableNomades,
+    0,
+  );
+  const totalNomades = mockAvailability.categories.reduce(
+    (sum, cat) => sum + cat.totalNomades,
+    0,
+  );
+  const totalActiveTasks = mockAvailability.categories.reduce(
+    (sum, cat) => sum + cat.activeTasks,
+    0,
+  );
+  const totalPendingTasks = mockAvailability.categories.reduce(
+    (sum, cat) => sum + cat.pendingTasks,
+    0,
+  );
+
+  if (loading) {
+    return <PageLoader text="Carregando disponibilidade…" />;
+  }
 
   return (
     <div className="container mx-auto space-y-6 bg-slate-200 py-0 px-0">
@@ -58,7 +91,9 @@ export default function AdminDisponibilidadePage() {
               <div>
                 <p className="text-sm opacity-90">Nômades Disponíveis</p>
                 <p className="text-3xl font-bold mt-2">{totalAvailable}</p>
-                <p className="text-xs opacity-75 mt-1">de {totalNomades} total</p>
+                <p className="text-xs opacity-75 mt-1">
+                  de {totalNomades} total
+                </p>
               </div>
               <CheckCircle className="h-10 w-10 opacity-80" />
             </div>
@@ -95,7 +130,10 @@ export default function AdminDisponibilidadePage() {
               <div>
                 <p className="text-sm opacity-90">Taxa de Utilização</p>
                 <p className="text-3xl font-bold mt-2">
-                  {Math.round(((totalNomades - totalAvailable) / totalNomades) * 100)}%
+                  {Math.round(
+                    ((totalNomades - totalAvailable) / totalNomades) * 100,
+                  )}
+                  %
                 </p>
               </div>
               <Users className="h-10 w-10 opacity-80" />
@@ -134,23 +172,37 @@ export default function AdminDisponibilidadePage() {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                   <div>
                     <p className="text-sm text-gray-600">Disponíveis</p>
-                    <p className="text-2xl font-bold text-green-600">{category.availableNomades}</p>
-                    <p className="text-xs text-gray-500">de {category.totalNomades}</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {category.availableNomades}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      de {category.totalNomades}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Tarefas Ativas</p>
-                    <p className="text-2xl font-bold text-blue-600">{category.activeTasks}</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {category.activeTasks}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Pendentes</p>
-                    <p className="text-2xl font-bold text-orange-600">{category.pendingTasks}</p>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {category.pendingTasks}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Tempo Resposta</p>
-                    <p className="text-2xl font-bold">{category.avgResponseTime}</p>
+                    <p className="text-2xl font-bold">
+                      {category.avgResponseTime}
+                    </p>
                   </div>
                   <div className="flex items-center">
-                    <Button variant="outline" size="sm" className="w-full bg-transparent">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full bg-transparent"
+                    >
                       Ver Detalhes
                     </Button>
                   </div>
@@ -160,7 +212,9 @@ export default function AdminDisponibilidadePage() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600">Capacidade</span>
-                    <span className="font-medium">{category.utilizationRate}%</span>
+                    <span className="font-medium">
+                      {category.utilizationRate}%
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
                     <div
@@ -198,7 +252,9 @@ export default function AdminDisponibilidadePage() {
                     <div className="flex gap-1 h-8">
                       <div
                         className="bg-green-500 rounded flex items-center justify-center text-white text-xs font-medium"
-                        style={{ width: `${(day.available / day.total) * 100}%` }}
+                        style={{
+                          width: `${(day.available / day.total) * 100}%`,
+                        }}
                       >
                         {day.available > 10 && `${day.available}`}
                       </div>
@@ -217,5 +273,5 @@ export default function AdminDisponibilidadePage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

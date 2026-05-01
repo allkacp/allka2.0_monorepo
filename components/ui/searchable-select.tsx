@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
+import { Command as CommandPrimitive } from "cmdk";
 
 import { cn } from "@/lib/utils";
 import {
@@ -9,7 +10,6 @@ import {
 } from "@/components/ui/popover";
 import {
   Command,
-  CommandInput,
   CommandList,
   CommandEmpty,
   CommandGroup,
@@ -32,6 +32,11 @@ interface SearchableSelectProps {
   className?: string;
   onAddNew?: () => void;
   addNewLabel?: string;
+  /** Show a loading spinner / text inside the dropdown */
+  loading?: boolean;
+  loadingMessage?: string;
+  /** Show an error message inside the dropdown instead of the empty message */
+  errorMessage?: string;
 }
 
 export function SearchableSelect({
@@ -44,6 +49,9 @@ export function SearchableSelect({
   className,
   onAddNew,
   addNewLabel = "Adicionar novo",
+  loading = false,
+  loadingMessage = "Carregando...",
+  errorMessage,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -75,50 +83,69 @@ export function SearchableSelect({
         align="start"
       >
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {items.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  value={item.label}
-                  onSelect={() => {
-                    onValueChange(item.value === value ? "" : item.value);
-                    setOpen(false);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === item.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span className="truncate">{item.label}</span>
-                    {item.sublabel && (
-                      <span className="text-xs text-muted-foreground truncate">
-                        {item.sublabel}
-                      </span>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+          {/* Search row — with inline "+" when onAddNew is provided */}
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <CommandPrimitive.Input
+              placeholder={searchPlaceholder}
+              className="placeholder:text-muted-foreground flex h-9 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+            />
             {onAddNew && (
-              <CommandGroup forceMount>
-                <CommandItem
-                  onSelect={() => {
-                    onAddNew();
-                    setOpen(false);
-                  }}
-                  className="cursor-pointer text-violet-600 font-semibold"
-                >
-                  <Plus className="mr-2 h-4 w-4 shrink-0" />
-                  {addNewLabel}
-                </CommandItem>
-              </CommandGroup>
+              <button
+                type="button"
+                title={addNewLabel}
+                onClick={() => {
+                  setOpen(false);
+                  // Delay until after Radix focus-return scroll so callers can override scroll
+                  requestAnimationFrame(() => onAddNew());
+                }}
+                className="ml-1 h-6 w-6 shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-violet-50 hover:border-violet-400 text-slate-400 hover:text-violet-600 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <CommandList>
+            {loading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {loadingMessage}
+              </div>
+            ) : errorMessage ? (
+              <div className="py-6 text-center text-sm text-red-500">
+                {errorMessage}
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>{emptyMessage}</CommandEmpty>
+                <CommandGroup>
+                  {items.map((item) => (
+                    <CommandItem
+                      key={item.value}
+                      value={item.label}
+                      onSelect={() => {
+                        onValueChange(item.value === value ? "" : item.value);
+                        setOpen(false);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 shrink-0",
+                          value === item.value ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{item.label}</span>
+                        {item.sublabel && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {item.sublabel}
+                          </span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
             )}
           </CommandList>
         </Command>

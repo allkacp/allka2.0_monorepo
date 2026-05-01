@@ -1781,7 +1781,7 @@ async function main() {
   console.log("✅ Seed concluído com sucesso!\n");
   console.log("📊 Dados criados:");
   console.log("   10 usuários · 10 nômades · 10 empresas · 10 projetos");
-  console.log("   10 tarefas · 10 faturas · 10 campanhas · 10 produtos");
+  console.log("   10 tarefas · 10 faturas · 10 campanhas");
   console.log("   10 especialidades · 5 cursos · 7 matrículas · 5 saques");
   console.log("   3 termos · 6 níveis · 10 qualificações");
   console.log("\n👤 Credenciais de acesso:");
@@ -1791,6 +1791,28 @@ async function main() {
   console.log("   Nômade:   ana@nomad.com         / senha123");
   console.log("   Agência:  agencia@exemplo.com   / senha123");
   console.log("   Parceiro: parceiro@exemplo.com  / senha123");
+
+  // ─── Verificar se dados reais foram perdidos ──────────────────────────────
+  // ATENÇÃO: este seed NÃO restaura produtos, modelos de tarefas ou
+  // tarefas operacionais. Esses dados devem ser restaurados manualmente.
+  const productCount    = await prisma.product.count();
+  const catalogCount    = await prisma.catalogTask.count();
+  const projectTaskCount = await prisma.projectTask.count();
+
+  if (productCount === 0 || catalogCount === 0) {
+    console.log("\n⚠️  ─────────────────────────────────────────────────────");
+    console.log("⚠️  DADOS REAIS AUSENTES — execute os comandos abaixo:");
+    if (productCount === 0) {
+      console.log("⚠️  Produtos (0):         npx tsx seed-all-products.ts");
+    }
+    if (catalogCount === 0) {
+      console.log("⚠️  Modelos tarefas (0):  npx tsx migrate-tasks.ts");
+    }
+    if (projectTaskCount === 0) {
+      console.log("⚠️  Tarefas operat. (0):  node seed-in-progress.cjs");
+    }
+    console.log("⚠️  ─────────────────────────────────────────────────────\n");
+  }
 }
 
 main()

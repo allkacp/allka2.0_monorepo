@@ -7,6 +7,7 @@ import { FolderOpen, CheckCircle2, Clock, XCircle, Search } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PageLoader } from "@/components/ui/loading";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -17,10 +18,18 @@ function fmtDate(s: string) {
 }
 
 export default function PartnerProjetos() {
-  const { projects, stats } = usePartner();
+  const { projects, stats, loading } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
+  const {
+    sortKey,
+    sortDir,
+    handleSort,
+    sortData,
+    columnFilters,
+    toggleColumnFilter,
+    clearColumnFilter,
+  } = useSorting();
 
   const filtered = projects.filter((p) => {
     if (
@@ -62,6 +71,10 @@ export default function PartnerProjetos() {
     confirmed: { label: "Confirmado", color: "bg-blue-100 text-blue-700" },
     paid: { label: "Pago", color: "bg-emerald-100 text-emerald-700" },
   };
+
+  if (loading) {
+    return <PageLoader text="Carregando projetos…" />;
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -141,25 +154,87 @@ export default function PartnerProjetos() {
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
               <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Projeto" field="projectName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader
+                  label="Projeto"
+                  field="projectName"
+                  type="text"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Empresa" field="companyName" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader
+                  label="Empresa"
+                  field="companyName"
+                  type="text"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Categoria" field="serviceCategory" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["Branding","Social Media","Produção de Vídeo","Conteúdo"]} />
+                <SortableHeader
+                  label="Categoria"
+                  field="serviceCategory"
+                  type="status"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  columnFilters={columnFilters}
+                  onFilter={toggleColumnFilter}
+                  onClearFilter={clearColumnFilter}
+                  filterValues={[
+                    "Branding",
+                    "Social Media",
+                    "Produção de Vídeo",
+                    "Conteúdo",
+                  ]}
+                />
               </th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Valor" field="projectValue" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader
+                  label="Valor"
+                  field="projectValue"
+                  type="number"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
               </th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Comissão" field="commissionGenerated" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader
+                  label="Comissão"
+                  field="commissionGenerated"
+                  type="number"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Status" field="status" type="status" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} columnFilters={columnFilters} onFilter={toggleColumnFilter} onClearFilter={clearColumnFilter} filterValues={["active","completed","cancelled"]} />
+                <SortableHeader
+                  label="Status"
+                  field="status"
+                  type="status"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  columnFilters={columnFilters}
+                  onFilter={toggleColumnFilter}
+                  onClearFilter={clearColumnFilter}
+                  filterValues={["active", "completed", "cancelled"]}
+                />
               </th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader label="Contratado" field="startDate" type="date" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                <SortableHeader
+                  label="Contratado"
+                  field="startDate"
+                  type="date"
+                  sortKey={sortKey ? String(sortKey) : null}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
               </th>
             </tr>
           </thead>

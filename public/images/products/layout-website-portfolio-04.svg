@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0b1640"/>
+      <stop offset="55%" style="stop-color:#14205e"/>
+      <stop offset="100%" style="stop-color:#1e0e5c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2558FF"/>
+      <stop offset="100%" style="stop-color:#6E2C96"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="rgba(0,0,0,0.6)"/></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="700" cy="380" r="120" fill="rgba(110,44,150,0.05)" stroke="rgba(110,44,150,0.07)" stroke-width="1.5"/>
+
+  <rect x="30" y="22" width="180" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">PÁGINA INSTITUCIONAL</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Site Institucional Completo</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Sobre, Serviços, Cases e Contato com identidade sólida</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Page sections panel -->
+  <g filter="url(#shadow)">
+    <!-- Sidebar navigation (left) -->
+    <rect x="60" y="130" width="160" height="284" rx="8" fill="#0f1628"/>
+    <!-- Sidebar items -->
+    <rect x="72" y="146" width="50" height="8" rx="2" fill="rgba(37,88,255,0.5)"/>
+    <text x="79" y="154" font-family="system-ui,sans-serif" font-size="8" fill="#94a3b8">PÁGINAS</text>
+    <rect x="72" y="162" width="120" height="26" rx="5" fill="url(#accent)" opacity="0.3"/>
+    <text x="86" y="179" font-family="system-ui,sans-serif" font-size="10" fill="#ffffff" font-weight="600">🏠 Início</text>
+    <rect x="72" y="192" width="120" height="26" rx="5" fill="#ffffff06"/>
+    <text x="86" y="209" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">👥 Sobre Nós</text>
+    <rect x="72" y="222" width="120" height="26" rx="5" fill="#ffffff06"/>
+    <text x="86" y="239" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">🛠 Serviços</text>
+    <rect x="72" y="252" width="120" height="26" rx="5" fill="#ffffff06"/>
+    <text x="86" y="269" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">📂 Cases</text>
+    <rect x="72" y="282" width="120" height="26" rx="5" fill="#ffffff06"/>
+    <text x="86" y="299" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">💬 Blog</text>
+    <rect x="72" y="312" width="120" height="26" rx="5" fill="#ffffff06"/>
+    <text x="86" y="329" font-family="system-ui,sans-serif" font-size="10" fill="#94a3b8">📞 Contato</text>
+    <!-- Divider in sidebar -->
+    <line x1="72" y1="350" x2="188" y2="350" stroke="#ffffff10" stroke-width="1"/>
+    <rect x="72" y="358" width="90" height="22" rx="4" fill="url(#accent)" opacity="0.5"/>
+    <text x="117" y="373" font-family="system-ui,sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">+ Nova Página</text>
+
+    <!-- Main content preview area -->
+    <rect x="234" y="130" width="506" height="284" rx="8" fill="#111827"/>
+    <!-- Page preview - Serviços section -->
+    <rect x="234" y="130" width="506" height="48" fill="#1f2937" rx="8"/>
+    <rect x="234" y="165" width="506" height="13" fill="#1f2937"/>
+    <!-- Browser controls -->
+    <circle cx="255" cy="154" r="5" fill="#ff5f57"/>
+    <circle cx="272" cy="154" r="5" fill="#ffbd2e"/>
+    <circle cx="289" cy="154" r="5" fill="#28ca41"/>
+    <rect x="330" y="146" width="200" height="16" rx="8" fill="#111827"/>
+    <text x="430" y="158" font-family="system-ui,sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">empresa.com.br/servicos</text>
+
+    <!-- Services page inside browser -->
+    <!-- Header strip -->
+    <rect x="234" y="178" width="506" height="34" fill="url(#accent)" opacity="0.8"/>
+    <rect x="248" y="184" width="50" height="8" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="500" y="185" width="32" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="540" y="185" width="32" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="580" y="185" width="32" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="622" y="181" width="100" height="18" rx="9" fill="rgba(255,255,255,0.9)"/>
+    <text x="672" y="193" font-family="system-ui,sans-serif" font-size="8" fill="#2558FF" text-anchor="middle" font-weight="700">Falar conosco</text>
+
+    <!-- Section title -->
+    <text x="487" y="238" font-family="system-ui,sans-serif" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">Nossos Serviços</text>
+    <text x="487" y="254" font-family="system-ui,sans-serif" font-size="9" fill="#9ca3af" text-anchor="middle">Soluções completas para impulsionar sua presença digital</text>
+
+    <!-- Service cards grid -->
+    <rect x="248" y="264" width="140" height="90" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <rect x="404" y="264" width="140" height="90" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <rect x="560" y="264" width="166" height="90" rx="6" fill="#ffffff06" stroke="#ffffff10" stroke-width="0.8"/>
+    <!-- Card icons -->
+    <rect x="262" y="278" width="28" height="28" rx="7" fill="url(#accent)" opacity="0.6"/>
+    <text x="276" y="296" font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">📱</text>
+    <rect x="297" y="280" width="80" height="7" rx="2" fill="#ffffff25"/>
+    <rect x="262" y="314" width="110" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="262" y="322" width="90" height="4" rx="2" fill="#ffffff10"/>
+    <rect x="418" y="278" width="28" height="28" rx="7" fill="#10b981" opacity="0.5"/>
+    <text x="432" y="296" font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">🎨</text>
+    <rect x="453" y="280" width="80" height="7" rx="2" fill="#ffffff25"/>
+    <rect x="418" y="314" width="110" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="418" y="322" width="90" height="4" rx="2" fill="#ffffff10"/>
+    <rect x="574" y="278" width="28" height="28" rx="7" fill="#f59e0b" opacity="0.5"/>
+    <text x="588" y="296" font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">📊</text>
+    <rect x="609" y="280" width="80" height="7" rx="2" fill="#ffffff25"/>
+    <rect x="574" y="314" width="110" height="4" rx="2" fill="#ffffff15"/>
+    <rect x="574" y="322" width="90" height="4" rx="2" fill="#ffffff10"/>
+
+    <!-- Page count indicator -->
+    <rect x="234" y="390" width="506" height="24" rx="0" fill="#0d1126" opacity="0.9"/>
+    <rect x="234" y="404" width="506" height="10" rx="8" fill="#0d1126"/>
+    <text x="487" y="406" font-family="system-ui,sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">Página 3 de 6 · Último salvo há 2 min</text>
+  </g>
+
+  <!-- Badges -->
+  <rect x="30" y="430" width="115" height="16" rx="8" fill="rgba(37,88,255,0.15)" stroke="rgba(37,88,255,0.35)" stroke-width="1"/>
+  <text x="87" y="441" font-family="system-ui,sans-serif" font-size="9" fill="#60a5fa" text-anchor="middle" font-weight="600">6 páginas incluídas</text>
+  <rect x="157" y="430" width="120" height="16" rx="8" fill="rgba(110,44,150,0.15)" stroke="rgba(110,44,150,0.35)" stroke-width="1"/>
+  <text x="217" y="441" font-family="system-ui,sans-serif" font-size="9" fill="#c084fc" text-anchor="middle" font-weight="600">SEO ready</text>
+  <rect x="289" y="430" width="130" height="16" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="354" y="441" font-family="system-ui,sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle" font-weight="600">Entrega em 7 dias úteis</text>
+</svg>

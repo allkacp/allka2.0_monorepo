@@ -42,7 +42,7 @@ router.get("/", verifyToken, async (_req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const level = await prisma.partnerLevel.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
     });
     if (!level) return res.status(404).json({ error: "Nível não encontrado" });
     res.json(level);
@@ -65,7 +65,7 @@ router.post("/", verifyToken, validate(levelSchema), async (req, res, next) => {
 router.put("/:id", verifyToken, validate(levelSchema.partial()), async (req, res, next) => {
   try {
     const level = await prisma.partnerLevel.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(level);
@@ -77,7 +77,7 @@ router.put("/:id", verifyToken, validate(levelSchema.partial()), async (req, res
 // DELETE /api/levels/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.partnerLevel.delete({ where: { id: req.params.id } });
+    await prisma.partnerLevel.delete({ where: { id: (req.params.id as string) } });
     res.status(204).end();
   } catch (err) {
     next(err);

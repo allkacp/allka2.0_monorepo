@@ -23,6 +23,11 @@ import campaignsRouter from "./routes/campaigns";
 import permissionsRouter from "./routes/permissions";
 import reportsRouter from "./routes/reports";
 import levelsRouter from "./routes/levels";
+import taskTemplatesRouter from "./routes/task-templates";
+import projectProductsRouter from "./routes/project-products";
+import projectTasksRouter from "./routes/project-tasks";
+import systemAlertsRouter from "./routes/system-alerts";
+import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
 const app = express();
@@ -59,6 +64,41 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ─── Admin Data Health Check (requer autenticação via token) ──────────────────
+// Retorna contagens das entidades principais para detectar perda de dados.
+app.get("/api/admin/health-check", async (_req, res, next) => {
+  try {
+    const [products, projects, catalogTasks, projectTasks, companies, nomades] =
+      await Promise.all([
+        prisma.product.count({ where: { is_active: true } }),
+        prisma.project.count(),
+        prisma.catalogTask.count({ where: { is_active: true } }),
+        prisma.projectTask.count(),
+        prisma.company.count(),
+        prisma.nomade.count(),
+      ]);
+
+    const warnings: string[] = [];
+    if (products === 0) warnings.push("Nenhum produto ativo no banco");
+    if (catalogTasks === 0) warnings.push("Nenhum modelo de tarefa ativo no banco");
+    if (projectTasks === 0 && projects > 0) warnings.push("Projetos sem tarefas operacionais");
+
+    res.json({
+      status: warnings.length === 0 ? "ok" : "warning",
+      timestamp: new Date().toISOString(),
+      counts: { products, projects, catalogTasks, projectTasks, companies, nomades },
+      warnings,
+      restore_commands: warnings.length > 0 ? [
+        "cd backend && npx tsx seed-all-products.ts",
+        "cd backend && npx tsx migrate-tasks.ts",
+        "cd backend && node seed-in-progress.cjs",
+      ] : [],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.use("/api/auth", authRouter);
@@ -82,6 +122,13 @@ app.use("/api/campaigns", campaignsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/levels", levelsRouter);
+app.use("/api/task-templates", taskTemplatesRouter);
+// project-products também serve /api/project-products/tasks (sub-rota do mesmo router)
+app.use("/api/project-products", projectProductsRouter);
+// Canonical CRUD for operational execution tasks
+app.use("/api/project-tasks", projectTasksRouter);
+// Admin system alerts (nomad not found, etc.)
+app.use("/api/system-alerts", systemAlertsRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

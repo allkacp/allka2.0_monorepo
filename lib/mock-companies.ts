@@ -3,19 +3,19 @@
 // IMPORTANT: Components should migrate to useCompanyData() hook for real API data.
 
 export interface MockCompanyItem {
-  id: number;
+  id: string | number;
   name: string;
 }
 
 export interface MockClientItem {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   cnpj?: string;
 }
 
 export interface MockUserItem {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   role: string;
@@ -46,7 +46,7 @@ export function useCompanyData() {
     try {
       const res: any = await apiClient.getCompanies({ limit: "1000" });
       const data = res.data || (Array.isArray(res) ? res : []);
-      setCompanies(data.map((c: any) => ({ id: Number(c.id), name: c.name })));
+      setCompanies(data.map((c: any) => ({ id: String(c.id), name: c.name })));
     } catch (err) {
       console.error("[useCompanyData] Failed to load companies:", err);
     } finally {

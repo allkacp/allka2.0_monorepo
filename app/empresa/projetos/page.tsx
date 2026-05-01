@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import { PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1528,11 +1528,7 @@ export default function EmpresaProjetosPage() {
   };
 
   if (projectsLoading) {
-    return (
-      <div className="space-y-5">
-        <PageLoadingSkeleton statCards={4} tableRows={8} tableColumns={7} />
-      </div>
-    );
+    return <PageLoader text="Carregando projetos…" />;
   }
 
   return (

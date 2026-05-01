@@ -29,10 +29,13 @@ import {
   FileText,
   Sparkles,
   Package,
+  Link2,
+  PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAccountType } from "@/contexts/account-type-context";
+import { useProducts } from "@/lib/contexts/product-context";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
 import { ProductRatingDisplay } from "@/components/product-rating-display";
 
@@ -299,12 +302,16 @@ export function ProductDetailSheet({
 }: ProductDetailSheetProps) {
   const [selectedVariation, setSelectedVariation] = useState<any | null>(null);
   const [isClosing, setIsClosing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"detalhes" | "portfolio" | "nomades">(
-    "detalhes",
+  const [activeTab, setActiveTab] = useState<
+    "detalhes" | "portfolio" | "nomades"
+  >("detalhes");
+  const [nestedDetailProduct, setNestedDetailProduct] = useState<any | null>(
+    null,
   );
   const { sidebarWidth } = useSidebar();
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
+  const { products: allProducts } = useProducts();
 
   // Painel direito redimensionável — fração (0–1) da largura do drawer
   const [rightFraction, setRightFraction] = useState(0.5);
@@ -317,6 +324,7 @@ export function ProductDetailSheet({
       setSelectedVariation(null);
       setIsClosing(false);
       setActiveTab("detalhes");
+      setNestedDetailProduct(null);
     }
   }, [open]);
 
@@ -385,13 +393,13 @@ export function ProductDetailSheet({
 
   return (
     <>
-      {/* Backdrop — começa ao lado da sidebar */}
+      {/* Backdrop — começa ao lado da sidebar, para antes do footer (24px) */}
       <div
         className={cn(
-          "fixed top-0 bottom-0 right-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity duration-[420ms]",
+          "fixed top-0 right-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity duration-420",
           isClosing ? "opacity-0" : "opacity-100",
         )}
-        style={{ left: `${sidebarWidth}px` }}
+        style={{ left: `${sidebarWidth}px`, height: "calc(100vh - 24px)" }}
         onClick={handleClose}
       />
 
@@ -532,8 +540,8 @@ export function ProductDetailSheet({
             {/* ── Tab navigation ── */}
             <div className="shrink-0 flex border-b border-border/50 bg-background/80 backdrop-blur-sm">
               {[
-                { id: "detalhes" as const,   label: "Detalhes",           icon: FileText },
-                { id: "portfolio" as const,  label: "Portfólio",          icon: Images   },
+                { id: "detalhes" as const, label: "Detalhes", icon: FileText },
+                { id: "portfolio" as const, label: "Portfólio", icon: Images },
                 ...(isAdmin
                   ? [{ id: "nomades" as const, label: "Nômades", icon: Users }]
                   : []),
@@ -787,38 +795,139 @@ export function ProductDetailSheet({
                     </Section>
                   )}
 
-                  {/* Produtos complementares */}
-                  {pres?.complementaryProducts?.length > 0 && (
-                    <Section
-                      icon={Package}
-                      title="Produtos complementares"
-                      color="text-indigo-600"
-                      bg="bg-indigo-100 dark:bg-indigo-900/40"
-                    >
-                      <div className="space-y-2">
-                        {pres.complementaryProducts.map(
-                          (cp: any, i: number) => (
-                            <div
-                              key={i}
-                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 border border-border/40"
-                            >
-                              <Package className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
-                              <div>
-                                <p className="text-sm font-semibold">
-                                  {cp.title}
-                                </p>
-                                {cp.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                                    {cp.description}
+                  {/* Produtos complementares — reais (IDs vinculados) + fallback textual */}
+                  {(() => {
+                    const linkedIds: string[] =
+                      (product as any).complementaryProductIds ?? [];
+                    const linkedProducts = linkedIds
+                      .map((id: string) =>
+                        allProducts.find((p: any) => p.id === id),
+                      )
+                      .filter(Boolean);
+                    const textComps: any[] = pres?.complementaryProducts ?? [];
+
+                    if (linkedProducts.length === 0 && textComps.length === 0)
+                      return null;
+
+                    return (
+                      <Section
+                        icon={Link2}
+                        title="Combine também com"
+                        color="text-indigo-600"
+                        bg="bg-indigo-100 dark:bg-indigo-900/40"
+                      >
+                        <div className="space-y-2">
+                          {/* ── Linked real products ── */}
+                          {linkedProducts.map((cp: any) => {
+                            const cpHasVariations =
+                              (cp.variations ?? []).filter(
+                                (v: any) => v.isActive !== false,
+                              ).length > 0;
+                            const cpMinPrice = cpHasVariations
+                              ? Math.min(
+                                  ...cp.variations
+                                    .filter((v: any) => v.isActive !== false)
+                                    .map((v: any) => v.price || 0),
+                                )
+                              : cp.finalPrice || 0;
+                            return (
+                              <div
+                                key={cp.id}
+                                className="flex items-center gap-3 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
+                              >
+                                {/* Cover image */}
+                                <div className="shrink-0 h-12 w-12 rounded-lg overflow-hidden bg-linear-to-br from-indigo-500 to-purple-600 border border-indigo-100 dark:border-indigo-800">
+                                  {cp.image ? (
+                                    <img
+                                      src={cp.image}
+                                      alt={cp.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <Package className="h-5 w-5 text-white/70" />
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold leading-tight line-clamp-1">
+                                    {cp.name}
                                   </p>
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    <span className="text-[10px] font-mono text-muted-foreground">
+                                      {cp.id}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      ·
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground line-clamp-1">
+                                      {cp.category}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                                      {cpHasVariations ? "A partir de " : ""}
+                                      {fmtBRL(cpMinPrice)}
+                                      {cp.recurrence === "Mensal" ? "/mês" : ""}
+                                    </span>
+                                    {cp.recurrence && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700">
+                                        {cp.recurrence}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Action button */}
+                                {onAdd && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (cpHasVariations) {
+                                        setNestedDetailProduct(cp);
+                                      } else {
+                                        onAdd({
+                                          ...cp,
+                                          finalPrice: cpMinPrice,
+                                        });
+                                      }
+                                    }}
+                                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-sm"
+                                  >
+                                    <PlusCircle className="h-3.5 w-3.5" />
+                                    {cpHasVariations
+                                      ? "Ver opções"
+                                      : "Adicionar"}
+                                  </button>
                                 )}
                               </div>
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    </Section>
-                  )}
+                            );
+                          })}
+
+                          {/* ── Fallback text-based complementary (only when no IDs linked) ── */}
+                          {linkedProducts.length === 0 &&
+                            textComps.map((cp: any, i: number) => (
+                              <div
+                                key={i}
+                                className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 border border-border/40"
+                              >
+                                <Package className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-semibold">
+                                    {cp.title}
+                                  </p>
+                                  {cp.description && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                                      {cp.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </Section>
+                    );
+                  })()}
 
                   {/* Pré-requisitos */}
                   {pres?.requirements?.length > 0 && (
@@ -851,7 +960,7 @@ export function ProductDetailSheet({
                       bg="bg-purple-100 dark:bg-purple-900/40"
                     >
                       <div className="relative">
-                        <div className="absolute left-[19px] top-6 bottom-4 w-px bg-border" />
+                        <div className="absolute left-4.75 top-6 bottom-4 w-px bg-border" />
                         {pres.howToRequest.map((s: any, i: number) => (
                           <div
                             key={i}
@@ -955,17 +1064,18 @@ export function ProductDetailSheet({
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
                                 {s.executionDeadlineDays != null && (
                                   <span className="text-[10px] font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">
-                                    Execução: até {s.executionDeadlineDays}{" "}
-                                    dia
-                                    {s.executionDeadlineDays > 1 ? "s" : ""}{" "}
+                                    Execução: até {s.executionDeadlineDays} dia
+                                    {s.executionDeadlineDays > 1
+                                      ? "s"
+                                      : ""}{" "}
                                     útil
                                     {s.executionDeadlineDays > 1 ? "is" : ""}
                                   </span>
                                 )}
                                 {s.approvalDeadlineDays != null && (
                                   <span className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
-                                    Aprovação: até {s.approvalDeadlineDays}{" "}
-                                    dias úteis
+                                    Aprovação: até {s.approvalDeadlineDays} dias
+                                    úteis
                                   </span>
                                 )}
                               </div>
@@ -1336,6 +1446,17 @@ export function ProductDetailSheet({
           </div>
         </div>
       </div>
+      {/* ── Nested detail sheet for complementary products with variations ── */}
+      {nestedDetailProduct && (
+        <ProductDetailSheet
+          product={nestedDetailProduct}
+          open={!!nestedDetailProduct}
+          onOpenChange={(v) => {
+            if (!v) setNestedDetailProduct(null);
+          }}
+          onAdd={onAdd}
+        />
+      )}
     </>
   );
 }

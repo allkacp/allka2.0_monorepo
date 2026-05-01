@@ -58,7 +58,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const company = await prisma.company.findUnique({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       include: { _count: { select: { projects: true, invoices: true } } },
     });
 
@@ -87,7 +87,7 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
 router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
   try {
     const company = await prisma.company.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: req.body,
     });
     res.json(company);
@@ -99,7 +99,7 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
 // DELETE /api/clients/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    await prisma.company.delete({ where: { id: req.params.id } });
+    await prisma.company.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
   } catch (err) {
     next(err);

@@ -15,13 +15,14 @@ import {
   Phone,
   MessageCircle,
   Mail,
-  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { NomadMetricsWidgets } from "@/components/admin/nomad-metrics-widgets";
 import { NomadViewModal } from "@/components/admin/nomad-view-modal";
 import { NomadEditModal } from "@/components/admin/nomad-edit-modal";
 import { PageHeader } from "@/components/page-header";
 import { useNomades } from "@/hooks/useNomades";
+import { PageLoader } from "@/components/ui/loading";
 
 const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
   Bronze: {
@@ -289,17 +290,22 @@ export default function AdminNomadesPage() {
     }
   };
 
-  if (loading)
-    return (
-      <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+  if (loading) return <PageLoader text="Carregando nômades…" />;
 
   if (error)
     return (
-      <div className="container mx-auto px-0 py-0 flex items-center justify-center min-h-[400px]">
-        <p className="text-destructive">Erro ao carregar nômades: {error}</p>
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar nômades
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {error}
+          </p>
+        </div>
       </div>
     );
 

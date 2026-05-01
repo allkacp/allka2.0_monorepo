@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0b1640"/>
+      <stop offset="55%" style="stop-color:#14205e"/>
+      <stop offset="100%" style="stop-color:#1e0e5c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2558FF"/>
+      <stop offset="100%" style="stop-color:#6E2C96"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.7)"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <circle cx="700" cy="80" r="140" fill="rgba(37,88,255,0.06)" stroke="rgba(37,88,255,0.08)" stroke-width="1.5"/>
+  <circle cx="100" cy="380" r="100" fill="rgba(110,44,150,0.06)" stroke="rgba(110,44,150,0.07)" stroke-width="1"/>
+
+  <rect x="30" y="22" width="175" height="24" rx="6" fill="#ffffff10"/>
+  <text x="42" y="38" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" font-weight="600" letter-spacing="1">LAYOUT DE WEBSITE</text>
+  <text x="30" y="72" font-family="system-ui,sans-serif" font-size="24" fill="#ffffff" font-weight="700">Design de Site Profissional</text>
+  <text x="30" y="94" font-family="system-ui,sans-serif" font-size="13" fill="#94a3b8">Layout responsivo desktop e mobile com identidade visual completa</text>
+  <line x1="30" y1="110" x2="770" y2="110" stroke="#ffffff12" stroke-width="1"/>
+
+  <!-- Browser mockup -->
+  <g filter="url(#shadow)">
+    <!-- Browser chrome -->
+    <rect x="90" y="128" width="500" height="290" rx="10" fill="#1e2235"/>
+    <rect x="90" y="128" width="500" height="32" rx="10" fill="#252840"/>
+    <rect x="90" y="148" width="500" height="12" rx="0" fill="#252840"/>
+    <!-- traffic lights -->
+    <circle cx="112" cy="144" r="5" fill="#ff5f57"/>
+    <circle cx="128" cy="144" r="5" fill="#ffbd2e"/>
+    <circle cx="144" cy="144" r="5" fill="#28ca41"/>
+    <!-- URL bar -->
+    <rect x="165" y="136" width="260" height="16" rx="8" fill="#1a1d30"/>
+    <text x="295" y="148" font-family="system-ui,sans-serif" font-size="9" fill="#6b7280" text-anchor="middle">https://empresa.com.br</text>
+    <!-- Hero section -->
+    <rect x="90" y="160" width="500" height="100" fill="url(#accent)" opacity="0.9"/>
+    <!-- Hero nav bar -->
+    <rect x="100" y="165" width="60" height="10" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="370" y="167" width="40" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="420" y="167" width="40" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="470" y="167" width="40" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="520" y="163" width="56" height="14" rx="7" fill="rgba(255,255,255,0.9)"/>
+    <!-- Hero text -->
+    <rect x="110" y="188" width="200" height="12" rx="3" fill="rgba(255,255,255,0.95)"/>
+    <rect x="110" y="206" width="155" height="7" rx="2" fill="rgba(255,255,255,0.6)"/>
+    <rect x="110" y="220" width="80" height="18" rx="9" fill="rgba(255,255,255,0.95)"/>
+    <!-- Hero image placeholder -->
+    <rect x="390" y="178" width="180" height="75" rx="6" fill="rgba(255,255,255,0.12)"/>
+    <!-- Cards section -->
+    <rect x="100" y="272" width="140" height="80" rx="6" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <rect x="256" y="272" width="140" height="80" rx="6" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <rect x="412" y="272" width="140" height="80" rx="6" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <!-- Card content dots -->
+    <circle cx="130" cy="295" r="12" fill="url(#accent)" opacity="0.7"/>
+    <rect x="152" y="290" width="70" height="6" rx="2" fill="#ffffff30"/>
+    <rect x="110" y="310" width="110" height="4" rx="2" fill="#ffffff20"/>
+    <rect x="110" y="320" width="90" height="4" rx="2" fill="#ffffff15"/>
+    <circle cx="286" cy="295" r="12" fill="#10b981" opacity="0.7"/>
+    <rect x="308" y="290" width="70" height="6" rx="2" fill="#ffffff30"/>
+    <rect x="266" y="310" width="110" height="4" rx="2" fill="#ffffff20"/>
+    <rect x="266" y="320" width="90" height="4" rx="2" fill="#ffffff15"/>
+    <circle cx="442" cy="295" r="12" fill="#f59e0b" opacity="0.7"/>
+    <rect x="464" y="290" width="70" height="6" rx="2" fill="#ffffff30"/>
+    <rect x="422" y="310" width="110" height="4" rx="2" fill="#ffffff20"/>
+    <rect x="422" y="320" width="90" height="4" rx="2" fill="#ffffff15"/>
+    <!-- Footer -->
+    <rect x="90" y="388" width="500" height="30" rx="0" fill="#0d1126"/>
+    <rect x="100" y="397" width="80" height="4" rx="2" fill="rgba(255,255,255,0.3)"/>
+    <rect x="480" y="397" width="100" height="4" rx="2" fill="rgba(255,255,255,0.2)"/>
+  </g>
+
+  <!-- Mobile mockup (side) -->
+  <g filter="url(#shadow)">
+    <rect x="620" y="148" width="130" height="230" rx="14" fill="#1e2235" stroke="#ffffff10" stroke-width="1.5"/>
+    <rect x="620" y="148" width="130" height="14" rx="14" fill="#252840"/>
+    <circle cx="685" cy="155" r="4" fill="#1a1d30"/>
+    <!-- Mobile hero -->
+    <rect x="625" y="162" width="120" height="55" fill="url(#accent)" opacity="0.85"/>
+    <rect x="635" y="170" width="70" height="7" rx="2" fill="rgba(255,255,255,0.9)"/>
+    <rect x="635" y="182" width="50" height="5" rx="2" fill="rgba(255,255,255,0.5)"/>
+    <rect x="635" y="193" width="40" height="13" rx="6" fill="rgba(255,255,255,0.9)"/>
+    <!-- Mobile cards -->
+    <rect x="628" y="222" width="114" height="36" rx="5" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <rect x="628" y="262" width="114" height="36" rx="5" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <rect x="628" y="302" width="114" height="36" rx="5" fill="#ffffff08" stroke="#ffffff12" stroke-width="1"/>
+    <!-- Mobile footer -->
+    <rect x="620" y="358" width="130" height="20" rx="0" fill="#0d1126"/>
+    <rect x="620" y="364" width="130" height="14" rx="14" fill="#0d1126"/>
+  </g>
+
+  <!-- Badges -->
+  <rect x="30" y="398" width="120" height="26" rx="13" fill="rgba(37,88,255,0.15)" stroke="rgba(37,88,255,0.35)" stroke-width="1"/>
+  <text x="90" y="415" font-family="system-ui,sans-serif" font-size="11" fill="#60a5fa" text-anchor="middle" font-weight="600">Design responsivo</text>
+  <rect x="162" y="398" width="110" height="26" rx="13" fill="rgba(110,44,150,0.15)" stroke="rgba(110,44,150,0.35)" stroke-width="1"/>
+  <text x="217" y="415" font-family="system-ui,sans-serif" font-size="11" fill="#c084fc" text-anchor="middle" font-weight="600">Desktop + Mobile</text>
+  <rect x="284" y="398" width="130" height="26" rx="13" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="349" y="415" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="600">UI profissional</text>
+</svg>

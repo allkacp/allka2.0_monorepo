@@ -9,8 +9,13 @@
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:products": "tsx seed-all-products.ts",
+    "db:seed:tasks": "tsx migrate-tasks.ts",
+    "db:seed:project-tasks": "node seed-in-progress.cjs",
+    "db:restore": "tsx restore-data.ts",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "echo '⛔  Proibido em automação. Use: prisma migrate reset --force (manualmente)'",
+    "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -27,7 +32,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
+    "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.0",
     "prisma": "^5.22.0",

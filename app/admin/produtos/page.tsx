@@ -1,9 +1,14 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { SheetFooter } from "@/components/ui/sheet";
+import {
+  InlineLoader,
+  ButtonLoader,
+  PageLoader,
+} from "@/components/ui/loading";
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -57,7 +62,6 @@ import {
   ArrowRight,
   Layers,
   DollarSign,
-  TrendingUp,
   Calculator,
   X,
   Lock,
@@ -66,7 +70,6 @@ import {
   Link,
   Copy,
   Grid3x3,
-  LayoutList,
   SlidersHorizontal,
   Pencil,
   Power,
@@ -87,6 +90,9 @@ import {
   LayoutTemplate,
   BookOpen,
   Users,
+  ExternalLink,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { CircuitoPreHabilitacaoModal } from "@/components/circuito-pre-habilitacao-modal";
 import { QualificationChecklistPanel } from "@/components/qualification-checklist-panel";
@@ -100,6 +106,7 @@ import {
 // Removed: import ImportTaskTemplateModal from "@/components/import-task-template-modal"
 import { Switch } from "@/components/ui/switch"; // Import Switch
 import { ConfirmationDialog } from "@/components/confirmation-dialog"; // Import ConfirmationDialog
+import { apiClient } from "@/lib/api-client";
 // Removed: import { ProductSheet } from "@/components/admin/product-sheet"
 // Removed: import { QuestionnaireSheet } from "@/components/admin/questionnaire-sheet"
 // Removed: import { PricingCalculatorModal } from "@/components/admin/pricing-calculator-modal"
@@ -112,6 +119,138 @@ import { useSpecialties } from "@/lib/contexts/specialty-context";
 import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
 import { formatCurrency } from "@/lib/utils";
 import PageHeader from "@/components/page-header";
+
+// ── View mode for the product grid ───────────────────────────────────────────
+type ProdGridMode = 2 | 3 | 4 | 5 | "list";
+const PROD_GRID_MODES: {
+  value: ProdGridMode;
+  label: string;
+  Icon: React.FC<{ active: boolean }>;
+}[] = [
+  {
+    value: 2,
+    label: "2 colunas",
+    Icon: ({ active }) => {
+      const c = active ? "#4f46e5" : "#94a3b8";
+      return (
+        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+          <rect x="1" y="1" width="6" height="6" rx="1" fill={c} />
+          <rect x="9" y="1" width="6" height="6" rx="1" fill={c} />
+          <rect x="1" y="9" width="6" height="6" rx="1" fill={c} />
+          <rect x="9" y="9" width="6" height="6" rx="1" fill={c} />
+        </svg>
+      );
+    },
+  },
+  {
+    value: 3,
+    label: "3 colunas",
+    Icon: ({ active }) => {
+      const c = active ? "#4f46e5" : "#94a3b8";
+      return (
+        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+          <rect x="1" y="1" width="4" height="4" rx="0.8" fill={c} />
+          <rect x="6" y="1" width="4" height="4" rx="0.8" fill={c} />
+          <rect x="11" y="1" width="4" height="4" rx="0.8" fill={c} />
+          <rect x="1" y="7" width="4" height="4" rx="0.8" fill={c} />
+          <rect x="6" y="7" width="4" height="4" rx="0.8" fill={c} />
+          <rect x="11" y="7" width="4" height="4" rx="0.8" fill={c} />
+        </svg>
+      );
+    },
+  },
+  {
+    value: 4,
+    label: "4 colunas",
+    Icon: ({ active }) => {
+      const c = active ? "#4f46e5" : "#94a3b8";
+      return (
+        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+          <rect x="0.5" y="1" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="4.5" y="1" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="8.5" y="1" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="12.5" y="1" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="0.5" y="5.5" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="4.5" y="5.5" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="8.5" y="5.5" width="3" height="3" rx="0.6" fill={c} />
+          <rect x="12.5" y="5.5" width="3" height="3" rx="0.6" fill={c} />
+        </svg>
+      );
+    },
+  },
+  {
+    value: 5,
+    label: "5 colunas",
+    Icon: ({ active }) => {
+      const c = active ? "#4f46e5" : "#94a3b8";
+      const xs = [0.5, 3.5, 6.5, 9.5, 12.5];
+      return (
+        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+          {xs.map((x) => (
+            <rect
+              key={x + "a"}
+              x={x}
+              y="1"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
+          {xs.map((x) => (
+            <rect
+              key={x + "b"}
+              x={x}
+              y="5.5"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
+          {xs.map((x) => (
+            <rect
+              key={x + "c"}
+              x={x}
+              y="10"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
+        </svg>
+      );
+    },
+  },
+  {
+    value: "list",
+    label: "Lista",
+    Icon: ({ active }) => {
+      const c = active ? "#4f46e5" : "#94a3b8";
+      return (
+        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+          <rect x="1" y="1.5" width="14" height="3" rx="0.8" fill={c} />
+          <rect x="1" y="6.5" width="14" height="3" rx="0.8" fill={c} />
+          <rect x="1" y="11.5" width="14" height="3" rx="0.8" fill={c} />
+        </svg>
+      );
+    },
+  },
+];
+
+function getProdGridClass(mode: ProdGridMode): string {
+  if (mode === "list") return "";
+  if (mode === 2) return "grid grid-cols-1 sm:grid-cols-2 gap-4";
+  if (mode === 3) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+  if (mode === 4)
+    return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
+  if (mode === 5)
+    return "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3";
+  return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
+}
+
+const PROD_GRID_STORAGE_KEY = "allka_cadastro_produtos_view_mode";
 
 type Question = {
   id: string;
@@ -271,7 +410,15 @@ const DEFAULT_TAX_RATES = {
 };
 
 export default function AdminProdutosPage() {
-  const { products, addProduct, updateProduct, deleteProduct } = useProducts();
+  const {
+    products,
+    loading: productsLoading,
+    error: productsError,
+    refetch: refetchProducts,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+  } = useProducts();
   const { specialties } = useSpecialties();
   const { toast } = useToast();
   const { sidebarWidth } = useSidebar();
@@ -282,7 +429,21 @@ export default function AdminProdutosPage() {
   const [filterAreas, setFilterAreas] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [gridMode, setGridModeState] = useState<ProdGridMode>(() => {
+    try {
+      const saved = localStorage.getItem(PROD_GRID_STORAGE_KEY);
+      if (saved === "list") return "list";
+      const n = Number(saved);
+      if (n === 2 || n === 3 || n === 4 || n === 5) return n as ProdGridMode;
+    } catch {}
+    return 3;
+  });
+  const setGridMode = (mode: ProdGridMode) => {
+    setGridModeState(mode);
+    try {
+      localStorage.setItem(PROD_GRID_STORAGE_KEY, String(mode));
+    } catch {}
+  };
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -311,6 +472,17 @@ export default function AdminProdutosPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false); // Renamed from isCreateOpen
   const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+  // ── Catalog tasks for the view sheet ────────────────────────────────────
+  const [productCatalogTasks, setProductCatalogTasks] = useState<any[]>([]);
+  const [catalogTasksLoading, setCatalogTasksLoading] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [catalogTaskSearch, setCatalogTaskSearch] = useState("");
+  const [catalogTaskSearchResults, setCatalogTaskSearchResults] = useState<
+    any[]
+  >([]);
+  const [catalogTaskSearchLoading, setCatalogTaskSearchLoading] =
+    useState(false);
+  const [openAddTaskFor, setOpenAddTaskFor] = useState<string | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false); // New state for view modal
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isQuestionnaireModalOpen, setIsQuestionnaireModalOpen] =
@@ -602,6 +774,162 @@ export default function AdminProdutosPage() {
     return "bg-orange-100 text-orange-800";
   };
 
+  // ── Catalog Task Handlers ───────────────────────────────────────────────
+  const fetchProductCatalogTasks = useCallback(async (productId: string) => {
+    setCatalogTasksLoading(true);
+    try {
+      const data = await apiClient.getCatalogTasksByProduct(productId);
+      setProductCatalogTasks(Array.isArray(data) ? data : []);
+    } catch {
+      setProductCatalogTasks([]);
+    } finally {
+      setCatalogTasksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isViewSheetOpen && selectedProduct) {
+      fetchProductCatalogTasks(selectedProduct.id);
+      setOpenAddTaskFor(null);
+      setCatalogTaskSearch("");
+      setCatalogTaskSearchResults([]);
+    } else {
+      setProductCatalogTasks([]);
+    }
+  }, [isViewSheetOpen, selectedProduct?.id]);
+
+  const searchCatalogTasks = useCallback(
+    async (q: string) => {
+      if (!q.trim()) {
+        setCatalogTaskSearchResults([]);
+        return;
+      }
+      setCatalogTaskSearchLoading(true);
+      try {
+        const res = await apiClient.getCatalogTasks({ search: q, limit: 20 });
+        const data = res.data ?? res ?? [];
+        const linkedIds = new Set(
+          productCatalogTasks.map(
+            (l: any) => l.catalog_task?.id ?? l.catalog_task_id,
+          ),
+        );
+        setCatalogTaskSearchResults(
+          data.filter((t: any) => !linkedIds.has(t.id)),
+        );
+      } catch {
+        setCatalogTaskSearchResults([]);
+      } finally {
+        setCatalogTaskSearchLoading(false);
+      }
+    },
+    [productCatalogTasks],
+  );
+
+  async function handleAddCatalogTask(task: any, phase: string | null) {
+    if (!selectedProduct) return;
+    const relevantLinks = phase
+      ? productCatalogTasks.filter((l) => l.phase === phase)
+      : productCatalogTasks.filter((l) => !l.phase || l.phase === "base");
+    const nextOrder = relevantLinks.length + 1;
+    try {
+      await apiClient.linkCatalogTaskToProduct({
+        product_id: selectedProduct.id,
+        catalog_task_id: task.id,
+        sort_order: nextOrder,
+        is_mandatory: true,
+        phase: phase || undefined,
+      });
+      toast({ title: "Tarefa vinculada!" });
+      fetchProductCatalogTasks(selectedProduct.id);
+      setCatalogTaskSearch("");
+      setCatalogTaskSearchResults([]);
+    } catch (e: any) {
+      toast({
+        title: "Erro ao vincular",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRemoveCatalogTaskLink(linkId: string) {
+    try {
+      await apiClient.unlinkCatalogTask(linkId);
+      toast({ title: "Tarefa desvinculada" });
+      if (selectedProduct) fetchProductCatalogTasks(selectedProduct.id);
+    } catch (e: any) {
+      toast({
+        title: "Erro ao desvincular",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleUpdateCatalogTaskLink(
+    link: any,
+    updates: { is_mandatory?: boolean; notes?: string; sort_order?: number },
+  ) {
+    try {
+      await apiClient.linkCatalogTaskToProduct({
+        product_id: link.product_id,
+        catalog_task_id: link.catalog_task?.id ?? link.catalog_task_id,
+        sort_order: updates.sort_order ?? link.sort_order,
+        is_mandatory: updates.is_mandatory ?? link.is_mandatory,
+        phase: link.phase ?? undefined,
+        notes:
+          updates.notes !== undefined
+            ? updates.notes || undefined
+            : (link.notes ?? undefined),
+      });
+      if (selectedProduct) fetchProductCatalogTasks(selectedProduct.id);
+    } catch (e: any) {
+      toast({
+        title: "Erro ao atualizar",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleMoveTaskLink(
+    link: any,
+    idx: number,
+    arr: any[],
+    direction: -1 | 1,
+  ) {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    const other = arr[newIdx];
+    try {
+      await Promise.all([
+        apiClient.linkCatalogTaskToProduct({
+          product_id: link.product_id,
+          catalog_task_id: link.catalog_task?.id ?? link.catalog_task_id,
+          sort_order: newIdx + 1,
+          is_mandatory: link.is_mandatory,
+          phase: link.phase ?? undefined,
+          notes: link.notes ?? undefined,
+        }),
+        apiClient.linkCatalogTaskToProduct({
+          product_id: other.product_id,
+          catalog_task_id: other.catalog_task?.id ?? other.catalog_task_id,
+          sort_order: idx + 1,
+          is_mandatory: other.is_mandatory,
+          phase: other.phase ?? undefined,
+          notes: other.notes ?? undefined,
+        }),
+      ]);
+      if (selectedProduct) fetchProductCatalogTasks(selectedProduct.id);
+    } catch (e: any) {
+      toast({
+        title: "Erro ao reordenar",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
   const handleEditProduct = (product: Product) => {
     setSelectedProduct(product);
     setProductFormData({
@@ -621,7 +949,7 @@ export default function AdminProdutosPage() {
       tags: (product as any).tags || [],
       productId: product.id,
       recurrence: (product as any).recurrence || "",
-      complementaryProducts: (product as any).complementaryProducts || [],
+      complementaryProducts: (product as any).complementaryProductIds || [],
       requestAttention: (product as any).requestAttention || "",
       oneTimeContract: (product as any).oneTimeContract || "",
       monthlyContract: (product as any).monthlyContract || "",
@@ -844,7 +1172,7 @@ export default function AdminProdutosPage() {
       summaryDescription: productFormData.summaryDescription,
       includedItems: productFormData.includedItems,
       notIncludedItems: productFormData.notIncludedItems,
-      complementaryProducts: productFormData.complementaryProducts,
+      complementaryProductIds: productFormData.complementaryProducts,
       requestAttention: productFormData.requestAttention,
       oneTimeContract: productFormData.oneTimeContract,
       monthlyContract: productFormData.monthlyContract,
@@ -929,11 +1257,15 @@ export default function AdminProdutosPage() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setProductFormData({
-        ...productFormData,
-        productImage: file,
-        productImagePreview: URL.createObjectURL(file),
-      });
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setProductFormData({
+          ...productFormData,
+          productImage: file,
+          productImagePreview: ev.target?.result as string,
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -1081,64 +1413,75 @@ export default function AdminProdutosPage() {
     setProductAddOns(productAddOns.filter((a) => a.id !== id));
   };
 
-  const handleSaveProduct = () => {
-    if (selectedProduct) {
-      // Edit existing product
-      updateProduct(selectedProduct.id, {
-        // Pass selectedProduct.id to updateProduct
-        ...selectedProduct, // Start with existing selected product
-        ...productFormData, // Override with form data
-        price: Number.parseFloat(productFormData.price),
-        deliveryDays: Number.parseInt(productFormData.deliveryDays), // Changed from deadline to deliveryDays
-        additionalImages,
-        portfolioImages,
-        demonstrations: portfolioImages.map((img) => img.url).filter(Boolean),
-        questions: productQuestions,
-        variations: productVariations,
-        addOns: productAddOns,
-        tasks: productTasks, // Use the tasks from the form state
-        // Ensure other necessary fields are updated as well
-        name: productFormData.name,
-        presentation: productFormData.presentation,
-        benefits: productFormData.benefits,
-        information: productFormData.information,
-        description: productFormData.description,
-        category: productFormData.category,
-        subcategories: productFormData.subcategories,
-        image: productFormData.productImagePreview,
-        productImagePreview: productFormData.productImagePreview,
-        deliveryVideoUrl: productFormData.deliveryVideoUrl,
-        tags: productFormData.tags,
-        recurrence: productFormData.recurrence,
-        complementaryProducts: productFormData.complementaryProducts,
-        requestAttention: productFormData.requestAttention,
-        oneTimeContract: productFormData.oneTimeContract,
-        monthlyContract: productFormData.monthlyContract,
-        previousContracts: productFormData.previousContracts,
-        status: productFormData.status,
-        associatedTaskModels: productFormData.associatedTaskModels,
-        isActive: productFormData.isActive, // Assuming isActive is part of productFormData
-        // Include questionnaire and tasks from form state
-        questionnaire: {
-          title: "Questionário do Produto", // Placeholder title
-          description: "Respostas do cliente para configurar o produto.", // Placeholder description
+  const handleSaveProduct = async () => {
+    setIsSavingProduct(true);
+    try {
+      if (selectedProduct) {
+        // Edit existing product
+        await updateProduct(selectedProduct.id, {
+          // Pass selectedProduct.id to updateProduct
+          ...selectedProduct, // Start with existing selected product
+          ...productFormData, // Override with form data
+          price: Number.parseFloat(productFormData.price),
+          deliveryDays: Number.parseInt(productFormData.deliveryDays), // Changed from deadline to deliveryDays
+          additionalImages,
+          portfolioImages,
+          demonstrations: portfolioImages.map((img) => img.url).filter(Boolean),
           questions: productQuestions,
-        },
-        excludedItems: productFormData.excludedItems,
-        updatedAt: new Date().toISOString(),
-      });
+          variations: productVariations,
+          addOns: productAddOns,
+          tasks: productTasks, // Use the tasks from the form state
+          // Ensure other necessary fields are updated as well
+          name: productFormData.name,
+          presentation: productFormData.presentation,
+          benefits: productFormData.benefits,
+          information: productFormData.information,
+          description: productFormData.description,
+          category: productFormData.category,
+          subcategories: productFormData.subcategories,
+          image: productFormData.productImagePreview,
+          productImagePreview: productFormData.productImagePreview,
+          deliveryVideoUrl: productFormData.deliveryVideoUrl,
+          tags: productFormData.tags,
+          recurrence: productFormData.recurrence,
+          complementaryProductIds: productFormData.complementaryProducts,
+          requestAttention: productFormData.requestAttention,
+          oneTimeContract: productFormData.oneTimeContract,
+          monthlyContract: productFormData.monthlyContract,
+          previousContracts: productFormData.previousContracts,
+          status: productFormData.status,
+          associatedTaskModels: productFormData.associatedTaskModels,
+          isActive: productFormData.isActive, // Assuming isActive is part of productFormData
+          // Include questionnaire and tasks from form state
+          questionnaire: {
+            title: "Questionário do Produto", // Placeholder title
+            description: "Respostas do cliente para configurar o produto.", // Placeholder description
+            questions: productQuestions,
+          },
+          excludedItems: productFormData.excludedItems,
+          updatedAt: new Date().toISOString(),
+        });
+        toast({
+          title: "Sucesso",
+          description: "Produto atualizado com sucesso!",
+        });
+      } else {
+        // Create new product
+        // Call handleCreateProduct which already has the logic for new products
+        await handleCreateProduct();
+        toast({
+          title: "Sucesso",
+          description: "Produto criado com sucesso!",
+        });
+      }
+    } catch (err: any) {
       toast({
-        title: "Sucesso",
-        description: "Produto atualizado com sucesso!",
+        title: "Erro ao salvar produto",
+        description: err?.message || "Não foi possível salvar o produto.",
+        variant: "destructive",
       });
-    } else {
-      // Create new product
-      // Call handleCreateProduct which already has the logic for new products
-      handleCreateProduct();
-      toast({
-        title: "Sucesso",
-        description: "Produto criado com sucesso!",
-      });
+    } finally {
+      setIsSavingProduct(false);
     }
     setIsProductSheetOpen(false);
     resetForm();
@@ -1233,7 +1576,7 @@ export default function AdminProdutosPage() {
       summaryDescription: productFormData.summaryDescription,
       includedItems: productFormData.includedItems,
       notIncludedItems: productFormData.notIncludedItems,
-      complementaryProducts: productFormData.complementaryProducts,
+      complementaryProductIds: productFormData.complementaryProducts,
       requestAttention: productFormData.requestAttention,
       oneTimeContract: productFormData.oneTimeContract,
       monthlyContract: productFormData.monthlyContract,
@@ -1385,6 +1728,31 @@ export default function AdminProdutosPage() {
     sortBy !== "name",
   ].filter(Boolean).length;
 
+  if (productsLoading) {
+    return <PageLoader text="Carregando produtos…" />;
+  }
+
+  if (productsError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar produtos
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+            {productsError}
+          </p>
+        </div>
+        <Button onClick={refetchProducts} className="btn-brand">
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 space-y-3">
       <PageHeader
@@ -1403,99 +1771,58 @@ export default function AdminProdutosPage() {
       />
 
       {/* ── Stats Bar ── */}
-      <TooltipProvider>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 cursor-default">
-                <div className="h-11 w-11 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Package className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Produtos
-                  </p>
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-400 leading-tight">
-                    {safeProducts.length}
-                  </p>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Total de produtos cadastrados na plataforma</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 cursor-default">
-                <div className="h-11 w-11 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <ListChecks className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Tarefas
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 leading-tight">
-                    {safeProducts.reduce(
-                      (sum, p) => sum + (p.tasks || []).length,
-                      0,
-                    )}
-                  </p>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Total de tarefas vinculadas a todos os produtos</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-violet-100 dark:border-violet-900/40 bg-violet-50 dark:bg-violet-950/30 cursor-default">
-                <div className="h-11 w-11 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Clock className="h-5 w-5 text-violet-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Horas Est.
-                  </p>
-                  <p className="text-2xl font-bold text-violet-700 dark:text-violet-400 leading-tight">
-                    {safeProducts.reduce((sum, p) => sum + getTotalHours(p), 0)}
-                    h
-                  </p>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Soma das horas estimadas de execução de todos os produtos</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-orange-100 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/30 cursor-default">
-                <div className="h-11 w-11 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <TrendingUp className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Receita
-                  </p>
-                  <p className="text-xl font-bold text-orange-700 dark:text-orange-400 leading-tight">
-                    {formatCurrency(
-                      safeProducts.reduce(
-                        (sum, p) => sum + (p.finalPrice || 0),
-                        0,
-                      ),
-                    )}
-                  </p>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Soma dos preços finais de todos os produtos cadastrados</p>
-            </TooltipContent>
-          </Tooltip>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-1">
+        {/* Card — Produtos */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm transition-shadow hover:shadow-md">
+          {/* gradient accent strip */}
+          <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" />
+          <div className="flex items-center gap-5 px-6 py-5">
+            {/* icon */}
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shrink-0">
+              <Package className="h-7 w-7 text-white" />
+            </div>
+            {/* content */}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
+                Produtos
+              </p>
+              <p className="text-4xl font-extrabold text-slate-800 dark:text-slate-100 leading-none tabular-nums">
+                {safeProducts.length}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">
+                Produtos cadastrados na base
+              </p>
+            </div>
+          </div>
         </div>
-      </TooltipProvider>
+
+        {/* Card — Tarefas */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm transition-shadow hover:shadow-md">
+          {/* gradient accent strip */}
+          <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" />
+          <div className="flex items-center gap-5 px-6 py-5">
+            {/* icon */}
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-md shrink-0">
+              <ListChecks className="h-7 w-7 text-white" />
+            </div>
+            {/* content */}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
+                Tarefas
+              </p>
+              <p className="text-4xl font-extrabold text-slate-800 dark:text-slate-100 leading-none tabular-nums">
+                {safeProducts.reduce(
+                  (sum, p) => sum + (p.tasks || []).length,
+                  0,
+                )}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">
+                Modelos internos vinculados aos produtos
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
         {/* Top Bar */}
@@ -1562,37 +1889,24 @@ export default function AdminProdutosPage() {
             )}
           </Button>
 
-          {/* View toggle */}
-          <TooltipProvider>
-            <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shrink-0">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === "grid" ? "bg-blue-500 text-white" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
-                  >
-                    <Grid3x3 className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Visualizar como grade de cards</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setViewMode("list")}
-                    className={`h-9 w-9 flex items-center justify-center transition-colors border-l border-slate-200 dark:border-slate-700 ${viewMode === "list" ? "bg-blue-500 text-white" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
-                  >
-                    <LayoutList className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Visualizar como lista compacta</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
+          {/* View mode selector */}
+          <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 shrink-0">
+            {PROD_GRID_MODES.map(({ value, label, Icon }) => (
+              <button
+                key={String(value)}
+                type="button"
+                title={label}
+                onClick={() => setGridMode(value)}
+                className={`h-8 w-8 flex items-center justify-center rounded-md transition-all ${
+                  gridMode === value
+                    ? "bg-white dark:bg-slate-700 shadow-sm"
+                    : "hover:bg-white/60 dark:hover:bg-slate-700/60"
+                }`}
+              >
+                <Icon active={gridMode === value} />
+              </button>
+            ))}
+          </div>
 
           {/* Pagination top */}
           {totalPages > 1 && (
@@ -1660,7 +1974,7 @@ export default function AdminProdutosPage() {
               </Button>
             )}
           </div>
-        ) : viewMode === "list" ? (
+        ) : gridMode === "list" ? (
           /* ── LIST VIEW ── */
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {paginatedProducts.map((product) => (
@@ -1787,7 +2101,7 @@ export default function AdminProdutosPage() {
         ) : (
           /* ── GRID VIEW ── */
           <div className="p-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-4">
+            <div className={getProdGridClass(gridMode)}>
               {paginatedProducts.map((product) => (
                 <Card
                   key={product.id}
@@ -3278,7 +3592,9 @@ export default function AdminProdutosPage() {
                           Esta tarefa só pode iniciar após a conclusão de{" "}
                           <strong>{selectedTask.dependencies.length}</strong>{" "}
                           tarefa
-                          {selectedTask.dependencies.length !== 1 ? "s" : ""}{" "}
+                          {selectedTask.dependencies.length !== 1
+                            ? "s"
+                            : ""}{" "}
                           anterior
                           {selectedTask.dependencies.length !== 1 ? "es" : ""}.
                         </p>
@@ -3832,9 +4148,9 @@ export default function AdminProdutosPage() {
                       >
                         <Layers className="h-3.5 w-3.5" />
                         Tarefas
-                        {(selectedProduct.tasks || []).length > 0 && (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center">
-                            {(selectedProduct.tasks || []).length}
+                        {productCatalogTasks.length > 0 && (
+                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                            {productCatalogTasks.length}
                           </span>
                         )}
                       </TabsTrigger>
@@ -3919,6 +4235,25 @@ export default function AdminProdutosPage() {
                         <Users className="h-3.5 w-3.5" />
                         Nômades e Desempenho
                       </TabsTrigger>
+                      <TabsTrigger
+                        value="complementares"
+                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Complementares
+                        {(
+                          (selectedProduct as any).complementaryProductIds || []
+                        ).length > 0 && (
+                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                            {
+                              (
+                                (selectedProduct as any)
+                                  .complementaryProductIds || []
+                              ).length
+                            }
+                          </span>
+                        )}
+                      </TabsTrigger>
                     </TabsList>
                   </div>
                   <div className="p-5">
@@ -3931,15 +4266,21 @@ export default function AdminProdutosPage() {
                           className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-gradient-to-br from-blue-500 to-violet-600 shrink-0"
                           style={{ width: 160, height: 160 }}
                         >
-                          <img
-                            src={
-                              selectedProduct.productImagePreview ||
-                              (selectedProduct as any).image ||
-                              ""
-                            }
-                            alt={selectedProduct.name}
-                            className="w-full h-full object-cover"
-                          />
+                          {selectedProduct.productImagePreview ||
+                          (selectedProduct as any).image ? (
+                            <img
+                              src={
+                                selectedProduct.productImagePreview ||
+                                (selectedProduct as any).image
+                              }
+                              alt={selectedProduct.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="h-12 w-12 text-white/40" />
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
                           {/* Status pill */}
                           <div className="absolute top-2 left-2">
@@ -4165,108 +4506,341 @@ export default function AdminProdutosPage() {
                       )}
                     </TabsContent>
 
-                    {/* ── TAREFAS ── */}
-                    <TabsContent value="tasks" className="space-y-3 mt-3">
-                      {(selectedProduct.tasks || []).length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                          <Layers className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            Nenhuma tarefa cadastrada para este produto.
+                    {/* ── TAREFAS VINCULADAS ── */}
+                    <TabsContent value="tasks" className="space-y-4 mt-3">
+                      {/* Warning banner */}
+                      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40 px-4 py-3">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                          <strong>Tarefas reutilizáveis.</strong> Alterações
+                          feitas no{" "}
+                          <a
+                            href="/admin/tarefas"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline font-semibold hover:text-amber-900 dark:hover:text-amber-100"
+                          >
+                            Cadastro de Tarefas
+                          </a>{" "}
+                          serão refletidas automaticamente em todos os produtos
+                          vinculados.
+                        </p>
+                      </div>
+
+                      {/* Base tasks section */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            Tarefas do produto
+                            {!catalogTasksLoading &&
+                              productCatalogTasks.filter(
+                                (l) => !l.phase || l.phase === "base",
+                              ).length > 0 && (
+                                <span className="text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                  {
+                                    productCatalogTasks.filter(
+                                      (l) => !l.phase || l.phase === "base",
+                                    ).length
+                                  }
+                                </span>
+                              )}
                           </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() => {
+                              setCatalogTaskSearch("");
+                              setCatalogTaskSearchResults([]);
+                              setOpenAddTaskFor((p) =>
+                                p === "base" ? null : "base",
+                              );
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Vincular Tarefa
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {[...(selectedProduct.tasks || [])]
-                            .sort((a, b) => (a.order || 0) - (b.order || 0))
-                            .map((task, idx) => (
-                              <div
-                                key={task.id}
-                                className="border rounded-xl overflow-hidden"
-                              >
-                                <div className="flex items-start gap-3 px-4 py-3 bg-muted/30">
-                                  <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-xs shrink-0 mt-0.5">
-                                    {task.order || idx + 1}
-                                  </span>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <p className="font-semibold text-sm">
+
+                        {/* Add panel for base tasks */}
+                        {openAddTaskFor === "base" && (
+                          <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 space-y-2">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                              <Input
+                                className="pl-8 h-8 text-xs"
+                                placeholder="Buscar por nome ou código..."
+                                value={catalogTaskSearch}
+                                onChange={(e) => {
+                                  setCatalogTaskSearch(e.target.value);
+                                  searchCatalogTasks(e.target.value);
+                                }}
+                                autoFocus
+                              />
+                              {catalogTaskSearch && (
+                                <button
+                                  onClick={() => {
+                                    setCatalogTaskSearch("");
+                                    setCatalogTaskSearchResults([]);
+                                  }}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            {catalogTaskSearchLoading && (
+                              <InlineLoader
+                                text="Buscando..."
+                                className="py-1 justify-start"
+                              />
+                            )}
+                            {catalogTaskSearchResults.length > 0 && (
+                              <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+                                {catalogTaskSearchResults.map((task) => (
+                                  <button
+                                    key={task.id}
+                                    onClick={() =>
+                                      handleAddCatalogTask(task, null)
+                                    }
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 text-left transition-colors group"
+                                  >
+                                    <span className="font-mono text-[10px] text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                                      {task.code}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-medium truncate">
                                         {task.name}
                                       </p>
-                                      <Badge
-                                        variant={
-                                          task.canRunInParallel
-                                            ? "outline"
-                                            : "secondary"
-                                        }
-                                        className="text-xs"
-                                      >
-                                        {task.canRunInParallel
-                                          ? "Paralela"
-                                          : "Sequencial"}
-                                      </Badge>
-                                      {(task.dependencies || []).length > 0 && (
-                                        <Badge
-                                          className={`text-xs ${getDependencyBadgeColor(task.dependencies)}`}
-                                        >
-                                          {task.dependencies.length} dep.
-                                        </Badge>
-                                      )}
-                                      <span className="text-xs font-semibold text-emerald-600 ml-auto">
-                                        {formatCurrency(task.calculatedCost)}
-                                      </span>
-                                    </div>
-                                    {task.description && (
-                                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                        {task.description}
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {task.category}
                                       </p>
-                                    )}
-                                  </div>
-                                </div>
-                                {(task.steps || []).length > 0 && (
-                                  <div className="divide-y px-4">
-                                    {(task.steps || []).map((step) => {
-                                      const specialty = specialties.find(
-                                        (s) => s.id === step.specialty,
-                                      );
-                                      return (
-                                        <div
-                                          key={step.id}
-                                          className="flex items-center justify-between py-2.5 text-xs"
-                                        >
-                                          <div className="flex items-center gap-2 flex-1 min-w-0 mr-3">
-                                            <span className="text-muted-foreground w-4 shrink-0">
-                                              {step.order}.
-                                            </span>
-                                            <span className="truncate">
-                                              {step.name}
-                                            </span>
-                                            {specialty && (
-                                              <Badge
-                                                variant="outline"
-                                                className="text-xs shrink-0"
-                                              >
-                                                {specialty.name}
-                                              </Badge>
-                                            )}
-                                            {step.experienceLevel && (
-                                              <Badge
-                                                variant="secondary"
-                                                className="text-xs shrink-0"
-                                              >
-                                                {step.experienceLevel}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          <span className="text-muted-foreground shrink-0">
-                                            {step.estimatedHours}h
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                    </div>
+                                    <Plus className="h-3.5 w-3.5 text-indigo-500 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+                                  </button>
+                                ))}
                               </div>
-                            ))}
+                            )}
+                            {!catalogTaskSearchLoading &&
+                              catalogTaskSearch.length > 1 &&
+                              catalogTaskSearchResults.length === 0 && (
+                                <p className="text-xs text-muted-foreground py-1">
+                                  Nenhuma tarefa disponível.{" "}
+                                  <a
+                                    href="/admin/tarefas"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 underline"
+                                  >
+                                    Criar nova tarefa
+                                  </a>
+                                </p>
+                              )}
+                          </div>
+                        )}
+
+                        {/* Loading */}
+                        {catalogTasksLoading && (
+                          <InlineLoader
+                            text="Carregando tarefas vinculadas…"
+                            className="py-10 justify-center"
+                          />
+                        )}
+
+                        {/* Empty state */}
+                        {!catalogTasksLoading &&
+                          productCatalogTasks.filter(
+                            (l) => !l.phase || l.phase === "base",
+                          ).length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                              <Layers className="h-8 w-8 text-muted-foreground/25 mb-2" />
+                              <p className="text-xs text-muted-foreground">
+                                Nenhuma tarefa vinculada.
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                Use "Vincular Tarefa" para adicionar do
+                                catálogo.
+                              </p>
+                            </div>
+                          )}
+
+                        {/* Task list — base */}
+                        {!catalogTasksLoading &&
+                          productCatalogTasks.filter(
+                            (l) => !l.phase || l.phase === "base",
+                          ).length > 0 && (
+                            <div className="space-y-2">
+                              {productCatalogTasks
+                                .filter((l) => !l.phase || l.phase === "base")
+                                .map((link, idx, arr) => (
+                                  <CatalogTaskLinkRow
+                                    key={link.id}
+                                    link={link}
+                                    index={idx}
+                                    total={arr.length}
+                                    onMoveUp={() =>
+                                      handleMoveTaskLink(link, idx, arr, -1)
+                                    }
+                                    onMoveDown={() =>
+                                      handleMoveTaskLink(link, idx, arr, 1)
+                                    }
+                                    onToggleMandatory={() =>
+                                      handleUpdateCatalogTaskLink(link, {
+                                        is_mandatory: !link.is_mandatory,
+                                      })
+                                    }
+                                    onUpdateNotes={(notes) =>
+                                      handleUpdateCatalogTaskLink(link, {
+                                        notes,
+                                      })
+                                    }
+                                    onRemove={() =>
+                                      handleRemoveCatalogTaskLink(link.id)
+                                    }
+                                  />
+                                ))}
+                            </div>
+                          )}
+                      </div>
+
+                      {/* Variation-specific tasks */}
+                      {(selectedProduct.variations || []).length > 0 && (
+                        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            Tarefas por variação
+                          </p>
+                          {(selectedProduct.variations || []).map(
+                            (variation: any) => {
+                              const varTasks = productCatalogTasks.filter(
+                                (l) => l.phase === variation.id,
+                              );
+                              return (
+                                <div
+                                  key={variation.id}
+                                  className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+                                >
+                                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/60 dark:bg-slate-900/30">
+                                    <div>
+                                      <p className="text-xs font-semibold">
+                                        {variation.name}
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {varTasks.length} tarefa
+                                        {varTasks.length !== 1 ? "s" : ""}{" "}
+                                        específica
+                                        {varTasks.length !== 1 ? "s" : ""}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                      onClick={() => {
+                                        setCatalogTaskSearch("");
+                                        setCatalogTaskSearchResults([]);
+                                        setOpenAddTaskFor((p) =>
+                                          p === variation.id
+                                            ? null
+                                            : variation.id,
+                                        );
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                      Adicionar
+                                    </Button>
+                                  </div>
+                                  {openAddTaskFor === variation.id && (
+                                    <div className="px-3 py-2.5 border-t border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/10 space-y-2">
+                                      <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                        <Input
+                                          className="pl-8 h-8 text-xs"
+                                          placeholder="Buscar tarefa..."
+                                          value={catalogTaskSearch}
+                                          onChange={(e) => {
+                                            setCatalogTaskSearch(
+                                              e.target.value,
+                                            );
+                                            searchCatalogTasks(e.target.value);
+                                          }}
+                                          autoFocus
+                                        />
+                                      </div>
+                                      {catalogTaskSearchResults.length > 0 && (
+                                        <div className="space-y-1 max-h-36 overflow-y-auto">
+                                          {catalogTaskSearchResults.map(
+                                            (task) => (
+                                              <button
+                                                key={task.id}
+                                                onClick={() =>
+                                                  handleAddCatalogTask(
+                                                    task,
+                                                    variation.id,
+                                                  )
+                                                }
+                                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-400 text-left transition-colors group"
+                                              >
+                                                <span className="font-mono text-[10px] text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                                                  {task.code}
+                                                </span>
+                                                <p className="text-xs font-medium flex-1 truncate">
+                                                  {task.name}
+                                                </p>
+                                                <Plus className="h-3 w-3 text-indigo-500 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+                                              </button>
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {varTasks.length > 0 && (
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                      {varTasks.map((link) => (
+                                        <div
+                                          key={link.id}
+                                          className="flex items-center gap-2 px-3 py-2"
+                                        >
+                                          <span className="font-mono text-[10px] text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                                            {link.catalog_task?.code}
+                                          </span>
+                                          <p className="text-xs font-medium flex-1 truncate">
+                                            {link.catalog_task?.name}
+                                          </p>
+                                          {link.is_mandatory ? (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">
+                                              Obrig.
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">
+                                              Opcional
+                                            </span>
+                                          )}
+                                          <button
+                                            onClick={() =>
+                                              handleRemoveCatalogTaskLink(
+                                                link.id,
+                                              )
+                                            }
+                                            className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {varTasks.length === 0 &&
+                                    openAddTaskFor !== variation.id && (
+                                      <div className="px-4 py-3 text-xs text-muted-foreground/60 italic">
+                                        Nenhuma tarefa específica para esta
+                                        variação.
+                                      </div>
+                                    )}
+                                </div>
+                              );
+                            },
+                          )}
                         </div>
                       )}
                     </TabsContent>
@@ -5547,6 +6121,29 @@ export default function AdminProdutosPage() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <TabsTrigger
+                            value="complementares"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                          >
+                            <Link2 className="h-3.5 w-3.5" />
+                            Complementares
+                            {productFormData.complementaryProducts.length >
+                              0 && (
+                              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                                {productFormData.complementaryProducts.length}
+                              </span>
+                            )}
+                          </TabsTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            Produtos vinculados como complementares (upsell /
+                            cross-sell)
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <TabsTrigger
                             value="descricao"
                             className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
@@ -6347,6 +6944,106 @@ export default function AdminProdutosPage() {
                           }
                           className="text-xs min-h-[100px]"
                         />
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* ── COMPLEMENTARES (edit) ── */}
+                <TabsContent value="complementares" className="space-y-3 mt-3">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                      <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Produtos Complementares
+                      </span>
+                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                        · aparecem no Ver Detalhes como sugestão de upsell
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {/* Currently linked */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          IDs vinculados (
+                          {productFormData.complementaryProducts.length})
+                        </Label>
+                        {productFormData.complementaryProducts.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {productFormData.complementaryProducts.map(
+                              (id: string) => {
+                                const p = safeProducts.find((x) => x.id === id);
+                                return (
+                                  <div
+                                    key={id}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+                                  >
+                                    <span>{p ? `${id} · ${p.name}` : id}</span>
+                                    <button
+                                      type="button"
+                                      className="ml-1 text-indigo-400 hover:text-red-500 transition-colors"
+                                      onClick={() =>
+                                        setProductFormData((prev: any) => ({
+                                          ...prev,
+                                          complementaryProducts:
+                                            prev.complementaryProducts.filter(
+                                              (x: string) => x !== id,
+                                            ),
+                                        }))
+                                      }
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                );
+                              },
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">
+                            Nenhum produto vinculado ainda.
+                          </p>
+                        )}
+                      </div>
+                      {/* Add product search */}
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          Adicionar produto
+                        </Label>
+                        <div className="max-h-60 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
+                          {safeProducts
+                            .filter(
+                              (p) =>
+                                p.id !== productFormData.productId &&
+                                !productFormData.complementaryProducts.includes(
+                                  p.id,
+                                ),
+                            )
+                            .map((p: any) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
+                                onClick={() =>
+                                  setProductFormData((prev: any) => ({
+                                    ...prev,
+                                    complementaryProducts: [
+                                      ...prev.complementaryProducts,
+                                      p.id,
+                                    ],
+                                  }))
+                                }
+                              >
+                                <span className="text-[10px] font-mono text-muted-foreground w-16 shrink-0">
+                                  {p.id}
+                                </span>
+                                <span className="text-xs flex-1 min-w-0 line-clamp-1">
+                                  {p.name}
+                                </span>
+                                <Plus className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                              </button>
+                            ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -7521,7 +8218,10 @@ export default function AdminProdutosPage() {
                 </TabsContent>
 
                 {/* ── NÔMADES E DESEMPENHO — admin only (rota já protegida) ── */}
-                <TabsContent value="nomades-habilitados" className="space-y-3 mt-3">
+                <TabsContent
+                  value="nomades-habilitados"
+                  className="space-y-3 mt-3"
+                >
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
@@ -7538,6 +8238,150 @@ export default function AdminProdutosPage() {
                   </div>
                 </TabsContent>
 
+                {/* ── COMPLEMENTARES ── */}
+                <TabsContent value="complementares" className="space-y-3 mt-3">
+                  {(() => {
+                    if (!selectedProduct) return null;
+                    const linkedIds: string[] =
+                      (selectedProduct as any).complementaryProductIds || [];
+                    const linkedProds = linkedIds
+                      .map((id) => safeProducts.find((p) => p.id === id))
+                      .filter(Boolean);
+                    return (
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                            <div className="flex items-center gap-2">
+                              <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                Produtos Complementares Vinculados
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold">
+                                {linkedIds.length}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setIsViewSheetOpen(false);
+                                handleEditProduct(selectedProduct);
+                              }}
+                              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Editar vínculos
+                            </button>
+                          </div>
+                          <div className="p-4">
+                            {linkedProds.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                                <Link2 className="h-8 w-8 text-muted-foreground/30" />
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  Nenhum produto complementar vinculado
+                                </p>
+                                <p className="text-xs text-muted-foreground/70">
+                                  Clique em "Editar vínculos" para adicionar
+                                  produtos complementares.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {linkedProds.map((cp: any) => (
+                                  <div
+                                    key={cp.id}
+                                    className="flex items-center gap-3 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20"
+                                  >
+                                    <div className="shrink-0 h-10 w-10 rounded-lg overflow-hidden border border-indigo-100 dark:border-indigo-800 bg-gradient-to-br from-indigo-500 to-purple-600">
+                                      {cp.image ? (
+                                        <img
+                                          src={(cp as any).image}
+                                          alt={cp.name}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <Package className="h-4 w-4 text-white/70" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold leading-tight line-clamp-1">
+                                        {cp.name}
+                                      </p>
+                                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                        <span className="text-[10px] font-mono text-muted-foreground">
+                                          {cp.id}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          ·
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {cp.category}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          ·
+                                        </span>
+                                        <span className="text-[10px] font-semibold text-emerald-600">
+                                          {new Intl.NumberFormat("pt-BR", {
+                                            style: "currency",
+                                            currency: "BRL",
+                                          }).format(cp.finalPrice || 0)}
+                                          {cp.recurrence === "Mensal"
+                                            ? "/mês"
+                                            : ""}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] shrink-0"
+                                    >
+                                      {cp.category}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {/* Cross-reference: which products point to this one */}
+                        {(() => {
+                          const pointingToThis = safeProducts.filter((p) =>
+                            ((p as any).complementaryProductIds || []).includes(
+                              selectedProduct.id,
+                            ),
+                          );
+                          if (pointingToThis.length === 0) return null;
+                          return (
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                                <Link2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                  Produtos que indicam este como complementar
+                                </span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold">
+                                  {pointingToThis.length}
+                                </span>
+                              </div>
+                              <div className="p-4 space-y-2">
+                                {pointingToThis.map((p: any) => (
+                                  <div
+                                    key={p.id}
+                                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                                  >
+                                    <Package className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="font-mono">{p.id}</span>
+                                    <span>·</span>
+                                    <span>{p.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+                </TabsContent>
               </Tabs>
             </div>
           </div>
@@ -7574,15 +8418,174 @@ export default function AdminProdutosPage() {
               <Button
                 size="sm"
                 onClick={handleSaveProduct}
+                disabled={isSavingProduct}
                 className="btn-brand gap-1.5 text-xs"
               >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Salvar Produto
+                {isSavingProduct ? (
+                  <ButtonLoader text="Salvando…" />
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Salvar Produto
+                  </>
+                )}
               </Button>
             </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+// ─── CatalogTaskLinkRow: sub-component for Tarefas tab ─────────────────────────────────────
+function CatalogTaskLinkRow({
+  link,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onToggleMandatory,
+  onUpdateNotes,
+  onRemove,
+}: {
+  link: any;
+  index: number;
+  total: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggleMandatory: () => void;
+  onUpdateNotes: (notes: string) => void;
+  onRemove: () => void;
+}) {
+  const task = link.catalog_task;
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState(link.notes || "");
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        {/* Reorder */}
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <button
+            onClick={onMoveUp}
+            disabled={index === 0}
+            className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronUp className="h-3 w-3 text-slate-500" />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronDown className="h-3 w-3 text-slate-500" />
+          </button>
+        </div>
+        {/* Order badge */}
+        <span className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+          {index + 1}
+        </span>
+        {/* Code */}
+        <span className="font-mono text-[10px] text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+          {task?.code ?? "—"}
+        </span>
+        {/* Name + category */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight truncate">
+            {task?.name ?? "Tarefa"}
+          </p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {task?.category}
+          </p>
+        </div>
+        {/* Mandatory toggle */}
+        <button
+          onClick={onToggleMandatory}
+          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+            link.is_mandatory
+              ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+              : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+          }`}
+        >
+          {link.is_mandatory ? "Obrigatória" : "Opcional"}
+        </button>
+        {/* Link to Cadastro de Tarefas */}
+        <a
+          href="/admin/tarefas"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Abrir no Cadastro de Tarefas"
+          className="shrink-0 text-muted-foreground hover:text-indigo-600 transition-colors"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+        {/* Remove */}
+        <button
+          onClick={onRemove}
+          title="Remover vínculo"
+          className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {/* Notes row */}
+      <div className="px-3 py-2 bg-slate-50/50 dark:bg-slate-900/20 border-t border-slate-100 dark:border-slate-800">
+        {editingNotes ? (
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 text-xs px-2 py-1 border rounded-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-400"
+              value={notesValue}
+              onChange={(e) => setNotesValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  onUpdateNotes(notesValue);
+                  setEditingNotes(false);
+                }
+                if (e.key === "Escape") {
+                  setNotesValue(link.notes || "");
+                  setEditingNotes(false);
+                }
+              }}
+              autoFocus
+              placeholder="Observação específica para este produto..."
+            />
+            <button
+              onClick={() => {
+                onUpdateNotes(notesValue);
+                setEditingNotes(false);
+              }}
+              className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold whitespace-nowrap"
+            >
+              Salvar
+            </button>
+            <button
+              onClick={() => {
+                setNotesValue(link.notes || "");
+                setEditingNotes(false);
+              }}
+              className="text-xs text-muted-foreground"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditingNotes(true)}
+            className="text-xs text-left w-full transition-colors"
+          >
+            {link.notes ? (
+              <span className="text-slate-600 dark:text-slate-400">
+                {link.notes}
+              </span>
+            ) : (
+              <span className="text-muted-foreground/50 italic">
+                Adicionar observação específica para este produto...
+              </span>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
