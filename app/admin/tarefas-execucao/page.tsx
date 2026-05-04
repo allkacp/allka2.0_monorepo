@@ -46,6 +46,7 @@ interface ProjectTask {
   project_product_id: string;
   product_id: string;
   catalog_task_id: string | null;
+  task_code: string | null;
   code_snapshot: string | null;
   name_snapshot: string;
   category_snapshot: string | null;
@@ -573,9 +574,9 @@ export default function AdminTarefasExecucaoPage() {
                           <p className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-snug">
                             {task.title}
                           </p>
-                          {task.code_snapshot && (
-                            <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
-                              {task.code_snapshot}
+                          {(task.task_code || task.code_snapshot) && (
+                            <span className="text-[10px] font-mono font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800 px-1.5 py-0.5 rounded">
+                              {task.task_code ?? task.code_snapshot}
                             </span>
                           )}
                           {task.phase && (

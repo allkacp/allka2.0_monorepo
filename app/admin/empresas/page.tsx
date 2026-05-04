@@ -177,27 +177,27 @@ const PARTNER_LEVEL_CONFIG = {
   bronze: {
     label: "Bronze",
     icon: "🥉",
-    badge: "bg-amber-50 text-amber-700 border-amber-200",
+    badge: "allka-badge allka-badge-bronze",
   },
   silver: {
     label: "Silver",
     icon: "🥈",
-    badge: "bg-slate-100 text-slate-600 border-slate-300",
+    badge: "allka-badge allka-badge-silver",
   },
   gold: {
     label: "Gold",
     icon: "🥇",
-    badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    badge: "allka-badge allka-badge-gold",
   },
   platinum: {
     label: "Platinum",
     icon: "💎",
-    badge: "bg-sky-50 text-sky-700 border-sky-200",
+    badge: "allka-badge allka-badge-platinum",
   },
   diamond: {
     label: "Diamond",
     icon: "👑",
-    badge: "bg-violet-50 text-violet-700 border-violet-200",
+    badge: "allka-badge allka-badge-diamond",
   },
 };
 
@@ -313,7 +313,7 @@ export default function EmpresasPage() {
     status: 145,
     plano: 145,
     tipo: 130,
-    acoes: 68,
+    acoes: 116,
   };
   const allMinWidths: Record<ColKey, number> = {
     empresa: 200,
@@ -322,7 +322,7 @@ export default function EmpresasPage() {
     status: 110,
     plano: 110,
     tipo: 100,
-    acoes: 60,
+    acoes: 116,
   };
   const defaultColWidths = visibleColumnsList.map(
     (c) => allDefaultWidths[c.key],
@@ -1318,9 +1318,9 @@ export default function EmpresasPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 19rem)" }}>
           <table
-            className="text-sm"
+            className="text-xs"
             style={{
               tableLayout: "fixed",
               width: "100%",
@@ -1337,25 +1337,26 @@ export default function EmpresasPage() {
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative bg-white dark:bg-[oklch(0.19_0.026_258)]"
+                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
                     style={{
                       paddingLeft: 20,
                       paddingRight: 20,
-                      textAlign: col.key === "acoes" ? "right" : "left",
+                      textAlign: col.key === "acoes" ? "center" : "left",
+                      position: "sticky",
+                      top: 0,
+                      zIndex: col.key === "acoes" ? 3 : 2,
+                      background: "var(--table-head)",
+                      boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       borderRight:
                         col.key !== "acoes"
                           ? "1px solid rgba(148,163,184,0.25)"
                           : undefined,
-                      borderLeft:
-                        col.key === "acoes"
-                          ? "1px solid rgba(148,163,184,0.25)"
-                          : undefined,
                       ...(col.key === "acoes"
                         ? {
-                            position: "sticky",
                             right: 0,
-                            zIndex: 2,
-                            background: "var(--table-head)",
+                            minWidth: 116,
+                            borderLeft: "1px solid rgba(148,163,184,0.18)",
+                            boxShadow: "-4px 0 10px -2px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                           }
                         : {}),
                     }}
@@ -1427,8 +1428,8 @@ export default function EmpresasPage() {
                   key={company.id}
                   className={`group transition-colors cursor-pointer ${
                     rowIndex % 2 === 0
-                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-slate-50 dark:hover:bg-[oklch(0.21_0.024_258)]"
-                      : "bg-slate-50/80 dark:bg-[oklch(0.16_0.024_258)] hover:bg-slate-100 dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#eef2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      : "bg-[#f4f7fb] dark:bg-[oklch(0.16_0.024_258)] hover:bg-[#e8eeff] dark:hover:bg-[oklch(0.21_0.024_258)]"
                   }`}
                 >
                   {/* Company */}
@@ -1456,7 +1457,7 @@ export default function EmpresasPage() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium hover:bg-orange-200 transition-colors dark:bg-orange-500/15 dark:text-orange-400 dark:hover:bg-orange-500/25"
+                                      className="allka-badge allka-badge-dpo-warning hover:brightness-110 transition-all"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditCompany(company);
@@ -1490,7 +1491,7 @@ export default function EmpresasPage() {
                               <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-200 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30">
+                                    <span className="allka-badge allka-badge-dpo-ok cursor-default">
                                       <ShieldCheck className="h-3 w-3" />
                                       DPO cadastrado
                                     </span>
@@ -1522,7 +1523,7 @@ export default function EmpresasPage() {
                             {/* Política de privacidade ainda não aceita */}
                             {company.lgpd &&
                               !company.lgpd.privacy_policy_accepted && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium dark:bg-amber-500/15 dark:text-amber-400">
+                                <span className="allka-badge allka-badge-policy-pending">
                                   Política pendente
                                 </span>
                               )}
@@ -1606,23 +1607,18 @@ export default function EmpresasPage() {
                       }}
                     >
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                        className={`allka-badge ${
                           company.status === "active"
-                            ? "bg-emerald-500 text-white border-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30"
+                            ? "allka-badge-status-ativo"
                             : company.status === "inactive"
-                              ? "bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600/50"
-                              : "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30"
+                              ? "allka-badge-status-inativo"
+                              : "allka-badge-status-pendente"
                         }`}
                       >
-                        {company.status === "active" && (
-                          <CheckCircle className="h-3.5 w-3.5" />
-                        )}
-                        {company.status === "inactive" && (
-                          <PauseCircle className="h-3.5 w-3.5" />
-                        )}
-                        {company.status === "pending" && (
-                          <Clock className="h-3.5 w-3.5" />
-                        )}
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          company.status === "active" ? "bg-emerald-400" :
+                          company.status === "inactive" ? "bg-slate-400" : "bg-amber-400"
+                        }`} />
                         {company.status === "active"
                           ? "Ativo"
                           : company.status === "inactive"
@@ -1657,56 +1653,49 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color:
-                              "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40",
+                            color: "allka-badge allka-badge-plano-lite",
                           },
                           start: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color:
-                              "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40",
+                            color: "allka-badge allka-badge-plano-start",
                           },
                           standard: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color:
-                              "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40",
+                            color: "allka-badge allka-badge-plano-standard",
                           },
                           growth: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color:
-                              "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-700/40",
+                            color: "allka-badge allka-badge-plano-growth",
                           },
                           scale: {
                             name: "Scale",
                             price: "R$ 3.000/mês",
                             discount: "20%",
                             info: "20% de desconto em todos os produtos",
-                            color:
-                              "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700/40",
+                            color: "allka-badge allka-badge-plano-scale",
                           },
                           squad: {
                             name: "Squad",
                             price: "R$ 5.000/mês",
                             discount: "20%",
                             info: "Agências — 20% desconto + pós pago + squad dedicado",
-                            color:
-                              "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/40",
+                            color: "allka-badge allka-badge-plano-squad",
                           },
                           enterprise: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color:
-                              "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/40",
+                            color: "allka-badge allka-badge-plano-enterprise",
                           },
                           // backwards compat
                           basic: {
@@ -1714,48 +1703,42 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color:
-                              "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40",
+                            color: "allka-badge allka-badge-plano-lite",
                           },
                           starter: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color:
-                              "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40",
+                            color: "allka-badge allka-badge-plano-start",
                           },
                           premium: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color:
-                              "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40",
+                            color: "allka-badge allka-badge-plano-standard",
                           },
                           gold: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color:
-                              "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-700/40",
+                            color: "allka-badge allka-badge-plano-growth",
                           },
                           silver: {
                             name: "Lite",
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color:
-                              "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/40",
+                            color: "allka-badge allka-badge-plano-lite",
                           },
                           platinum: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color:
-                              "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/40",
+                            color: "allka-badge allka-badge-plano-enterprise",
                           },
                         };
                         const key = (
@@ -1772,7 +1755,7 @@ export default function EmpresasPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span
-                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border w-fit cursor-default ${plan.color}`}
+                                  className={`${plan.color} w-fit cursor-default`}
                                 >
                                   {plan.name}
                                 </span>
@@ -1807,12 +1790,12 @@ export default function EmpresasPage() {
                     >
                       <div className="flex flex-col gap-1 items-start">
                         <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                          className={`allka-badge ${
                             company.type === "company"
-                              ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"
+                              ? "allka-badge-tipo-empresa"
                               : company.type === "agency"
-                                ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"
-                                : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
+                                ? "allka-badge-tipo-agencia"
+                                : "allka-badge-tipo-outro"
                           }`}
                         >
                           {getTypeLabel(company.type)}
@@ -1833,7 +1816,7 @@ export default function EmpresasPage() {
                             ) : null;
                           })()}
                         {company.type === "agency" && company.is_partner && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-50 text-rose-700 border-rose-200">
+                          <span className="allka-badge allka-badge-partner">
                             <Award className="h-3 w-3" /> Partner
                           </span>
                         )}
@@ -1844,54 +1827,79 @@ export default function EmpresasPage() {
                   {/* Actions */}
                   {visibleCols.has("acoes") && (
                     <td
-                      className="px-5 py-3.5"
+                      className={`px-2 py-2 transition-colors ${
+                        rowIndex % 2 === 0
+                          ? "bg-white group-hover:bg-[#eef2ff] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#f4f7fb] group-hover:bg-[#e8eeff] dark:bg-[oklch(0.16_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                      }`}
                       style={{
                         position: "sticky",
                         right: 0,
                         zIndex: 1,
-                        background:
-                          rowIndex % 2 === 0
-                            ? "var(--table-row)"
-                            : "var(--table-row-alt)",
-                        borderLeft: "1px solid rgba(148,163,184,0.25)",
+                        minWidth: 116,
+                        borderLeft: "1px solid rgba(148,163,184,0.18)",
+                        boxShadow: "-4px 0 10px -2px rgba(0,0,0,0.06)",
                       }}
                     >
-                      <div className="flex items-center justify-end gap-0">
-                        <TooltipProvider>
+                      {/* Pill container */}
+                      <div className="flex items-center justify-center">
+                        <div className="inline-flex items-center gap-px rounded-lg border border-slate-200/80 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/60 p-0.5 shadow-sm backdrop-blur-sm">
+                        {/* Ver detalhes */}
+                        <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleViewCompany(company)}
-                                className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                className="h-6 w-6 p-0 rounded-md text-[#2558FF]/60 hover:text-[#2558FF] hover:bg-[#2558FF]/10 dark:text-[#2558FF]/50 dark:hover:text-[#2558FF] dark:hover:bg-[#2558FF]/15 transition-all duration-150"
                               >
-                                <Eye className="h-2.5 w-2.5" />
+                                <Eye className="h-3 w-3" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent className="text-xs">
-                              Ver Detalhes
+                            <TooltipContent className="text-xs font-medium">
+                              Ver detalhes
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                        <TooltipProvider>
+                        {/* Editar empresa */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditCompany(company)}
+                                className="h-6 w-6 p-0 rounded-md text-[#6E2C96]/60 hover:text-[#6E2C96] hover:bg-[#6E2C96]/10 dark:text-[#6E2C96]/50 dark:hover:text-[#6E2C96] dark:hover:bg-[#6E2C96]/15 transition-all duration-150"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Editar empresa
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {/* Excluir empresa */}
+                        <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDeleteCompany(company.id)}
-                                className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                                className="h-6 w-6 p-0 rounded-md text-rose-400/60 hover:text-rose-500 hover:bg-rose-500/10 dark:text-rose-400/50 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-all duration-150"
                               >
-                                <Trash2 className="h-2.5 w-2.5" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent className="text-xs">
-                              Excluir
+                            <TooltipContent className="text-xs font-medium">
+                              Excluir empresa
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </div>
+                        </div>{/* end pill */}
+                      </div>{/* end center wrapper */}
                     </td>
                   )}
                 </tr>

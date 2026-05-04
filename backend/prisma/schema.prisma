@@ -38,8 +38,24 @@ model User {
   chat_participations ChatParticipant[]
   sent_messages       ChatMessage[]      @relation("SentMessages")
   course_enrollments  CourseEnrollment[]
+  lider_areas         LiderArea[]
+  tasks_como_lider    ProjectTask[] @relation("TaskLiderResponsavel")
 
   @@map("users")
+}
+
+model LiderArea {
+  id                    String   @id @default(cuid())
+  user_id               String
+  user                  User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  area_nome             String
+  categorias_permitidas String?
+  produtos_permitidos   String?
+  ativo                 Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@map("lider_areas")
 }
 
 // ─── Companies (Empresas / Clientes) ─────────────────────────────────────────
@@ -125,8 +141,42 @@ model Nomade {
   bank_account        BankAccount?
   task_executions     TaskExecution[]
   withdrawal_requests WithdrawalRequest[]
+  habilidades         NomadeHabilidade[]
 
   @@map("nomades")
+}
+
+// ─── NomadeHabilidade ────────────────────────────────────────────────────────
+// Vínculo estruturado entre nômade e área/categoria/produto para seleção automática.
+// Complementa o modelo Qualification (mantido para compatibilidade).
+
+model NomadeHabilidade {
+  id                String   @id @default(cuid())
+  nomade_id         String
+  nomade            Nomade   @relation(fields: [nomade_id], references: [id], onDelete: Cascade)
+
+  area              String
+  // Performance | Design | Conteúdo | Web | Audiovisual
+
+  categoria_produto String?
+  // Categoria do produto, e.g., "Performance e Anúncios Patrocinados"
+
+  produto_id        String?
+  // Produto específico (opcional) — link suave, sem FK forçada para evitar cascata
+
+  modelo_tarefa_id  String?
+  // CatalogTask específica (opcional) — link suave
+
+  nota_media        Float    @default(0)
+  disponibilidade   String   @default("disponivel")
+  // disponivel | indisponivel | pausado
+
+  ativo             Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([nomade_id, area, categoria_produto, produto_id, modelo_tarefa_id])
+  @@map("nomade_habilidades")
 }
 
 model NomadeLevel {
@@ -231,6 +281,7 @@ model Project {
   client_id   String?
   client      Company?  @relation(fields: [client_id], references: [id])
   status      String    @default("draft")
+  // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled | paid
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled
   lifecycle   String    @default("avulso")
   // avulso | mensal
@@ -263,6 +314,7 @@ model Project {
   invoices        Invoice[]
   products        ProjectProduct[]
   project_tasks   ProjectTask[]
+  payments        Payment[]
 
   @@map("projects")
 }
@@ -553,6 +605,9 @@ model ProjectTask {
   name_snapshot     String
   category_snapshot String?
 
+  // Globally unique operational task code — T000001, T000002, …
+  task_code         String? @unique
+
   // Task fields
   title        String
   description  String?
@@ -561,9 +616,11 @@ model ProjectTask {
   // | EM_EXECUCAO | EM_REVISAO | EM_APROVACAO | CONCLUIDA | CANCELADA | AGUARDANDO_NOMADE
   priority     String @default("medium")
   // low | medium | high | urgent
-  assignee_id          String?
-  responsavel_agencia_id  String?
-  nomade_responsavel_id   String?
+  assignee_id              String?
+  responsavel_agencia_id   String?
+  nomade_responsavel_id    String?
+  lider_responsavel_id     String?
+  // User.id of the leader assigned to qualify this task
 
   due_date               DateTime?
   start_date             DateTime?
@@ -572,6 +629,8 @@ model ProjectTask {
   data_liberacao_execucao DateTime?
   data_inicio_execucao   DateTime?
   data_conclusao         DateTime?
+  // Prazo de 30 dias para lançar a tarefa — após esta data ela expira automaticamente
+  lancamento_expires_at  DateTime?
 
   sort_order Int    @default(0)
   fase       String?
@@ -591,6 +650,7 @@ model ProjectTask {
   briefing_answers   TaskBriefingAnswer[]
   attachments        TaskAttachment[]
   assignment_history TaskAssignmentHistory[]
+  lider_responsavel  User?                  @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   @@map("project_tasks")
 }
@@ -609,7 +669,8 @@ model ProjectTaskStage {
   ordem             Int     @default(0)
   status            String  @default("PENDENTE")
   // PENDENTE | EM_ANDAMENTO | CONCLUIDA | BLOQUEADA
-  obrigatoria          Boolean @default(true)
+  obrigatoria              Boolean @default(true)
+  depende_da_etapa_anterior Boolean @default(true)
   briefing_necessario  Boolean @default(false)
   checklist_snapshot   String?
   // JSON: ChecklistItem[]
@@ -998,4 +1059,29 @@ model MatchQueueEntry {
   updated_at   DateTime @updatedAt
 
   @@map("match_queue_entries")
+}
+
+// ─── Payments (Sandbox / Fake Gateway) ───────────────────────────────────────
+
+model Payment {
+  id                  String    @id @default(cuid())
+  project_id          String
+  project             Project   @relation(fields: [project_id], references: [id])
+  user_id             String?
+  amount              Float
+  payment_method      String    @default("CARTAO_TESTE")
+  // CARTAO_TESTE | PIX_FAKE | BOLETO_FAKE | CREDITOS | ALLKOINS
+  status              String    @default("PENDENTE")
+  // PENDENTE | PAGO | FALHOU | CANCELADO
+  gateway             String    @default("FAKE_SANDBOX")
+  // FAKE_SANDBOX | STRIPE | PAGARME | ASAAS
+  fake_transaction_id String?
+  card_last_digits    String?
+  card_holder         String?
+  notes               String?
+  paid_at             DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  @@map("payments")
 }

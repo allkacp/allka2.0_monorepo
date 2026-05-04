@@ -953,12 +953,12 @@ export default function AdminFinanceiroPage() {
               </p>
             </div>
             <div className="flex gap-3 text-sm">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">
+              <span className="allka-badge allka-badge-financial-pending">
                 <Clock className="h-3.5 w-3.5" />
                 {withdrawals.filter((w) => w.status === "pending").length}{" "}
                 pendentes
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+              <span className="allka-badge allka-badge-financial-paid">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 {withdrawals.filter((w) => w.status === "paid").length} pagos
               </span>
@@ -967,9 +967,10 @@ export default function AdminFinanceiroPage() {
 
           <Card>
             <CardContent className="p-0">
+              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 22rem)" }}>
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-slate-50">
+                <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
+                  <tr className="border-b border-slate-200/60">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       <SortableHeader
                         label="Parceiro"
@@ -1028,10 +1029,14 @@ export default function AdminFinanceiroPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {sortWithdrawals(withdrawals).map((w) => (
+                  {sortWithdrawals(withdrawals).map((w, rowIdx) => (
                     <tr
                       key={w.id}
-                      className="hover:bg-slate-50/50 transition-colors"
+                      className={`transition-colors ${
+                        rowIdx % 2 === 0
+                          ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                          : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
+                      }`}
                     >
                       <td className="px-5 py-3">
                         <p className="font-medium text-slate-800">
@@ -1063,18 +1068,18 @@ export default function AdminFinanceiroPage() {
                       </td>
                       <td className="px-4 py-3">
                         {w.status === "pending" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                          <span className="allka-badge allka-badge-financial-pending" style={{ fontSize: 10 }}>
                             <Clock className="h-3 w-3" /> Aguardando
                           </span>
                         )}
                         {w.status === "paid" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                          <span className="allka-badge allka-badge-financial-paid" style={{ fontSize: 10 }}>
                             <CheckCircle2 className="h-3 w-3" /> Pago
                           </span>
                         )}
                         {w.status === "rejected" && (
                           <div>
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
+                            <span className="allka-badge allka-badge-financial-rejected" style={{ fontSize: 10 }}>
                               <XCircle className="h-3 w-3" /> Rejeitado
                             </span>
                             {w.notes && (
@@ -1151,6 +1156,7 @@ export default function AdminFinanceiroPage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

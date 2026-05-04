@@ -200,6 +200,9 @@ export function ProjectCreateSlidePanel({
     }>
   >(initialData?.vault || []);
 
+  // Maps productId → projectProductId after linking (used to update commission after checkout)
+  const [linkedProductIds, setLinkedProductIds] = useState<Record<string, string>>({});
+
   const [paymentCards, setPaymentCards] = useState<
     Array<{
       id: string;
@@ -328,10 +331,7 @@ export function ProjectCreateSlidePanel({
       newErrors.client_id = "Cliente é obrigatório";
     }
 
-    // Manager is optional when empresa is contracting directly
-    if (!preselectedCompanyId && !formData.manager_id) {
-      newErrors.manager_id = "Gerente é obrigatório";
-    }
+    // manager_id is optional — stored as consultant string in backend
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -347,26 +347,32 @@ export function ProjectCreateSlidePanel({
     setLoading(true);
 
     try {
+      // ── Normalise lifecycle to the lowercase values the backend expects
+      const lifecycleNorm: "avulso" | "mensal" =
+        formLifecycle === "Mensal" ? "mensal" : "avulso";
+
       const projectData = {
-        name: formData.name,
+        // Backend uses `title`, not `name`
+        title: formData.name,
         description: formData.description,
-        client_id: Number.parseInt(formData.client_id),
-        manager_id: Number.parseInt(formData.manager_id),
-        status: "awaiting-payment" as any,
-        lifecycle: formLifecycle,
-        billingConfig:
-          formLifecycle === "Mensal"
-            ? { billingDay: formBillingDay }
-            : undefined,
+        // client_id is a string FK to Company in the backend schema
+        client_id: formData.client_id || undefined,
+        // manager is stored as consultant (string) — no FK in backend
+        consultant: formData.manager_id || undefined,
+        status: "awaiting-payment",
+        lifecycle: lifecycleNorm,
+        type:
+          customProjectType ||
+          (formLifecycle !== "Avulso" && formLifecycle !== "Mensal"
+            ? formLifecycle
+            : undefined),
+        value: calculateTotal(),
+        billing_day: formLifecycle === "Mensal" ? formBillingDay : undefined,
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
         budget: formData.budget
           ? Number.parseFloat(formData.budget)
           : undefined,
-        image: formData.image,
-        // Include vault and payment data in project data
-        vault: vaultCredentials,
-        paymentCards: paymentCards.filter((card) => card.isPrimary), // Only save the primary card or selected cards
       };
 
       let result: Project;
@@ -379,30 +385,64 @@ export function ProjectCreateSlidePanel({
         onSubmit(result);
         onClose();
       } else {
-        // Persist to API (mock or real) so refetch() picks it up
+        // Persist to API — must succeed to get a real UUID for payment
         let apiResult: any = null;
         try {
           apiResult = await apiClient.createProject(projectData);
-        } catch {
-          // API unavailable — fall back to local-only object
+        } catch (apiErr) {
+          console.error("[createProject] API error:", apiErr);
+          // Fall back to a local object (payment won't work, but UX continues)
         }
         result = apiResult ?? {
-          id: Date.now(),
+          id: `local_${Date.now()}`,
           ...projectData,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         setCreatedProject(result);
         setProjectCreated(true);
+
+        // ── Link selected products to the newly-created project ────────────
+        const newLinkedIds: Record<string, string> = {};
+        if (result?.id && !String(result.id).startsWith("local_") && selectedProducts.length > 0) {
+          const pagadorDefault =
+            payerType === "company" ? "CLIENTE" : "AGENCIA";
+          for (const product of selectedProducts) {
+            const qty =
+              productQuantities[product.id] || product.quantity || 1;
+            try {
+              const linked: any = await apiClient.linkProductToProject({
+                project_id: String(result.id),
+                product_id: String(product.id),
+                recurrence_snapshot: lifecycleNorm,
+                preco_final_cliente_snapshot:
+                  (product.finalPrice || 0) * qty,
+                comissao_snapshot: 0, // updated after checkout with real commission
+                pagador_snapshot: pagadorDefault,
+              });
+              const ppId =
+                linked?.project_product?.id ?? linked?.id ?? null;
+              if (ppId) newLinkedIds[product.id] = ppId;
+            } catch (linkErr: any) {
+              // 409 = already linked (idempotent) — ignore
+              if (linkErr?.status !== 409) {
+                console.warn(
+                  `[linkProduct] Falha ao vincular produto ${product.id}:`,
+                  linkErr,
+                );
+              }
+            }
+          }
+        }
+        setLinkedProductIds(newLinkedIds);
+
         if (selectedProducts.length > 0) {
-          // Products already loaded from basket — go straight to cart review
           toast({
             title: "Projeto criado!",
             description: "Revise os produtos e finalize a contratação.",
           });
           setShowCart(true);
         } else {
-          // No pre-selected products — open catalog so user can pick
           toast({
             title: "Projeto criado!",
             description: "Agora selecione os produtos que deseja contratar.",
@@ -587,17 +627,40 @@ export function ProjectCreateSlidePanel({
     setShowCheckout(true);
   };
 
-  const handleCheckoutComplete = (checkoutData: CheckoutData) => {
+  const handleCheckoutComplete = async (checkoutData: CheckoutData) => {
+    // ── Update each project-product with final commission + pagador ────────
+    const commRate: number = checkoutData.commissionRate ?? 0;
+    const pagador =
+      checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
+
+    for (const [productId, ppId] of Object.entries(linkedProductIds)) {
+      const product = selectedProducts.find((p) => p.id === productId);
+      if (!product || !ppId) continue;
+      const qty = productQuantities[productId] || product.quantity || 1;
+      const basePrice = (product.finalPrice || 0) * qty;
+      const clientPrice = basePrice * (1 + commRate / 100);
+      try {
+        await apiClient.updateProjectProduct(ppId, {
+          preco_final_cliente_snapshot: clientPrice,
+          comissao_snapshot: commRate,
+          pagador_snapshot: pagador,
+        });
+      } catch {
+        // non-fatal — commercial snapshot update failed
+      }
+    }
+
     const finalProject = {
       ...createdProject!,
-      status: "aguardando_pagamento",
+      // Backend sets project to "in-progress" after fake payment
+      status: "in-progress",
       products: selectedProducts,
       checkoutData,
     };
 
     toast({
-      title: "Contratação Registrada!",
-      description: "Projeto aguardando confirmação de pagamento.",
+      title: "✅ Contratação Concluída!",
+      description: "Pagamento aprovado. Projeto contratado com sucesso.",
     });
 
     onSubmit(finalProject);
@@ -703,6 +766,7 @@ export function ProjectCreateSlidePanel({
     if (!open) {
       setProjectCreated(false);
       setCreatedProject(null);
+      setLinkedProductIds({});
       setShowCatalog(false);
       setShowCheckout(false);
       setShowDraftConfirm(false);
@@ -943,6 +1007,8 @@ export function ProjectCreateSlidePanel({
           side="right"
           className="!w-auto !max-w-none p-0 border-0"
           hideOverlay={true}
+          onInteractOutside={(e) => { if (showCheckout) e.preventDefault(); }}
+          onEscapeKeyDown={(e) => { if (showCheckout) e.preventDefault(); }}
           style={{
             width: `calc(100vw - ${sidebarWidth}px)`,
             maxWidth: `calc(100vw - ${sidebarWidth}px)`,
@@ -972,6 +1038,7 @@ export function ProjectCreateSlidePanel({
                     }
                     preselectedProject={createdProject}
                     payerType={payerType}
+                    projectId={createdProject?.id}
                   />
                 </div>
               </>

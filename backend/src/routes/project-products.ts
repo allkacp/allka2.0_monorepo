@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { getNextTaskCode } from "../lib/task-code";
 
 const router = Router();
 
@@ -31,6 +32,10 @@ const updateProjectProductSchema = z.object({
     .datetime({ offset: true })
     .optional()
     .nullable(),
+  // Commercial snapshot fields (updatable after checkout)
+  preco_final_cliente_snapshot: z.number().min(0).optional(),
+  comissao_snapshot: z.number().min(0).optional(),
+  pagador_snapshot: z.enum(["AGENCIA", "CLIENTE"]).optional(),
 });
 
 const updateProjectTaskSchema = z.object({
@@ -82,6 +87,7 @@ router.get("/", verifyToken, async (req, res, next) => {
           orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
           select: {
             id: true,
+            task_code: true,
             title: true,
             status: true,
             priority: true,
@@ -91,6 +97,18 @@ router.get("/", verifyToken, async (req, res, next) => {
             completed_at: true,
             code_snapshot: true,
             name_snapshot: true,
+            lancamento_expires_at: true,
+            stages: {
+              orderBy: { ordem: "asc" },
+              select: {
+                id: true,
+                titulo: true,
+                descricao: true,
+                ordem: true,
+                status: true,
+                depende_da_etapa_anterior: true,
+              },
+            },
           },
         },
         _count: { select: { tasks: true } },
@@ -226,7 +244,8 @@ router.post(
             continue;
           }
 
-          await prisma.projectTask.create({
+          const taskCode = await getNextTaskCode();
+          const newTask = await prisma.projectTask.create({
             data: {
               project_id,
               project_product_id: projectProduct.id,
@@ -235,6 +254,7 @@ router.post(
               code_snapshot: ct.code,
               name_snapshot: ct.name,
               category_snapshot: ct.category,
+              task_code: taskCode,
               title: ct.name,
               description: ct.description || null,
               status: "PARA_LANCAMENTO",
@@ -247,6 +267,55 @@ router.post(
               briefing_snapshot: ct.briefing_questions || null,
             },
           });
+
+          // Create stages from CatalogTask.steps JSON, or one fallback stage
+          let parsedSteps: Array<{
+            id?: string;
+            code?: string;
+            name?: string;
+            titulo?: string;
+            description?: string;
+            descricao?: string;
+            order?: number;
+          }> = [];
+          if (ct.steps) {
+            try {
+              const raw = JSON.parse(ct.steps);
+              if (Array.isArray(raw)) parsedSteps = raw;
+            } catch { /* ignore */ }
+          }
+
+          const stagesToCreate =
+            parsedSteps.length > 0
+              ? parsedSteps.map((step, idx) => ({
+                  project_task_id: newTask.id,
+                  catalog_step_ref: step.id ?? step.code ?? `${ct.id}-step-${idx + 1}`,
+                  titulo: step.name ?? step.titulo ?? `Etapa ${idx + 1}`,
+                  descricao: step.description ?? step.descricao ?? null,
+                  ordem: step.order ?? idx + 1,
+                  status: idx === 0 ? "PENDENTE" : "BLOQUEADA",
+                  obrigatoria: true,
+                  depende_da_etapa_anterior: idx > 0,
+                  briefing_necessario: false,
+                }))
+              : [
+                  {
+                    project_task_id: newTask.id,
+                    catalog_step_ref: ct.id,
+                    titulo: ct.name,
+                    descricao: ct.description ?? null,
+                    ordem: 1,
+                    status: "PENDENTE",
+                    obrigatoria: link.is_mandatory,
+                    depende_da_etapa_anterior: false,
+                    briefing_necessario: false,
+                  },
+                ];
+
+          if (stagesToCreate.length > 0) {
+            await prisma.projectTaskStage.createMany({ data: stagesToCreate });
+          }
+
           generatedCount++;
         }
       }
@@ -298,6 +367,13 @@ router.patch(
         data.expected_end_date = req.body.expected_end_date
           ? new Date(req.body.expected_end_date)
           : null;
+      if (req.body.preco_final_cliente_snapshot !== undefined)
+        data.preco_final_cliente_snapshot =
+          req.body.preco_final_cliente_snapshot;
+      if (req.body.comissao_snapshot !== undefined)
+        data.comissao_snapshot = req.body.comissao_snapshot;
+      if (req.body.pagador_snapshot !== undefined)
+        data.pagador_snapshot = req.body.pagador_snapshot;
 
       const updated = await prisma.projectProduct.update({
         where: { id },
@@ -413,13 +489,31 @@ router.get(
 router.get("/tasks/:id", verifyToken, async (req, res, next) => {
   try {
     const task = await prisma.projectTask.findUnique({
-      where: { id: req.params.id as string as string as string },
+      where: { id: req.params.id as string },
       include: {
         project: {
           include: { client: { select: { id: true, name: true, cnpj: true } } },
         },
-        project_product: true,
+        project_product: {
+          include: { product: { select: { id: true, name: true, category: true, code: true } } },
+        },
         catalog_task: true,
+        stages: {
+          orderBy: { ordem: "asc" },
+          select: {
+            id: true,
+            titulo: true,
+            descricao: true,
+            ordem: true,
+            status: true,
+            obrigatoria: true,
+            depende_da_etapa_anterior: true,
+            briefing_necessario: true,
+            checklist_snapshot: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
       },
     });
     if (!task) {

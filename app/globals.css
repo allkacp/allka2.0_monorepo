@@ -72,8 +72,8 @@
   /* Table tokens — light mode */
   --table-head: #f8fafc;
   --table-row: #ffffff;
-  --table-row-alt: #f1f5f9;
-  --table-row-hover: #e2e8f0;
+  --table-row-alt: #f4f7fb;
+  --table-row-hover: #eef2ff;
   --table-border: rgba(226,232,240,0.6);
 }
 
@@ -242,6 +242,24 @@
 }
 
 @layer base {
+  /*
+   * Tipografia global Allka — controlada pelo hook useFontScale (header).
+   * O valor real é aplicado via document.documentElement.style.fontSize (inline style),
+   * que tem precedência sobre esta regra CSS. Esta declaração serve apenas como
+   * fallback para o instante anterior ao script anti-flash de index.html rodar.
+   *
+   * Padrão: 1.0625  →  17px (16px × 1.0625 = +1px sobre o browser default)
+   *
+   * Escala disponível:
+   *   1.0000 → 16px (Menor)
+   *   1.0625 → 17px (Padrão)  ← default
+   *   1.1250 → 18px (Grande)
+   *   1.1875 → 19px (Extra grande)
+   */
+  html {
+    font-size: calc(16px * var(--allka-font-scale, 1.0625));
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -311,6 +329,825 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* ─── Allka Badge System ────────────────────────────────────────────────── */
+  /* Base: estrutura comum a todas as badges */
+  .allka-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1875rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.4;
+    border-width: 1px;
+    border-style: solid;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Status ── */
+  .allka-badge-status-ativo {
+    background-color: #bbf7d0;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.45);
+  }
+  .dark .allka-badge-status-ativo {
+    background-color: #065f46;
+    color: #6ee7b7;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.35);
+  }
+  .allka-badge-status-inativo {
+    background-color: #e2e8f0;
+    color: #475569;
+    border-color: #94a3b8;
+  }
+  .dark .allka-badge-status-inativo {
+    background-color: #1e293b;
+    color: #94a3b8;
+    border-color: #475569;
+  }
+  .allka-badge-status-pendente {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  .dark .allka-badge-status-pendente {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+
+  /* ── DPO / LGPD ── */
+  .allka-badge-dpo-ok {
+    background-color: #99f6e4;
+    color: #0f5242;
+    border-color: #2dd4bf;
+    box-shadow: 0 0 9px rgba(45, 212, 191, 0.4);
+  }
+  .dark .allka-badge-dpo-ok {
+    background-color: #134e4a;
+    color: #5eead4;
+    border-color: #2dd4bf;
+    box-shadow: 0 0 9px rgba(45, 212, 191, 0.3);
+  }
+  .allka-badge-dpo-warning {
+    background-color: #fed7aa;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 10px rgba(251, 146, 60, 0.45);
+  }
+  .dark .allka-badge-dpo-warning {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 10px rgba(251, 146, 60, 0.35);
+  }
+  .allka-badge-policy-pending {
+    background-color: #fef3c7;
+    color: #78350f;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+  }
+  .dark .allka-badge-policy-pending {
+    background-color: #78350f;
+    color: #fde68a;
+    border-color: #f59e0b;
+  }
+
+  /* ── Planos ── */
+  .allka-badge-plano-lite {
+    background-color: #e2e8f0;
+    color: #334155;
+    border-color: #94a3b8;
+  }
+  .dark .allka-badge-plano-lite {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    border-color: #475569;
+  }
+  .allka-badge-plano-start {
+    background-color: #bbf7d0;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 9px rgba(52, 211, 153, 0.4);
+  }
+  .dark .allka-badge-plano-start {
+    background-color: #065f46;
+    color: #6ee7b7;
+    border-color: #34d399;
+    box-shadow: 0 0 9px rgba(52, 211, 153, 0.3);
+  }
+  .allka-badge-plano-standard {
+    background-color: #bfdbfe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.4);
+  }
+  .dark .allka-badge-plano-standard {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.3);
+  }
+  .allka-badge-plano-growth {
+    background-color: #c7d2fe;
+    color: #312e81;
+    border-color: #818cf8;
+    box-shadow: 0 0 10px rgba(129, 140, 248, 0.45);
+  }
+  .dark .allka-badge-plano-growth {
+    background-color: #312e81;
+    color: #a5b4fc;
+    border-color: #6366f1;
+    box-shadow: 0 0 10px rgba(129, 140, 248, 0.3);
+  }
+  .allka-badge-plano-scale {
+    background-color: #ddd6fe;
+    color: #4c1d95;
+    border-color: #a78bfa;
+    box-shadow: 0 0 11px rgba(167, 139, 250, 0.5);
+  }
+  .dark .allka-badge-plano-scale {
+    background-color: #4c1d95;
+    color: #c4b5fd;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 11px rgba(167, 139, 250, 0.35);
+  }
+  .allka-badge-plano-squad {
+    background-color: #fed7aa;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.4);
+  }
+  .dark .allka-badge-plano-squad {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-plano-enterprise {
+    background-color: #e9d5ff;
+    color: #581c87;
+    border-color: #c084fc;
+    box-shadow: 0 0 12px rgba(192, 132, 252, 0.5);
+  }
+  .dark .allka-badge-plano-enterprise {
+    background-color: #581c87;
+    color: #e9d5ff;
+    border-color: #a855f7;
+    box-shadow: 0 0 12px rgba(192, 132, 252, 0.35);
+  }
+
+  /* ── Tipo de conta ── */
+  .allka-badge-tipo-empresa {
+    background-color: #bfdbfe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+  }
+  .dark .allka-badge-tipo-empresa {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+  }
+  .allka-badge-tipo-agencia {
+    background-color: #ddd6fe;
+    color: #4c1d95;
+    border-color: #a78bfa;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.45);
+  }
+  .dark .allka-badge-tipo-agencia {
+    background-color: #4c1d95;
+    color: #c4b5fd;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
+  }
+  .allka-badge-tipo-outro {
+    background-color: #fed7aa;
+    color: #9a3412;
+    border-color: #fb923c;
+  }
+  .dark .allka-badge-tipo-outro {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+  }
+
+  /* ── Nível parceiro / partner ── */
+  .allka-badge-bronze {
+    background-color: #fef3c7;
+    color: #78350f;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  }
+  .dark .allka-badge-bronze {
+    background-color: #78350f;
+    color: #fde68a;
+    border-color: #d97706;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  }
+  .allka-badge-silver {
+    background-color: #e2e8f0;
+    color: #334155;
+    border-color: #94a3b8;
+    box-shadow: 0 0 6px rgba(148, 163, 184, 0.35);
+  }
+  .dark .allka-badge-silver {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    border-color: #64748b;
+  }
+  .allka-badge-gold {
+    background-color: #fef08a;
+    color: #713f12;
+    border-color: #facc15;
+    box-shadow: 0 0 11px rgba(250, 204, 21, 0.5);
+  }
+  .dark .allka-badge-gold {
+    background-color: #713f12;
+    color: #fef08a;
+    border-color: #eab308;
+    box-shadow: 0 0 11px rgba(250, 204, 21, 0.35);
+  }
+  .allka-badge-platinum {
+    background-color: #a5f3fc;
+    color: #0c4a6e;
+    border-color: #22d3ee;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
+  }
+  .dark .allka-badge-platinum {
+    background-color: #0c4a6e;
+    color: #67e8f9;
+    border-color: #06b6d4;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+  }
+  .allka-badge-diamond {
+    background-color: #f5d0fe;
+    color: #6b21a8;
+    border-color: #e879f9;
+    box-shadow: 0 0 13px rgba(232, 121, 249, 0.5);
+  }
+  .dark .allka-badge-diamond {
+    background-color: #6b21a8;
+    color: #f0abfc;
+    border-color: #d946ef;
+    box-shadow: 0 0 13px rgba(232, 121, 249, 0.38);
+  }
+  .allka-badge-partner {
+    background-color: #fecdd3;
+    color: #9f1239;
+    border-color: #fb7185;
+    box-shadow: 0 0 10px rgba(251, 113, 133, 0.45);
+  }
+  .dark .allka-badge-partner {
+    background-color: #9f1239;
+    color: #fda4af;
+    border-color: #f43f5e;
+    box-shadow: 0 0 10px rgba(251, 113, 133, 0.35);
+  }
+
+  /* ── Status de Projeto ── */
+  .allka-badge-projeto-draft {
+    background-color: #e2e8f0;
+    color: #334155;
+    border-color: #94a3b8;
+  }
+  .dark .allka-badge-projeto-draft {
+    background-color: #1e293b;
+    color: #94a3b8;
+    border-color: #475569;
+  }
+  .allka-badge-projeto-pending-approval {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  .dark .allka-badge-projeto-pending-approval {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+  .allka-badge-projeto-negotiation {
+    background-color: #fef9c3;
+    color: #713f12;
+    border-color: #facc15;
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+  }
+  .dark .allka-badge-projeto-negotiation {
+    background-color: #422006;
+    color: #fef08a;
+    border-color: #eab308;
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
+  }
+  .allka-badge-projeto-awaiting-payment {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.4);
+  }
+  .dark .allka-badge-projeto-awaiting-payment {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-projeto-planning {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.4);
+  }
+  .dark .allka-badge-projeto-planning {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.3);
+  }
+  .allka-badge-projeto-in-progress {
+    background-color: #ede9fe;
+    color: #4c1d95;
+    border-color: #a78bfa;
+    box-shadow: 0 0 10px rgba(167, 139, 250, 0.45);
+  }
+  .dark .allka-badge-projeto-in-progress {
+    background-color: #4c1d95;
+    color: #c4b5fd;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+  }
+  .allka-badge-projeto-completed {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.45);
+  }
+  .dark .allka-badge-projeto-completed {
+    background-color: #065f46;
+    color: #6ee7b7;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.35);
+  }
+  .allka-badge-projeto-cancelled {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+  }
+  .dark .allka-badge-projeto-cancelled {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+  }
+
+  /* ── Status de Tarefa ── */
+  .allka-badge-task-para-lancamento {
+    background-color: #e2e8f0;
+    color: #334155;
+    border-color: #94a3b8;
+  }
+  .dark .allka-badge-task-para-lancamento {
+    background-color: #1e293b;
+    color: #94a3b8;
+    border-color: #475569;
+  }
+  .allka-badge-task-em-lancamento {
+    background-color: #e0e7ff;
+    color: #3730a3;
+    border-color: #818cf8;
+    box-shadow: 0 0 9px rgba(129, 140, 248, 0.4);
+  }
+  .dark .allka-badge-task-em-lancamento {
+    background-color: #312e81;
+    color: #a5b4fc;
+    border-color: #6366f1;
+    box-shadow: 0 0 9px rgba(129, 140, 248, 0.3);
+  }
+  .allka-badge-task-aguardando-informacoes {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+  }
+  .dark .allka-badge-task-aguardando-informacoes {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-task-aguardando-etapa {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+  }
+  .dark .allka-badge-task-aguardando-etapa {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.25);
+  }
+  .allka-badge-task-liberada-execucao {
+    background-color: #cffafe;
+    color: #0e7490;
+    border-color: #22d3ee;
+    box-shadow: 0 0 9px rgba(34, 211, 238, 0.4);
+  }
+  .dark .allka-badge-task-liberada-execucao {
+    background-color: #0c4a6e;
+    color: #67e8f9;
+    border-color: #06b6d4;
+    box-shadow: 0 0 9px rgba(34, 211, 238, 0.3);
+  }
+  .allka-badge-task-em-execucao {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.45);
+  }
+  .dark .allka-badge-task-em-execucao {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 9px rgba(96, 165, 250, 0.3);
+  }
+  .allka-badge-task-em-revisao {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  .dark .allka-badge-task-em-revisao {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+  .allka-badge-task-melhorias-finais {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+  }
+  .dark .allka-badge-task-melhorias-finais {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-task-em-aprovacao {
+    background-color: #ede9fe;
+    color: #4c1d95;
+    border-color: #a78bfa;
+    box-shadow: 0 0 9px rgba(167, 139, 250, 0.45);
+  }
+  .dark .allka-badge-task-em-aprovacao {
+    background-color: #4c1d95;
+    color: #c4b5fd;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 9px rgba(167, 139, 250, 0.3);
+  }
+  .allka-badge-task-aprovacao-pendente-cliente {
+    background-color: #f3e8ff;
+    color: #581c87;
+    border-color: #c084fc;
+    box-shadow: 0 0 9px rgba(192, 132, 252, 0.45);
+  }
+  .dark .allka-badge-task-aprovacao-pendente-cliente {
+    background-color: #581c87;
+    color: #e9d5ff;
+    border-color: #a855f7;
+    box-shadow: 0 0 9px rgba(192, 132, 252, 0.3);
+  }
+  .allka-badge-task-aprovada {
+    background-color: #ccfbf1;
+    color: #0f5242;
+    border-color: #2dd4bf;
+    box-shadow: 0 0 9px rgba(45, 212, 191, 0.4);
+  }
+  .dark .allka-badge-task-aprovada {
+    background-color: #134e4a;
+    color: #5eead4;
+    border-color: #14b8a6;
+    box-shadow: 0 0 9px rgba(45, 212, 191, 0.3);
+  }
+  .allka-badge-task-reprovada {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+  }
+  .dark .allka-badge-task-reprovada {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.3);
+  }
+  .allka-badge-task-concluida {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.45);
+  }
+  .dark .allka-badge-task-concluida {
+    background-color: #065f46;
+    color: #6ee7b7;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.35);
+  }
+  .allka-badge-task-pausada {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+  }
+  .dark .allka-badge-task-pausada {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+  }
+  .allka-badge-task-cancelada {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+  }
+  .dark .allka-badge-task-cancelada {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+  }
+  .allka-badge-task-aguardando-nomade {
+    background-color: #f3e8ff;
+    color: #581c87;
+    border-color: #c084fc;
+    box-shadow: 0 0 9px rgba(192, 132, 252, 0.4);
+  }
+  .dark .allka-badge-task-aguardando-nomade {
+    background-color: #581c87;
+    color: #e9d5ff;
+    border-color: #a855f7;
+    box-shadow: 0 0 9px rgba(192, 132, 252, 0.3);
+  }
+  .allka-badge-task-entrega-pendente {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+  }
+  .dark .allka-badge-task-entrega-pendente {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-task-entrega-atrasada,
+  .allka-badge-task-nao-seguiu-orientacoes {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+    box-shadow: 0 0 9px rgba(248, 113, 113, 0.45);
+  }
+  .dark .allka-badge-task-entrega-atrasada,
+  .dark .allka-badge-task-nao-seguiu-orientacoes {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+    box-shadow: 0 0 9px rgba(248, 113, 113, 0.3);
+  }
+  .allka-badge-task-qualificacao-pendente {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+  }
+  .dark .allka-badge-task-qualificacao-pendente {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+  }
+
+  /* ── Status internos novos (ciclo completo) ── */
+  .allka-badge-task-lancamento-em-revisao {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+  }
+  .dark .allka-badge-task-lancamento-em-revisao {
+    background-color: #451a03;
+    color: #fcd34d;
+    border-color: #f59e0b;
+  }
+  .allka-badge-task-devolvida-agencia {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+  }
+  .dark .allka-badge-task-devolvida-agencia {
+    background-color: #431407;
+    color: #fdba74;
+    border-color: #ea580c;
+  }
+  .allka-badge-task-entregue-nomade {
+    background-color: #e0e7ff;
+    color: #3730a3;
+    border-color: #818cf8;
+    box-shadow: 0 0 8px rgba(129, 140, 248, 0.4);
+  }
+  .dark .allka-badge-task-entregue-nomade {
+    background-color: #1e1b4b;
+    color: #a5b4fc;
+    border-color: #6366f1;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+  }
+  .allka-badge-task-reprovada-lider {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+  }
+  .dark .allka-badge-task-reprovada-lider {
+    background-color: #450a0a;
+    color: #fca5a5;
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+  }
+  .allka-badge-task-aprovada-lider {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.4);
+  }
+  .dark .allka-badge-task-aprovada-lider {
+    background-color: #022c22;
+    color: #6ee7b7;
+    border-color: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+  }
+
+  /* ── Prioridade ── */
+  .allka-badge-priority-low {
+    background-color: #f1f5f9;
+    color: #475569;
+    border-color: #94a3b8;
+  }
+  .dark .allka-badge-priority-low {
+    background-color: #1e293b;
+    color: #94a3b8;
+    border-color: #475569;
+  }
+  .allka-badge-priority-medium {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #60a5fa;
+    box-shadow: 0 0 7px rgba(96, 165, 250, 0.35);
+  }
+  .dark .allka-badge-priority-medium {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #3b82f6;
+    box-shadow: 0 0 7px rgba(96, 165, 250, 0.25);
+  }
+  .allka-badge-priority-high {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  .dark .allka-badge-priority-high {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+  .allka-badge-priority-urgent {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+    box-shadow: 0 0 9px rgba(248, 113, 113, 0.45);
+  }
+  .dark .allka-badge-priority-urgent {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+    box-shadow: 0 0 9px rgba(248, 113, 113, 0.3);
+  }
+
+  /* ── Financeiro ── */
+  .allka-badge-financial-paid {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.45);
+  }
+  .dark .allka-badge-financial-paid {
+    background-color: #065f46;
+    color: #6ee7b7;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.35);
+  }
+  .allka-badge-financial-pending {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  .dark .allka-badge-financial-pending {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+  .allka-badge-financial-overdue {
+    background-color: #ffedd5;
+    color: #9a3412;
+    border-color: #fb923c;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.45);
+  }
+  .dark .allka-badge-financial-overdue {
+    background-color: #7c2d12;
+    color: #fdba74;
+    border-color: #f97316;
+    box-shadow: 0 0 9px rgba(251, 146, 60, 0.3);
+  }
+  .allka-badge-financial-rejected {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+  }
+  .dark .allka-badge-financial-rejected {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+  }
+  .allka-badge-financial-refunded {
+    background-color: #e0e7ff;
+    color: #3730a3;
+    border-color: #818cf8;
+    box-shadow: 0 0 8px rgba(129, 140, 248, 0.4);
+  }
+  .dark .allka-badge-financial-refunded {
+    background-color: #312e81;
+    color: #a5b4fc;
+    border-color: #6366f1;
+    box-shadow: 0 0 8px rgba(129, 140, 248, 0.3);
+  }
+
+  /* ── Status de Usuário (extra) ── */
+  .allka-badge-status-bloqueado {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-color: #f87171;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+  }
+  .dark .allka-badge-status-bloqueado {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.3);
+  }
+  .allka-badge-status-pausado {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+  }
+  .dark .allka-badge-status-pausado {
+    background-color: #78350f;
+    color: #fcd34d;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.25);
+  }
+  /* ─── /Allka Badge System ────────────────────────────────────────────────── */
+
+  /* Allka table — scrollbar estilizado */
+  .allka-table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+  .allka-table-scroll::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .allka-table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .allka-table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+  }
+  .allka-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.6);
+  }
+  .allka-table-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Hide scrollbar for mobile menu */
   .hide-scrollbar {
     -ms-overflow-style: none;
@@ -356,7 +1193,7 @@
 
   @media (min-width: 1024px) {
     .footer-positioned {
-      left: var(--sidebar-width, 256px);
+      left: var(--sidebar-width, 240px);
     }
   }
 

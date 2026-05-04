@@ -7,7 +7,8 @@ export type AccountType =
   | "agencias"
   | "nomades"
   | "admin"
-  | "parceiro";
+  | "parceiro"
+  | "lider";
 export type AccountSubType = "company" | "in-house" | null;
 
 interface AccountTypeContextType {
@@ -36,6 +37,8 @@ function inferFromPath(path: string): {
 } {
   if (path.startsWith("/nomades"))
     return { accountType: "nomades", accountSubType: null };
+  if (path.startsWith("/lider"))
+    return { accountType: "lider", accountSubType: null };
   if (path.startsWith("/company"))
     return { accountType: "empresas", accountSubType: "company" };
   if (path.startsWith("/agencia"))

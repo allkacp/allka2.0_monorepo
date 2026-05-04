@@ -19,6 +19,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  AlertTriangle,
+  XCircle,
   Building2,
   FolderKanban,
   ShoppingBag,
@@ -30,6 +32,10 @@ import {
   Copy,
   Users,
   Percent,
+  FlaskConical,
+  Loader2,
+  PartyPopper,
+  Download,
 } from "lucide-react";
 import type {
   Client,
@@ -54,6 +60,8 @@ interface CheckoutFlowProps {
     brand: string;
   }>;
   presetCommissionRate?: number;
+  /** ID do projeto já criado � usado para registrar pagamento sandbox */
+  projectId?: string;
 }
 
 export interface CheckoutData {
@@ -66,6 +74,8 @@ export interface CheckoutData {
   commissionRate: number;
   clientTotal: number;
   checkoutLinks: { self: string; client: string };
+  /** If set, the parent should open the project on this tab */
+  openTab?: string;
 }
 
 interface PaymentData {
@@ -90,6 +100,15 @@ interface CreditCardDetails {
 let mockClients: Client[] = [];
 let mockProjects: Project[] = [];
 
+// ���� Cartão de teste sandbox ����������������������������������������������������������������������������������������������������
+const SANDBOX_CARD = {
+  id: "sandbox-card-vinicius-4242",
+  lastDigits: "4242",
+  holder: "VINICIUS GUARDIA",
+  expiry: "12/30",
+  brand: "Visa",
+};
+
 const TEST_CARD = {
   id: "test-card-1111",
   lastDigits: "1111",
@@ -107,12 +126,21 @@ export function CheckoutFlow({
   payerType,
   savedCards,
   presetCommissionRate,
+  projectId,
 }: CheckoutFlowProps) {
   const [step, setStep] = useState(1);
   const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
   const [projectMode, setProjectMode] = useState<"existing" | "new">(
     "existing",
   );
+
+  // Sandbox payment state
+  const [payingState, setPayingState] = useState<
+    "idle" | "processing" | "success" | "error"
+  >("idle");
+  const [payingError, setPayingError] = useState<string | null>(null);
+  const [sandboxResult, setSandboxResult] = useState<any | null>(null);
+  const [pendingCheckoutData, setPendingCheckoutData] = useState<CheckoutData | null>(null);
 
   // Client data
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -165,13 +193,16 @@ export function CheckoutFlow({
   const [commissionRate, setCommissionRate] = useState(
     presetCommissionRate ?? 0,
   );
-  const [selectedSavedCardId, setSelectedSavedCardId] = useState<string | null>(
-    null,
-  );
   const [checkoutSlug] = useState(() =>
     Math.random().toString(36).slice(2, 10),
   );
-  const allSavedCards = savedCards ?? [];
+  // Sempre injeta o cartão sandbox como primeira opção
+  const allSavedCards = [SANDBOX_CARD, ...(savedCards ?? [])];
+
+  // Auto-seleciona o cartão sandbox na abertura
+  const [selectedSavedCardId, setSelectedSavedCardId] = useState<string | null>(
+    SANDBOX_CARD.id,
+  );
 
   useEffect(() => {
     apiClient
@@ -218,9 +249,19 @@ export function CheckoutFlow({
     ...(skipProject ? [] : [3]),
     4,
     5,
+    6, // Resultado do pagamento
   ];
   const totalSteps = activeSteps.length;
-  const logicalStep = activeSteps[step - 1]; // map display position → logical step
+  const logicalStep = activeSteps[step - 1]; // map display position �  logical step
+
+  // Auto-advance to result step when payment completes (success or error)
+  useEffect(() => {
+    if (payingState === "success" || payingState === "error") {
+      const resultIdx = activeSteps.indexOf(6);
+      if (resultIdx >= 0) setStep(resultIdx + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payingState]);
 
   useEffect(() => {
     if (
@@ -276,7 +317,119 @@ export function CheckoutFlow({
     }
   };
 
-  const handleComplete = () => {
+  const handleDownloadInvoice = () => {
+    const projectName = (preselectedProject as any)?.name || "Projeto";
+    const agencyName = (preselectedProject as any)?.agency || "";
+    const clientName = (preselectedClient as any)?.name || "";
+    const amount = sandboxResult?.payment?.amount ?? getTotalPrice();
+    const date = new Date().toLocaleDateString("pt-BR");
+    const transactionId =
+      sandboxResult?.payment?.id || `FAKE-${Date.now()}`;
+    const fmt = (v: number) =>
+      new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(v);
+
+    const productRows = items
+      .map(
+        (item) => `
+        <tr>
+          <td>${item.product.name}</td>
+          <td style="text-align:center">${item.quantity}</td>
+          <td style="text-align:right">${fmt(item.product.basePrice)}</td>
+          <td style="text-align:right">${fmt(item.product.basePrice * item.quantity)}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Fatura · ${projectName}</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1a1a2e;font-size:14px}
+    .hdr{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3px solid #2558FF;padding-bottom:20px;margin-bottom:28px}
+    .logo{font-size:30px;font-weight:900;letter-spacing:-1px;color:#2558FF}
+    .inv-meta{text-align:right;color:#666;font-size:12px;line-height:1.7}
+    .inv-num{font-size:18px;font-weight:700;color:#2558FF}
+    .badge-paid{display:inline-block;background:#22c55e;color:#fff;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700}
+    .badge-sandbox{display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;margin-left:6px}
+    .two-col{display:flex;gap:32px;margin-bottom:28px}
+    .section{flex:1}
+    .section-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;border-bottom:1px solid #eee;padding-bottom:5px;margin-bottom:10px}
+    .proj-name{font-size:17px;font-weight:700;margin-bottom:4px}
+    .meta-line{color:#555;font-size:13px;line-height:1.7}
+    table{width:100%;border-collapse:collapse;margin-bottom:28px}
+    th{background:#f4f6ff;padding:9px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#555}
+    td{padding:9px 10px;border-bottom:1px solid #f0f0f0}
+    .total-row td{background:#f4f6ff;font-weight:700;font-size:15px}
+    .pay-row{display:flex;justify-content:space-between;margin-bottom:7px}
+    .pay-label{color:#555}
+    .pay-value{font-weight:600}
+    .grand-total{display:flex;justify-content:space-between;border-top:2px solid #2558FF;padding-top:10px;margin-top:6px;font-size:17px;font-weight:700}
+    .grand-val{color:#2558FF}
+    .footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:18px;line-height:1.8}
+    @media print{button{display:none}}
+  </style>
+</head>
+<body>
+  <div class="hdr">
+    <div class="logo">allka</div>
+    <div class="inv-meta">
+      FATURA DE PAGAMENTO<br>
+      <span class="inv-num">#${transactionId}</span><br>
+      Data: ${date}
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="section">
+      <div class="section-title">Projeto</div>
+      <div class="proj-name">${projectName}</div>
+      ${agencyName ? `<div class="meta-line">Empresa: <strong>${agencyName}</strong></div>` : ""}
+      ${clientName ? `<div class="meta-line">Cliente: <strong>${clientName}</strong></div>` : ""}
+    </div>
+    <div class="section" style="text-align:right">
+      <div class="section-title">Status</div>
+      <div><span class="badge-paid">&#x2705; PAGO</span><span class="badge-sandbox">FAKE_SANDBOX</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">Produtos Contratados</div>
+  <table>
+    <thead><tr><th>Produto</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
+    <tbody>
+      ${productRows}
+      <tr class="total-row"><td colspan="3">Total</td><td style="text-align:right">${fmt(Number(amount))}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Dados do Pagamento</div>
+  <div class="pay-row"><span class="pay-label">Método</span><span class="pay-value">Cartão de Crédito · Visa &bull;&bull;&bull;&bull; 4242</span></div>
+  <div class="pay-row"><span class="pay-label">Titular</span><span class="pay-value">VINICIUS GUARDIA</span></div>
+  <div class="pay-row"><span class="pay-label">Gateway</span><span class="pay-value">FAKE_SANDBOX (ambiente de teste)</span></div>
+  <div class="pay-row"><span class="pay-label">ID da transação</span><span class="pay-value">${transactionId}</span></div>
+  <div class="grand-total"><span>Total pago</span><span class="grand-val">${fmt(Number(amount))}</span></div>
+
+  <div class="footer">
+    <p>Allka Plataforma · allka.com.vc · Fatura gerada automaticamente em ${date}</p>
+    <p>AMBIENTE DE TESTE &mdash; Nenhum pagamento real foi processado nesta transação.</p>
+  </div>
+  <script>window.onload=function(){window.print()}</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
+  const handleComplete = async () => {
     const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`;
     const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}`;
     const paymentData: PaymentData = {
@@ -318,6 +471,35 @@ export function CheckoutFlow({
       clientTotal: getClientTotal(),
       checkoutLinks: { self: selfLink, client: clientLink },
     };
+
+    // ���� Sandbox: chama o backend para registrar o pagamento fake ��������������������������
+    if (projectId) {
+      setPayingState("processing");
+      setPayingError(null);
+      try {
+        const isSandboxCard =
+          selectedSavedCardId === SANDBOX_CARD.id ||
+          selectedPaymentType === "credit_card";
+
+        const result = await apiClient.fakeSandboxCheckout({
+          project_id: projectId,
+          amount: paymentData.totalAmount,
+          card_last_digits: isSandboxCard ? "4242" : undefined,
+          card_holder: isSandboxCard ? "VINICIUS GUARDIA" : undefined,
+          notes: "Pagamento de teste via checkout sandbox",
+        });
+
+        setSandboxResult(result);
+        setPendingCheckoutData(checkoutData);
+        setPayingState("success");
+      } catch (err: any) {
+        setPayingState("error");
+        setPayingError(err?.message ?? "Erro ao processar pagamento de teste");
+      }
+      return;
+    }
+
+    // Sem projectId (fluxo sem projeto criado ainda) � chama diretamente
     onComplete(checkoutData);
   };
 
@@ -327,29 +509,54 @@ export function CheckoutFlow({
     3: "Projeto",
     4: "Pagamento",
     5: "Revisão",
+    6: "Resultado",
   };
 
   const renderStepIndicator = () => (
-    <div className="flex items-center justify-center space-x-2 mb-6">
+    <div className="flex items-start justify-center gap-0 mb-6">
       {activeSteps.map((logicalS, displayIdx) => {
         const displayNum = displayIdx + 1;
+        const isActive = displayNum === step;
+        const isDone = displayNum < step;
         return (
-          <div key={logicalS} className="flex items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-                displayNum === step
-                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-                  : displayNum < step
-                    ? "bg-green-500 text-white"
-                    : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400"
-              }`}
-              title={stepLabels[logicalS]}
-            >
-              {displayNum < step ? <Check className="h-4 w-4" /> : displayNum}
+          <div key={logicalS} className="flex items-start">
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+                  isActive
+                    ? "text-white"
+                    : isDone
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400"
+                }`}
+                style={
+                  isActive
+                    ? {
+                        background:
+                          "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                        boxShadow: "0 2px 8px rgba(37,88,255,0.35)",
+                      }
+                    : {}
+                }
+                title={stepLabels[logicalS]}
+              >
+                {isDone ? <Check className="h-4 w-4" /> : displayNum}
+              </div>
+              <span
+                className={`text-[10px] mt-1 font-medium ${
+                  isActive
+                    ? "text-blue-600 dark:text-blue-400"
+                    : isDone
+                      ? "text-green-600 dark:text-green-500"
+                      : "text-gray-400 dark:text-gray-500"
+                }`}
+              >
+                {stepLabels[logicalS]}
+              </span>
             </div>
             {displayIdx < activeSteps.length - 1 && (
               <div
-                className={`w-12 h-0.5 ${displayNum < step ? "bg-green-500" : "bg-gray-200 dark:bg-slate-700"}`}
+                className={`w-10 h-0.5 mt-4 ${isDone ? "bg-green-500" : "bg-gray-200 dark:bg-slate-700"}`}
               />
             )}
           </div>
@@ -757,6 +964,15 @@ export function CheckoutFlow({
 
     return (
       <div className="space-y-4">
+        {/* Banner sandbox */}
+        {projectId && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+            <FlaskConical className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+              AMBIENTE DE TESTE &mdash; Nenhum pagamento real será processado. Use o cartão Visa &bull;&bull;&bull;&bull; 4242.
+            </p>
+          </div>
+        )}
         <div className="flex items-center space-x-3 mb-4">
           <div className="bg-emerald-100 dark:bg-emerald-900 p-2 rounded-lg">
             <Wallet className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -804,7 +1020,7 @@ export function CheckoutFlow({
           </div>
         </div>
 
-        {/* Commission — hidden when preset from project panel */}
+        {/* Commission � hidden when preset from project panel */}
         {presetCommissionRate == null && (
           <div className="space-y-2">
             <Label
@@ -975,7 +1191,7 @@ export function CheckoutFlow({
                                   <CreditCard className="h-4 w-4 shrink-0 text-gray-500" />
                                   <div className="flex-1">
                                     <p className="font-medium text-gray-900 dark:text-white">
-                                      {card.brand} •••• {card.lastDigits}
+                                      {card.brand} ⬢⬢⬢⬢ {card.lastDigits}
                                     </p>
                                     <p className="text-xs text-gray-500">
                                       {card.holder} · {card.expiry}
@@ -1141,7 +1357,7 @@ export function CheckoutFlow({
                               Allkoins
                             </h4>
                             <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                              Saldo disponível: {userBalances.allkoins} AK (≈{" "}
+                              Saldo disponível: {userBalances.allkoins} AK (�0�{" "}
                               {formatCurrency(userBalances.allkoins * 1)})
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1425,221 +1641,475 @@ export function CheckoutFlow({
   };
 
   const renderStep5 = () => {
-    const client = clientMode === "existing" ? selectedClient : newClient;
-    const project = projectMode === "existing" ? selectedProject : newProject;
+    const project = preselectedProject ?? (projectMode === "existing" ? selectedProject : newProject);
+    const client = preselectedClient ?? (clientMode === "existing" ? selectedClient : newClient);
+    const totalPrice = getTotalPrice();
+    const clientTotal = getClientTotal();
+    const payTotal = payerMode === "client" ? clientTotal : totalPrice;
     const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`;
     const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}`;
+    const selectedCard = selectedSavedCardId
+      ? allSavedCards.find((c) => c.id === selectedSavedCardId)
+      : null;
+    const payTypeLabel: Record<string, string> = {
+      credit_card: "Cartão de Crédito",
+      pix: "Pix",
+      boleto: "Boleto Bancário",
+      credits: "Créditos da Plataforma",
+      allkoins: "Allkoins",
+    };
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="bg-orange-100 dark:bg-orange-900 p-2 rounded-lg">
-            <Check className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+        {/* Section header */}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background:
+                "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+            }}
+          >
+            <Check className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Revisar e Confirmar
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Verifique os dados antes de finalizar
+              Verifique os dados antes de finalizar o pagamento
+            </p>
+          </div>
+          {projectId && (
+            <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+              <FlaskConical className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                TESTE
+              </span>
+            </div>
+          )}
+        </div>
+
+        <ScrollArea className="h-[340px]">
+          <div className="space-y-3 pr-4">
+            {/* Project card */}
+            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-100 dark:border-slate-800">
+                <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                  Projeto
+                </span>
+                <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700 text-xs font-medium text-cyan-700 dark:text-cyan-300">
+                  Ag. Pagamento
+                </span>
+              </div>
+              <div className="px-3 py-2.5 bg-white dark:bg-slate-900 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Nome
+                  </p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {(project as any)?.name || "�"}
+                  </p>
+                </div>
+                {(project as any)?.agency && (
+                  <div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      Empresa
+                    </p>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      {(project as any).agency}
+                    </p>
+                  </div>
+                )}
+                {(client as any)?.name && (
+                  <div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      Cliente
+                    </p>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      {(client as any).name}
+                    </p>
+                  </div>
+                )}
+                {(project as any)?.consultant && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      Consultor
+                    </p>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      {(project as any).consultant}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Products card */}
+            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-100 dark:border-slate-800">
+                <ShoppingBag className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                  Produtos
+                </span>
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                  {items.length} {items.length === 1 ? "item" : "itens"}
+                </span>
+              </div>
+              <div className="divide-y divide-gray-50 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                {items.map((item) => (
+                  <div
+                    key={item.product.id}
+                    className="flex items-center gap-3 px-3 py-2.5"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 flex items-center justify-center shrink-0 overflow-hidden">
+                      {item.product.image ? (
+                        <img
+                          src={item.product.image}
+                          alt={item.product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ShoppingBag className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {item.product.name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Qtd: {item.quantity}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        {formatCurrency(item.product.basePrice * item.quantity)}
+                      </p>
+                      {item.quantity > 1 && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {formatCurrency(item.product.basePrice)}/un
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Subtotal
+                  </span>
+                  <span
+                    className="text-base font-bold bg-clip-text text-transparent"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                    }}
+                  >
+                    {formatCurrency(totalPrice)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment card */}
+            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-b border-gray-100 dark:border-slate-800">
+                <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                  Pagamento
+                </span>
+                {projectId && (
+                  <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <FlaskConical className="h-2.5 w-2.5" />
+                    FAKE_SANDBOX
+                  </span>
+                )}
+              </div>
+              <div className="px-3 py-3 space-y-2.5 bg-white dark:bg-slate-900 text-sm">
+                {paymentMethod === "single" ? (
+                  <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    {selectedPaymentType === "credit_card" && (
+                      <CreditCard className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                    )}
+                    {selectedPaymentType === "pix" && (
+                      <Smartphone className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                    )}
+                    {selectedPaymentType === "boleto" && (
+                      <FileText className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                    )}
+                    {selectedPaymentType === "credits" && (
+                      <Wallet className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                    )}
+                    {selectedPaymentType === "allkoins" && (
+                      <Coins className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                    )}
+                    <span>
+                      {payTypeLabel[selectedPaymentType] || selectedPaymentType}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="font-medium text-gray-900 dark:text-white text-xs mb-1">
+                      Pagamento Dividido:
+                    </p>
+                    {Object.entries(splitPayments).map(([type, data]) => {
+                      if (!data.enabled || data.amount === 0) return null;
+                      const labels: Record<string, string> = {
+                        credit_card: "Cartão de Crédito",
+                        pix: "Pix",
+                        boleto: "Boleto",
+                        credits: "Créditos",
+                        allkoins: "Allkoins",
+                      };
+                      return (
+                        <p key={type} className="text-gray-700 dark:text-gray-300">
+                          · {labels[type]}: {formatCurrency(data.amount)}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+                {selectedPaymentType === "credit_card" && selectedCard && (
+                  <div className="flex items-center gap-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 px-3 py-2">
+                    <CreditCard className="h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedCard.brand} ⬢⬢⬢⬢ {selectedCard.lastDigits}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {selectedCard.holder} · {selectedCard.expiry}
+                      </p>
+                    </div>
+                    <Check className="h-4 w-4 text-green-500 shrink-0" />
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-slate-700">
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {payerMode === "client" ? "Total ao cliente" : "Total a pagar"}
+                  </span>
+                  <span
+                    className="text-lg font-bold bg-clip-text text-transparent"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                    }}
+                  >
+                    {formatCurrency(payTotal)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Checkout links */}
+            <div className="rounded-xl border border-blue-200/60 dark:border-blue-800/50 overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-blue-100 dark:border-blue-900/30">
+                <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                  Links de Checkout
+                </span>
+              </div>
+              <div className="px-3 py-3 space-y-2.5 bg-linear-to-br from-blue-50/60 to-purple-50/60 dark:from-blue-900/10 dark:to-purple-900/10">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Seu link de pagamento
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
+                      {selfLink}
+                    </code>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-7 px-2"
+                      onClick={() => navigator.clipboard?.writeText(selfLink)}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Link para o cliente
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
+                      {clientLink}
+                    </code>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-7 px-2"
+                      onClick={() => navigator.clipboard?.writeText(clientLink)}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  };
+
+  const renderStep6 = () => {
+    const tCriadasAgora: number = sandboxResult?.tarefasCriadasAgora ?? 0;
+    const tProcessados: number = sandboxResult?.produtosProcessadosNaCompra ?? 0;
+    const amount = sandboxResult?.payment?.amount ?? getTotalPrice();
+    const projectName = (preselectedProject as any)?.name || "";
+
+    if (payingState === "success") {
+      return (
+        <div className="space-y-4">
+          {/* Success header */}
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" }}
+            >
+              <PartyPopper className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                Pagamento aprovado!
+              </h3>
+              {projectName && (
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-1">
+                  {projectName}
+                </p>
+              )}
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Projeto marcado como em andamento.
+              </p>
+            </div>
+          </div>
+
+          {/* Payment details card */}
+          <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-b border-gray-100 dark:border-slate-800">
+              <CreditCard className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                Pagamento
+              </span>
+              <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-xs font-semibold text-green-700 dark:text-green-400">
+                <Check className="h-3 w-3" />
+                Aprovado
+              </span>
+            </div>
+            <div className="px-3 py-3 space-y-2 bg-white dark:bg-slate-900 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Cartão
+                </span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  Visa &bull;&bull;&bull;&bull; 4242
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Gateway
+                </span>
+                <span className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-400">
+                  <FlaskConical className="h-3 w-3" />
+                  FAKE_SANDBOX
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-1">
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  Valor pago
+                </span>
+                <span
+                  className="text-lg font-bold bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                  }}
+                >
+                  {formatCurrency(Number(amount))}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Resumo da contratação */}
+          <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border-b border-gray-100 dark:border-slate-800">
+              <Check className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                Resumo da Contratação
+              </span>
+            </div>
+            <div className="px-3 py-2.5 bg-white dark:bg-slate-900 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Produtos processados nesta compra
+                </span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {tProcessados}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Tarefas criadas agora
+                </span>
+                <span
+                  className={`font-semibold ${tCriadasAgora > 0 ? "text-violet-700 dark:text-violet-300" : "text-gray-500 dark:text-gray-400"}`}
+                >
+                  {tCriadasAgora}
+                </span>
+              </div>
+            </div>
+            <div className="px-3 py-2 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+              {tCriadasAgora === 0 ? (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Nenhuma nova tarefa foi criada nesta contratação.
+                </p>
+              ) : (
+                <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                  Foram abertas {tCriadasAgora}{" "}
+                  {tCriadasAgora === 1 ? "tarefa" : "tarefas"} para lançamento.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* 30-day expiry warning */}
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+              As tarefas abertas têm o prazo de expiração de{" "}
+              <strong>30 dias</strong> a partir da data de hoje. Caso o
+              lançamento não seja feito, a tarefa será expirada e não poderá
+              ser reutilizada.
             </p>
           </div>
         </div>
+      );
+    }
 
-        <ScrollArea className="h-[350px]">
-          <div className="space-y-4 pr-4">
-            {/* Client Summary */}
-            <Card className="p-4 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
-              <div className="flex items-start space-x-3">
-                <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                    Cliente
-                  </h4>
-                  <div className="space-y-1 text-sm">
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">Nome:</span> {client?.name}
-                    </p>
-                    {client?.email && (
-                      <p className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">E-mail:</span>{" "}
-                        {client.email}
-                      </p>
-                    )}
-                    {client?.phone && (
-                      <p className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Telefone:</span>{" "}
-                        {client.phone}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Project Summary */}
-            <Card className="p-4 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-              <div className="flex items-start space-x-3">
-                <FolderKanban className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                    Projeto
-                  </h4>
-                  <div className="space-y-1 text-sm">
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">Nome:</span> {project?.name}
-                    </p>
-                    {project?.description && (
-                      <p className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Descrição:</span>{" "}
-                        {project.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Items Summary */}
-            <Card className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-              <div className="flex items-start space-x-3">
-                <ShoppingBag className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                    Produtos ({items.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {items.map((item) => (
-                      <div
-                        key={item.product.id}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-gray-700 dark:text-gray-300">
-                          {item.product.name} × {item.quantity}
-                        </span>
-                        <span className="font-medium text-blue-600 dark:text-blue-400">
-                          {formatCurrency(
-                            item.product.basePrice * item.quantity,
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="border-t border-blue-200 dark:border-blue-800 pt-2 mt-2 flex items-center justify-between font-semibold">
-                      <span className="text-gray-900 dark:text-white">
-                        Total
-                      </span>
-                      <span className="text-lg text-blue-600 dark:text-blue-400">
-                        {formatCurrency(getTotalPrice())}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
-              <div className="flex items-start space-x-3">
-                <Wallet className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                    Pagamento
-                  </h4>
-                  <div className="space-y-1 text-sm">
-                    {paymentMethod === "single" ? (
-                      <p className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Método:</span>{" "}
-                        {selectedPaymentType === "credit_card" &&
-                          "Cartão de Crédito"}
-                        {selectedPaymentType === "pix" && "Pix"}
-                        {selectedPaymentType === "boleto" && "Boleto Bancário"}
-                        {selectedPaymentType === "credits" &&
-                          "Créditos da Plataforma"}
-                        {selectedPaymentType === "allkoins" && "Allkoins"}
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        <p className="font-medium text-gray-900 dark:text-white mb-1">
-                          Pagamento Dividido:
-                        </p>
-                        {Object.entries(splitPayments).map(([type, data]) => {
-                          if (!data.enabled || data.amount === 0) return null;
-                          const labels = {
-                            credit_card: "Cartão de Crédito",
-                            pix: "Pix",
-                            boleto: "Boleto",
-                            credits: "Créditos",
-                            allkoins: "Allkoins",
-                          };
-                          return (
-                            <p
-                              key={type}
-                              className="text-gray-700 dark:text-gray-300"
-                            >
-                              • {labels[type as keyof typeof labels]}:{" "}
-                              {formatCurrency(data.amount)}
-                            </p>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Checkout Links */}
-            <Card className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
-              <div className="flex items-start space-x-3">
-                <Copy className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <div className="flex-1 space-y-3">
-                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white">
-                    Links de Checkout
-                  </h4>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                      Seu link de pagamento
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
-                        {selfLink}
-                      </code>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0 h-7 px-2"
-                        onClick={() => navigator.clipboard?.writeText(selfLink)}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                      Link para o cliente
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
-                        {clientLink}
-                      </code>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0 h-7 px-2"
-                        onClick={() =>
-                          navigator.clipboard?.writeText(clientLink)
-                        }
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </ScrollArea>
+    // Error state
+    return (
+      <div className="flex flex-col items-center gap-4 py-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+          <XCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+        </div>
+        <div className="w-full max-w-xs space-y-3">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+            Pagamento recusado
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Não foi possível processar o pagamento neste momento.
+          </p>
+          {payingError && (
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3">
+              <p className="text-sm text-red-700 dark:text-red-300">
+                {payingError}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1651,61 +2121,181 @@ export function CheckoutFlow({
         {renderStepIndicator()}
       </div>
 
-      {/* Content with proper scrolling */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
-          {logicalStep === 1 && renderStep1()}
-          {logicalStep === 2 && renderStep2()}
-          {logicalStep === 3 && renderStep3()}
-          {logicalStep === 4 && renderStep4()}
-          {logicalStep === 5 && renderStep5()}
-        </div>
-      </ScrollArea>
-
-      {/* Footer - Fixed at bottom, always visible */}
-      <div className="border-t border-gray-200 dark:border-slate-700 p-4 space-y-3 bg-white dark:bg-slate-900 flex-shrink-0">
-        <div className="flex gap-2">
-          {step > 1 ? (
-            <Button
-              variant="outline"
-              onClick={() => setStep(step - 1)}
-              className="flex-1"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={onBack} className="flex-1">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar ao Carrinho
-            </Button>
-          )}
-
-          {step < totalSteps ? (
-            <Button
-              onClick={() => setStep(step + 1)}
-              disabled={
-                (logicalStep === 1 && !canProceedFromStep1) ||
-                (logicalStep === 2 && !canProceedFromStep2) ||
-                (logicalStep === 3 && !canProceedFromStep3) ||
-                (logicalStep === 4 && !canProceedFromStep4())
-              }
-              className="flex-1 btn-brand"
-            >
-              Próximo
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          ) : (
-            <Button
-              onClick={handleComplete}
-              className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Finalizar Compra
-            </Button>
+      {/* Processing overlay */}
+      {payingState === "processing" && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+          {payingState === "processing" && (
+            <>
+              <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 text-blue-600 dark:text-blue-400 animate-spin" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Processando pagamento de teste...
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Simulando aprovação via sandbox · aguarde
+                </p>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
+                <FlaskConical className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                  FAKE_SANDBOX · nenhum pagamento real
+                </span>
+              </div>
+            </>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Content */}
+      {payingState !== "processing" && (
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-6">
+            {logicalStep === 1 && renderStep1()}
+            {logicalStep === 2 && renderStep2()}
+            {logicalStep === 3 && renderStep3()}
+            {logicalStep === 4 && renderStep4()}
+            {logicalStep === 5 && renderStep5()}
+            {logicalStep === 6 && renderStep6()}
+          </div>
+        </ScrollArea>
+      )}
+
+      {/* Footer */}
+      {payingState !== "processing" && (
+        <div className="border-t border-gray-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900 shrink-0">
+          {logicalStep === 6 ? (
+            payingState === "success" ? (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (pendingCheckoutData) onComplete(pendingCheckoutData);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                      boxShadow: "0 4px 14px rgba(37,88,255,0.30)",
+                    }}
+                  >
+                    <FolderKanban className="h-4 w-4" />
+                    Abrir projeto
+                  </button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (pendingCheckoutData)
+                        onComplete({
+                          ...pendingCheckoutData,
+                          openTab: "tarefas",
+                        });
+                    }}
+                  >
+                    Ver tarefas
+                  </Button>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadInvoice}
+                  className="w-full"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar fatura de pagamento
+                </Button>
+              </div>
+            ) : (
+              /* Error state */
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setPayingState("idle");
+                    setPayingError(null);
+                    const revIdx = activeSteps.indexOf(5);
+                    if (revIdx >= 0) setStep(revIdx + 1);
+                  }}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar para revisão
+                </Button>
+                <button
+                  type="button"
+                  className="flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                  }}
+                  onClick={() => {
+                    setPayingState("idle");
+                    setPayingError(null);
+                    const revIdx = activeSteps.indexOf(5);
+                    if (revIdx >= 0) setStep(revIdx + 1);
+                  }}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )
+          ) : (
+            /* Normal navigation */
+            <div className="flex gap-2">
+              {step > 1 ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setStep(step - 1)}
+                  className="flex-1"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={onBack} className="flex-1">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar ao Carrinho
+                </Button>
+              )}
+
+              {logicalStep === 5 ? (
+                <button
+                  type="button"
+                  onClick={handleComplete}
+                  className="flex-1 flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                    boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
+                  }}
+                >
+                  {projectId ? (
+                    <FlaskConical className="h-4 w-4" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {projectId ? "Pagar agora (teste)" : "Finalizar Compra"}
+                </button>
+              ) : (
+                <Button
+                  onClick={() => setStep(step + 1)}
+                  disabled={
+                    (logicalStep === 1 && !canProceedFromStep1) ||
+                    (logicalStep === 2 && !canProceedFromStep2) ||
+                    (logicalStep === 3 && !canProceedFromStep3) ||
+                    (logicalStep === 4 && !canProceedFromStep4())
+                  }
+                  className="flex-1 btn-brand"
+                >
+                  Próximo
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

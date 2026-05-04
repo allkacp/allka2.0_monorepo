@@ -354,6 +354,9 @@ export function ProjectCreateNewPanel({
   const [showProductsStep, setShowProductsStep] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  // Pre-created project (created before entering checkout so CheckoutFlow gets a real ID)
+  const [preCreatedProjectId, setPreCreatedProjectId] = useState<string | null>(null);
+  const [preLinkedProductIds, setPreLinkedProductIds] = useState<Record<string, string>>({});
   const [selectedProducts, setSelectedProducts] = useState<
     CatalogSelectedProduct[]
   >([]);
@@ -448,6 +451,8 @@ export function ProjectCreateNewPanel({
       setShowProductsStep(false);
       setShowReview(false);
       setShowCheckout(false);
+      setPreCreatedProjectId(null);
+      setPreLinkedProductIds({});
       setSelectedProducts([]);
       setProductQuantities({});
       setProductCommissions({});
@@ -472,9 +477,56 @@ export function ProjectCreateNewPanel({
       if (resumeToCheckout) {
         setShowProductsStep(true);
         setShowCheckout(true);
+        // If re-entering checkout for an existing project, restore the project ID
+        // so CheckoutFlow can call fakeSandboxCheckout.
+        if (draftProjectId) {
+          setPreCreatedProjectId(String(draftProjectId));
+        }
       }
     }
   }, [open]);
+
+  // When resuming an existing project (Pagar Agora) with no draft products,
+  // load the project's linked products from the API so the cart is not empty.
+  useEffect(() => {
+    if (!open || !draftProjectId) return;
+    if (draftProducts && draftProducts.length > 0) return; // already hydrated from draft prop
+    let cancelled = false;
+    setLoading(true);
+    apiClient
+      .getProjectProducts({ project_id: String(draftProjectId), limit: 100 })
+      .then((res: any) => {
+        if (cancelled) return;
+        const list: any[] = res?.data ?? (Array.isArray(res) ? res : []);
+        if (list.length === 0) return;
+        const products: CatalogSelectedProduct[] = list.map((pp: any) => ({
+          id: String(pp.product_id ?? pp.id),
+          name: pp.product_name_snapshot || pp.product?.name || "Produto",
+          description: pp.product?.description || "",
+          category: pp.product_category_snapshot || pp.product?.category || "",
+          finalPrice: Number(pp.preco_final_cliente_snapshot ?? pp.product?.base_price ?? 0),
+          basePrice: Number(pp.product?.base_price ?? 0),
+          image: pp.product?.image || "",
+          quantity: 1,
+        }));
+        const qmap: Record<string, number> = {};
+        products.forEach((p) => { qmap[p.id] = 1; });
+        const linkedMap: Record<string, string> = {};
+        list.forEach((pp: any) => {
+          if (pp.product_id && pp.id) linkedMap[String(pp.product_id)] = String(pp.id);
+        });
+        setSelectedProducts(products);
+        setProductQuantities(qmap);
+        setPreLinkedProductIds(linkedMap);
+      })
+      .catch(() => {
+        // non-fatal — cart stays empty, user will see empty review
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, draftProjectId, draftProducts]);
 
   // Fetch companies lazily when panel opens (and allowCompanySelect is on)
   // ESC closes the Review overlay and returns to the correct previous screen
@@ -567,6 +619,19 @@ export function ProjectCreateNewPanel({
               ...prev,
               cliente: only.name,
               clienteCnpj: prev.clienteCnpj,
+            }));
+          }
+
+          // If exactly one consultant → auto-select it
+          const consultorItems = activeUsers.filter(
+            (u) => u.role !== "company_user",
+          );
+          if (consultorItems.length === 1) {
+            const only = consultorItems[0];
+            setFormData((prev) => ({
+              ...prev,
+              consultor: only.name,
+              emailConsultor: only.email || prev.emailConsultor,
             }));
           }
         }
@@ -1240,20 +1305,133 @@ export function ProjectCreateNewPanel({
       };
     });
 
-  const handleCheckoutComplete = (_data: CheckoutData) => {
-    const products = selectedProducts.map((p) => {
-      const id = String(p.id);
-      const qty = productQuantities[id] || p.quantity || 1;
-      const c = getProductCommission(id);
-      const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
-      const clientUnitPrice =
-        c.pagador === "CLIENTE" ? p.finalPrice + commValue / qty : p.finalPrice;
-      return { name: p.name, price: clientUnitPrice, qty };
+  const handleCheckoutComplete = async (checkoutData: CheckoutData) => {
+    // Payment was already registered in the backend by CheckoutFlow (fakeSandboxCheckout).
+    // Here we just update product-level commission snapshots and close the panel.
+    if (!preCreatedProjectId) {
+      toast({
+        title: "Erro ao finalizar",
+        description: "ID do projeto não encontrado. Tente novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const commRate: number = checkoutData.commissionRate ?? 0;
+    const pagador =
+      checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
+
+    for (const [productId, ppId] of Object.entries(preLinkedProductIds)) {
+      const product = selectedProducts.find((p) => String(p.id) === productId);
+      if (!product || !ppId) continue;
+      const qty = productQuantities[productId] || product.quantity || 1;
+      const basePrice = (product.finalPrice || 0) * qty;
+      const clientPrice = basePrice * (1 + commRate / 100);
+      try {
+        await apiClient.updateProjectProduct(ppId, {
+          preco_final_cliente_snapshot: clientPrice,
+          comissao_snapshot: commRate,
+          pagador_snapshot: pagador,
+        });
+      } catch {
+        // non-fatal – commission snapshot update failed
+      }
+    }
+
+    toast({
+      title: "Contratação Concluída!",
+      description: "Pagamento aprovado. Projeto contratado com sucesso.",
+      variant: "success",
     });
-    confirmSubmit("awaiting-payment", products);
+    onCreate({ id: preCreatedProjectId, status: "in-progress", openTab: checkoutData.openTab });
+    handleClose();
   };
 
-  // ── Avatar handlers ──
+  // Creates the project + links products in the backend BEFORE opening checkout,
+  // so CheckoutFlow receives a real projectId and can call fakeSandboxCheckout.
+  const handleProceedToCheckout = async () => {
+    // Guard: already created (user went back and clicked again)
+    if (preCreatedProjectId) {
+      setShowReview(false);
+      setShowCheckout(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const toISODate = (d: string | undefined): string | undefined => {
+        if (!d) return undefined;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d}T00:00:00.000Z`;
+        return d;
+      };
+      const budgetValue =
+        parseFloat(
+          formData.orcamento.replace(/[^\d.,]/g, "").replace(",", "."),
+        ) || 0;
+      const payload: any = {
+        title: formData.nome,
+        type: formData.tipo || undefined,
+        agency: resolvedCompanyName || formData.agencia || undefined,
+        consultant: formData.consultor || undefined,
+        consultant_email: formData.emailConsultor || undefined,
+        start_date: toISODate(formData.dataInicio),
+        end_date: toISODate(formData.prazo),
+        budget: budgetValue,
+        value: budgetValue,
+        portfolio_permission: formData.permitePortfolio,
+        bitrix_sync: formData.sincronizadoBitrix,
+        description: formData.descricao || undefined,
+        status: "awaiting-payment",
+        lifecycle: "avulso",
+        client_id: resolvedCompanyId ?? undefined,
+      };
+      const created = await apiClient.createProject(payload);
+      const createdId = String(created?.id);
+
+      // Link each selected product to the project
+      const linkedMap: Record<string, string> = {};
+      for (const product of selectedProducts) {
+        const pid = String(product.id);
+        const qty = productQuantities[pid] || product.quantity || 1;
+        const c = getProductCommission(pid);
+        const commValue = calcProductCommissionValue(pid, product.finalPrice, qty);
+        const clientUnitPrice =
+          c.pagador === "CLIENTE"
+            ? product.finalPrice + commValue / qty
+            : product.finalPrice;
+        try {
+          const linked: any = await apiClient.linkProductToProject({
+            project_id: createdId,
+            product_id: pid,
+            recurrence_snapshot: "avulso",
+            preco_final_cliente_snapshot: clientUnitPrice * qty,
+            comissao_snapshot: 0,
+            pagador_snapshot: "AGENCIA",
+          });
+          const ppId = linked?.project_product?.id ?? linked?.id ?? null;
+          if (ppId) linkedMap[pid] = String(ppId);
+        } catch (linkErr: any) {
+          if (linkErr?.status !== 409) {
+            console.warn(`[handleProceedToCheckout] Falha ao vincular produto ${pid}:`, linkErr);
+          }
+        }
+      }
+
+      setPreCreatedProjectId(createdId);
+      setPreLinkedProductIds(linkedMap);
+      setShowReview(false);
+      setShowCheckout(true);
+    } catch (err: any) {
+      console.error("[handleProceedToCheckout]", err);
+      toast({
+        title: "Erro ao criar projeto",
+        description: "Não foi possível iniciar o checkout. Verifique os dados e tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const handleAvatarClick = () => {
     if (avatarPreview) setShowAvatarMenu((p) => !p);
     else fileInputRef.current?.click();
@@ -2623,612 +2801,568 @@ export function ProjectCreateNewPanel({
 
           {/* Review Modal Overlay (inside this panel so z-index works correctly) */}
           {showReview && (
-            <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="absolute inset-0 z-10 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
               <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-h-[calc(100%-32px)] flex flex-col overflow-hidden"
-                style={{ maxWidth: "960px" }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-h-[calc(100%-24px)] flex flex-col overflow-hidden"
+                style={{ maxWidth: "1020px" }}
               >
-                {/* ── Review Header ── */}
+                {/* ── Header ── */}
                 <div
-                  className="relative shrink-0 px-6 pt-5 pb-0 overflow-hidden"
+                  className="relative shrink-0 px-6 py-5 overflow-hidden"
                   style={{
-                    background:
-                      "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+                    background: "linear-gradient(135deg, #1a2060 0%, #2558FF 30%, #6E2C96 65%, #A61E86 100%)",
                   }}
                 >
-                  {/* decorative blobs */}
-                  <div className="absolute -top-10 -right-10 w-48 h-48 bg-purple-400/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="absolute -bottom-8 left-1/4 w-36 h-36 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+                  {/* Decorative blobs */}
+                  <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-blue-300/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(166,30,134,0.15)_0%,transparent_60%)] pointer-events-none" />
 
-                  <div className="relative flex items-center justify-between mb-4">
+                  <div className="relative flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-white/15 border border-white/20 backdrop-blur-sm">
+                      <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-sm">
                         <Eye className="h-5 w-5 text-white" />
                       </div>
                       <div>
                         <h2 className="text-base font-bold text-white leading-tight">
-                          Revisão do Projeto
+                          Revisar Projeto
                         </h2>
-                        <p className="text-xs text-white/55 mt-0.5">
-                          {formData.nome
-                            ? `"${formData.nome}" — confira antes do checkout`
-                            : "Confira os detalhes antes de prosseguir"}
+                        <p className="text-xs text-white/60 mt-0.5 max-w-xs truncate">
+                          {formData.nome ? `"${formData.nome}"` : "Novo projeto"} · Confira tudo antes de confirmar
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={handleCloseReview}
-                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/12 border border-white/20 text-white/60 hover:bg-white/22 hover:text-white transition-all"
-                    >
-                      <XIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {/* Tabs — attached to header bottom */}
-                  <div className="relative flex gap-0.5">
-                    {(["resumo", "comissoes"] as const).map((tab) => (
+                    <div className="flex items-center gap-2">
+                      {selectedProducts.length > 0 && (
+                        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20">
+                          <Package className="h-3.5 w-3.5 text-white/70" />
+                          <span className="text-xs font-semibold text-white/90">
+                            {selectedProducts.length} {selectedProducts.length === 1 ? "produto" : "produtos"}
+                          </span>
+                          <span className="text-white/40 text-xs">·</span>
+                          <span
+                            className="text-xs font-bold text-white"
+                            style={{
+                              textShadow: "0 0 12px rgba(255,255,255,0.4)",
+                            }}
+                          >
+                            {formatCurrency(calculateClientTotal())}
+                          </span>
+                        </div>
+                      )}
                       <button
-                        key={tab}
-                        onClick={() => setActiveReviewTab(tab)}
-                        className={cn(
-                          "relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-all rounded-t-lg",
-                          activeReviewTab === tab
-                            ? "bg-slate-50 text-violet-700 shadow-sm"
-                            : "text-white/65 hover:text-white hover:bg-white/10",
-                        )}
+                        onClick={handleCloseReview}
+                        className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/10 border border-white/20 text-white/60 hover:bg-white/20 hover:text-white transition-all"
                       >
-                        {tab === "resumo" ? (
-                          <Eye className="h-3.5 w-3.5" />
-                        ) : (
-                          <Percent className="h-3.5 w-3.5" />
-                        )}
-                        {tab === "resumo" ? "Resumo" : "Comissões"}
-                        {tab === "comissoes" &&
-                          calculateCommissionTotal() > 0 && (
-                            <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none">
-                              +{formatCurrency(calculateCommissionTotal())}
-                            </span>
-                          )}
+                        <XIcon className="h-4 w-4" />
                       </button>
-                    ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* ── Scrollable Content ── */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50/80">
-                  {/* ── TAB: RESUMO ── */}
-                  {activeReviewTab === "resumo" && (
-                    <>
-                      {/* Project Info */}
+                {/* ── Two-column scrollable body ── */}
+                <div className="flex-1 overflow-y-auto bg-slate-50/80">
+                  <div className="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+                    {/* ── LEFT COLUMN: main content (3/5) ── */}
+                    <div className="lg:col-span-3 space-y-4">
+
+                      {/* 1. Project Data */}
                       <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                        <div className="px-4 py-2.5 border-b border-slate-50 flex items-center gap-2">
-                          <div className="w-1 h-3.5 rounded-full bg-linear-to-b from-[#2558FF] to-[#6E2C96]" />
-                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2"
+                          style={{ background: "linear-gradient(90deg, rgba(37,88,255,0.06) 0%, transparent 100%)" }}
+                        >
+                          <div className="h-6 w-6 rounded-lg flex items-center justify-center"
+                            style={{ background: "linear-gradient(135deg, #2558FF, #6E2C96)" }}
+                          >
+                            <FolderKanban className="h-3.5 w-3.5 text-white" />
+                          </div>
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">
                             Dados do Projeto
                           </p>
                         </div>
-                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                        <div className="p-4 grid grid-cols-2 gap-x-5 gap-y-3.5">
+                          {/* Nome */}
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Nome do Projeto</p>
+                            <p className="text-sm font-bold text-slate-900 truncate">{formData.nome || "—"}</p>
+                          </div>
+                          {/* Tipo */}
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Tipo</p>
+                            <p className="text-sm font-semibold text-slate-800">{formData.tipo || "—"}</p>
+                          </div>
+                          {/* Status */}
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Status</p>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-100 text-cyan-800">
+                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                              Ag. Pagamento
+                            </span>
+                          </div>
+                          {/* Empresa */}
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Empresa</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate">{resolvedCompanyName || formData.agencia || "—"}</p>
+                          </div>
+                          {/* Cliente */}
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Cliente</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate">{formData.cliente || "—"}</p>
+                          </div>
+                          {/* CNPJ */}
+                          {formData.clienteCnpj && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">CNPJ / Doc.</p>
+                              <p className="text-sm font-semibold text-slate-800">{formData.clienteCnpj}</p>
+                            </div>
+                          )}
+                          {/* Consultor */}
+                          <div className={formData.clienteCnpj ? "" : ""}>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Consultor Responsável</p>
+                            <div className="flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <p className="text-sm font-semibold text-slate-800 truncate">{formData.consultor || "—"}</p>
+                            </div>
+                          </div>
+                          {/* E-mail consultor */}
+                          {formData.emailConsultor && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">E-mail do Consultor</p>
+                              <div className="flex items-center gap-1.5">
+                                <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <p className="text-xs text-slate-600 truncate">{formData.emailConsultor}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Datas */}
+                          {(formData.dataInicio || formData.prazo) && (
+                            <div className="col-span-2 grid grid-cols-2 gap-5">
+                              {formData.dataInicio && (
+                                <div>
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Data de Início</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                    <p className="text-sm font-semibold text-slate-800">{formData.dataInicio}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {formData.prazo && (
+                                <div>
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Prazo Final</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                    <p className="text-sm font-semibold text-slate-800">{formData.prazo}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2. Products */}
+                      <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"
+                          style={{ background: "linear-gradient(90deg, rgba(110,44,150,0.06) 0%, transparent 100%)" }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-6 rounded-lg flex items-center justify-center"
+                              style={{ background: "linear-gradient(135deg, #6E2C96, #A61E86)" }}
+                            >
+                              <ShoppingBag className="h-3.5 w-3.5 text-white" />
+                            </div>
+                            <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">
+                              Produtos Contratados
+                            </p>
+                          </div>
+                          {selectedProducts.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold"
+                              style={{ background: "linear-gradient(135deg, #6E2C96, #A61E86)", color: "white" }}
+                            >
+                              {selectedProducts.length} {selectedProducts.length === 1 ? "item" : "itens"}
+                            </span>
+                          )}
+                        </div>
+
+                        {selectedProducts.length === 0 ? (
+                          <div className="flex flex-col items-center py-10 text-center px-4">
+                            <Package className="h-10 w-10 text-slate-200 mb-2" />
+                            <p className="text-sm font-medium text-slate-400">Nenhum produto adicionado</p>
+                            <p className="text-xs text-slate-300 mt-0.5">Volte para adicionar produtos</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-slate-50">
+                            {selectedProducts.map((product, pIdx) => {
+                              const id = String(product.id);
+                              const qty = productQuantities[id] || product.quantity || 1;
+                              const baseUnit = product.finalPrice;
+                              const baseTotal = baseUnit * qty;
+                              const comm = getProductCommission(id);
+                              const commVal = calcProductCommissionValue(id, product.finalPrice, qty);
+                              const clientTotal = comm.pagador === "CLIENTE" ? baseTotal + commVal : baseTotal;
+                              return (
+                                <div key={id} className="p-4 hover:bg-slate-50/60 transition-colors">
+                                  <div className="flex items-start gap-3">
+                                    {/* Thumbnail */}
+                                    <div className="h-12 w-12 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center"
+                                      style={{ background: "linear-gradient(135deg, #f0f4ff, #f5f0ff)" }}
+                                    >
+                                      {product.image ? (
+                                        <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                                      ) : (
+                                        <Package className="h-5 w-5 text-violet-300" />
+                                      )}
+                                    </div>
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          {(product as any).code && (
+                                            <span className="inline-block text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded mb-1">
+                                              {(product as any).code}
+                                            </span>
+                                          )}
+                                          <p className="text-sm font-bold text-slate-900 leading-snug truncate">{product.name}</p>
+                                          {(product as any).variation && (
+                                            <p className="text-xs text-indigo-600 mt-0.5 font-medium">
+                                              Variação: {(product as any).variation}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <p className="text-sm font-extrabold text-slate-900">{formatCurrency(clientTotal)}</p>
+                                          {qty > 1 && (
+                                            <p className="text-[10px] text-slate-400">unit. {formatCurrency(baseUnit)}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {/* Badges row */}
+                                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                                        {product.category && (
+                                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                            {product.category}
+                                          </span>
+                                        )}
+                                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                          Qtd: {qty}
+                                        </span>
+                                        {(product as any).recurrence && (
+                                          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-semibold">
+                                            {(product as any).recurrence}
+                                          </span>
+                                        )}
+                                        {(product as any).deliveryDays && (
+                                          <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold flex items-center gap-0.5">
+                                            <Calendar className="h-2.5 w-2.5" />
+                                            {(product as any).deliveryDays}d
+                                          </span>
+                                        )}
+                                        {comm.pagador === "AGENCIA" ? (
+                                          <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold flex items-center gap-0.5">
+                                            <Building2 className="h-2.5 w-2.5" />
+                                            Agência paga
+                                          </span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold flex items-center gap-0.5">
+                                            <User className="h-2.5 w-2.5" />
+                                            Cliente paga
+                                          </span>
+                                        )}
+                                        {commVal > 0 && (
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-0.5"
+                                            style={{ background: "linear-gradient(135deg, rgba(37,88,255,0.1), rgba(110,44,150,0.1))", color: "#6E2C96", border: "1px solid rgba(110,44,150,0.2)" }}
+                                          >
+                                            <TrendingUp className="h-2.5 w-2.5" />
+                                            +{formatCurrency(commVal)} margem
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. Important notices */}
+                      <div className="rounded-xl border border-amber-100 bg-amber-50/60 overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-amber-100/80 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                          <p className="text-xs font-bold text-amber-800 uppercase tracking-widest">
+                            Avisos Importantes
+                          </p>
+                        </div>
+                        <div className="p-4 space-y-2.5">
                           {[
-                            { label: "Nome", value: formData.nome },
-                            { label: "Tipo", value: formData.tipo },
-                            { label: "Cliente", value: formData.cliente },
-                            {
-                              label: "Empresa",
-                              value: resolvedCompanyName || formData.agencia,
-                            },
-                            ...(formData.dataInicio
-                              ? [
-                                  {
-                                    label: "Início",
-                                    value: formData.dataInicio,
-                                  },
-                                ]
-                              : []),
-                            ...(formData.prazo
-                              ? [{ label: "Prazo", value: formData.prazo }]
-                              : []),
-                          ].map(({ label, value }) => (
-                            <div key={label}>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-                                {label}
-                              </p>
-                              <p className="text-sm font-semibold text-slate-800 truncate">
-                                {value || "—"}
-                              </p>
+                            { icon: <ShoppingBag className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />, text: "Os produtos serão vinculados ao projeto após a confirmação." },
+                            { icon: <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />, text: "Após o pagamento aprovado, tarefas de lançamento serão abertas automaticamente." },
+                            { icon: <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />, text: "Cada tarefa de lançamento terá prazo de 30 dias para ser iniciada." },
+                            { icon: <AlertCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />, text: "Tarefas não iniciadas dentro do prazo serão marcadas como expiradas." },
+                          ].map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-2.5">
+                              {item.icon}
+                              <p className="text-xs text-amber-900/80 leading-relaxed">{item.text}</p>
                             </div>
                           ))}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Products list */}
-                      {selectedProducts.length > 0 ? (
-                        <div className="rounded-xl border border-slate-100 overflow-hidden bg-white shadow-sm">
-                          <div className="px-4 py-2.5 border-b border-slate-50 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-1 h-3.5 rounded-full bg-linear-to-b from-[#6E2C96] to-[#A61E86]" />
-                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                                Produtos Selecionados
-                              </p>
+                    {/* ── RIGHT COLUMN: financial (2/5) ── */}
+                    <div className="lg:col-span-2 space-y-4">
+
+                      {/* Financial Summary card */}
+                      <div className="rounded-xl overflow-hidden border border-indigo-100 shadow-sm">
+                        <div className="px-4 py-3 flex items-center gap-2"
+                          style={{ background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)" }}
+                        >
+                          <DollarSign className="h-4 w-4 text-white/80" />
+                          <p className="text-xs font-bold text-white uppercase tracking-widest">Resumo Financeiro</p>
+                        </div>
+                        <div className="p-4 bg-white space-y-2">
+                          {/* Product count */}
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>Produtos</span>
+                            <span className="font-semibold text-slate-700">{selectedProducts.length}</span>
+                          </div>
+                          {/* Base total (internal) */}
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>Total Base (Agência)</span>
+                            <span className="font-semibold text-slate-700">{formatCurrency(calculateTotal())}</span>
+                          </div>
+                          {/* Commission (internal) */}
+                          {calculateCommissionTotal() > 0 && (
+                            <div className="flex items-center justify-between text-xs text-emerald-600">
+                              <span className="flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3" />
+                                Margem / Comissão
+                              </span>
+                              <span className="font-bold">+{formatCurrency(calculateCommissionTotal())}</span>
                             </div>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold">
-                              {selectedProducts.length}{" "}
-                              {selectedProducts.length === 1 ? "item" : "itens"}
-                            </span>
+                          )}
+                          {/* Payer split */}
+                          {calculateAgencyPayTotal() > 0 && (
+                            <div className="flex items-center justify-between text-xs text-blue-600">
+                              <span className="flex items-center gap-1">
+                                <Building2 className="h-3 w-3" />
+                                Pago pela Agência
+                              </span>
+                              <span className="font-semibold">{formatCurrency(calculateAgencyPayTotal())}</span>
+                            </div>
+                          )}
+                          {calculateClientPayTotal() > 0 && (
+                            <div className="flex items-center justify-between text-xs text-slate-600">
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                A pagar pelo Cliente
+                              </span>
+                              <span className="font-semibold">{formatCurrency(calculateClientPayTotal())}</span>
+                            </div>
+                          )}
+                          {/* Divider */}
+                          <div className="pt-2 mt-1 border-t border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-600">Total ao Cliente</span>
+                              <span className="text-base font-extrabold"
+                                style={{
+                                  background: "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                                  WebkitBackgroundClip: "text",
+                                  WebkitTextFillColor: "transparent",
+                                  backgroundClip: "text",
+                                }}
+                              >
+                                {formatCurrency(calculateClientTotal())}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Rate */}
+                          {calculateCommissionTotal() > 0 && calculateTotal() > 0 && (
+                            <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
+                              <span>Margem média</span>
+                              <span className="font-semibold text-emerald-500">
+                                {((calculateCommissionTotal() / calculateTotal()) * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Per-product commission editor */}
+                      {selectedProducts.length > 0 && (
+                        <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2"
+                            style={{ background: "linear-gradient(90deg, rgba(16,185,129,0.06) 0%, transparent 100%)" }}
+                          >
+                            <div className="h-6 w-6 rounded-lg flex items-center justify-center bg-emerald-500">
+                              <Percent className="h-3.5 w-3.5 text-white" />
+                            </div>
+                            <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">Margens / Comissões</p>
                           </div>
                           <div className="divide-y divide-slate-50">
                             {selectedProducts.map((product) => {
                               const id = String(product.id);
-                              const qty =
-                                productQuantities[id] || product.quantity || 1;
-                              const baseTotal = product.finalPrice * qty;
+                              const qty = productQuantities[id] || product.quantity || 1;
+                              const baseCost = product.finalPrice * qty;
                               const comm = getProductCommission(id);
-                              const commVal = calcProductCommissionValue(
-                                id,
-                                product.finalPrice,
-                                qty,
-                              );
-                              const clientTotal =
-                                comm.pagador === "CLIENTE"
-                                  ? baseTotal + commVal
-                                  : baseTotal;
+                              const commissionValue = calcProductCommissionValue(id, product.finalPrice, qty);
+                              const clientPrice = comm.pagador === "CLIENTE" ? baseCost + commissionValue : baseCost;
                               return (
-                                <div
-                                  key={id}
-                                  className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/80 transition-colors group"
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="h-9 w-9 rounded-lg bg-linear-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center shrink-0 overflow-hidden">
-                                      {product.image ? (
-                                        <img
-                                          src={product.image}
-                                          alt={product.name}
-                                          className="h-full w-full object-cover"
-                                        />
-                                      ) : (
-                                        <Package className="h-4 w-4 text-violet-400" />
-                                      )}
+                                <div key={id} className="p-3">
+                                  <p className="text-xs font-semibold text-slate-700 truncate mb-2">{product.name}</p>
+                                  <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div>
+                                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Tipo</p>
+                                      <select
+                                        value={comm.tipoComissao}
+                                        onChange={(e) => {
+                                          const tipo = e.target.value as "PERCENTUAL" | "VALOR_FIXO";
+                                          setProductCommissionData((prev) => ({
+                                            ...prev,
+                                            [id]: { ...getProductCommission(id), tipoComissao: tipo },
+                                          }));
+                                        }}
+                                        className="w-full h-7 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-violet-400 cursor-pointer"
+                                      >
+                                        <option value="PERCENTUAL">%</option>
+                                        <option value="VALOR_FIXO">R$ Fixo</option>
+                                      </select>
                                     </div>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-slate-800 truncate">
-                                        {product.name}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                        {product.category && (
-                                          <span className="text-[11px] text-slate-400">
-                                            {product.category}
-                                          </span>
-                                        )}
-                                        <span className="text-slate-200 text-xs select-none">
-                                          ·
-                                        </span>
-                                        <span className="text-[11px] text-slate-400">
-                                          Qtd:{" "}
-                                          <strong className="text-slate-600">
-                                            {qty}
-                                          </strong>
-                                        </span>
-                                        {comm.pagador === "AGENCIA" && (
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-semibold">
-                                            Agência paga
-                                          </span>
-                                        )}
-                                        {comm.pagador === "CLIENTE" &&
-                                          commVal > 0 && (
-                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">
-                                              <TrendingUp className="h-2.5 w-2.5" />
-                                              +{formatCurrency(commVal)}
-                                            </span>
-                                          )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right shrink-0 ml-4">
-                                    <p className="text-sm font-bold text-slate-800">
-                                      {formatCurrency(baseTotal)}
-                                    </p>
-                                    {commVal > 0 && (
-                                      <p className="text-[11px] text-emerald-600 font-semibold">
-                                        Cliente: {formatCurrency(clientTotal)}
-                                      </p>
-                                    )}
-                                    <p className="text-[11px] text-slate-400">
-                                      unit. {formatCurrency(product.finalPrice)}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center bg-white">
-                          <Package className="h-9 w-9 mx-auto mb-2 text-slate-200" />
-                          <p className="text-sm font-medium text-slate-400">
-                            Nenhum produto adicionado
-                          </p>
-                          <p className="text-xs text-slate-300 mt-0.5">
-                            Volte para adicionar produtos ao projeto
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Financial Summary */}
-                      {selectedProducts.length > 0 && (
-                        <div className="rounded-xl overflow-hidden border border-indigo-100 shadow-sm">
-                          <div
-                            className="px-4 py-3 flex items-center gap-2"
-                            style={{
-                              background:
-                                "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
-                            }}
-                          >
-                            <DollarSign className="h-4 w-4 text-white/80" />
-                            <p className="text-xs font-bold text-white uppercase tracking-widest">
-                              Resumo Financeiro
-                            </p>
-                          </div>
-                          <div className="p-4 space-y-1.5 bg-white">
-                            {selectedProducts.map((p) => {
-                              const id = String(p.id);
-                              const qty =
-                                productQuantities[id] || p.quantity || 1;
-                              return (
-                                <div
-                                  key={id}
-                                  className="flex items-center justify-between text-xs text-slate-600"
-                                >
-                                  <span className="truncate mr-2 text-slate-500">
-                                    {p.name}{" "}
-                                    <span className="text-slate-300">×</span>{" "}
-                                    {qty}
-                                  </span>
-                                  <span className="font-semibold text-slate-700 shrink-0">
-                                    {formatCurrency(p.finalPrice * qty)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                            {calculateCommissionTotal() > 0 && (
-                              <div className="flex items-center justify-between text-xs text-emerald-600 border-t border-slate-100 pt-2 mt-1">
-                                <span className="flex items-center gap-1">
-                                  <TrendingUp className="h-3 w-3" />
-                                  Comissões
-                                </span>
-                                <span className="font-bold">
-                                  +{formatCurrency(calculateCommissionTotal())}
-                                </span>
-                              </div>
-                            )}
-                            <div className="pt-2 mt-1 border-t border-slate-100 space-y-1.5">
-                              {calculateCommissionTotal() > 0 && (
-                                <div className="flex items-center justify-between text-xs text-slate-500">
-                                  <span>Total Agência</span>
-                                  <span className="font-semibold text-slate-700">
-                                    {formatCurrency(calculateTotal())}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between pt-1">
-                                <span className="text-sm font-bold text-slate-700">
-                                  {calculateCommissionTotal() > 0
-                                    ? "Total Cliente"
-                                    : "Total Geral"}
-                                </span>
-                                <span
-                                  className="text-xl font-extrabold"
-                                  style={{
-                                    background:
-                                      "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
-                                    WebkitBackgroundClip: "text",
-                                    WebkitTextFillColor: "transparent",
-                                    backgroundClip: "text",
-                                  }}
-                                >
-                                  {formatCurrency(calculateClientTotal())}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* ── TAB: COMISSÕES ── */}
-                  {activeReviewTab === "comissoes" && (
-                    <>
-                      {selectedProducts.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center bg-white">
-                          <Percent className="h-9 w-9 mx-auto mb-2 text-slate-200" />
-                          <p className="text-sm font-medium text-slate-400">
-                            Nenhum produto para configurar comissão
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-xs text-slate-500 px-0.5">
-                            Defina a porcentagem de comissão por produto. O
-                            valor será adicionado ao preço cobrado do cliente.
-                          </p>
-
-                          {/* Per-product commission rows */}
-                          <div className="rounded-xl border border-slate-100 overflow-hidden bg-white shadow-sm">
-                            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/80">
-                              <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                <span className="col-span-4">Produto</span>
-                                <span className="col-span-2 text-right">
-                                  Custo
-                                </span>
-                                <span className="col-span-2 text-center">
-                                  Com. %
-                                </span>
-                                <span className="col-span-2 text-right">
-                                  Valor Com.
-                                </span>
-                                <span className="col-span-2 text-right">
-                                  Preço Cliente
-                                </span>
-                              </div>
-                            </div>
-                            <div className="divide-y divide-slate-50">
-                              {selectedProducts.map((product) => {
-                                const id = String(product.id);
-                                const qty =
-                                  productQuantities[id] ||
-                                  product.quantity ||
-                                  1;
-                                const baseCost = product.finalPrice * qty;
-                                const comm = getProductCommission(id);
-                                const commissionValue =
-                                  calcProductCommissionValue(
-                                    id,
-                                    product.finalPrice,
-                                    qty,
-                                  );
-                                const clientPrice =
-                                  comm.pagador === "CLIENTE"
-                                    ? baseCost + commissionValue
-                                    : baseCost;
-                                return (
-                                  <div
-                                    key={id}
-                                    className="grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-slate-50/80 transition-colors"
-                                  >
-                                    <div className="col-span-4 flex items-center gap-2 min-w-0">
-                                      <div className="h-7 w-7 rounded-lg bg-linear-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center shrink-0">
-                                        <Package className="h-3.5 w-3.5 text-violet-400" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-semibold text-slate-800 truncate">
-                                          {product.name}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                          Qtd: {qty}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="col-span-2 text-right">
-                                      <p className="text-xs font-semibold text-slate-700">
-                                        {formatCurrency(baseCost)}
-                                      </p>
-                                    </div>
-                                    <div className="col-span-2 flex items-center justify-center">
-                                      <div className="relative w-full max-w-18">
+                                    <div>
+                                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Valor</p>
+                                      <div className="relative">
                                         <input
                                           type="number"
                                           min={0}
                                           max={200}
                                           step={0.5}
-                                          value={
-                                            comm.tipoComissao === "PERCENTUAL"
-                                              ? comm.percentualComissao || ""
-                                              : comm.valorComissao || ""
-                                          }
+                                          value={comm.tipoComissao === "PERCENTUAL" ? comm.percentualComissao || "" : comm.valorComissao || ""}
                                           placeholder="0"
                                           onChange={(e) => {
-                                            const v =
-                                              parseFloat(e.target.value) || 0;
-                                            const field =
-                                              comm.tipoComissao === "PERCENTUAL"
-                                                ? "percentualComissao"
-                                                : "valorComissao";
-                                            setProductCommissionData(
-                                              (prev) => ({
-                                                ...prev,
-                                                [id]: {
-                                                  ...getProductCommission(id),
-                                                  [field]: v,
-                                                },
-                                              }),
-                                            );
-                                            if (
-                                              comm.tipoComissao === "PERCENTUAL"
-                                            ) {
-                                              setProductCommissions((prev) => ({
-                                                ...prev,
-                                                [id]: v,
-                                              }));
+                                            const v = parseFloat(e.target.value) || 0;
+                                            const field = comm.tipoComissao === "PERCENTUAL" ? "percentualComissao" : "valorComissao";
+                                            setProductCommissionData((prev) => ({
+                                              ...prev,
+                                              [id]: { ...getProductCommission(id), [field]: v },
+                                            }));
+                                            if (comm.tipoComissao === "PERCENTUAL") {
+                                              setProductCommissions((prev) => ({ ...prev, [id]: v }));
                                             }
                                           }}
-                                          className="w-full h-7 text-xs text-center rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-4"
+                                          className="w-full h-7 text-xs text-center rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-5"
                                         />
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
-                                          {comm.tipoComissao === "PERCENTUAL"
-                                            ? "%"
-                                            : "R$"}
+                                          {comm.tipoComissao === "PERCENTUAL" ? "%" : "R$"}
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="col-span-2 text-right">
-                                      <p
-                                        className={cn(
-                                          "text-xs font-semibold",
-                                          commissionValue > 0
-                                            ? "text-emerald-600"
-                                            : "text-slate-300",
-                                        )}
-                                      >
-                                        {commissionValue > 0
-                                          ? formatCurrency(commissionValue)
-                                          : "—"}
-                                      </p>
-                                    </div>
-                                    <div className="col-span-2 text-right">
-                                      <p className="text-xs font-bold text-slate-800">
-                                        {formatCurrency(clientPrice)}
-                                      </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Pagador</p>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      {(["AGENCIA", "CLIENTE"] as const).map((opt) => (
+                                        <button
+                                          key={opt}
+                                          onClick={() => setProductCommissionData((prev) => ({
+                                            ...prev,
+                                            [id]: { ...getProductCommission(id), pagador: opt },
+                                          }))}
+                                          className={cn(
+                                            "h-7 text-[10px] font-semibold rounded-lg border transition-all",
+                                            comm.pagador === opt
+                                              ? opt === "AGENCIA"
+                                                ? "bg-blue-600 text-white border-blue-600"
+                                                : "bg-emerald-600 text-white border-emerald-600"
+                                              : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300",
+                                          )}
+                                        >
+                                          {opt === "AGENCIA" ? "Agência" : "Cliente"}
+                                        </button>
+                                      ))}
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Commission Summary */}
-                          <div className="rounded-xl overflow-hidden border border-emerald-100 shadow-sm">
-                            <div className="px-4 py-3 flex items-center gap-2 bg-linear-to-r from-emerald-600 to-teal-600">
-                              <TrendingUp className="h-4 w-4 text-white" />
-                              <p className="text-xs font-bold text-white uppercase tracking-widest">
-                                Resumo de Comissões
-                              </p>
-                            </div>
-                            <div className="p-4 bg-white space-y-2">
-                              <div className="flex items-center justify-between text-xs text-slate-500">
-                                <span>Total Custo (Agência)</span>
-                                <span className="font-semibold text-slate-700">
-                                  {formatCurrency(calculateTotal())}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-emerald-600">
-                                <span className="flex items-center gap-1">
-                                  <TrendingUp className="h-3 w-3" />
-                                  Total Comissões
-                                </span>
-                                <span className="font-bold">
-                                  +{formatCurrency(calculateCommissionTotal())}
-                                </span>
-                              </div>
-                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                                <span className="text-sm font-bold text-slate-800">
-                                  Total Cliente
-                                </span>
-                                <span className="text-lg font-extrabold text-emerald-600">
-                                  {formatCurrency(calculateClientTotal())}
-                                </span>
-                              </div>
-                              {calculateCommissionTotal() > 0 && (
-                                <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
-                                  <span>Margem média</span>
-                                  <span className="font-semibold text-emerald-500">
-                                    {(
-                                      (calculateCommissionTotal() /
-                                        calculateTotal()) *
-                                      100
-                                    ).toFixed(1)}
-                                    %
-                                  </span>
+                                  {commissionValue > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                                      <span className="text-slate-400">Preço ao cliente</span>
+                                      <span className="font-bold text-slate-700">{formatCurrency(clientPrice)}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
+                              );
+                            })}
                           </div>
-                        </>
+                        </div>
                       )}
-                    </>
-                  )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* ── Footer Actions ── */}
                 <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3">
                   <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    {/* Left: secondary actions */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Left group */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={handleCloseReview}
+                        className="h-9 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Voltar</span>
+                      </button>
                       <button
                         onClick={() => setShowEditProducts(true)}
-                        className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-all"
+                        className="h-9 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
                       >
                         <Package className="h-3.5 w-3.5" />
-                        Editar Produtos
+                        <span className="hidden sm:inline">Editar Produtos</span>
                       </button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleExportPresentation}
                         disabled={exportingPDF || !!exportBlockReason}
-                        title={
-                          !exportingPDF && exportBlockReason
-                            ? exportBlockReason
-                            : undefined
-                        }
-                        className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+                        title={!exportingPDF && exportBlockReason ? exportBlockReason : undefined}
+                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
                       >
-                        {exportingPDF ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <FileDown className="h-3.5 w-3.5" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {exportingPDF ? "Gerando..." : "Exportar PDF"}
-                        </span>
+                        {exportingPDF ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                        <span className="hidden sm:inline">{exportingPDF ? "Gerando..." : "Exportar"}</span>
                       </Button>
                     </div>
 
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Right: primary actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    {/* Right group */}
+                    <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleSaveDraftNow}
-                        disabled={loading}
+                        disabled={loading || !!draftBlockReason}
                         title={draftBlockReason ?? undefined}
-                        className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
                       >
-                        {loadingAction === "draft" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Save className="h-3.5 w-3.5" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {loadingAction === "draft"
-                            ? "Salvando..."
-                            : "Rascunho"}
-                        </span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleOpenSendApproval}
-                        disabled={loading || !!approvalBlockReason}
-                        title={approvalBlockReason ?? undefined}
-                        className="h-8 text-xs gap-1.5 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300 disabled:opacity-40"
-                      >
-                        {loading && !loadingAction ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Send className="h-3.5 w-3.5" />
-                        )}
-                        <span className="hidden sm:inline">
-                          Enviar Aprovação
-                        </span>
-                        <span className="sm:hidden">Aprovação</span>
+                        {loadingAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        <span className="hidden sm:inline">{loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}</span>
                       </Button>
                       <button
-                        disabled={!!checkoutBlockReason}
+                        disabled={!!checkoutBlockReason || loading}
                         title={checkoutBlockReason ?? undefined}
-                        onClick={() => {
-                          setShowReview(false);
-                          setShowCheckout(true);
-                        }}
-                        className="h-8 px-4 flex items-center gap-1.5 text-xs font-bold text-white rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.97]"
+                        onClick={handleProceedToCheckout}
+                        className="h-9 px-5 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
                         style={{
-                          background:
-                            "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)",
+                          background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                          boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
                         }}
                       >
-                        <CreditCard className="h-3.5 w-3.5" />
-                        Confirmar e ir ao Checkout
+                        {loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="h-4 w-4" />
+                        )}
+                        {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
+                        {!loading && <ChevronRight className="h-3.5 w-3.5 opacity-70" />}
                       </button>
                     </div>
                   </div>
@@ -3659,6 +3793,7 @@ export function ProjectCreateNewPanel({
             onComplete={handleCheckoutComplete}
             preselectedClient={buildPreselectedClient()}
             preselectedProject={buildProject("awaiting-payment")}
+            projectId={preCreatedProjectId ?? undefined}
             payerType="agency"
             presetCommissionRate={getWeightedCommissionRate()}
           />

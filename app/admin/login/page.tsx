@@ -2,7 +2,8 @@ import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 50%, #c81a7f 100%)",
-  defaultEmail: "cp@lamego.com.vc",
+  defaultEmail: "admin@allka.test",
+  defaultPassword: "123456",
   redirectPath: "/admin/dashboard",
   devUser: { email: "cp@lamego.com.vc" },
   translations: {

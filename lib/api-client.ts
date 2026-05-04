@@ -629,6 +629,9 @@ class ApiClient {
     product_id: string;
     variation_id?: string;
     recurrence_snapshot?: "avulso" | "mensal";
+    preco_final_cliente_snapshot?: number;
+    comissao_snapshot?: number;
+    pagador_snapshot?: "AGENCIA" | "CLIENTE";
     start_date?: string;
     expected_end_date?: string;
   }) {
@@ -687,6 +690,13 @@ class ApiClient {
   async getProjectTaskStages(id: string) {
     return this.get(`/project-tasks/${id}/stages`);
   }
+  async updateProjectTaskStage(
+    taskId: string,
+    stageId: string,
+    data: { status: "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDA" | "BLOQUEADA" },
+  ) {
+    return this.patch(`/project-tasks/${taskId}/stages/${stageId}`, data);
+  }
   async getProjectTaskBriefing(id: string) {
     return this.get(`/project-tasks/${id}/briefing`);
   }
@@ -714,6 +724,21 @@ class ApiClient {
   }
   async deleteProjectTaskAttachment(id: string, attachmentId: string) {
     return this.del(`/project-tasks/${id}/attachments/${attachmentId}`);
+  }
+
+  // ─── Payments (Sandbox / Fake Gateway) ────────────────────────────────────
+  async fakeSandboxCheckout(data: {
+    project_id: string;
+    amount: number;
+    card_last_digits?: string;
+    card_holder?: string;
+    notes?: string;
+  }) {
+    return this.post("/payments/fake-checkout", data);
+  }
+
+  async getPayments(filters?: Record<string, any>) {
+    return this.get("/payments", filters);
   }
 }
 

@@ -121,7 +121,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProjects } from "@/hooks/useProjects";
 import { apiClient } from "@/lib/api-client";
-import type { FrontendProject } from "@/lib/project-adapter";
+import { adaptApiProject, type FrontendProject } from "@/lib/project-adapter";
+import { ALLKA_BADGE_CLASS, PROJECT_STATUS_VARIANT } from "@/components/allka-badge";
 
 export default function AdminProjetosPage() {
   const {
@@ -152,6 +153,7 @@ export default function AdminProjetosPage() {
   const [modalMode, setModalMode] = useState<"view" | "edit" | "create">(
     "view",
   );
+  const [initialProjectTab, setInitialProjectTab] = useState<string>("dashboard");
   const [showWizard, setShowWizard] = useState(false);
   const [showProjectCreate, setShowProjectCreate] = useState(false);
   const [projectCreateData, setProjectCreateData] = useState<any>(null);
@@ -1473,70 +1475,43 @@ export default function AdminProjetosPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending-approval":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white whitespace-nowrap">
-            <Clock className="h-3.5 w-3.5 shrink-0" />
-            Ag. Aprovação
-          </span>
-        );
-      case "awaiting-payment":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white whitespace-nowrap">
-            <Clock className="h-3.5 w-3.5 shrink-0" />
-            Aguard. Pagamento
-          </span>
-        );
-      case "in-progress":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white whitespace-nowrap">
-            <Zap className="h-3.5 w-3.5 shrink-0" />
-            Em Andamento
-          </span>
-        );
-      case "completed":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500 text-white whitespace-nowrap">
-            <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-            Concluído
-          </span>
-        );
-      case "planning":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-500 text-white whitespace-nowrap">
-            <Flag className="h-3.5 w-3.5 shrink-0" />
-            Planejamento
-          </span>
-        );
-      case "draft":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white whitespace-nowrap">
-            <FileText className="h-3.5 w-3.5 shrink-0" />
-            Rascunho
-          </span>
-        );
-      case "negotiation":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-500 text-white whitespace-nowrap">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Negociação
-          </span>
-        );
-      case "cancelled":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500 text-white whitespace-nowrap">
-            <XCircle className="h-3.5 w-3.5 shrink-0" />
-            Cancelado
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white whitespace-nowrap">
-            {status}
-          </span>
-        );
+    const LABELS: Record<string, string> = {
+      "pending-approval": "Ag. Aprovação",
+      "awaiting-payment": "Aguard. Pagamento",
+      "in-progress": "Em Andamento",
+      completed: "Concluído",
+      planning: "Planejamento",
+      draft: "Rascunho",
+      negotiation: "Negociação",
+      cancelled: "Cancelado",
+    };
+    const ICONS: Record<string, any> = {
+      "pending-approval": Clock,
+      "awaiting-payment": Clock,
+      "in-progress": Zap,
+      completed: CheckCircle,
+      planning: Flag,
+      draft: FileText,
+      negotiation: AlertTriangle,
+      cancelled: XCircle,
+    };
+    const variant = PROJECT_STATUS_VARIANT[status];
+    const label = LABELS[status] ?? status;
+    const Icon = ICONS[status];
+    if (variant) {
+      const cls = ALLKA_BADGE_CLASS[variant];
+      return (
+        <span className={`allka-badge allka-badge-${cls ? cls.replace("allka-badge-", "") : variant.replace("projeto-", "allka-badge-projeto-")}`}>
+          {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+          {label}
+        </span>
+      );
     }
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white whitespace-nowrap">
+        {status}
+      </span>
+    );
   };
 
   if (projectsLoading) {
@@ -2361,7 +2336,7 @@ export default function AdminProjetosPage() {
               </div>
 
               {/* ── Table ── */}
-              <div className="overflow-x-auto">
+              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
                 <table
                   className="w-full text-xs"
                   style={{
@@ -2390,12 +2365,17 @@ export default function AdminProjetosPage() {
                       {visibleCols.map((col) => (
                         <th
                           key={col}
-                          className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative bg-white"
+                          className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative"
                           style={{
                             paddingLeft: 20,
                             paddingRight: 20,
                             textAlign: "left",
                             borderRight: "1px solid rgba(148,163,184,0.25)",
+                            position: "sticky",
+                            top: 0,
+                            zIndex: 2,
+                            background: "var(--table-head)",
+                            boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                           }}
                         >
                           {COL_LABELS[col]}
@@ -2409,16 +2389,18 @@ export default function AdminProjetosPage() {
                         </th>
                       ))}
                       <th
-                        className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-white"
+                        className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"
                         style={{
                           paddingLeft: 20,
                           paddingRight: 20,
                           textAlign: "right",
                           position: "sticky",
                           right: 0,
-                          zIndex: 2,
-                          background: "white",
+                          top: 0,
+                          zIndex: 3,
+                          background: "var(--table-head)",
                           borderLeft: "1px solid rgba(148,163,184,0.25)",
+                          boxShadow: "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                           width: 100,
                         }}
                       >
@@ -2451,7 +2433,11 @@ export default function AdminProjetosPage() {
                       paginatedProjects.map((project, rowIdx) => (
                         <TooltipProvider key={project.id} delayDuration={300}>
                           <tr
-                            className={`group transition-colors cursor-pointer ${rowIdx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"}`}
+                            className={`group transition-colors cursor-pointer ${
+                              rowIdx % 2 === 0
+                                ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                                : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
+                            }`}
                             onClick={() => handleViewProject(project)}
                           >
                             {/* ID */}
@@ -2683,9 +2669,9 @@ export default function AdminProjetosPage() {
                                 position: "sticky",
                                 right: 0,
                                 zIndex: 1,
-                                background:
-                                  rowIdx % 2 === 0 ? "#ffffff" : "#f1f4f8",
+                                background: rowIdx % 2 === 0 ? "var(--table-row)" : "var(--table-row-alt)",
                                 borderLeft: "1px solid rgba(148,163,184,0.25)",
+                                boxShadow: "-2px 0 6px rgba(0,0,0,0.05)",
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -4591,6 +4577,7 @@ export default function AdminProjetosPage() {
           open={modalOpen}
           onOpenChange={setModalOpen}
           mode={modalMode}
+          initialTab={initialProjectTab}
           onEdit={() => {
             setModalMode("edit");
           }}
@@ -4648,8 +4635,23 @@ export default function AdminProjetosPage() {
           }
           draftProjectId={draftPanelProjectId}
           resumeToCheckout={draftResumeToCheckout}
-          onCreate={() => {
+          onCreate={async (project) => {
             refetchProjects();
+            if (project?.id) {
+              setShowProjectCreate(false);
+              const openTab = project.openTab ?? "dashboard";
+              setInitialProjectTab(openTab);
+              try {
+                const raw: any = await apiClient.getProject(project.id);
+                const full = adaptApiProject(raw);
+                setInitialProjectTab(openTab);
+                handleViewProject(full);
+              } catch {
+                // Fallback: if API call fails, open modal with partial data
+                setInitialProjectTab(openTab);
+                handleViewProject(project as FrontendProject);
+              }
+            }
           }}
         />
       </div>

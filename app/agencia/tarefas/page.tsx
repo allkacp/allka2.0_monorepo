@@ -24,6 +24,7 @@ type TaskStatus =
 
 interface TarefaRow {
   id: string;
+  task_code: string | null;
   code_snapshot: string | null;
   title: string;
   category_snapshot: string | null;
@@ -283,8 +284,8 @@ export default function AgenciaTarefas() {
                   return (
                     <tr key={t.id} className={cn("hover:bg-slate-50/50 transition-colors", overdue && "bg-red-50/20")}>
                       <td className="px-4 py-3 pl-4">
-                        {t.code_snapshot
-                          ? <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{t.code_snapshot}</span>
+                        {(t.task_code || t.code_snapshot)
+                          ? <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{t.task_code ?? t.code_snapshot}</span>
                           : <span className="text-xs text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3">

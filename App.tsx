@@ -191,6 +191,15 @@ const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
 const EmpresaLoginPage = React.lazy(() => import("@/app/company/login/page"));
 const AgenciaLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
 const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
+const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
+
+// ─── Líder Pages ──────────────────────────────────────────────────────────────
+const LiderDashboardPage = React.lazy(() => import("@/app/lider/dashboard/page"));
+const LiderQualificacaoPage = React.lazy(() => import("@/app/lider/qualificacao/page"));
+const LiderTarefasPage = React.lazy(() => import("@/app/lider/tarefas/page"));
+const LiderDevolvidasPage = React.lazy(() => import("@/app/lider/devolvidas/page"));
+const LiderHistoricoPage = React.lazy(() => import("@/app/lider/historico/page"));
+const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -313,7 +322,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                   className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
                                   id="sidebar-overlay"
                                 />
-                                <div className="hidden lg:flex">
+                                <div className="hidden lg:flex shrink-0">
                                   <Sidebar />
                                 </div>
                                 <div
@@ -408,6 +417,14 @@ export default function App() {
           element={
             <Suspense fallback={<PageLoader />}>
               <ParceiroLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/lider/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LiderLoginPage />
             </Suspense>
           }
         />
@@ -644,6 +661,32 @@ export default function App() {
                   <Route
                     path="/agencia/financeiro"
                     element={<AgenciaFinanceiroPage />}
+                  />
+
+                  {/* ─── Líder ─────────────────────────────────────── */}
+                  <Route
+                    path="/lider/dashboard"
+                    element={<LiderDashboardPage />}
+                  />
+                  <Route
+                    path="/lider/qualificacao"
+                    element={<LiderQualificacaoPage />}
+                  />
+                  <Route
+                    path="/lider/tarefas"
+                    element={<LiderTarefasPage />}
+                  />
+                  <Route
+                    path="/lider/devolvidas"
+                    element={<LiderDevolvidasPage />}
+                  />
+                  <Route
+                    path="/lider/historico"
+                    element={<LiderHistoricoPage />}
+                  />
+                  <Route
+                    path="/lider/perfil"
+                    element={<LiderPerfilPage />}
                   />
 
                   {/* Fallback */}

@@ -5,12 +5,14 @@ import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
+import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 
 const router = Router();
 
 // ── Valid operational statuses ────────────────────────────────────────────────
 
 const TASK_STATUSES = [
+  // ── Pipeline original (mantidos para compatibilidade com dados existentes) ──
   "PARA_LANCAMENTO",
   "EM_LANCAMENTO",
   "AGUARDANDO_INFORMACOES",
@@ -21,6 +23,17 @@ const TASK_STATUSES = [
   "CONCLUIDA",
   "CANCELADA",
   "AGUARDANDO_NOMADE",
+  // ── Novos status operacionais ────────────────────────────────────────────────
+  "AGUARDANDO_ETAPA",
+  "APROVACAO_PENDENTE_CLIENTE",
+  "APROVADA",
+  "REPROVADA",
+  "PAUSADA",
+  "ENTREGA_PENDENTE",
+  "ENTREGA_ATRASADA",
+  "QUALIFICACAO_PENDENTE",
+  "MELHORIAS_FINAIS",
+  "NAO_SEGUIU_ORIENTACOES",
 ] as const;
 
 type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -87,6 +100,11 @@ function buildStatusSideEffects(
     case "EM_LANCAMENTO":
       if (!current.data_lancamento) extras.data_lancamento = new Date();
       break;
+    case "ENTREGUE_PELO_NOMADE":
+    case "PARA_QUALIFICACAO":
+    case "QUALIFICACAO_PENDENTE":
+      extras.data_conclusao = null; // not concluded yet
+      break;
     case "LIBERADA_PARA_EXECUCAO":
       extras.data_liberacao_execucao = new Date();
       break;
@@ -95,10 +113,13 @@ function buildStatusSideEffects(
         extras.data_inicio_execucao = new Date();
       break;
     case "CONCLUIDA":
+    case "APROVADA":
       extras.data_conclusao = new Date();
       extras.completed_at = new Date();
       break;
     case "CANCELADA":
+    case "REPROVADA":
+    case "NAO_SEGUIU_ORIENTACOES":
       extras.data_conclusao = new Date();
       extras.completed_at = new Date();
       break;
@@ -383,6 +404,19 @@ router.patch(
         },
       });
 
+      // Fire-and-forget: auto-assign leader when task enters qualification queue or is launched
+      if (
+        req.body.status === "PARA_QUALIFICACAO" ||
+        req.body.status === "QUALIFICACAO_PENDENTE" ||
+        req.body.status === "ENTREGUE_PELO_NOMADE" ||
+        req.body.status === "EM_LANCAMENTO" ||
+        req.body.status === "LANCAMENTO_EM_REVISAO"
+      ) {
+        atribuirLiderParaTarefa(updated.id).catch((err) =>
+          console.error("[atribuir-lider] Error:", err),
+        );
+      }
+
       res.json(updated);
     } catch (err) {
       next(err);
@@ -414,6 +448,19 @@ router.patch(
         return;
       }
 
+      // Verificar prazo de lançamento — 30 dias após geração da tarefa
+      if (task.lancamento_expires_at && task.lancamento_expires_at < new Date()) {
+        await prisma.projectTask.update({
+          where: { id: req.params.id as string },
+          data: { status: "CANCELADA" },
+        });
+        res.status(410).json({
+          error: "Prazo de lançamento expirado. A tarefa foi cancelada automaticamente.",
+          code: "LANCAMENTO_EXPIRADO",
+        });
+        return;
+      }
+
       const updated = await prisma.projectTask.update({
         where: { id: req.params.id as string as string as string },
         data: {
@@ -421,6 +468,23 @@ router.patch(
           data_lancamento: task.data_lancamento ?? new Date(),
         },
       });
+
+      // Fire-and-forget: assign leader (PA0001-T01 E01 is leader-responsible)
+      atribuirLiderParaTarefa(updated.id).catch((err) =>
+        console.error("[atribuir-lider] Error on launch:", err),
+      );
+
+      // Activate the first stage so the lider can start working on it
+      const firstStage = await prisma.projectTaskStage.findFirst({
+        where: { project_task_id: updated.id },
+        orderBy: { ordem: "asc" },
+      });
+      if (firstStage) {
+        await prisma.projectTaskStage.update({
+          where: { id: firstStage.id },
+          data: { status: "EM_ANDAMENTO" },
+        });
+      }
 
       res.json(updated);
     } catch (err) {

@@ -36,7 +36,6 @@ export default function PartnerDashboard() {
   if (loading) {
     return <PageLoader text="Carregando painel…" />;
   }
-  }
 
   if (!profile || !stats) {
     return (

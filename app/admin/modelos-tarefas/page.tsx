@@ -1889,9 +1889,9 @@ export default function AdminModelosTarefasPage() {
         {/* Table */}
         {!loading && !error && sorted.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <table className="w-full text-sm min-w-[800px]">
-                <thead className="border-b border-slate-200 bg-slate-50/80 dark:bg-slate-800/50">
+                <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     {isCol("code") && (
                       <Th
@@ -1982,7 +1982,11 @@ export default function AdminModelosTarefasPage() {
                     return (
                       <tr
                         key={model.id}
-                        className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        className={`group transition-colors ${
+                          sorted.indexOf(model) % 2 === 0
+                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
+                        }`}
                       >
                         {/* Código */}
                         {isCol("code") && (

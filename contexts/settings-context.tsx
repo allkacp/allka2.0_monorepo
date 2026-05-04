@@ -78,14 +78,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
     const root = document.documentElement;
 
-    // Apply font size
-    const fontSizeMap = {
-      small: "15px",
-      medium: "17px",
-      large: "19px",
-      "extra-large": "21px",
-    };
-    root.style.fontSize = fontSizeMap[fontSize];
+    // Font size is controlled exclusively by useFontScale (hooks/useFontScale.ts)
+    // DO NOT set root.style.fontSize here — it overrides the user's font scale preference.
 
     // Apply theme
     if (theme === "dark") {

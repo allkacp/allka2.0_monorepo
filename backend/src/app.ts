@@ -27,6 +27,9 @@ import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
 import projectTasksRouter from "./routes/project-tasks";
 import systemAlertsRouter from "./routes/system-alerts";
+import paymentsRouter from "./routes/payments";
+import liderRouter from "./routes/lider";
+import habilidadesRouter from "./routes/habilidades";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -129,6 +132,12 @@ app.use("/api/project-products", projectProductsRouter);
 app.use("/api/project-tasks", projectTasksRouter);
 // Admin system alerts (nomad not found, etc.)
 app.use("/api/system-alerts", systemAlertsRouter);
+// Payments — sandbox/fake checkout + real gateway future
+app.use("/api/payments", paymentsRouter);
+// Lider — task qualification and approval flow
+app.use("/api/lider", liderRouter);
+// Habilidades — nomad skills and leader area CRUD
+app.use("/api/habilidades", habilidadesRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

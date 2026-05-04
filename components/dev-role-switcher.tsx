@@ -84,6 +84,18 @@ const ROLES: Array<{
     accountType: "parceiro",
     accountSubType: null,
   },
+  {
+    id: "lider",
+    label: "Líder",
+    description: "Qualificação e supervisão de tarefas",
+    path: "/lider/dashboard",
+    loginPath: "/lider/login",
+    prefix: "/lider",
+    color: "bg-teal-600",
+    emoji: "🎯",
+    accountType: "lider",
+    accountSubType: null,
+  },
 ];
 
 function getActiveRole(pathname: string) {

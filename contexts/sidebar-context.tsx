@@ -163,17 +163,25 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   const [projectColor, setProjectColor] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const SIDEBAR_MIN = 220;
+  const SIDEBAR_MAX = 400;
+  const SIDEBAR_DEFAULT = 240;
+  const SIDEBAR_COLLAPSED = 72;
+
   const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("sidebar-width");
-      return saved ? Number(saved) : 208;
+      const parsed = saved ? Number(saved) : SIDEBAR_DEFAULT;
+      if (!isFinite(parsed) || parsed < SIDEBAR_MIN) return SIDEBAR_DEFAULT;
+      if (parsed > SIDEBAR_MAX) return SIDEBAR_MAX;
+      return parsed;
     } catch {
-      return 208;
+      return SIDEBAR_DEFAULT;
     }
   });
 
   const setSidebarWidth = (width: number) => {
-    const clamped = Math.min(400, Math.max(160, width));
+    const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width));
     setCustomSidebarWidth(clamped);
     try {
       localStorage.setItem("sidebar-width", String(clamped));
@@ -235,15 +243,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-brand-button", buttonCss);
     const activeColor = s.activeItemColor || "#c81a7f";
     root.style.setProperty("--app-brand-active", activeColor);
-    const fontScaleMap = {
-      compact: "13px",
-      normal: "15px",
-      comfortable: "16px",
-      large: "17px",
-    } as const;
-    document.documentElement.style.fontSize =
-      fontScaleMap[s.fontScale || "normal"];
     // Per-context font sizes
+    // (font-size global é controlada pelo FontScaleControl no header via useFontScale)
     const fsMap = {
       xs: "0.7rem",
       sm: "0.8125rem",
@@ -302,14 +303,6 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-brand-button", buttonCss);
     const activeColor2 = newSettings.activeItemColor || "#c81a7f";
     root.style.setProperty("--app-brand-active", activeColor2);
-    const fontScaleMap2 = {
-      compact: "13px",
-      normal: "15px",
-      comfortable: "16px",
-      large: "17px",
-    } as const;
-    document.documentElement.style.fontSize =
-      fontScaleMap2[newSettings.fontScale || "normal"];
     const fsMap2 = {
       xs: "0.7rem",
       sm: "0.8125rem",
@@ -343,14 +336,15 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setUserProfile((prev) => ({ ...prev, ...profile }));
   };
 
-  const sidebarWidth = sidebarCollapsed ? 64 : customSidebarWidth;
+  const sidebarWidth = sidebarCollapsed ? 72 : customSidebarWidth;
 
-  // Sync CSS variable so footer and other elements can use it
+  // Sync CSS variables so footer and other elements can use them
   useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--sidebar-width",
-      `${sidebarWidth}px`,
-    );
+    const root = document.documentElement;
+    root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
+    root.style.setProperty("--sidebar-collapsed-width", "72px");
+    root.style.setProperty("--sidebar-min-width", "220px");
+    root.style.setProperty("--sidebar-max-width", "400px");
   }, [sidebarWidth]);
 
   return (

@@ -19,6 +19,7 @@ export interface LocaleContent {
 export interface LoginRoleConfig {
   gradient: string
   defaultEmail: string
+  defaultPassword?: string
   redirectPath: string
   translations: Record<Locale, LocaleContent>
   /** Email do usuário de desenvolvimento — auto-login em modo mock */
@@ -108,7 +109,7 @@ export function LoginPageTemplate({ config }: Props) {
     return (localStorage.getItem("allka_login_locale") as Locale) ?? "pt"
   })
   const [email, setEmail] = useState(config.defaultEmail)
-  const [password, setPassword] = useState("")
+  const [password, setPassword] = useState(config.defaultPassword ?? "")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)

@@ -2,7 +2,8 @@ import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 40%, #c81a7f 75%, #1a2a6f 100%)",
-  defaultEmail: "agencia@allka.com.vc",
+  defaultEmail: "agencia@allka.test",
+  defaultPassword: "123456",
   redirectPath: "/agencia/dashboard",
   devUser: { email: "joao.costa@agenciacriativa.com.br" },
   translations: {

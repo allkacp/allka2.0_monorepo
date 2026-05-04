@@ -92,6 +92,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { apiClient } from "@/lib/api-client"
+import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer"
 import {
   buildProposalData,
   exportProposalPDF,
@@ -125,6 +127,8 @@ interface ProjectManagementModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode: "view" | "edit" | "create"
+  /** Tab to open when the modal mounts/opens. Defaults to "dashboard" */
+  initialTab?: string
   onEdit?: () => void
   onClone?: () => void
   onExport?: () => void
@@ -159,7 +163,7 @@ function getProjectStatusBadge(status: string) {
   )
 }
 
-export function ProjectManagementModal({ project, open, onOpenChange, mode, onEdit, onClone, onExport, onSave, onCancel, onContinueDraft, onGoToPayment }: ProjectManagementModalProps) {
+export function ProjectManagementModal({ project, open, onOpenChange, mode, initialTab, onEdit, onClone, onExport, onSave, onCancel, onContinueDraft, onGoToPayment }: ProjectManagementModalProps) {
   const { toast } = useToast()
   const { sidebarWidth, sidebarSettings, agencyProfile } = useSidebar()
   const { accountType } = useAccountType()
@@ -327,6 +331,104 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
     }
   }, [project?.id])
 
+  // ── Fetch products + tasks from the API ────────────────────────────────────
+  const fetchModalData = React.useCallback(async () => {
+    if (!project?.id) return
+    setLoadingModalData(true)
+    try {
+      const res = await apiClient.getProjectProducts({ project_id: String(project.id) })
+      const items: any[] = res?.data ?? []
+
+      const statusMap: Record<string, string> = {
+        PARA_LANCAMENTO:      "Para lançamento",
+        EM_LANCAMENTO:        "Para lançamento",
+        AGUARDANDO_INFORMACOES: "Para lançamento",
+        LIBERADA_PARA_EXECUCAO: "Em Execução",
+        EM_EXECUCAO:          "Em Execução",
+        AGUARDANDO_APROVACAO: "Para Aprovação",
+        CONCLUIDA:            "Aprovada",
+        ENTREGUE:             "Entregue",
+        CANCELADA:            "Atrasada",
+      }
+
+      const fmtDate = (iso: string | null | undefined, fallback = "—") => {
+        if (!iso) return fallback
+        const d = new Date(iso)
+        return isNaN(d.getTime()) ? fallback : d.toLocaleDateString("pt-BR")
+      }
+
+let tarefaCounter = 0
+          const produtos = items.map((pp: any, idx: number) => {
+        const tasks: any[] = pp.tasks ?? []
+        const concluidas = tasks.filter((t: any) =>
+          t.status === "CONCLUIDA" || t.status === "ENTREGUE"
+        ).length
+        const totais = tasks.length
+        const progresso = totais > 0 ? Math.round((concluidas / totais) * 100) : 0
+
+        let status = "Para lançamento"
+        if (tasks.some((t: any) => t.status === "EM_EXECUCAO" || t.status === "LIBERADA_PARA_EXECUCAO")) status = "Em Execução"
+        else if (concluidas === totais && totais > 0) status = "Aprovada"
+        else if (tasks.some((t: any) => t.status === "ENTREGUE")) status = "Entregue"
+        else if (tasks.some((t: any) => t.status === "AGUARDANDO_APROVACAO")) status = "Para Aprovação"
+
+        return {
+          id: idx + 1,
+          nome: pp.product?.name ?? "—",
+          tipo: pp.product?.category ?? "—",
+          progresso,
+          status,
+          dataContratacao: fmtDate(pp.created_at, "01/01/2000"),
+          dataEntrega: fmtDate(pp.due_date),
+          tarefasConcluidas: concluidas,
+          tarefasTotais: totais,
+          tarefas: tasks.map((t: any, tidx: number) => {
+            tarefaCounter++
+            const mappedStatus = statusMap[t.status] ?? t.status
+            // For PARA_LANCAMENTO tasks, use lancamento_expires_at as the deadline
+            const prazoDate =
+              t.status === "PARA_LANCAMENTO" && t.lancamento_expires_at
+                ? t.lancamento_expires_at
+                : t.due_date
+            return {
+              id: tidx + 1,
+              taskDbId: t.id,
+              // Use task_code from DB (globally unique, set at creation).
+              // Fall back to sequential counter only if the API returns no code (legacy data).
+              tarefaCode: t.task_code ?? ("T" + String(tarefaCounter).padStart(6, "0")),
+              nome: t.title ?? "—",
+              status: mappedStatus,
+              prazo: fmtDate(prazoDate),
+              lancamentoExpiresAt: t.lancamento_expires_at ?? null,
+              executor: "",
+              lider: "",
+              rawStatus: t.status,
+              etapas: (t.stages ?? []).map((s: any) => ({
+                id: s.id,
+                titulo: s.titulo,
+                descricao: s.descricao ?? "",
+                ordem: s.ordem,
+                status: s.status,
+                dependeAnterior: s.depende_da_etapa_anterior ?? false,
+              })),
+            }
+          }),
+        }
+      })
+
+      setMockData((prev: any) => ({ ...prev, produtos }))
+    } catch (err) {
+      console.error("[ProjectManagementModal] fetchModalData error:", err)
+    } finally {
+      setLoadingModalData(false)
+    }
+  }, [project?.id])
+
+  React.useEffect(() => {
+    if (open && project?.id) fetchModalData()
+    if (!open) setMockData({ produtos: [], tarefas: [], timeline: [], kanban: {} })
+  }, [open, project?.id])
+
   const handleDadosProjSave = async () => {
     setIsSavingDados(true)
     await new Promise(r => setTimeout(r, 800))
@@ -379,6 +481,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>("all")
   const [taskProductFilter, setTaskProductFilter] = useState<string>("all")
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set())
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)
+  const [taskDrawerTask, setTaskDrawerTask] = useState<any>(null)
   const [taskDateFilter, setTaskDateFilter] = useState<string>("")
   const [taskSortBy, setTaskSortBy] = useState<string>("produto")
   const [taskSortOrder, setTaskSortOrder] = useState<"asc" | "desc">("asc")
@@ -402,9 +507,16 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
   // State for mock credentials, to allow updates
   const [mockCredentials, setMockCredentials] = useState<any[]>([])
 
+  // Controlled active tab — resets to initialTab when modal opens
+  const [activeModalTab, setActiveModalTab] = useState(initialTab ?? "dashboard")
+  React.useEffect(() => {
+    if (open) setActiveModalTab(initialTab ?? "dashboard")
+  }, [open, project?.id, initialTab])
+
   const isReadOnly = mode === "view"
 
-  const mockData: any = { produtos: [], tarefas: [], timeline: [], kanban: {} }
+  const [mockData, setMockData] = useState<any>({ produtos: [], tarefas: [], timeline: [], kanban: {} })
+  const [loadingModalData, setLoadingModalData] = useState(false)
 
   const mockVaultCredentials: any[] = []
 
@@ -629,6 +741,8 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
+      case "Para lançamento":
+        return "bg-orange-100 text-orange-700 border-orange-200"
       case "Aprovada":
         return "bg-green-100 text-green-700 border-green-200"
       case "Em Execução":
@@ -646,6 +760,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const getStatusBorderColor = (status: string) => {
     switch (status) {
+      case "Para lançamento": return "#f97316"
       case "Aprovada":        return "#10b981"
       case "Em Execução":    return "#3b82f6"
       case "Para Aprovação": return "#f59e0b"
@@ -657,6 +772,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
   const getStatusDotClass = (status: string) => {
     switch (status) {
+      case "Para lançamento": return "bg-orange-400"
       case "Aprovada":        return "bg-emerald-500"
       case "Em Execução":    return "bg-blue-500"
       case "Para Aprovação": return "bg-amber-400"
@@ -664,6 +780,34 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
       case "Atrasada":        return "bg-red-500 animate-pulse"
       default:                return "bg-slate-400"
     }
+  }
+
+  const openTaskDrawer = (tarefa: any) => {
+    // Build minimal object matching TarefaDetailDrawer's expected shape.
+    // The component self-fetches stages/briefing/attachments via tarefa.id.
+    setTaskDrawerTask({
+      id: tarefa.taskDbId,
+      title: tarefa.nome,
+      code_snapshot: tarefa.tarefaCode,
+      task_code: tarefa.tarefaCode,
+      status: tarefa.rawStatus ?? "PARA_LANCAMENTO",
+      priority: tarefa.priority ?? "medium",
+      due_date: null,
+      lancamento_expires_at: tarefa.lancamentoExpiresAt ?? null,
+      project: project ? { id: String(project.id), title: project.name, client: { name: project.client } } : null,
+      project_product: { product_name_snapshot: tarefa.produtoNome },
+    })
+    setTaskDrawerOpen(true)
+  }
+
+  /** Returns a badge label + className for PARA_LANCAMENTO expiry, or null for other statuses */
+  const getLancamentoExpiryBadge = (tarefa: any): { label: string; className: string } | null => {
+    if (tarefa.status !== "Para lançamento" || !tarefa.lancamentoExpiresAt) return null
+    const diff = new Date(tarefa.lancamentoExpiresAt).getTime() - Date.now()
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
+    if (days < 0) return { label: "Lançamento expirado", className: "bg-red-100 text-red-700 border-red-200" }
+    if (days <= 5) return { label: `Expira em ${days}d`, className: "bg-amber-100 text-amber-700 border-amber-200" }
+    return { label: `Vence em ${days}d`, className: "bg-orange-100 text-orange-600 border-orange-200" }
   }
 
   const getAllTasks = () => {
@@ -1077,7 +1221,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
             {/* Tabs + Content */}
             <div className="flex-1 flex flex-col bg-white dark:bg-background overflow-hidden">
-            <Tabs defaultValue="dashboard" className="w-full flex flex-col h-full">
+            <Tabs value={activeModalTab} onValueChange={setActiveModalTab} className="w-full flex flex-col h-full">
               <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
                 <TabsList className="grid w-max grid-cols-7 gap-1 bg-transparent p-0 h-auto">
                   <TabsTrigger value="dashboard" className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100">
@@ -1756,13 +1900,20 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   </div>
 
                   {getSortedAndFilteredProducts().length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-3">
-                        <Package className="h-5 w-5 text-slate-400" />
+                    loadingModalData ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                        <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                        <p className="text-xs">Carregando produtos...</p>
                       </div>
-                      <p className="text-sm font-medium text-slate-600">Nenhum produto encontrado</p>
-                      <p className="text-xs text-slate-400 mt-1">Tente alterar os filtros selecionados</p>
-                    </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-3">
+                          <Package className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-600">Nenhum produto encontrado</p>
+                        <p className="text-xs text-slate-400 mt-1">Tente alterar os filtros selecionados</p>
+                      </div>
+                    )
                   )}
 
                 </div>
@@ -2140,12 +2291,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                   {(() => {
                     const allTasks = getAllTasks()
                     const stats = {
-                      total:     allTasks.length,
-                      execucao:  allTasks.filter(t => t.status === "Em Execução").length,
-                      aprovada:  allTasks.filter(t => t.status === "Aprovada").length,
-                      aprovacao: allTasks.filter(t => t.status === "Para Aprovação").length,
-                      entregue:  allTasks.filter(t => t.status === "Entregue").length,
-                      atrasada:  allTasks.filter(t => t.status === "Atrasada").length,
+                      total:      allTasks.length,
+                      lancamento: allTasks.filter(t => t.status === "Para lançamento").length,
+                      execucao:   allTasks.filter(t => t.status === "Em Execução").length,
+                      aprovada:   allTasks.filter(t => t.status === "Aprovada").length,
+                      aprovacao:  allTasks.filter(t => t.status === "Para Aprovação").length,
+                      entregue:   allTasks.filter(t => t.status === "Entregue").length,
+                      atrasada:   allTasks.filter(t => t.status === "Atrasada").length,
                     }
                     return (
                       <div className="flex items-center gap-2 flex-wrap">
@@ -2156,6 +2308,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                           <span className="text-xs font-semibold text-slate-600">Total</span>
                           <span className="text-sm font-bold text-slate-900">{stats.total}</span>
                         </div>
+                        {stats.lancamento > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-orange-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-500">Para lançamento</span>
+                            <span className="text-sm font-bold text-orange-500">{stats.lancamento}</span>
+                          </div>
+                        )}
                         {stats.execucao > 0 && (
                           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
                             <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
@@ -2316,8 +2475,9 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                               <SelectTrigger className="h-8 text-xs border-slate-200"><SelectValue placeholder="Todos" /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">Todos</SelectItem>
-                                <SelectItem value="Aprovada">Aprovada</SelectItem>
+                                <SelectItem value="Para lançamento">Para lançamento</SelectItem>
                                 <SelectItem value="Em Execução">Em Execução</SelectItem>
+                                <SelectItem value="Aprovada">Aprovada</SelectItem>
                                 <SelectItem value="Para Aprovação">Para Aprovação</SelectItem>
                                 <SelectItem value="Entregue">Entregue</SelectItem>
                                 <SelectItem value="Atrasada">Atrasada</SelectItem>
@@ -2375,70 +2535,137 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       <div>
                         {getPaginatedTasks().length > 0 ? (
                           getPaginatedTasks().map((tarefa, idx) => (
-                            <div
-                              key={tarefa.uniqueId}
-                              className={`flex items-center gap-4 px-5 py-3 transition-all ${
-                                idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"
-                              }`}
-                              style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
-                            >
-                              {/* ID */}
-                              <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
-                                <span className="text-[11px] text-blue-600 font-bold">#{tarefa.uniqueId}</span>
+                            <div key={tarefa.uniqueId}>
+                              <div
+                                className={`flex items-center gap-4 px-5 py-3 transition-all ${
+                                  idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-200/50 hover:bg-slate-200/70"
+                                }`}
+                                style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}
+                              >
+                                {/* T-Code */}
+                                <div className="flex items-center justify-center bg-blue-50 rounded-lg px-2.5 py-1 shrink-0 border border-blue-100">
+                                  <span className="text-[11px] text-blue-600 font-bold font-mono tracking-wider">{tarefa.tarefaCode ?? `#${tarefa.uniqueId}`}</span>
+                                </div>
+
+                                {/* Main info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                    <span className={`text-sm font-semibold ${tarefa.status === "Atrasada" ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shrink-0">{tarefa.produtoNome}</span>
+                                    {tarefa.etapas?.length > 0 && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 font-medium border border-violet-200 shrink-0">
+                                        {tarefa.etapas.length} etapa{tarefa.etapas.length !== 1 ? "s" : ""}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span className="font-medium text-slate-600">{tarefa.prazo}</span>
+                                    </span>
+                                    {(() => {
+                                      const expiry = getLancamentoExpiryBadge(tarefa)
+                                      return expiry ? (
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${expiry.className}`}>{expiry.label}</span>
+                                      ) : null
+                                    })()}
+                                  </div>
+                                </div>
+
+                                {/* Status pill + expand + eye */}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
+                                    <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
+                                    {tarefa.status}
+                                  </div>
+                                  {tarefa.etapas?.length > 0 && (
+                                    <button
+                                      onClick={() => setExpandedTasks(prev => {
+                                        const next = new Set(prev)
+                                        next.has(tarefa.uniqueId) ? next.delete(tarefa.uniqueId) : next.add(tarefa.uniqueId)
+                                        return next
+                                      })}
+                                      className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                                      title={expandedTasks.has(tarefa.uniqueId) ? "Ocultar etapas" : "Ver etapas"}
+                                    >
+                                      {expandedTasks.has(tarefa.uniqueId)
+                                        ? <ChevronDown className="h-3.5 w-3.5" />
+                                        : <ChevronRight className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => openTaskDrawer(tarefa)}
+                                    className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                    title="Visualizar detalhes da tarefa"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               </div>
 
-                              {/* Main info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                                  <span className={`text-sm font-semibold ${tarefa.status === "Atrasada" ? "text-red-600" : "text-slate-900"}`}>{tarefa.nome}</span>
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">{tarefa.produtoNome}</span>
+                              {/* Etapas expandíveis */}
+                              {expandedTasks.has(tarefa.uniqueId) && tarefa.etapas?.length > 0 && (
+                                <div className="border-t border-slate-100" style={{ borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}` }}>
+                                  {tarefa.etapas.map((etapa: any, etapaIdx: number) => {
+                                    const etapaStatusColor: Record<string, string> = {
+                                      PENDENTE: "text-slate-400 bg-slate-50 border-slate-200",
+                                      EM_ANDAMENTO: "text-blue-600 bg-blue-50 border-blue-200",
+                                      CONCLUIDA: "text-emerald-600 bg-emerald-50 border-emerald-200",
+                                      BLOQUEADA: "text-red-500 bg-red-50 border-red-200",
+                                    }
+                                    const etapaStatusLabel: Record<string, string> = {
+                                      PENDENTE: "Pendente",
+                                      EM_ANDAMENTO: "Em andamento",
+                                      CONCLUIDA: "Concluída",
+                                      BLOQUEADA: "Bloqueada",
+                                    }
+                                    return (
+                                      <div key={etapa.id} className={`flex items-start gap-3 pl-14 pr-5 py-2.5 border-b border-slate-100/70 last:border-b-0 ${etapa.status === "CONCLUIDA" ? "bg-emerald-50/30" : "bg-slate-50/80"}`}>
+                                        <span className="text-[10px] font-bold text-slate-400 w-5 text-center shrink-0 mt-0.5">{etapaIdx + 1}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-xs text-slate-700 font-medium">{etapa.titulo}</span>
+                                          {etapa.dependeAnterior && etapaIdx > 0 && (
+                                            <span className="ml-2 inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium">
+                                              <svg className="h-2 w-2" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7 4a1 1 0 0 1 2 0v4a1 1 0 0 1-2 0V4zm1 8a1.25 1.25 0 1 1 0-2.5A1.25 1.25 0 0 1 8 12z"/></svg>
+                                              Aguarda anterior
+                                            </span>
+                                          )}
+                                          {etapa.descricao && (
+                                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">{etapa.descricao}</p>
+                                          )}
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${etapaStatusColor[etapa.status] ?? "text-slate-400 bg-slate-50 border-slate-200"}`}>
+                                          {etapaStatusLabel[etapa.status] ?? etapa.status}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
-                                <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
-                                  <span className="flex items-center gap-1">
-                                    <User className="h-3 w-3" />
-                                    <span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.executor : "Nômade"}</span>
-                                  </span>
-                                  <span>·</span>
-                                  <span className="flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
-                                    <span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.lider : "Equipe Allka"}</span>
-                                  </span>
-                                  <span>·</span>
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    <span className="font-medium text-slate-600">{tarefa.prazo}</span>
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Status pill + eye */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`} />
-                                  {tarefa.status}
-                                </div>
-                                <button
-                                  className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                  title="Visualizar Tarefa"
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
+                              )}
                             </div>
                           ))
                         ) : (
                           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-                              <CheckSquare className="h-7 w-7 opacity-40" />
-                            </div>
-                            <p className="text-sm font-medium text-slate-500">Nenhuma tarefa encontrada</p>
-                            <p className="text-xs text-slate-400 mt-1">Tente ajustar os filtros ou a busca</p>
+                            {loadingModalData ? (
+                              <>
+                                <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                                <p className="text-xs">Carregando tarefas...</p>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                                  <CheckSquare className="h-7 w-7 opacity-40" />
+                                </div>
+                                <p className="text-sm font-medium text-slate-500">Nenhuma tarefa encontrada</p>
+                                <p className="text-xs text-slate-400 mt-1">Tente ajustar os filtros ou a busca</p>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className="flex gap-3 overflow-x-auto px-5 pb-4 pt-4">
-                        {["Aprovada", "Em Execução", "Para Aprovação", "Entregue", "Atrasada"].map((status) => {
+                        {["Para lançamento", "Em Execução", "Para Aprovação", "Aprovada", "Entregue", "Atrasada"].map((status) => {
                           const statusTasks = getFilteredAndSortedTasks().filter((t) => t.status === status)
                           const columnColor = getStatusBorderColor(status)
                           return (
@@ -3018,12 +3245,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
 
                 // Stats
                 const ptStats = {
-                  total:     allProdTasks.length,
-                  execucao:  allProdTasks.filter((t: any) => t.status === "Em Execução").length,
-                  aprovada:  allProdTasks.filter((t: any) => t.status === "Aprovada").length,
-                  aprovacao: allProdTasks.filter((t: any) => t.status === "Para Aprovação").length,
-                  entregue:  allProdTasks.filter((t: any) => t.status === "Entregue").length,
-                  atrasada:  allProdTasks.filter((t: any) => t.status === "Atrasada").length,
+                  total:      allProdTasks.length,
+                  lancamento: allProdTasks.filter((t: any) => t.status === "Para lançamento").length,
+                  execucao:   allProdTasks.filter((t: any) => t.status === "Em Execução").length,
+                  aprovada:   allProdTasks.filter((t: any) => t.status === "Aprovada").length,
+                  aprovacao:  allProdTasks.filter((t: any) => t.status === "Para Aprovação").length,
+                  entregue:   allProdTasks.filter((t: any) => t.status === "Entregue").length,
+                  atrasada:   allProdTasks.filter((t: any) => t.status === "Atrasada").length,
                 }
 
                 // Filter + search
@@ -3060,6 +3288,13 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                         <span className="text-xs font-semibold text-slate-600">Total</span>
                         <span className="text-sm font-bold text-slate-900">{ptStats.total}</span>
                       </div>
+                      {ptStats.lancamento > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <div className="h-2 w-2 rounded-full bg-orange-400 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-slate-500">Para lançamento</span>
+                          <span className="text-sm font-bold text-orange-500">{ptStats.lancamento}</span>
+                        </div>
+                      )}
                       {ptStats.execucao > 0 && (
                         <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
                           <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
@@ -3217,6 +3452,7 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">Todos</SelectItem>
+                                <SelectItem value="Para lançamento">Para lançamento</SelectItem>
                                 <SelectItem value="Em Execução">Em Execução</SelectItem>
                                 <SelectItem value="Aprovada">Aprovada</SelectItem>
                                 <SelectItem value="Para Aprovação">Para Aprovação</SelectItem>
@@ -3283,6 +3519,12 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                                     <span>·</span>
                                     <span className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="font-medium text-slate-600">{canSeeNomadNames ? tarefa.lider : "Equipe Allka"}</span></span>
                                     {tarefa.prazo && (<><span>·</span><span className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="font-medium text-slate-600">{tarefa.prazo}</span></span></>)}
+                                    {(() => {
+                                      const expiry = getLancamentoExpiryBadge(tarefa)
+                                      return expiry ? (
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${expiry.className}`}>{expiry.label}</span>
+                                      ) : null
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
@@ -3313,9 +3555,10 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
                       {productTaskViewMode === "kanban" && (
                         <div className="p-5 overflow-x-auto">
                           <div className="flex gap-4 min-w-max">
-                            {["Em Execução", "Para Aprovação", "Aprovada", "Entregue", "Atrasada"].map((col) => {
+                            {["Para lançamento", "Em Execução", "Para Aprovação", "Aprovada", "Entregue", "Atrasada"].map((col) => {
                               const colTasks = filtered.filter((t: any) => t.status === col)
                               const colColors: Record<string, string> = {
+                                "Para lançamento": "from-orange-50 to-orange-100/50 border-orange-200",
                                 "Em Execução": "from-blue-50 to-blue-100/50 border-blue-200",
                                 "Para Aprovação": "from-amber-50 to-amber-100/50 border-amber-200",
                                 "Aprovada": "from-emerald-50 to-emerald-100/50 border-emerald-200",
@@ -4307,6 +4550,17 @@ export function ProjectManagementModal({ project, open, onOpenChange, mode, onEd
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Task Detail Drawer ─────────────────────────────────────────────── */}
+      {/* Full-width drawer (sidebar → right edge) with tabs: dados, briefing,  */}
+      {/* etapas, comentários, aprovação, hist. entrega, hist. status, acessos, anexos */}
+      <TarefaDetailDrawer
+        tarefa={taskDrawerTask}
+        open={taskDrawerOpen}
+        onClose={() => setTaskDrawerOpen(false)}
+        onStatusChange={() => {}}
+        updatingId={null}
+      />
     </>
   )
 }

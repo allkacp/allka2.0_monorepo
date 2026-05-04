@@ -56,6 +56,7 @@ import { apiClient } from "@/lib/api-client";
 import { useSettings } from "@/contexts/settings-context";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
+import { FontScaleControl } from "@/components/font-scale-control";
 
 const LEVEL_CONFIG = {
   bronze: { label: "Bronze", bg: "bg-amber-100", text: "text-amber-700" },
@@ -90,6 +91,11 @@ const ACCOUNT_CONFIG = {
     color: "text-blue-600",
     badgeBg: "bg-blue-50",
     badgeBorder: "border-blue-200",
+  },
+  lider: {
+    color: "text-teal-600",
+    badgeBg: "bg-teal-50",
+    badgeBorder: "border-teal-200",
   },
 };
 
@@ -747,6 +753,9 @@ export function Header() {
                 <Moon className="h-4 w-4" />
               )}
             </button>
+
+            {/* Controle de tamanho de fonte */}
+            <FontScaleControl />
 
             {/* ── Cesta de projeto ──────────────────────────────────── */}
             {(() => {

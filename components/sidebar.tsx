@@ -56,6 +56,8 @@ import {
   GripVertical,
   Package,
   ClipboardList,
+  Play,
+  RotateCcw,
 } from "lucide-react";
 
 const navigationConfig = {
@@ -246,6 +248,44 @@ const navigationConfig = {
       current: false,
     },
   ],
+  lider: [
+    {
+      name: "Dashboard",
+      href: "/lider/dashboard",
+      icon: LayoutDashboard,
+      current: true,
+    },
+    {
+      name: "Para Qualificar",
+      href: "/lider/qualificacao",
+      icon: CheckSquare,
+      current: false,
+    },
+    {
+      name: "Em Execução",
+      href: "/lider/tarefas",
+      icon: Play,
+      current: false,
+    },
+    {
+      name: "Devolvidas",
+      href: "/lider/devolvidas",
+      icon: RotateCcw,
+      current: false,
+    },
+    {
+      name: "Histórico",
+      href: "/lider/historico",
+      icon: History,
+      current: false,
+    },
+    {
+      name: "Perfil",
+      href: "/lider/perfil",
+      icon: UserCheck,
+      current: false,
+    },
+  ],
   admin: [
     {
       name: "Dashboard",
@@ -263,14 +303,12 @@ const navigationConfig = {
           href: "/admin/empresas",
           icon: Building2,
           current: false,
-          badge: "32",
         },
         {
           name: "Usuários",
           href: "/admin/usuarios",
           icon: Users,
           current: false,
-          badge: "589",
         },
         {
           name: "Permissões",
@@ -426,9 +464,9 @@ export function Sidebar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [hasMoreContent, setHasMoreContent] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [adminProjectCount, setAdminProjectCount] = useState<number | null>(
-    null,
-  );
+  const [adminProjectCount, setAdminProjectCount] = useState<number | null>(null);
+  const [adminCompanyCount, setAdminCompanyCount] = useState<number | null>(null);
+  const [adminUserCount, setAdminUserCount] = useState<number | null>(null);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [dragOverItem, setDragOverItem] = useState<number | null>(null);
   const [draggedSubitem, setDraggedSubitem] = useState<{
@@ -442,8 +480,10 @@ export function Sidebar() {
   const [customOrder, setCustomOrder] = useState<string[]>([]);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
+  const sidebarRootRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef<{ x: number; startW: number } | null>(null);
+  const COLLAPSE_THRESHOLD = 180;
 
   const location = useLocation();
   const pathname = location.pathname;
@@ -466,16 +506,35 @@ export function Sidebar() {
     resizeStartRef.current = { x: e.clientX, startW: ctxWidth };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
+    // Disable CSS transition during drag so the sidebar follows the cursor instantly
+    if (sidebarRootRef.current) sidebarRootRef.current.style.transition = "none";
     const onMove = (mv: MouseEvent) => {
       if (!isResizingRef.current || !resizeStartRef.current) return;
-      const delta = mv.clientX - resizeStartRef.current.x;
-      setSidebarWidth(resizeStartRef.current.startW + delta);
+      const newW = resizeStartRef.current.startW + (mv.clientX - resizeStartRef.current.x);
+      // Auto-collapse when dragged below threshold
+      if (newW < COLLAPSE_THRESHOLD) {
+        isResizingRef.current = false;
+        resizeStartRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        if (sidebarRootRef.current) sidebarRootRef.current.style.transition = "";
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        setCollapsed(true);
+        setSidebarCollapsed(true);
+        localStorage.setItem("sidebar-collapsed", JSON.stringify(true));
+        window.dispatchEvent(new CustomEvent("sidebar-collapsed-change", { detail: { collapsed: true } }));
+        return;
+      }
+      setSidebarWidth(newW);
     };
     const onUp = () => {
       isResizingRef.current = false;
       resizeStartRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      // Re-enable CSS transition after drag
+      if (sidebarRootRef.current) sidebarRootRef.current.style.transition = "";
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
@@ -507,16 +566,16 @@ export function Sidebar() {
   useEffect(() => {
     if (accountType !== "admin") return;
     let cancelled = false;
-    apiClient
-      .getProjects({ limit: "1" })
-      .then((res: any) => {
-        if (!cancelled && res?.total !== undefined) {
-          setAdminProjectCount(res.total);
-        }
-      })
-      .catch(() => {
-        /* silent: badge omitted on API error */
-      });
+    Promise.all([
+      apiClient.getProjects({ limit: "1" }).catch(() => null),
+      apiClient.getCompanies({ limit: "1" }).catch(() => null),
+      apiClient.getUsers({ limit: "1" }).catch(() => null),
+    ]).then(([projects, companies, users]: any[]) => {
+      if (cancelled) return;
+      if (projects?.total !== undefined) setAdminProjectCount(projects.total);
+      if (companies?.total !== undefined) setAdminCompanyCount(companies.total);
+      if (users?.total !== undefined) setAdminUserCount(users.total);
+    });
     return () => {
       cancelled = true;
     };
@@ -533,10 +592,27 @@ export function Sidebar() {
               if (sub.href === "/admin/projetos") {
                 return {
                   ...sub,
-                  badge:
-                    adminProjectCount !== null
-                      ? String(adminProjectCount)
-                      : undefined,
+                  badge: adminProjectCount !== null ? String(adminProjectCount) : undefined,
+                };
+              }
+              return sub;
+            }),
+          };
+        }
+        if (item.name === "Gestão de Contas" && item.subitems) {
+          return {
+            ...item,
+            subitems: item.subitems.map((sub: any) => {
+              if (sub.href === "/admin/empresas") {
+                return {
+                  ...sub,
+                  badge: adminCompanyCount !== null ? String(adminCompanyCount) : undefined,
+                };
+              }
+              if (sub.href === "/admin/usuarios") {
+                return {
+                  ...sub,
+                  badge: adminUserCount !== null ? String(adminUserCount) : undefined,
                 };
               }
               return sub;
@@ -550,6 +626,10 @@ export function Sidebar() {
     // Regular users see only their account type menu
     if (accountType === "empresas") {
       return navigationConfig.empresas[accountSubType || "company"];
+    }
+
+    if (accountType === "lider") {
+      return navigationConfig.lider;
     }
 
     return navigationConfig[accountType] || [];
@@ -910,6 +990,7 @@ export function Sidebar() {
     <TooltipProvider delayDuration={300}>
       <div className="relative group/sbhover h-screen flex-shrink-0">
         <div
+          ref={sidebarRootRef}
           data-sidebar-root
           className={cn(
             "flex flex-col h-screen text-white transition-all duration-300 relative overflow-hidden brand-surface",
@@ -917,11 +998,11 @@ export function Sidebar() {
               !appliedTheme.backgroundColor.includes("custom-gradient:") &&
               appliedTheme.backgroundColor !== "bg-slate-900" &&
               appliedTheme.backgroundColor,
-            collapsed ? "w-16" : "",
           )}
           style={{
             ...getSidebarStyle(),
-            ...(collapsed ? {} : { width: ctxWidth, minWidth: ctxWidth }),
+            width: collapsed ? 72 : ctxWidth,
+            minWidth: collapsed ? 72 : ctxWidth,
           }}
         >
           {/* Background image overlay — rendered as first child so content stays fully visible */}

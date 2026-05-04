@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,7 @@ import {
   Copy,
   FileText,
   Ban,
+  AlertTriangle,
   FolderOpen,
   Building2,
   Users,
@@ -214,6 +215,42 @@ function isTaskOverdue(task: any) {
   return new Date(task.due_date) < new Date();
 }
 
+/** Returns days until lancamento_expires_at, or null if field absent. Negative = already expired. */
+function getLancamentoDaysLeft(task: any): number | null {
+  if (!task.lancamento_expires_at) return null;
+  const diff = new Date(task.lancamento_expires_at).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+/** Badge showing expiry countdown for PARA_LANCAMENTO tasks */
+function LancamentoExpiryBadge({ task }: { task: any }) {
+  if (task.status !== "PARA_LANCAMENTO") return null;
+  const days = getLancamentoDaysLeft(task);
+  if (days === null) return null;
+  if (days <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+        Prazo expirado
+      </span>
+    );
+  }
+  if (days <= 7) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+        Expira em {days}d
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200">
+      Lançar em até {days}d
+    </span>
+  );
+}
+
+
 function getProjectStatusBadge(status: string) {
   const map: Record<string, { label: string; cls: string }> = {
     active: { label: "Ativo", cls: "bg-emerald-500 text-white" },
@@ -321,15 +358,35 @@ function PriorityDot({ priority }: { priority: string }) {
 
 // ─── TaskDetailDrawer ─────────────────────────────────────────────────────────
 
+const STAGE_STATUS_CFG: Record<string, { label: string; cls: string }> = {
+  PENDENTE:    { label: "Pendente",    cls: "bg-slate-100 text-slate-600 border-slate-300" },
+  EM_ANDAMENTO:{ label: "Em andamento",cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  CONCLUIDA:   { label: "Concluída",  cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  BLOQUEADA:   { label: "Bloqueada",  cls: "bg-red-100 text-red-600 border-red-200" },
+};
+
 function TaskDetailDrawer({
   task,
   onClose,
+  onLaunch,
 }: {
   task: any;
   onClose: () => void;
+  onLaunch?: (task: any) => void;
 }) {
   const pc = PRIORITY_CFG[task.priority] ?? PRIORITY_CFG.medium;
   const overdue = isTaskOverdue(task);
+  const [stages, setStages] = useState<any[]>([]);
+  const [loadingStages, setLoadingStages] = useState(false);
+
+  useEffect(() => {
+    setLoadingStages(true);
+    apiClient
+      .getProjectTaskStages(task.id)
+      .then((r: any) => setStages(Array.isArray(r) ? r : (r?.data ?? [])))
+      .catch(() => setStages([]))
+      .finally(() => setLoadingStages(false));
+  }, [task.id]);
 
   function parseJson(data: any): any[] {
     if (!data) return [];
@@ -347,197 +404,304 @@ function TaskDetailDrawer({
         : i?.title || i?.item || i?.question || i?.label || JSON.stringify(i),
     );
   }
+  function parseBriefingQuestions(data: any): Array<{ key: string; text: string; type?: string }> {
+    return parseJson(data).map((i: any, idx: number) =>
+      typeof i === "string"
+        ? { key: `q${idx}`, text: i }
+        : { key: i?.key || i?.id || `q${idx}`, text: i?.question || i?.text || i?.label || JSON.stringify(i), type: i?.type },
+    );
+  }
 
-  const steps = parseStringArray(task.steps_snapshot);
+  const briefingQuestions = parseBriefingQuestions(task.briefing_snapshot);
   const checklist = parseStringArray(task.checklist_snapshot);
-  const briefing = parseStringArray(task.briefing_snapshot);
+
+  const proj = task.project;
+  const client = proj?.client;
 
   return (
-    <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-[92vw] max-w-2xl flex flex-col p-0 overflow-hidden gap-0"
+      >
+        {/* ── Header ── */}
+        <SheetHeader className="shrink-0 px-6 pt-5 pb-4 border-b border-slate-200 bg-white">
+          <div className="flex items-start gap-3 pr-8">
+            <div className="h-9 w-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
               <CheckCircle2 className="h-5 w-5 text-blue-600" />
             </div>
             <div className="flex-1 min-w-0">
               {task.code_snapshot && (
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded mr-2">
+                <span className="inline-flex items-center text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded mb-1">
                   {task.code_snapshot}
                 </span>
               )}
-              <DialogTitle className="text-base font-bold text-slate-800 leading-snug mt-1">
+              <SheetTitle className="text-base font-bold text-slate-800 leading-snug">
                 {task.title}
-              </DialogTitle>
+              </SheetTitle>
               {task.project_product?.product_name_snapshot && (
-                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                  <Package className="h-3 w-3" />
+                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <Package className="h-3 w-3 shrink-0" />
                   {task.project_product.product_name_snapshot}
+                  {task.project_product.product_code_snapshot && (
+                    <span className="text-[10px] font-mono text-slate-400">
+                      ({task.project_product.product_code_snapshot})
+                    </span>
+                  )}
                 </p>
               )}
             </div>
           </div>
-        </DialogHeader>
+          {/* Status + Priority row */}
+          <div className="flex items-center gap-2 flex-wrap mt-2">
+            <TaskStatusBadge status={task.status} />
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-white",
+                pc.text,
+                "border-slate-200",
+              )}
+            >
+              <span className={cn("h-2 w-2 rounded-full shrink-0", pc.dot)} />
+              {pc.label}
+            </span>
+            {task.fase && (
+              <span className="text-[11px] bg-blue-50 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
+                {task.fase}
+              </span>
+            )}
+            {overdue && (
+              <span className="text-[11px] bg-red-50 text-red-600 border border-red-200 px-2.5 py-1 rounded-full font-semibold">
+                Atrasada
+              </span>
+            )}
+            <LancamentoExpiryBadge task={task} />
+          </div>
+        </SheetHeader>
 
-        <div className="space-y-5 pt-2">
-          {/* Status + Priority */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Status
-              </p>
-              <TaskStatusBadge status={task.status} />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Prioridade
-              </p>
-              <div
-                className={cn(
-                  "h-9 flex items-center gap-2 px-3 rounded-md border border-slate-200 bg-white text-sm",
-                  pc.text,
+        {/* ── Scrollable body ── */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          <div className="px-6 py-5 space-y-6">
+
+            {/* Projeto + Cliente */}
+            {(proj || client) && (
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+                {proj && (
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <FolderOpen className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Projeto</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate">{proj.title}</p>
+                    </div>
+                    {proj.status && getProjectStatusBadge(proj.status)}
+                  </div>
                 )}
-              >
-                <span
-                  className={cn("h-2.5 w-2.5 rounded-full shrink-0", pc.dot)}
-                />
-                {pc.label}
+                {client && (
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Cliente</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate">{client.name}</p>
+                      {client.cnpj && (
+                        <p className="text-[10px] text-slate-400 font-mono">{client.cnpj}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Dates */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Prazo
-              </p>
-              <span
-                className={cn(
-                  "text-sm font-semibold",
-                  overdue ? "text-red-600" : "text-slate-700",
+            {/* Datas */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Prazo", value: fmtDate(task.due_date), cls: overdue ? "text-red-600 font-bold" : "text-slate-800" },
+                { label: "Início", value: fmtDate(task.start_date), cls: "text-slate-800" },
+                { label: "Lançamento", value: fmtDate(task.data_lancamento), cls: "text-slate-800" },
+                { label: "Conclusão", value: fmtDate(task.completed_at), cls: "text-emerald-700" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-white rounded-lg border border-slate-200 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{label}</p>
+                  <p className={cn("text-sm font-semibold", cls)}>{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Responsáveis */}
+            {(task.responsavel_agencia || task.nomade_responsavel) && (
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+                {task.responsavel_agencia && (
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <User className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Responsável Agência</p>
+                      <p className="text-sm font-semibold text-slate-800">{task.responsavel_agencia.name}</p>
+                      {task.responsavel_agencia.email && (
+                        <p className="text-[10px] text-slate-400">{task.responsavel_agencia.email}</p>
+                      )}
+                    </div>
+                  </div>
                 )}
-              >
-                {fmtDate(task.due_date)}
-              </span>
+                {task.nomade_responsavel && (
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <UserSearch className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Nômade</p>
+                      <p className="text-sm font-semibold text-slate-800">{task.nomade_responsavel.name}</p>
+                      {task.nomade_responsavel.email && (
+                        <p className="text-[10px] text-slate-400">{task.nomade_responsavel.email}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Descrição */}
+            {task.description && (
+              <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Descrição</p>
+                <p className="text-sm text-slate-600 leading-relaxed">{task.description}</p>
+              </div>
+            )}
+
+            {/* Etapas operacionais */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-slate-500" />
+                  <p className="text-sm font-semibold text-slate-700">Etapas</p>
+                </div>
+                {loadingStages && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+                {!loadingStages && stages.length > 0 && (
+                  <span className="text-[11px] text-slate-400">{stages.filter((s) => s.status === "CONCLUIDA").length}/{stages.length} concluídas</span>
+                )}
+              </div>
+              {loadingStages ? (
+                <div className="px-4 py-6 flex items-center justify-center text-slate-400 gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando etapas...
+                </div>
+              ) : stages.length === 0 ? (
+                <div className="px-4 py-5 text-center text-slate-400 text-sm">
+                  Nenhuma etapa registrada para esta tarefa.
+                </div>
+              ) : (
+                <ol className="divide-y divide-slate-100">
+                  {stages.map((stage: any, idx: number) => {
+                    const stageCfg = STAGE_STATUS_CFG[stage.status] ?? STAGE_STATUS_CFG.PENDENTE;
+                    const stageChecklist = parseStringArray(stage.checklist_snapshot);
+                    return (
+                      <li key={stage.id} className="px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="h-5 w-5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-slate-800">{stage.titulo}</p>
+                              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", stageCfg.cls)}>
+                                {stageCfg.label}
+                              </span>
+                              {stage.obrigatoria && (
+                                <span className="text-[10px] text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded-full">
+                                  obrigatória
+                                </span>
+                              )}
+                            </div>
+                            {stage.descricao && (
+                              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{stage.descricao}</p>
+                            )}
+                            {stageChecklist.length > 0 && (
+                              <ul className="mt-2 space-y-1">
+                                {stageChecklist.map((item: string, i: number) => (
+                                  <li key={i} className="flex items-center gap-2 text-xs text-slate-500">
+                                    <span className="h-3.5 w-3.5 rounded border border-slate-300 shrink-0" />
+                                    {item}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Início
-              </p>
-              <span className="text-sm text-slate-700">
-                {fmtDate(task.start_date)}
-              </span>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Conclusão
-              </p>
-              <span className="text-sm text-emerald-700">
-                {fmtDate(task.completed_at)}
-              </span>
-            </div>
+
+            {/* Briefing */}
+            {briefingQuestions.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-slate-500" />
+                  <p className="text-sm font-semibold text-slate-700">Briefing ({briefingQuestions.length})</p>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {briefingQuestions.map((q, i) => (
+                    <li key={q.key} className="px-4 py-3">
+                      <p className="text-xs font-semibold text-slate-500 mb-0.5">Pergunta {i + 1}</p>
+                      <p className="text-sm text-slate-700">{q.text}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Checklist */}
+            {checklist.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-slate-500" />
+                  <p className="text-sm font-semibold text-slate-700">Checklist ({checklist.length})</p>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {checklist.map((item, i) => (
+                    <li key={i} className="px-4 py-3 flex items-center gap-2.5">
+                      <span className="h-4 w-4 rounded border border-slate-300 shrink-0" />
+                      <span className="text-sm text-slate-600">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Observações */}
+            {task.observations && (
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 mb-1">Observações</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{task.observations}</p>
+              </div>
+            )}
+
           </div>
-
-          {/* Description */}
-          {task.description && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Descrição
-              </p>
-              <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3 leading-relaxed">
-                {task.description}
-              </p>
-            </div>
-          )}
-
-          {/* Phase */}
-          {task.phase && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Fase
-              </p>
-              <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
-                {task.phase}
-              </span>
-            </div>
-          )}
-
-          {/* Steps */}
-          {steps.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Etapas ({steps.length})
-              </p>
-              <ol className="space-y-1.5">
-                {steps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-2.5">
-                    <span className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm text-slate-700">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {/* Checklist */}
-          {checklist.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Checklist ({checklist.length})
-              </p>
-              <ul className="space-y-1.5">
-                {checklist.map((item, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center gap-2 text-sm text-slate-600"
-                  >
-                    <span className="h-4 w-4 rounded border border-slate-300 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Briefing */}
-          {briefing.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Briefing ({briefing.length})
-              </p>
-              <ul className="space-y-1.5">
-                {briefing.map((q, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 text-sm text-slate-600"
-                  >
-                    <span className="text-blue-500 font-bold shrink-0">
-                      Q{i + 1}.
-                    </span>
-                    {q}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Observations */}
-          {task.observations && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Observações
-              </p>
-              <p className="text-sm text-slate-600 bg-amber-50 border border-amber-100 rounded-lg p-3 leading-relaxed">
-                {task.observations}
-              </p>
-            </div>
-          )}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* ── Footer actions ── */}
+        {onLaunch && task.status === "PARA_LANCAMENTO" && (
+          <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="h-9">
+              Fechar
+            </Button>
+            {(() => {
+              const days = getLancamentoDaysLeft(task);
+              const expired = days !== null && days <= 0;
+              return (
+                <Button
+                  size="sm"
+                  className="h-9 gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                  disabled={expired}
+                  title={expired ? "Prazo de lançamento expirado" : undefined}
+                  onClick={() => { onClose(); onLaunch(task); }}
+                >
+                  <Rocket className="h-4 w-4" />
+                  {expired ? "Prazo expirado" : "Lançar tarefa"}
+                </Button>
+              );
+            })()}
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1724,7 +1888,7 @@ export function ProjectViewSlidePanel({
                         "awaiting-payment",
                       ].includes(project.status) ? (
                       /* Empty state A — project not yet contracted */
-                      <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 flex flex-col items-center justify-center gap-4 text-center">
+                      <div className="bg-white rounded-xl border-2 border-dashed border-amber-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
                         <div className="h-14 w-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
                           <Clock className="h-7 w-7 text-amber-500" />
                         </div>
@@ -1733,34 +1897,45 @@ export function ProjectViewSlidePanel({
                             Tarefas ainda não geradas
                           </p>
                           <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-                            As tarefas serão geradas automaticamente após a
-                            contratação ou pagamento do projeto.
+                            As tarefas serão geradas após a contratação ou
+                            pagamento do projeto.
                           </p>
                         </div>
                       </div>
                     ) : taskStats.total === 0 ? (
-                      /* Empty state B — contracted but no tasks */
-                      <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 flex flex-col items-center justify-center gap-4 text-center">
-                        <div className="h-14 w-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center">
-                          <CheckCircle2 className="h-7 w-7 text-slate-400" />
+                      /* Empty state B — paid/contracted but no tasks generated */
+                      <div className="bg-white rounded-xl border-2 border-dashed border-red-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
+                        <div className="h-14 w-14 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
+                          <AlertTriangle className="h-7 w-7 text-red-500" />
                         </div>
                         <div>
-                          <p className="text-base font-semibold text-slate-600">
-                            Nenhuma tarefa gerada para este projeto.
+                          <p className="text-base font-semibold text-red-700">
+                            Projeto pago, mas nenhuma tarefa foi gerada.
                           </p>
-                          <p className="text-sm text-slate-400 mt-1 max-w-xs mx-auto">
-                            Vincule produtos ao projeto para gerar as tarefas
-                            operacionais.
+                          <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                            Verifique se os produtos vinculados possuem modelos
+                            de tarefas ativos configurados.
                           </p>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setActiveTab("produtos")}
-                          className="gap-2"
-                        >
-                          <Package className="h-3.5 w-3.5" /> Ir para Produtos
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setActiveTab("produtos")}
+                            className="gap-2"
+                          >
+                            <Package className="h-3.5 w-3.5" /> Ver Produtos
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={fetchTasks}
+                            disabled={loadingTasks}
+                            className="gap-2"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" /> Recarregar
+                          </Button>
+                        </div>
                       </div>
                     ) : filteredTasks.length === 0 ? (
                       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 flex flex-col items-center text-center gap-3">
@@ -1821,6 +1996,8 @@ export function ProjectViewSlidePanel({
                                 const stageCount = task._count?.stages ?? 0;
                                 const attachCount =
                                   task._count?.attachments ?? 0;
+                                const lancamentoDays = getLancamentoDaysLeft(task);
+                                const lancamentoExpired = lancamentoDays !== null && lancamentoDays <= 0;
 
                                 // Context-sensitive primary action
                                 let primaryBtn: React.ReactNode;
@@ -1828,8 +2005,9 @@ export function ProjectViewSlidePanel({
                                   primaryBtn = (
                                     <Button
                                       size="sm"
-                                      className="h-7 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                      disabled={isLaunching}
+                                      className="h-7 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                                      disabled={isLaunching || lancamentoExpired}
+                                      title={lancamentoExpired ? "Prazo de lançamento expirado" : undefined}
                                       onClick={() => handleLaunchTask(task.id)}
                                     >
                                       {isLaunching ? (
@@ -1837,7 +2015,7 @@ export function ProjectViewSlidePanel({
                                       ) : (
                                         <Rocket className="h-3 w-3" />
                                       )}
-                                      Lançar tarefa
+                                      {lancamentoExpired ? "Expirada" : "Lançar tarefa"}
                                     </Button>
                                   );
                                 } else if (task.status === "EM_EXECUCAO") {
@@ -1949,7 +2127,10 @@ export function ProjectViewSlidePanel({
                                     </td>
                                     {/* Status */}
                                     <td className="px-3 py-3">
-                                      <TaskStatusBadge status={task.status} />
+                                      <div className="flex flex-col gap-1">
+                                        <TaskStatusBadge status={task.status} />
+                                        <LancamentoExpiryBadge task={task} />
+                                      </div>
                                     </td>
                                     {/* Etapas */}
                                     <td className="px-3 py-3">
@@ -1967,25 +2148,29 @@ export function ProjectViewSlidePanel({
                                     </td>
                                     {/* Resp. Agência */}
                                     <td className="px-3 py-3">
-                                      <span className="text-xs text-slate-500 truncate max-w-[100px] block">
-                                        {task.responsavel_agencia_id
-                                          ? task.responsavel_agencia_id.slice(
-                                              0,
-                                              8,
-                                            ) + "…"
-                                          : "—"}
-                                      </span>
+                                      {task.responsavel_agencia ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <User className="h-3 w-3 text-slate-400 shrink-0" />
+                                          <span className="text-xs text-slate-700 truncate max-w-[100px]">
+                                            {task.responsavel_agencia.name}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-300 text-xs">—</span>
+                                      )}
                                     </td>
                                     {/* Nômade */}
                                     <td className="px-3 py-3">
-                                      <span className="text-xs text-slate-500 truncate max-w-[100px] block">
-                                        {task.nomade_responsavel_id
-                                          ? task.nomade_responsavel_id.slice(
-                                              0,
-                                              8,
-                                            ) + "…"
-                                          : "—"}
-                                      </span>
+                                      {task.nomade_responsavel ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <UserSearch className="h-3 w-3 text-slate-400 shrink-0" />
+                                          <span className="text-xs text-slate-700 truncate max-w-[100px]">
+                                            {task.nomade_responsavel.name}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-300 text-xs">—</span>
+                                      )}
                                     </td>
                                     {/* Prazo */}
                                     <td className="px-3 py-3">
@@ -2562,6 +2747,12 @@ export function ProjectViewSlidePanel({
           onClose={() => {
             setTaskDrawerOpen(false);
             setSelectedTask(null);
+          }}
+          onLaunch={(task) => {
+            setTaskDrawerOpen(false);
+            setSelectedTask(null);
+            setLaunchDrawerTask(task);
+            setLaunchDrawerOpen(true);
           }}
         />
       )}

@@ -2292,14 +2292,17 @@ export default function UsuariosPage() {
               )}
 
             {/* Users Table */}
-            <div className="overflow-x-auto">
+            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
+                        position: "sticky", top: 0, zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       <SortableHeader
@@ -2312,17 +2315,23 @@ export default function UsuariosPage() {
                       />
                     </th>
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
+                        position: "sticky", top: 0, zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       Contato
                     </th>
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
+                        position: "sticky", top: 0, zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       <SortableHeader
@@ -2339,9 +2348,12 @@ export default function UsuariosPage() {
                       />
                     </th>
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
+                        position: "sticky", top: 0, zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       <SortableHeader
@@ -2358,9 +2370,12 @@ export default function UsuariosPage() {
                       />
                     </th>
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
+                        position: "sticky", top: 0, zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       <SortableHeader
@@ -2385,12 +2400,15 @@ export default function UsuariosPage() {
                       />
                     </th>
                     <th
-                      className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-white dark:bg-slate-900"
+                      className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         position: "sticky",
                         right: 0,
-                        zIndex: 2,
+                        top: 0,
+                        zIndex: 3,
                         borderLeft: "1px solid rgba(148,163,184,0.25)",
+                        background: "var(--table-head)",
+                        boxShadow: "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       Ações
@@ -2410,7 +2428,11 @@ export default function UsuariosPage() {
                     return (
                       <tr
                         key={user.id}
-                        className={`group transition-colors cursor-pointer ${paginatedUsers.indexOf(user) % 2 === 0 ? "bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)]" : "bg-slate-200/50 hover:bg-slate-200/70 dark:bg-[oklch(0.19_0.018_258)]"} dark:hover:bg-[oklch(0.22_0.022_258)]`}
+                        className={`group transition-colors cursor-pointer ${
+                          paginatedUsers.indexOf(user) % 2 === 0
+                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
+                        }`}
                       >
                         <td
                           className="px-5 py-3.5"
@@ -2562,16 +2584,16 @@ export default function UsuariosPage() {
                           }}
                         >
                           {user.auto_paused ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            <span className="allka-badge allka-badge-status-pausado">
                               ⏸ Pausado
                             </span>
                           ) : (
                             <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              className={
                                 user.is_active
-                                  ? "bg-emerald-500 text-white"
-                                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                              }`}
+                                  ? "allka-badge allka-badge-status-ativo"
+                                  : "allka-badge allka-badge-status-bloqueado"
+                              }
                             >
                               {user.is_active ? "Ativo" : "Bloqueado"}
                             </span>
