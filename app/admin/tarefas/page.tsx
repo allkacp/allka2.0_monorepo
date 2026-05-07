@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckSquare2,
   Loader2,
@@ -106,7 +107,10 @@ import {
   EMPTY_FILTERS,
   countActiveFilters,
 } from "@/types/tarefas-filters";
-import { TASK_STATUS_VARIANT, PRIORITY_VARIANT } from "@/components/allka-badge";
+import {
+  TASK_STATUS_VARIANT,
+  PRIORITY_VARIANT,
+} from "@/components/allka-badge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -519,7 +523,14 @@ function StatusBadge({ status }: { status: TaskStatus }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.PARA_LANCAMENTO;
   const Icon = cfg.icon;
   const allkaCls = TASK_STATUS_VARIANT[status] ?? "";
-  const variantCls = allkaCls ? `allka-badge allka-badge-${allkaCls.replace("task-", "task-")}` : cn("inline-flex items-center gap-1.5 text-xs font-semibold rounded-full border px-2.5 py-1 whitespace-nowrap", cfg.bg, cfg.color, cfg.border);
+  const variantCls = allkaCls
+    ? `allka-badge allka-badge-${allkaCls.replace("task-", "task-")}`
+    : cn(
+        "inline-flex items-center gap-1.5 text-xs font-semibold rounded-full border px-2.5 py-1 whitespace-nowrap",
+        cfg.bg,
+        cfg.color,
+        cfg.border,
+      );
   if (allkaCls) {
     return (
       <span className={`allka-badge allka-badge-${allkaCls}`}>
@@ -866,6 +877,24 @@ export default function AdminTarefasPage() {
   const [selectedTarefa, setSelectedTarefa] =
     useState<TarefaOperacional | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const navigate = useNavigate();
+  const { tarefaId: urlTarefaId } = useParams<{ tarefaId?: string }>();
+
+  // Deep-link: open task drawer from URL param
+  useEffect(() => {
+    if (!urlTarefaId) return;
+    apiClient
+      .getTask(urlTarefaId)
+      .then((task: any) => {
+        setSelectedTarefa(task);
+        setDrawerOpen(true);
+      })
+      .catch(() => {
+        setSelectedTarefa({ id: urlTarefaId } as any);
+        setDrawerOpen(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTarefaId]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [launchTask, setLaunchTask] = useState<TarefaOperacional | null>(null);
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
@@ -1015,8 +1044,7 @@ export default function AdminTarefasPage() {
         if (!match) return false;
       }
       // Identification
-      if (f.idQuery && !t.id.toLowerCase().includes(f.idQuery.toLowerCase()))
-        return false;
+      if (f.idQuery && !String(t.id).includes(f.idQuery)) return false;
       if (
         f.codeQuery &&
         !t.code_snapshot?.toLowerCase().includes(f.codeQuery.toLowerCase())
@@ -1727,7 +1755,10 @@ export default function AdminTarefasPage() {
 
           {/* Table */}
           {sorted.length > 0 && (
-            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div
+              className="overflow-auto allka-table-scroll"
+              style={{ maxHeight: "calc(100vh - 18rem)" }}
+            >
               <table
                 className="text-sm"
                 style={{
@@ -1833,7 +1864,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("acoes") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <div className="flex items-center justify-end gap-0.5">
                               <Tooltip>
@@ -1842,8 +1876,10 @@ export default function AdminTarefasPage() {
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
                                       setDrawerOpen(true);
+                                      navigate(`/admin/tarefas/${tarefa.id}`, {
+                                        replace: true,
+                                      });
                                     }}
-                                    className="h-7 w-7 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </button>
@@ -1867,6 +1903,9 @@ export default function AdminTarefasPage() {
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
                                       setDrawerOpen(true);
+                                      navigate(`/admin/tarefas/${tarefa.id}`, {
+                                        replace: true,
+                                      });
                                     }}
                                   >
                                     <Eye className="h-3.5 w-3.5 text-slate-500" />
@@ -1981,10 +2020,13 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("id") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <span className="text-[11px] font-mono text-slate-400">
-                              #{tarefa.id.slice(-6)}
+                              #{String(tarefa.id)}
                             </span>
                           </td>
                         )}
@@ -1993,9 +2035,12 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("codigo") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
-                            {(tarefa.task_code || tarefa.code_snapshot) ? (
+                            {tarefa.task_code || tarefa.code_snapshot ? (
                               <span className="text-[11px] font-mono font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800 px-1.5 py-0.5 rounded">
                                 {tarefa.task_code ?? tarefa.code_snapshot}
                               </span>
@@ -2011,13 +2056,19 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("tarefa") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <button
                               className="text-left w-full"
                               onClick={() => {
                                 setSelectedTarefa(tarefa);
                                 setDrawerOpen(true);
+                                navigate(`/admin/tarefas/${tarefa.id}`, {
+                                  replace: true,
+                                });
                               }}
                             >
                               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
@@ -2036,7 +2087,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("projeto") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -2051,7 +2105,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("cliente") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.project.client ? (
                               <div className="flex items-center gap-1.5 min-w-0">
@@ -2072,7 +2129,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("agencia") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.responsavel_agencia ? (
                               <div className="flex items-center gap-1.5 min-w-0">
@@ -2096,7 +2156,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("produto") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
@@ -2111,7 +2174,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("status") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <StatusBadge status={tarefa.status} />
                           </td>
@@ -2121,7 +2187,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("nomade") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.nomade_responsavel ? (
                               <div className="flex items-center gap-1.5 min-w-0">
@@ -2151,7 +2220,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("lider") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.project.consultant ? (
                               <span className="text-xs text-slate-600 dark:text-slate-400 truncate block">
@@ -2169,7 +2241,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("prazo") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.due_date ? (
                               <div>
@@ -2214,7 +2289,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("execucao") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {tarefa.start_date ? (
                               <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -2232,7 +2310,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("atraso") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             {overdue && dias !== null ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 border border-red-200 rounded-full px-2 py-0.5">
@@ -2251,7 +2332,10 @@ export default function AdminTarefasPage() {
                         {visibleCols.has("prioridade") && (
                           <td
                             className="px-5 py-3.5"
-                            style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}
+                            style={{
+                              borderRight: "1px solid rgba(148,163,184,0.15)",
+                              overflow: "hidden",
+                            }}
                           >
                             <PriorityBadge
                               priority={tarefa.priority as Priority}
@@ -2371,7 +2455,10 @@ export default function AdminTarefasPage() {
       <TarefaDetailDrawer
         tarefa={selectedTarefa}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false);
+          navigate("/admin/tarefas", { replace: true });
+        }}
         onStatusChange={handleStatusChange}
         updatingId={updatingId}
       />

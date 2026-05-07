@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
+import { apiClient } from "@/lib/api-client";
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900":
@@ -272,6 +274,24 @@ export default function EmpresasPage() {
   };
   const [headerHeight, setHeaderHeight] = useState(64);
   const [footerHeight, setFooterHeight] = useState(40);
+  const navigate = useNavigate();
+  const { empresaId: urlEmpresaId } = useParams<{ empresaId?: string }>();
+
+  // Deep-link: open company view from URL param
+  useEffect(() => {
+    if (!urlEmpresaId) return;
+    apiClient
+      .getCompany(urlEmpresaId)
+      .then((company: any) => {
+        setSelectedCompany(company);
+        setViewPanelOpen(true);
+      })
+      .catch(() => {
+        setSelectedCompany({ id: urlEmpresaId } as any);
+        setViewPanelOpen(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlEmpresaId]);
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
@@ -757,6 +777,7 @@ export default function EmpresasPage() {
   const handleViewCompany = (company: Company) => {
     setSelectedCompany(company);
     setViewPanelOpen(true);
+    navigate(`/admin/empresas/${company.id}`, { replace: true });
   };
 
   const handleSaveCompany = async (data: any) => {
@@ -1318,7 +1339,10 @@ export default function EmpresasPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 19rem)" }}>
+        <div
+          className="overflow-auto allka-table-scroll"
+          style={{ maxHeight: "calc(100vh - 19rem)" }}
+        >
           <table
             className="text-xs"
             style={{
@@ -1356,7 +1380,8 @@ export default function EmpresasPage() {
                             right: 0,
                             minWidth: 116,
                             borderLeft: "1px solid rgba(148,163,184,0.18)",
-                            boxShadow: "-4px 0 10px -2px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
+                            boxShadow:
+                              "-4px 0 10px -2px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                           }
                         : {}),
                     }}
@@ -1615,10 +1640,15 @@ export default function EmpresasPage() {
                               : "allka-badge-status-pendente"
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          company.status === "active" ? "bg-emerald-400" :
-                          company.status === "inactive" ? "bg-slate-400" : "bg-amber-400"
-                        }`} />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            company.status === "active"
+                              ? "bg-emerald-400"
+                              : company.status === "inactive"
+                                ? "bg-slate-400"
+                                : "bg-amber-400"
+                          }`}
+                        />
                         {company.status === "active"
                           ? "Ativo"
                           : company.status === "inactive"
@@ -1844,62 +1874,66 @@ export default function EmpresasPage() {
                       {/* Pill container */}
                       <div className="flex items-center justify-center">
                         <div className="inline-flex items-center gap-px rounded-lg border border-slate-200/80 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/60 p-0.5 shadow-sm backdrop-blur-sm">
-                        {/* Ver detalhes */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleViewCompany(company)}
-                                className="h-6 w-6 p-0 rounded-md text-[#2558FF]/60 hover:text-[#2558FF] hover:bg-[#2558FF]/10 dark:text-[#2558FF]/50 dark:hover:text-[#2558FF] dark:hover:bg-[#2558FF]/15 transition-all duration-150"
-                              >
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Ver detalhes
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Editar empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditCompany(company)}
-                                className="h-6 w-6 p-0 rounded-md text-[#6E2C96]/60 hover:text-[#6E2C96] hover:bg-[#6E2C96]/10 dark:text-[#6E2C96]/50 dark:hover:text-[#6E2C96] dark:hover:bg-[#6E2C96]/15 transition-all duration-150"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Editar empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Excluir empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteCompany(company.id)}
-                                className="h-6 w-6 p-0 rounded-md text-rose-400/60 hover:text-rose-500 hover:bg-rose-500/10 dark:text-rose-400/50 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-all duration-150"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Excluir empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        </div>{/* end pill */}
-                      </div>{/* end center wrapper */}
+                          {/* Ver detalhes */}
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewCompany(company)}
+                                  className="h-6 w-6 p-0 rounded-md text-[#2558FF]/60 hover:text-[#2558FF] hover:bg-[#2558FF]/10 dark:text-[#2558FF]/50 dark:hover:text-[#2558FF] dark:hover:bg-[#2558FF]/15 transition-all duration-150"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">
+                                Ver detalhes
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          {/* Editar empresa */}
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditCompany(company)}
+                                  className="h-6 w-6 p-0 rounded-md text-[#6E2C96]/60 hover:text-[#6E2C96] hover:bg-[#6E2C96]/10 dark:text-[#6E2C96]/50 dark:hover:text-[#6E2C96] dark:hover:bg-[#6E2C96]/15 transition-all duration-150"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">
+                                Editar empresa
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          {/* Excluir empresa */}
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleDeleteCompany(company.id)
+                                  }
+                                  className="h-6 w-6 p-0 rounded-md text-rose-400/60 hover:text-rose-500 hover:bg-rose-500/10 dark:text-rose-400/50 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-all duration-150"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">
+                                Excluir empresa
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        {/* end pill */}
+                      </div>
+                      {/* end center wrapper */}
                     </td>
                   )}
                 </tr>
@@ -3001,6 +3035,7 @@ export default function EmpresasPage() {
             onClose={() => {
               setViewPanelOpen(false);
               setSelectedCompany(null);
+              navigate("/admin/empresas", { replace: true });
             }}
             company={selectedCompany}
             onCompanyUpdate={(updatedCompany) => {

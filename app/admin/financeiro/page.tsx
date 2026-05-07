@@ -1,17 +1,13 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+﻿// @ts-nocheck
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { apiClient } from "@/lib/api-client";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -20,1147 +16,807 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Calendar,
-  Building2,
-  CheckCircle2,
-  Clock,
-  FileText,
-  Search,
-  Filter,
-  Download,
-  Plus,
-  AlertCircle,
-  Users,
-  XCircle,
-  UserCheck,
-} from "lucide-react";
-import { useSorting, SortableHeader } from "@/hooks/useSorting";
-import { useState, useEffect } from "react";
-import { useFinancial } from "@/hooks/useFinancial";
-import { useBilling } from "@/hooks/useBilling";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { PageLoader } from "@/components/ui/loading";
+import { useToast } from "@/components/ui/use-toast";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import {
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Search,
+  Plus,
+  Building2,
+  FolderOpen,
+  Calendar,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ReceiptText,
+  Banknote,
+  Clock,
+  Users,
+  UserCheck,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 
-// Default empty data structure — overridden once API responds
-const emptyFinancialData = {
-  summary: {
-    totalRevenue: 0,
-    totalExpenses: 0,
-    taxes: 0,
-    grossProfit: 0,
-    netProfit: 0,
-    pendingPayments: 0,
-    monthlyGrowth: 0,
-  },
-  wallet: {
-    totalBalance: 0,
-    pendingRevenue: 0,
-    pendingExpenses: 0,
-    availableBalance: 0,
-  },
-  postPaidClients: [] as any[],
-  bankReconciliation: [] as any[],
-  walletTransactions: [] as any[],
-  revenueBySource: [] as any[],
-  expenses: [] as any[],
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type AdminPartnerWithdrawalStatus = "pending" | "paid" | "rejected";
-type AdminPartnerPixKeyType = "cpf" | "email" | "phone" | "random";
-
-interface AdminPartnerWithdrawal {
-  id: string;
-  partnerName: string;
-  partnerEmail: string;
-  amount: number;
-  pixKey: string;
-  pixKeyType: AdminPartnerPixKeyType;
-  requestedAt: string;
-  status: AdminPartnerWithdrawalStatus;
-  notes: string;
+function fmt(value) {
+  return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function fmtDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+function fmtDateTime(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+const INVOICE_STATUS_LABELS = {
+  pending: "Pendente",
+  paid: "Pago",
+  overdue: "Em Atraso",
+  cancelled: "Cancelado",
+};
+
+const INVOICE_STATUS_CLASSES = {
+  pending:  "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700/40",
+  paid:     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-700/40",
+  overdue:  "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-700/40",
+  cancelled:"bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-600/40",
+};
+
+const WD_STATUS_LABELS = {
+  aguardando_analise: "Aguardando",
+  pagamento_agendado: "Agendado",
+  pagamento_efetuado: "Pago",
+  cancelado: "Cancelado",
+  reprovado: "Reprovado",
+};
+
+const WD_STATUS_CLASSES = {
+  aguardando_analise:"bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700/40",
+  pagamento_agendado:"bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-700/40",
+  pagamento_efetuado:"bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-700/40",
+  cancelado:         "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-600/40",
+  reprovado:         "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-700/40",
+};
+
+function Pagination({ page, totalPages, onPage }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={page === 1}
+        className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="text-xs text-slate-500 px-1">{page} / {totalPages}</span>
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={page === totalPages}
+        className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
 export default function AdminFinanceiroPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const {
-    withdrawals: apiWithdrawals,
-    stats: financialStats,
-    loading: fLoading,
-    updateWithdrawal,
-  } = useFinancial();
-  const { invoices, stats: billingStats, loading: bLoading } = useBilling();
+  useSidebar();
+  const { toast } = useToast();
 
-  // Build display data from API stats or fallback to empty
-  const mockFinancialData = financialStats
-    ? {
-        summary: {
-          totalRevenue: financialStats.totalRevenue ?? 0,
-          totalExpenses: financialStats.totalExpenses ?? 0,
-          taxes: financialStats.taxes ?? 0,
-          grossProfit: financialStats.grossProfit ?? 0,
-          netProfit: financialStats.netProfit ?? 0,
-          pendingPayments: financialStats.pendingPayments ?? 0,
-          monthlyGrowth: financialStats.monthlyGrowth ?? 0,
-        },
-        wallet: financialStats.wallet ?? emptyFinancialData.wallet,
-        postPaidClients: financialStats.postPaidClients ?? [],
-        bankReconciliation: financialStats.bankReconciliation ?? [],
-        walletTransactions: financialStats.walletTransactions ?? [],
-        revenueBySource: financialStats.revenueBySource ?? [],
-        expenses: financialStats.expenses ?? [],
-      }
-    : emptyFinancialData;
+  // invoices
+  const [invoices, setInvoices] = useState([]);
+  const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [invPage, setInvPage] = useState(1);
+  const INV_PER_PAGE = 20;
+  const [invSearch, setInvSearch] = useState("");
+  const [invStatusFilter, setInvStatusFilter] = useState("all");
+  const [invLoading, setInvLoading] = useState(true);
+  const [billingStats, setBillingStats] = useState(null);
 
-  const [withdrawals, setWithdrawals] = useState<AdminPartnerWithdrawal[]>([]);
+  // withdrawals
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [wdLoading, setWdLoading] = useState(true);
 
-  // Sync API withdrawals into local state
-  useEffect(() => {
-    if (apiWithdrawals.length > 0) {
-      setWithdrawals(
-        apiWithdrawals.map((w: any) => ({
-          id: String(w.id),
-          partnerName: w.nomade?.user?.name || w.partner_name || "—",
-          partnerEmail: w.nomade?.user?.email || w.partner_email || "",
-          amount: w.amount || 0,
-          pixKey: w.pix_key || "",
-          pixKeyType: w.pix_key_type || "email",
-          requestedAt: w.created_at || w.requestedAt || "",
-          status: w.status || "pending",
-          notes: w.notes || "",
-        })),
-      );
+  // UI
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [actionLoading, setActionLoading] = useState(null);
+
+  // companies for form
+  const [companies, setCompanies] = useState([]);
+
+  // form
+  const [form, setForm] = useState({
+    company_id: "", project_id: "", amount: "", status: "pending",
+    due_date: "", description: "", invoice_number: "",
+  });
+
+  // ── load invoices ──────────────────────────────────────────────────────────
+  const loadInvoices = useCallback(async () => {
+    setInvLoading(true);
+    try {
+      const filters = { limit: INV_PER_PAGE, page: invPage };
+      if (invStatusFilter !== "all") filters.status = invStatusFilter;
+      const [res, stats] = await Promise.all([
+        apiClient.getInvoices(filters),
+        apiClient.getBillingStats(),
+      ]);
+      setInvoices(res.data || []);
+      setInvoiceTotal(res.total || 0);
+      setBillingStats(stats);
+    } catch (err) {
+      console.error("[Financeiro] invoices:", err);
+    } finally {
+      setInvLoading(false);
     }
-  }, [apiWithdrawals]);
-  const {
-    sortKey: wSortKey,
-    sortDir: wSortDir,
-    handleSort: handleWSort,
-    sortData: sortWithdrawals,
-    columnFilters: wColumnFilters,
-    toggleColumnFilter: toggleWFilter,
-    clearColumnFilter: clearWFilter,
-  } = useSorting<AdminPartnerWithdrawal>();
-  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  }, [invPage, invStatusFilter]);
 
-  function approveWithdrawal(id: string) {
-    updateWithdrawal(id, { status: "paid", notes: "Aprovado e pago" }).catch(
-      () => {},
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+
+  // ── load withdrawals ───────────────────────────────────────────────────────
+  const loadWithdrawals = useCallback(async () => {
+    setWdLoading(true);
+    try {
+      const res = await apiClient.getWithdrawals({ limit: "500" });
+      setWithdrawals(res.data || []);
+    } catch (err) {
+      console.error("[Financeiro] withdrawals:", err);
+    } finally {
+      setWdLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadWithdrawals(); }, [loadWithdrawals]);
+
+  // ── load companies ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    apiClient.getCompanies({ limit: "200" })
+      .then((r) => setCompanies(r.data || []))
+      .catch(() => {});
+  }, []);
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const kpi = useMemo(() => {
+    if (!billingStats) return { paid: 0, pending: 0, overdue: 0 };
+    const map = {};
+    (billingStats.byStatus || []).forEach((s) => { map[s.status] = s.amount; });
+    return {
+      paid: map["paid"] ?? 0,
+      pending: map["pending"] ?? 0,
+      overdue: map["overdue"] ?? 0,
+    };
+  }, [billingStats]);
+
+  const wdPending = useMemo(
+    () => withdrawals.filter((w) => w.status === "aguardando_analise").length,
+    [withdrawals]
+  );
+
+  // ── invoice search (client-side on current page) ───────────────────────────
+  const filteredInvoices = useMemo(() => {
+    if (!invSearch.trim()) return invoices;
+    const q = invSearch.toLowerCase();
+    return invoices.filter(
+      (inv) =>
+        inv.company?.name?.toLowerCase().includes(q) ||
+        inv.project?.title?.toLowerCase().includes(q) ||
+        inv.invoice_number?.toLowerCase().includes(q) ||
+        inv.description?.toLowerCase().includes(q)
     );
-    setWithdrawals((ws) =>
-      ws.map((w) =>
-        w.id === id ? { ...w, status: "paid", notes: "Aprovado e pago" } : w,
-      ),
-    );
+  }, [invoices, invSearch]);
+
+  // ── sorting ────────────────────────────────────────────────────────────────
+  const { sortKey: invSortKey, sortDir: invSortDir, handleSort: handleInvSort, sortData: sortInvoices } = useSorting();
+  const { sortKey: wSortKey, sortDir: wSortDir, handleSort: handleWSort, sortData: sortWithdrawals } = useSorting();
+
+  // ── invoice sheet ──────────────────────────────────────────────────────────
+  function openCreateSheet() {
+    setEditingInvoice(null);
+    setForm({ company_id: "", project_id: "", amount: "", status: "pending", due_date: "", description: "", invoice_number: "" });
+    setSheetOpen(true);
   }
 
-  function rejectWithdrawal(id: string) {
-    updateWithdrawal(id, {
-      status: "rejected",
-      notes: rejectNotes[id] ?? "",
-    }).catch(() => {});
-    setWithdrawals((ws) =>
-      ws.map((w) =>
-        w.id === id
-          ? { ...w, status: "rejected", notes: rejectNotes[id] ?? "" }
-          : w,
-      ),
-    );
-    setRejectingId(null);
+  function openEditSheet(inv) {
+    setEditingInvoice(inv);
+    setForm({
+      company_id: inv.company_id || "",
+      project_id: inv.project_id || "",
+      amount: String(inv.amount || ""),
+      status: inv.status || "pending",
+      due_date: inv.due_date ? inv.due_date.slice(0, 10) : "",
+      description: inv.description || "",
+      invoice_number: inv.invoice_number || "",
+    });
+    setSheetOpen(true);
   }
 
-  if (fLoading || bLoading) {
+  async function handleSaveInvoice() {
+    if (!form.amount || isNaN(parseFloat(form.amount))) {
+      toast({ title: "Informe um valor válido", variant: "destructive" }); return;
+    }
+    const payload = { amount: parseFloat(form.amount), status: form.status };
+    if (form.company_id) payload.company_id = form.company_id;
+    if (form.project_id) payload.project_id = form.project_id;
+    if (form.due_date) payload.due_date = new Date(form.due_date).toISOString();
+    if (form.description) payload.description = form.description;
+    if (form.invoice_number) payload.invoice_number = form.invoice_number;
+
+    setActionLoading("save");
+    try {
+      if (editingInvoice) {
+        await apiClient.updateInvoice(editingInvoice.id, payload);
+        toast({ title: "Fatura atualizada com sucesso" });
+      } else {
+        await apiClient.createInvoice(payload);
+        toast({ title: "Fatura criada com sucesso" });
+      }
+      setSheetOpen(false);
+      loadInvoices();
+    } catch (err) {
+      toast({ title: "Erro ao salvar fatura", description: err?.message, variant: "destructive" });
+    } finally { setActionLoading(null); }
+  }
+
+  async function handleMarkPaid(id) {
+    setActionLoading(id);
+    try {
+      await apiClient.updateInvoice(id, { status: "paid", paid_at: new Date().toISOString() });
+      toast({ title: "Fatura marcada como paga" });
+      loadInvoices();
+    } catch { toast({ title: "Erro ao atualizar fatura", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleMarkOverdue(id) {
+    setActionLoading(id);
+    try {
+      await apiClient.updateInvoice(id, { status: "overdue" });
+      toast({ title: "Fatura marcada como em atraso" });
+      loadInvoices();
+    } catch { toast({ title: "Erro ao atualizar fatura", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleCancelInvoice(id) {
+    setActionLoading(id);
+    try {
+      await apiClient.updateInvoice(id, { status: "cancelled" });
+      toast({ title: "Fatura cancelada" });
+      loadInvoices();
+    } catch { toast({ title: "Erro ao cancelar fatura", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleDeleteInvoice() {
+    if (!deleteTarget) return;
+    setActionLoading(deleteTarget);
+    try {
+      await apiClient.deleteInvoice(deleteTarget);
+      toast({ title: "Fatura excluída" });
+      setDeleteTarget(null);
+      loadInvoices();
+    } catch { toast({ title: "Erro ao excluir fatura", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function approveWithdrawal(id) {
+    setActionLoading(id);
+    try {
+      await apiClient.updateWithdrawal(id, { status: "pagamento_efetuado", notes: "Aprovado e pago" });
+      toast({ title: "Saque aprovado e pago" });
+      loadWithdrawals();
+    } catch { toast({ title: "Erro ao aprovar saque", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function rejectWithdrawal(id) {
+    setActionLoading(id);
+    try {
+      await apiClient.updateWithdrawal(id, { status: "reprovado", notes: rejectNote });
+      toast({ title: "Saque reprovado" });
+      setRejectingId(null); setRejectNote("");
+      loadWithdrawals();
+    } catch { toast({ title: "Erro ao reprovar saque", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  const invTotalPages = Math.max(1, Math.ceil(invoiceTotal / INV_PER_PAGE));
+
+  if (invLoading && invoices.length === 0 && wdLoading) {
     return <PageLoader text="Carregando financeiro…" />;
   }
 
   return (
-    <div className="container mx-auto space-y-6 px-0 py-0">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Gestão Financeira
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Controle completo das finanças da plataforma
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão Financeira</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Faturas, recebimentos e saques da plataforma</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Exportar
+          <Button variant="outline" size="sm" onClick={() => { loadInvoices(); loadWithdrawals(); }} className="h-8 gap-1.5 text-xs">
+            <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </Button>
-          <Button className="gap-2">
-            <FileText className="h-4 w-4" />
-            Relatório
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openCreateSheet}>
+            <Plus className="h-3.5 w-3.5" /> Nova Fatura
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="bg-linear-to-br from-green-500 to-green-600 text-white border-0">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-500/20">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs opacity-90 uppercase tracking-wide">
-                  Receita Total
-                </p>
-                <p className="text-2xl font-bold mt-1">
-                  R${" "}
-                  {(mockFinancialData.summary.totalRevenue / 1000).toFixed(0)}k
-                </p>
-                <div className="flex items-center gap-1 mt-1 text-xs">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>+{mockFinancialData.summary.monthlyGrowth}%</span>
-                </div>
+                <p className="text-xs font-medium uppercase tracking-wide opacity-90">Receita Recebida</p>
+                <p className="text-2xl font-bold mt-1 tabular-nums">{fmt(kpi.paid)}</p>
+                <p className="text-xs opacity-70 mt-0.5">Faturas pagas</p>
               </div>
-              <DollarSign className="h-8 w-8 opacity-80" />
+              <div className="bg-white/20 rounded-lg p-2"><CheckCircle2 className="h-5 w-5" /></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-red-500 to-red-600 text-white border-0">
+        <Card className="border-0 bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/20">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs opacity-90 uppercase tracking-wide">
-                  Despesas Totais
-                </p>
-                <p className="text-2xl font-bold mt-1">
-                  R${" "}
-                  {(mockFinancialData.summary.totalExpenses / 1000).toFixed(0)}k
-                </p>
-                <p className="text-xs opacity-75 mt-1">Inclui impostos</p>
+                <p className="text-xs font-medium uppercase tracking-wide opacity-90">A Receber</p>
+                <p className="text-2xl font-bold mt-1 tabular-nums">{fmt(kpi.pending)}</p>
+                <p className="text-xs opacity-70 mt-0.5">Faturas pendentes</p>
               </div>
-              <TrendingDown className="h-8 w-8 opacity-80" />
+              <div className="bg-white/20 rounded-lg p-2"><Clock className="h-5 w-5" /></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-purple-500 to-purple-600 text-white border-0">
+        <Card className="border-0 bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md shadow-red-500/20">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs opacity-90 uppercase tracking-wide">
-                  Impostos
-                </p>
-                <p className="text-2xl font-bold mt-1">
-                  R$ {(mockFinancialData.summary.taxes / 1000).toFixed(0)}k
-                </p>
-                <p className="text-xs opacity-75 mt-1">10% da receita</p>
+                <p className="text-xs font-medium uppercase tracking-wide opacity-90">Em Atraso</p>
+                <p className="text-2xl font-bold mt-1 tabular-nums">{fmt(kpi.overdue)}</p>
+                <p className="text-xs opacity-70 mt-0.5">Faturas vencidas</p>
               </div>
-              <FileText className="h-8 w-8 opacity-80" />
+              <div className="bg-white/20 rounded-lg p-2"><AlertCircle className="h-5 w-5" /></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-linear-to-br from-amber-500 to-amber-600 text-white border-0 ring-4 ring-amber-200">
+        <Card className="border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-md shadow-violet-500/20">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs opacity-90 uppercase tracking-wide font-bold">
-                  LUCRO BRUTO
-                </p>
-                <p className="text-2xl font-bold mt-1">
-                  R$ {(mockFinancialData.summary.grossProfit / 1000).toFixed(0)}
-                  k
-                </p>
-                <p className="text-xs opacity-75 mt-1">
-                  {(
-                    (mockFinancialData.summary.grossProfit /
-                      mockFinancialData.summary.totalRevenue) *
-                    100
-                  ).toFixed(1)}
-                  % margem
-                </p>
+                <p className="text-xs font-medium uppercase tracking-wide opacity-90">Saques Pendentes</p>
+                <p className="text-2xl font-bold mt-1 tabular-nums">{wdPending}</p>
+                <p className="text-xs opacity-70 mt-0.5">Aguardando análise</p>
               </div>
-              <TrendingUp className="h-8 w-8 opacity-80" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-br from-blue-500 to-blue-600 text-white border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs opacity-90 uppercase tracking-wide">
-                  Lucro Líquido
-                </p>
-                <p className="text-2xl font-bold mt-1">
-                  R$ {(mockFinancialData.summary.netProfit / 1000).toFixed(0)}k
-                </p>
-                <p className="text-xs opacity-75 mt-1">
-                  {(
-                    (mockFinancialData.summary.netProfit /
-                      mockFinancialData.summary.totalRevenue) *
-                    100
-                  ).toFixed(1)}
-                  % margem
-                </p>
-              </div>
-              <Wallet className="h-8 w-8 opacity-80" />
+              <div className="bg-white/20 rounded-lg p-2"><Banknote className="h-5 w-5" /></div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="wallet">Carteira</TabsTrigger>
-          <TabsTrigger value="postpaid">Clientes Pós-Pagos</TabsTrigger>
-          <TabsTrigger value="reconciliation">Conciliação Bancária</TabsTrigger>
-          <TabsTrigger
-            value="partner-withdrawals"
-            className="flex items-center gap-1.5"
-          >
+      {/* Tabs */}
+      <Tabs defaultValue="faturas" className="space-y-4">
+        <TabsList className="h-9">
+          <TabsTrigger value="faturas" className="gap-1.5 text-xs">
+            <ReceiptText className="h-3.5 w-3.5" />
+            Faturas
+            {invoiceTotal > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                {invoiceTotal}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="saques" className="gap-1.5 text-xs">
             <Users className="h-3.5 w-3.5" />
-            Saques Parceiros
-            {withdrawals.filter((w) => w.status === "pending").length > 0 && (
+            Saques de Parceiros
+            {wdPending > 0 && (
               <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold">
-                {withdrawals.filter((w) => w.status === "pending").length}
+                {wdPending}
               </span>
             )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                  Receita por Fonte
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {mockFinancialData.revenueBySource.map((source, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">
-                          {source.source}
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">
-                          R$ {source.amount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div
-                          className="bg-linear-to-r from-green-500 to-green-600 h-2.5 rounded-full transition-all"
-                          style={{ width: `${source.percentage}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {source.percentage.toFixed(1)}% do total
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
-                  Despesas por Categoria
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {mockFinancialData.expenses.map((expense, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">
-                          {expense.category}
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">
-                          R$ {expense.amount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div
-                          className="bg-linear-to-r from-red-500 to-red-600 h-2.5 rounded-full transition-all"
-                          style={{ width: `${expense.percentage}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {expense.percentage.toFixed(1)}% do total
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="wallet" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="border-blue-200 bg-blue-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-blue-700 font-medium uppercase tracking-wide">
-                      Saldo Total
-                    </p>
-                    <p className="text-2xl font-bold text-blue-900 mt-1">
-                      R${" "}
-                      {(mockFinancialData.wallet.totalBalance / 1000).toFixed(
-                        0,
-                      )}
-                      k
-                    </p>
-                  </div>
-                  <Wallet className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-green-700 font-medium uppercase tracking-wide">
-                      Receitas Pendentes
-                    </p>
-                    <p className="text-2xl font-bold text-green-900 mt-1">
-                      R${" "}
-                      {(mockFinancialData.wallet.pendingRevenue / 1000).toFixed(
-                        0,
-                      )}
-                      k
-                    </p>
-                  </div>
-                  <ArrowUpRight className="h-8 w-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-red-700 font-medium uppercase tracking-wide">
-                      Despesas Pendentes
-                    </p>
-                    <p className="text-2xl font-bold text-red-900 mt-1">
-                      R${" "}
-                      {(
-                        mockFinancialData.wallet.pendingExpenses / 1000
-                      ).toFixed(0)}
-                      k
-                    </p>
-                  </div>
-                  <ArrowDownRight className="h-8 w-8 text-red-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-purple-200 bg-purple-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-purple-700 font-medium uppercase tracking-wide">
-                      Saldo Disponível
-                    </p>
-                    <p className="text-2xl font-bold text-purple-900 mt-1">
-                      R${" "}
-                      {(
-                        mockFinancialData.wallet.availableBalance / 1000
-                      ).toFixed(0)}
-                      k
-                    </p>
-                  </div>
-                  <CheckCircle2 className="h-8 w-8 text-purple-600" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Extrato de Movimentações
-                </CardTitle>
-                <div className="flex gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Buscar transação..."
-                      className="pl-9 w-64"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="completed">Concluídas</SelectItem>
-                      <SelectItem value="pending">Pendentes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockFinancialData.walletTransactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`p-2 rounded-full ${transaction.type === "income" ? "bg-green-100" : "bg-red-100"}`}
-                      >
-                        {transaction.type === "income" ? (
-                          <ArrowUpRight className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <ArrowDownRight className="h-5 w-5 text-red-600" />
-                        )}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">
-                          {transaction.description}
-                        </h4>
-                        <div className="flex items-center gap-3 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3 text-gray-400" />
-                            <p className="text-sm text-gray-600">
-                              {new Date(transaction.date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="text-xs">
-                            {transaction.category}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={
-                              transaction.status === "completed"
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-orange-50 text-orange-700 border-orange-200"
-                            }
-                          >
-                            {transaction.status === "completed"
-                              ? "Concluído"
-                              : "Pendente"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <p
-                      className={`text-xl font-bold ${
-                        transaction.type === "income"
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {transaction.type === "income" ? "+" : "-"}R${" "}
-                      {transaction.amount.toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="postpaid" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Clientes Pós-Pagos (Squad)
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Gerencie limites de cheque especial e emissão de faturas mensais
-              </p>
+        {/* ── Tab Faturas ─────────────────────────────────────────── */}
+        <TabsContent value="faturas" className="space-y-4 mt-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="Buscar empresa, projeto, nº…"
+                className="pl-9 h-8 text-xs"
+                value={invSearch}
+                onChange={(e) => setInvSearch(e.target.value)}
+              />
             </div>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Novo Cliente Squad
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Adicionar Cliente Pós-Pago</DialogTitle>
-                  <DialogDescription>
-                    Configure o limite de cheque especial e condições de
-                    pagamento
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="client-name">Nome do Cliente</Label>
-                    <Input id="client-name" placeholder="Ex: TechCorp Squad" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="overdraft-limit">
-                      Limite de Cheque Especial
-                    </Label>
-                    <Input
-                      id="overdraft-limit"
-                      type="number"
-                      placeholder="50000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="invoice-day">
-                      Dia de Emissão da Fatura
-                    </Label>
-                    <Select defaultValue="31">
-                      <SelectTrigger id="invoice-day">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Dia 1</SelectItem>
-                        <SelectItem value="15">Dia 15</SelectItem>
-                        <SelectItem value="31">Último dia do mês</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="payment-days">
-                      Prazo de Pagamento (dias)
-                    </Label>
-                    <Input id="payment-days" type="number" defaultValue="10" />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline">Cancelar</Button>
-                  <Button>Adicionar Cliente</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {mockFinancialData.postPaidClients.map((client) => (
-              <Card key={client.id} className="border-2">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{client.name}</CardTitle>
-                    <Badge
-                      variant="outline"
-                      className={
-                        client.status === "active"
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : "bg-orange-50 text-orange-700 border-orange-200"
-                      }
-                    >
-                      {client.status === "active" ? "Ativo" : "Pendente"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">
-                        Limite Cheque Especial
-                      </span>
-                      <span className="font-semibold">
-                        R$ {client.overdraftLimit.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Saldo Atual</span>
-                      <span className="font-bold text-red-600">
-                        R$ {client.currentBalance.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-red-500 h-2 rounded-full"
-                        style={{
-                          width: `${(Math.abs(client.currentBalance) / client.overdraftLimit) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {(
-                        (Math.abs(client.currentBalance) /
-                          client.overdraftLimit) *
-                        100
-                      ).toFixed(1)}
-                      % do limite utilizado
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Emissão da Fatura</span>
-                      <span className="font-medium">
-                        {new Date(client.invoiceDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Vencimento</span>
-                      <span className="font-medium">
-                        {new Date(client.paymentDue).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 bg-transparent"
-                    >
-                      Ver Fatura
-                    </Button>
-                    <Button size="sm" className="flex-1">
-                      Editar Limite
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Projeção de Pagamentos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockFinancialData.postPaidClients.map((client) => (
-                  <div
-                    key={client.id}
-                    className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-5 w-5 text-blue-600" />
-                      <div>
-                        <h4 className="font-medium text-gray-900">
-                          {client.name}
-                        </h4>
-                        <p className="text-sm text-gray-600">
-                          Vencimento:{" "}
-                          {new Date(client.paymentDue).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-blue-600">
-                        R$ {Math.abs(client.currentBalance).toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        Pagamento esperado
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reconciliation" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Conciliação Bancária
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Identifique e reconcilie entradas bancárias
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="gap-2 bg-transparent">
-                <Filter className="h-4 w-4" />
-                Filtrar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-400"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Exportar
+            <Select value={invStatusFilter} onValueChange={(v) => { setInvStatusFilter(v); setInvPage(1); }}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+                <SelectItem value="overdue">Em Atraso</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="ml-auto flex items-center gap-2">
+              <Pagination page={invPage} totalPages={invTotalPages} onPage={setInvPage} />
+              <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openCreateSheet}>
+                <Plus className="h-3.5 w-3.5" /> Nova Fatura
               </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-green-700 font-medium uppercase tracking-wide">
-                      Reconciliadas
-                    </p>
-                    <p className="text-2xl font-bold text-green-900 mt-1">
-                      {
-                        mockFinancialData.bankReconciliation.filter(
-                          (t) => t.status === "reconciled",
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-orange-200 bg-orange-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-orange-700 font-medium uppercase tracking-wide">
-                      Pendentes
-                    </p>
-                    <p className="text-2xl font-bold text-orange-900 mt-1">
-                      {
-                        mockFinancialData.bankReconciliation.filter(
-                          (t) => t.status === "pending",
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <AlertCircle className="h-8 w-8 text-orange-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-blue-200 bg-blue-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-blue-700 font-medium uppercase tracking-wide">
-                      Total Movimentado
-                    </p>
-                    <p className="text-2xl font-bold text-blue-900 mt-1">
-                      R${" "}
-                      {(
-                        mockFinancialData.bankReconciliation.reduce(
-                          (sum, t) => sum + Math.abs(t.amount),
-                          0,
-                        ) / 1000
-                      ).toFixed(0)}
-                      k
-                    </p>
-                  </div>
-                  <DollarSign className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Transações Bancárias
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockFinancialData.bankReconciliation.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className={`flex items-center justify-between p-4 border-2 rounded-lg transition-colors ${
-                      transaction.status === "pending"
-                        ? "border-orange-200 bg-orange-50"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div
-                        className={`p-2 rounded-full ${transaction.amount > 0 ? "bg-green-100" : "bg-red-100"}`}
-                      >
-                        {transaction.amount > 0 ? (
-                          <ArrowUpRight className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <ArrowDownRight className="h-5 w-5 text-red-600" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">
-                          {transaction.description}
-                        </h4>
-                        <div className="flex items-center gap-3 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3 text-gray-400" />
-                            <p className="text-sm text-gray-600">
-                              {new Date(transaction.date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="text-xs">
-                            {transaction.paymentMethod}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {transaction.category}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <p
-                        className={`text-xl font-bold ${transaction.amount > 0 ? "text-green-600" : "text-red-600"}`}
-                      >
-                        {transaction.amount > 0 ? "+" : ""}R${" "}
-                        {Math.abs(transaction.amount).toLocaleString()}
-                      </p>
-                      {transaction.status === "pending" ? (
-                        <Button size="sm" className="gap-2">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Reconciliar
-                        </Button>
-                      ) : (
-                        <Badge className="bg-green-100 text-green-700 border-green-200">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Reconciliado
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="partner-withdrawals" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Saques de Parceiros
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Aprove ou rejeite solicitações de saque dos parceiros
-                influencers
-              </p>
-            </div>
-            <div className="flex gap-3 text-sm">
-              <span className="allka-badge allka-badge-financial-pending">
-                <Clock className="h-3.5 w-3.5" />
-                {withdrawals.filter((w) => w.status === "pending").length}{" "}
-                pendentes
-              </span>
-              <span className="allka-badge allka-badge-financial-paid">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {withdrawals.filter((w) => w.status === "paid").length} pagos
-              </span>
-            </div>
-          </div>
-
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 22rem)" }}>
+          <Card className="overflow-hidden">
+            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 22rem)" }}>
               <table className="w-full text-sm">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
-                  <tr className="border-b border-slate-200/60">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Parceiro"
-                        field="partnerName"
-                        type="text"
-                        sortKey={wSortKey ? String(wSortKey) : null}
-                        sortDir={wSortDir}
-                        onSort={handleWSort}
-                      />
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      <SortableHeader label="Nº / Descrição" field="invoice_number" type="text" sortKey={invSortKey ? String(invSortKey) : null} sortDir={invSortDir} onSort={handleInvSort} />
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Chave PIX
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Empresa</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Projeto</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      <SortableHeader label="Valor" field="amount" type="number" sortKey={invSortKey ? String(invSortKey) : null} sortDir={invSortDir} onSort={handleInvSort} />
                     </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Valor"
-                        field="amount"
-                        type="number"
-                        sortKey={wSortKey ? String(wSortKey) : null}
-                        sortDir={wSortDir}
-                        onSort={handleWSort}
-                      />
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      <SortableHeader label="Vencimento" field="due_date" type="date" sortKey={invSortKey ? String(invSortKey) : null} sortDir={invSortDir} onSort={handleInvSort} />
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Solicitado em"
-                        field="requestedAt"
-                        type="date"
-                        sortKey={wSortKey ? String(wSortKey) : null}
-                        sortDir={wSortDir}
-                        onSort={handleWSort}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Status"
-                        field="status"
-                        type="status"
-                        sortKey={wSortKey ? String(wSortKey) : null}
-                        sortDir={wSortDir}
-                        onSort={handleWSort}
-                        columnFilters={wColumnFilters}
-                        onFilter={toggleWFilter}
-                        onClearFilter={clearWFilter}
-                        filterValues={[
-                          "pending",
-                          "approved",
-                          "rejected",
-                          "paid",
-                        ]}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Ações
-                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Status</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {sortWithdrawals(withdrawals).map((w, rowIdx) => (
-                    <tr
-                      key={w.id}
-                      className={`transition-colors ${
-                        rowIdx % 2 === 0
-                          ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                          : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
-                      }`}
-                    >
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-slate-800">
-                          {w.partnerName}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {w.partnerEmail}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-xs font-medium text-slate-600">
-                          {w.pixKey}
-                        </p>
-                        <p className="text-[10px] text-slate-400 uppercase">
-                          {w.pixKeyType}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
-                        {w.amount.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
-                        {new Date(w.requestedAt).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </td>
-                      <td className="px-4 py-3">
-                        {w.status === "pending" && (
-                          <span className="allka-badge allka-badge-financial-pending" style={{ fontSize: 10 }}>
-                            <Clock className="h-3 w-3" /> Aguardando
-                          </span>
-                        )}
-                        {w.status === "paid" && (
-                          <span className="allka-badge allka-badge-financial-paid" style={{ fontSize: 10 }}>
-                            <CheckCircle2 className="h-3 w-3" /> Pago
-                          </span>
-                        )}
-                        {w.status === "rejected" && (
-                          <div>
-                            <span className="allka-badge allka-badge-financial-rejected" style={{ fontSize: 10 }}>
-                              <XCircle className="h-3 w-3" /> Rejeitado
-                            </span>
-                            {w.notes && (
-                              <p className="text-[10px] text-slate-400 mt-1">
-                                {w.notes}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {w.status === "pending" && (
-                          <div className="space-y-2">
-                            {rejectingId === w.id ? (
-                              <div className="flex gap-1.5 items-center">
-                                <input
-                                  autoFocus
-                                  className="h-7 text-xs rounded border border-slate-200 px-2 w-40 focus:outline-none focus:ring-1 focus:ring-red-400"
-                                  placeholder="Motivo da rejeição..."
-                                  value={rejectNotes[w.id] ?? ""}
-                                  onChange={(e) =>
-                                    setRejectNotes((n) => ({
-                                      ...n,
-                                      [w.id]: e.target.value,
-                                    }))
-                                  }
-                                />
-                                <button
-                                  onClick={() => rejectWithdrawal(w.id)}
-                                  className="h-7 px-2 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
-                                >
-                                  OK
-                                </button>
-                                <button
-                                  onClick={() => setRejectingId(null)}
-                                  className="h-7 px-2 rounded border border-slate-200 text-slate-500 text-xs hover:bg-slate-50"
-                                >
-                                  X
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-1.5">
-                                <button
-                                  onClick={() => approveWithdrawal(w.id)}
-                                  className="h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                                >
-                                  <UserCheck className="h-3 w-3" /> Aprovar
-                                </button>
-                                <button
-                                  onClick={() => setRejectingId(w.id)}
-                                  className="h-7 px-2.5 rounded-md border border-red-300 text-red-600 hover:bg-red-50 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                                >
-                                  <XCircle className="h-3 w-3" /> Rejeitar
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {w.status !== "pending" && (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {withdrawals.length === 0 && (
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {invLoading ? (
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="px-5 py-10 text-center text-sm text-slate-400"
-                      >
-                        Nenhuma solicitação de saque encontrada
+                      <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
+                        <div className="flex items-center justify-center gap-2">
+                          <RefreshCw className="h-4 w-4 animate-spin" /> Carregando faturas…
+                        </div>
                       </td>
                     </tr>
+                  ) : filteredInvoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <ReceiptText className="h-8 w-8 opacity-30" />
+                          <p>Nenhuma fatura encontrada</p>
+                          <Button size="sm" variant="outline" className="mt-2 h-8 text-xs" onClick={openCreateSheet}>
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Criar primeira fatura
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortInvoices(filteredInvoices).map((inv, idx) => {
+                      const isOverdue = inv.status === "pending" && inv.due_date && new Date(inv.due_date) < new Date();
+                      return (
+                        <tr
+                          key={inv.id}
+                          className={idx % 2 === 0
+                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}
+                        >
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">
+                              {inv.invoice_number || <span className="text-slate-400">—</span>}
+                            </p>
+                            {inv.description && (
+                              <p className="text-[11px] text-slate-400 mt-0.5 max-w-[180px] truncate">{inv.description}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                {inv.company?.name || <span className="text-slate-400">—</span>}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="text-xs text-slate-600 dark:text-slate-400 max-w-[140px] truncate">
+                                {inv.project?.title || <span className="text-slate-400">—</span>}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200 text-sm">
+                            {fmt(inv.amount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-slate-500 dark:text-slate-400"}`}>
+                                {fmtDate(inv.due_date)}
+                              </span>
+                            </div>
+                            {inv.paid_at && (
+                              <p className="text-[10px] text-emerald-600 mt-0.5">Pago em {fmtDate(inv.paid_at)}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className={`text-[10px] font-semibold ${INVOICE_STATUS_CLASSES[inv.status] || ""}`}>
+                              {INVOICE_STATUS_LABELS[inv.status] || inv.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {(inv.status === "pending" || inv.status === "overdue") && (
+                                <button disabled={actionLoading === inv.id} onClick={() => handleMarkPaid(inv.id)} title="Marcar como pago"
+                                  className="h-7 w-7 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors disabled:opacity-40">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </button>
+                              )}
+                              {inv.status === "pending" && (
+                                <button disabled={actionLoading === inv.id} onClick={() => handleMarkOverdue(inv.id)} title="Marcar como em atraso"
+                                  className="h-7 w-7 rounded flex items-center justify-center text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors disabled:opacity-40">
+                                  <AlertCircle className="h-4 w-4" />
+                                </button>
+                              )}
+                              <button onClick={() => openEditSheet(inv)} title="Editar"
+                                className="h-7 w-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              {inv.status !== "paid" && inv.status !== "cancelled" ? (
+                                <button disabled={actionLoading === inv.id} onClick={() => handleCancelInvoice(inv.id)} title="Cancelar fatura"
+                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 transition-colors disabled:opacity-40">
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <button disabled={actionLoading === inv.id} onClick={() => setDeleteTarget(inv.id)} title="Excluir fatura"
+                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 transition-colors disabled:opacity-40">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
-              </div>
-            </CardContent>
+            </div>
+            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <p className="text-xs text-slate-400">{invoiceTotal} fatura{invoiceTotal !== 1 ? "s" : ""} no total</p>
+              <Pagination page={invPage} totalPages={invTotalPages} onPage={setInvPage} />
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tab Saques ──────────────────────────────────────────── */}
+        <TabsContent value="saques" className="space-y-4 mt-0">
+          {/* stats chips */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: "Aguardando", status: "aguardando_analise", icon: Clock, color: "text-amber-600" },
+              { label: "Agendado",   status: "pagamento_agendado", icon: Calendar, color: "text-blue-600" },
+              { label: "Pago",       status: "pagamento_efetuado", icon: CheckCircle2, color: "text-emerald-600" },
+              { label: "Reprovado",  status: "reprovado",          icon: XCircle, color: "text-red-500" },
+            ].map(({ label, status, icon: Icon, color }) => {
+              const count  = withdrawals.filter((w) => w.status === status).length;
+              const amount = withdrawals.filter((w) => w.status === status).reduce((s, w) => s + (w.amount || 0), 0);
+              return (
+                <div key={status} className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs">
+                  <Icon className={`h-3.5 w-3.5 ${color}`} />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{count} {label}</span>
+                  {amount > 0 && <span className="text-slate-400">· {fmt(amount)}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 22rem)" }}>
+              <table className="w-full text-sm">
+                <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
+                  <tr>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Parceiro" field="amount" type="text" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Valor" field="amount" type="number" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Solicitado em" field="created_at" type="date" sortKey={wSortKey ? String(wSortKey) : null} sortDir={wSortDir} onSort={handleWSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {wdLoading ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
+                        <div className="flex items-center justify-center gap-2">
+                          <RefreshCw className="h-4 w-4 animate-spin" /> Carregando saques…
+                        </div>
+                      </td>
+                    </tr>
+                  ) : withdrawals.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-16 text-center text-sm text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <Banknote className="h-8 w-8 opacity-30" />
+                          <p>Nenhuma solicitação de saque encontrada</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortWithdrawals(withdrawals).map((w, idx) => (
+                      <tr
+                        key={w.id}
+                        className={idx % 2 === 0
+                          ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
+                          : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}
+                      >
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.nomade?.user?.name || "—"}</p>
+                          <p className="text-[11px] text-slate-400">{w.nomade?.user?.email || ""}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{w.pix_key || "—"}</p>
+                          <p className="text-[10px] text-slate-400 uppercase">{w.pix_key_type || ""}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200 text-sm">
+                          {fmt(w.amount || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                          {fmtDateTime(w.created_at)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className={`text-[10px] font-semibold ${WD_STATUS_CLASSES[w.status] || ""}`}>
+                            {WD_STATUS_LABELS[w.status] || w.status}
+                          </Badge>
+                          {w.notes && w.status === "reprovado" && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 max-w-[160px] truncate">{w.notes}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {w.status === "aguardando_analise" ? (
+                            rejectingId === w.id ? (
+                              <div className="flex gap-1.5 items-center">
+                                <input
+                                  autoFocus
+                                  className="h-7 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 w-36 focus:outline-none focus:ring-1 focus:ring-red-400"
+                                  placeholder="Motivo…"
+                                  value={rejectNote}
+                                  onChange={(e) => setRejectNote(e.target.value)}
+                                />
+                                <button onClick={() => rejectWithdrawal(w.id)} className="h-7 px-2 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-700">OK</button>
+                                <button onClick={() => { setRejectingId(null); setRejectNote(""); }} className="h-7 px-2 rounded border border-slate-200 dark:border-slate-600 text-slate-500 text-xs hover:bg-slate-50 dark:hover:bg-slate-700">X</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1.5">
+                                <button disabled={actionLoading === w.id} onClick={() => approveWithdrawal(w.id)}
+                                  className="h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40">
+                                  <UserCheck className="h-3 w-3" /> Aprovar
+                                </button>
+                                <button onClick={() => setRejectingId(w.id)}
+                                  className="h-7 px-2.5 rounded-md border border-red-300 dark:border-red-700 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 text-[11px] font-semibold flex items-center gap-1 transition-colors">
+                                  <XCircle className="h-3 w-3" /> Reprovar
+                                </button>
+                              </div>
+                            )
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-slate-400">
+                {withdrawals.length} solicitaç{withdrawals.length !== 1 ? "ões" : "ão"} no total
+              </p>
+            </div>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Sheet: Nova / Editar Fatura */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="mb-6">
+            <SheetTitle>{editingInvoice ? "Editar Fatura" : "Nova Fatura"}</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nº da Fatura</Label>
+              <Input placeholder="Ex: FAT-2026-001" className="h-9 text-sm" value={form.invoice_number}
+                onChange={(e) => setForm((f) => ({ ...f, invoice_number: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Valor <span className="text-red-500">*</span></Label>
+              <Input type="number" placeholder="0.00" className="h-9 text-sm" value={form.amount}
+                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Empresa</Label>
+              <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecionar empresa" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— Nenhuma —</SelectItem>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="paid">Pago</SelectItem>
+                  <SelectItem value="overdue">Em Atraso</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Data de Vencimento</Label>
+              <Input type="date" className="h-9 text-sm" value={form.due_date}
+                onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Descrição</Label>
+              <Input placeholder="Descrição da fatura…" className="h-9 text-sm" value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setSheetOpen(false)}>Cancelar</Button>
+              <Button className="flex-1" disabled={actionLoading === "save"} onClick={handleSaveInvoice}>
+                {actionLoading === "save" ? "Salvando…" : editingInvoice ? "Salvar" : "Criar Fatura"}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Dialog: Confirmar exclusão */}
+      <ConfirmationDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Excluir Fatura"
+        description="Tem certeza que deseja excluir esta fatura? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteInvoice}
+      />
     </div>
   );
 }

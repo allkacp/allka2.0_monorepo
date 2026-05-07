@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ClipboardList,
   Loader2,
@@ -74,6 +75,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Tooltip,
   TooltipContent,
@@ -366,8 +368,7 @@ function ModelDetailDrawer({
   const conclusionRules = parseStrings(model.conclusion_rules);
 
   const productLinks = model.product_links ?? [];
-  const productCount =
-    model._count?.product_links ?? productLinks.length ?? 0;
+  const productCount = model._count?.product_links ?? productLinks.length ?? 0;
   const briefingCount =
     briefing.length + rules.length + reqFiles.length + conclusionRules.length;
 
@@ -418,21 +419,43 @@ function ModelDetailDrawer({
                 ) : null}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <CopyLinkButton />
+              <button
+                onClick={onClose}
+                className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Tab strip */}
           <div className="flex">
             {[
-              { value: "overview", label: "Visão Geral", icon: <Info className="h-3.5 w-3.5" /> },
-              { value: "steps", label: "Etapas & Checklist", icon: <Layers className="h-3.5 w-3.5" />, badge: (steps.length + checklist.length) || undefined },
-              { value: "briefing", label: "Briefing", icon: <BookOpen className="h-3.5 w-3.5" />, badge: briefingCount || undefined },
-              { value: "products", label: "Produtos", icon: <Package className="h-3.5 w-3.5" />, badge: productCount || undefined },
+              {
+                value: "overview",
+                label: "Visão Geral",
+                icon: <Info className="h-3.5 w-3.5" />,
+              },
+              {
+                value: "steps",
+                label: "Etapas & Checklist",
+                icon: <Layers className="h-3.5 w-3.5" />,
+                badge: steps.length + checklist.length || undefined,
+              },
+              {
+                value: "briefing",
+                label: "Briefing",
+                icon: <BookOpen className="h-3.5 w-3.5" />,
+                badge: briefingCount || undefined,
+              },
+              {
+                value: "products",
+                label: "Produtos",
+                icon: <Package className="h-3.5 w-3.5" />,
+                badge: productCount || undefined,
+              },
             ].map((t) => (
               <button
                 key={t.value}
@@ -490,33 +513,89 @@ function ModelDetailDrawer({
                   <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 leading-relaxed">
-                      <span className="font-semibold">Modelo reutilizável.</span>{" "}
-                      Alterações neste modelo podem impactar produtos vinculados e futuras tarefas geradas a partir dele.
+                      <span className="font-semibold">
+                        Modelo reutilizável.
+                      </span>{" "}
+                      Alterações neste modelo podem impactar produtos vinculados
+                      e futuras tarefas geradas a partir dele.
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Complexidade", value: COMPLEXITY_LABEL[model.complexity] ?? model.complexity ?? "›", icon: <Star className="h-3.5 w-3.5" /> },
-                      { label: "Prioridade", value: PRIORITY_LABEL[model.default_priority] ?? model.default_priority ?? "›", icon: <Target className="h-3.5 w-3.5" /> },
-                      { label: "Prazo padrão", value: model.default_deadline_days ? `${model.default_deadline_days} dias` : "›", icon: <Clock className="h-3.5 w-3.5" /> },
-                      { label: "Horas estimadas", value: model.estimated_hours ? `${model.estimated_hours}h` : "›", icon: <Clock className="h-3.5 w-3.5" /> },
+                      {
+                        label: "Complexidade",
+                        value:
+                          COMPLEXITY_LABEL[model.complexity] ??
+                          model.complexity ??
+                          "›",
+                        icon: <Star className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        label: "Prioridade",
+                        value:
+                          PRIORITY_LABEL[model.default_priority] ??
+                          model.default_priority ??
+                          "›",
+                        icon: <Target className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        label: "Prazo padrão",
+                        value: model.default_deadline_days
+                          ? `${model.default_deadline_days} dias`
+                          : "›",
+                        icon: <Clock className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        label: "Horas estimadas",
+                        value: model.estimated_hours
+                          ? `${model.estimated_hours}h`
+                          : "›",
+                        icon: <Clock className="h-3.5 w-3.5" />,
+                      },
                     ].map((m) => (
-                      <div key={m.label} className="bg-slate-50 rounded-xl border border-slate-100 px-3 py-2.5 space-y-1">
+                      <div
+                        key={m.label}
+                        className="bg-slate-50 rounded-xl border border-slate-100 px-3 py-2.5 space-y-1"
+                      >
                         <div className="flex items-center gap-1 text-slate-400">
                           {m.icon}
-                          <span className="text-[10px] font-semibold uppercase tracking-wider">{m.label}</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider">
+                            {m.label}
+                          </span>
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">{m.value}</p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {m.value}
+                        </p>
                       </div>
                     ))}
                   </div>
 
-                  <DrawerSection icon={<CheckCircle2 className="h-3.5 w-3.5" />} title="Status do modelo">
+                  <DrawerSection
+                    icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                    title="Status do modelo"
+                  >
                     <div className="flex items-center gap-3">
-                      <Select value={model.status} onValueChange={(v) => onStatusChange(model, v as ModelStatus)} disabled={updating}>
-                        <SelectTrigger className={cn("h-9 text-xs font-semibold border w-44", sc.bg, sc.color, sc.border)}>
-                          {updating ? <ButtonLoader text="Salvando…" /> : <SelectValue />}
+                      <Select
+                        value={model.status}
+                        onValueChange={(v) =>
+                          onStatusChange(model, v as ModelStatus)
+                        }
+                        disabled={updating}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            "h-9 text-xs font-semibold border w-44",
+                            sc.bg,
+                            sc.color,
+                            sc.border,
+                          )}
+                        >
+                          {updating ? (
+                            <ButtonLoader text="Salvando…" />
+                          ) : (
+                            <SelectValue />
+                          )}
                         </SelectTrigger>
                         <SelectContent>
                           {ALL_STATUSES.map((s) => {
@@ -524,13 +603,17 @@ function ModelDetailDrawer({
                             const Icon = cfg.icon;
                             return (
                               <SelectItem key={s} value={s} className="text-xs">
-                                <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" /> {cfg.label}</span>
+                                <span className="flex items-center gap-1.5">
+                                  <Icon className="h-3.5 w-3.5" /> {cfg.label}
+                                </span>
                               </SelectItem>
                             );
                           })}
                         </SelectContent>
                       </Select>
-                      {(model.requires_briefing || model.requires_access || model.requires_files) && (
+                      {(model.requires_briefing ||
+                        model.requires_access ||
+                        model.requires_files) && (
                         <div className="flex flex-wrap gap-1.5">
                           {model.requires_briefing && (
                             <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
@@ -553,36 +636,62 @@ function ModelDetailDrawer({
                   </DrawerSection>
 
                   {model.description && (
-                    <DrawerSection icon={<FileText className="h-3.5 w-3.5" />} title="Descrição">
-                      <p className="text-sm text-slate-700 leading-relaxed">{model.description}</p>
+                    <DrawerSection
+                      icon={<FileText className="h-3.5 w-3.5" />}
+                      title="Descrição"
+                    >
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        {model.description}
+                      </p>
                     </DrawerSection>
                   )}
 
                   {model.objective && (
-                    <DrawerSection icon={<Target className="h-3.5 w-3.5" />} title="Objetivo">
-                      <p className="text-sm text-slate-700 leading-relaxed">{model.objective}</p>
+                    <DrawerSection
+                      icon={<Target className="h-3.5 w-3.5" />}
+                      title="Objetivo"
+                    >
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        {model.objective}
+                      </p>
                     </DrawerSection>
                   )}
 
                   {model.internal_guidance && (
-                    <DrawerSection icon={<Info className="h-3.5 w-3.5" />} title="Orientação interna">
+                    <DrawerSection
+                      icon={<Info className="h-3.5 w-3.5" />}
+                      title="Orientação interna"
+                    >
                       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                        <p className="text-sm text-slate-700 leading-relaxed">{model.internal_guidance}</p>
+                        <p className="text-sm text-slate-700 leading-relaxed">
+                          {model.internal_guidance}
+                        </p>
                       </div>
                     </DrawerSection>
                   )}
 
                   {model.notes && (
-                    <DrawerSection icon={<FileText className="h-3.5 w-3.5" />} title="Observações internas">
+                    <DrawerSection
+                      icon={<FileText className="h-3.5 w-3.5" />}
+                      title="Observações internas"
+                    >
                       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                        <p className="text-sm text-slate-700 leading-relaxed">{model.notes}</p>
+                        <p className="text-sm text-slate-700 leading-relaxed">
+                          {model.notes}
+                        </p>
                       </div>
                     </DrawerSection>
                   )}
 
                   <div className="flex gap-6 text-xs text-slate-400 pt-2 border-t border-slate-100">
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Criado: {fmtDate(model.created_at)}</span>
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Atualizado: {fmtDate(model.updated_at)}</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Criado:{" "}
+                      {fmtDate(model.created_at)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Atualizado:{" "}
+                      {fmtDate(model.updated_at)}
+                    </span>
                   </div>
                 </div>
               )}
@@ -591,12 +700,23 @@ function ModelDetailDrawer({
               {activeTab === "steps" && (
                 <div className="p-6 space-y-8">
                   {steps.length > 0 ? (
-                    <DrawerSection icon={<Layers className="h-3.5 w-3.5" />} title="Etapas de execução" badge={steps.length}>
+                    <DrawerSection
+                      icon={<Layers className="h-3.5 w-3.5" />}
+                      title="Etapas de execução"
+                      badge={steps.length}
+                    >
                       <ol className="space-y-3">
                         {steps.map((step, i) => (
-                          <li key={i} className="flex items-start gap-3 bg-slate-50 rounded-xl border border-slate-100 px-4 py-3">
-                            <span className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                            <p className="text-sm text-slate-700 leading-relaxed">{step}</p>
+                          <li
+                            key={i}
+                            className="flex items-start gap-3 bg-slate-50 rounded-xl border border-slate-100 px-4 py-3"
+                          >
+                            <span className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                              {i + 1}
+                            </span>
+                            <p className="text-sm text-slate-700 leading-relaxed">
+                              {step}
+                            </p>
                           </li>
                         ))}
                       </ol>
@@ -606,18 +726,29 @@ function ModelDetailDrawer({
                       <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
                         <Layers className="h-6 w-6 text-slate-300" />
                       </div>
-                      <p className="text-sm text-slate-400">Nenhuma etapa definida para este modelo.</p>
+                      <p className="text-sm text-slate-400">
+                        Nenhuma etapa definida para este modelo.
+                      </p>
                     </div>
                   )}
                   {checklist.length > 0 && (
-                    <DrawerSection icon={<ListChecks className="h-3.5 w-3.5" />} title="Checklist padrão" badge={checklist.length}>
+                    <DrawerSection
+                      icon={<ListChecks className="h-3.5 w-3.5" />}
+                      title="Checklist padrão"
+                      badge={checklist.length}
+                    >
                       <ul className="space-y-2">
                         {checklist.map((item, i) => (
-                          <li key={i} className="flex items-start gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5">
+                          <li
+                            key={i}
+                            className="flex items-start gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5"
+                          >
                             <div className="mt-0.5 h-4 w-4 rounded border-2 border-slate-300 shrink-0 flex items-center justify-center">
                               <span className="h-1.5 w-1.5 rounded-sm bg-slate-300" />
                             </div>
-                            <span className="text-sm text-slate-700">{item}</span>
+                            <span className="text-sm text-slate-700">
+                              {item}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -625,7 +756,9 @@ function ModelDetailDrawer({
                   )}
                   {steps.length === 0 && checklist.length === 0 && (
                     <div className="text-center py-8">
-                      <p className="text-xs text-slate-400">Sem etapas nem checklist definidos.</p>
+                      <p className="text-xs text-slate-400">
+                        Sem etapas nem checklist definidos.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -635,12 +768,23 @@ function ModelDetailDrawer({
               {activeTab === "briefing" && (
                 <div className="p-6 space-y-8">
                   {briefing.length > 0 ? (
-                    <DrawerSection icon={<HelpCircle className="h-3.5 w-3.5" />} title="Perguntas de briefing" badge={briefing.length}>
+                    <DrawerSection
+                      icon={<HelpCircle className="h-3.5 w-3.5" />}
+                      title="Perguntas de briefing"
+                      badge={briefing.length}
+                    >
                       <ol className="space-y-3">
                         {briefing.map((q, i) => (
-                          <li key={i} className="flex items-start gap-3 bg-blue-50 rounded-xl border border-blue-100 px-4 py-3">
-                            <span className="text-xs font-bold text-blue-500 shrink-0 mt-0.5 w-6 text-center">Q{i + 1}</span>
-                            <p className="text-sm text-slate-700 leading-relaxed">{q}</p>
+                          <li
+                            key={i}
+                            className="flex items-start gap-3 bg-blue-50 rounded-xl border border-blue-100 px-4 py-3"
+                          >
+                            <span className="text-xs font-bold text-blue-500 shrink-0 mt-0.5 w-6 text-center">
+                              Q{i + 1}
+                            </span>
+                            <p className="text-sm text-slate-700 leading-relaxed">
+                              {q}
+                            </p>
                           </li>
                         ))}
                       </ol>
@@ -650,15 +794,26 @@ function ModelDetailDrawer({
                       <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
                         <BookOpen className="h-6 w-6 text-slate-300" />
                       </div>
-                      <p className="text-sm text-slate-400">Nenhuma pergunta de briefing definida.</p>
+                      <p className="text-sm text-slate-400">
+                        Nenhuma pergunta de briefing definida.
+                      </p>
                     </div>
                   )}
                   {rules.length > 0 && (
-                    <DrawerSection icon={<Wrench className="h-3.5 w-3.5" />} title="Regras de execução" badge={rules.length}>
+                    <DrawerSection
+                      icon={<Wrench className="h-3.5 w-3.5" />}
+                      title="Regras de execução"
+                      badge={rules.length}
+                    >
                       <ul className="space-y-2">
                         {rules.map((r, i) => (
-                          <li key={i} className="flex items-start gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5">
-                            <span className="text-slate-400 shrink-0 font-bold text-sm">—</span>
+                          <li
+                            key={i}
+                            className="flex items-start gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5"
+                          >
+                            <span className="text-slate-400 shrink-0 font-bold text-sm">
+                              —
+                            </span>
                             <span className="text-sm text-slate-700">{r}</span>
                           </li>
                         ))}
@@ -666,11 +821,20 @@ function ModelDetailDrawer({
                     </DrawerSection>
                   )}
                   {conclusionRules.length > 0 && (
-                    <DrawerSection icon={<CheckCircle2 className="h-3.5 w-3.5" />} title="Regras de conclusão" badge={conclusionRules.length}>
+                    <DrawerSection
+                      icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                      title="Regras de conclusão"
+                      badge={conclusionRules.length}
+                    >
                       <ul className="space-y-2">
                         {conclusionRules.map((r, i) => (
-                          <li key={i} className="flex items-start gap-3 bg-emerald-50 rounded-lg border border-emerald-100 px-4 py-2.5">
-                            <span className="text-emerald-500 shrink-0 font-bold text-sm">—</span>
+                          <li
+                            key={i}
+                            className="flex items-start gap-3 bg-emerald-50 rounded-lg border border-emerald-100 px-4 py-2.5"
+                          >
+                            <span className="text-emerald-500 shrink-0 font-bold text-sm">
+                              —
+                            </span>
                             <span className="text-sm text-slate-700">{r}</span>
                           </li>
                         ))}
@@ -678,10 +842,17 @@ function ModelDetailDrawer({
                     </DrawerSection>
                   )}
                   {reqFiles.length > 0 && (
-                    <DrawerSection icon={<FileText className="h-3.5 w-3.5" />} title="Arquivos necessários" badge={reqFiles.length}>
+                    <DrawerSection
+                      icon={<FileText className="h-3.5 w-3.5" />}
+                      title="Arquivos necessários"
+                      badge={reqFiles.length}
+                    >
                       <ul className="space-y-2">
                         {reqFiles.map((f, i) => (
-                          <li key={i} className="flex items-center gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5">
+                          <li
+                            key={i}
+                            className="flex items-center gap-3 bg-slate-50 rounded-lg border border-slate-100 px-4 py-2.5"
+                          >
                             <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="text-sm text-slate-700">{f}</span>
                           </li>
@@ -699,15 +870,25 @@ function ModelDetailDrawer({
                     <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-700 leading-relaxed">
-                        Este modelo está vinculado a <span className="font-bold">{productCount}</span> produto{productCount !== 1 ? "s" : ""}. Alterações impactarão futuras tarefas geradas por eles.
+                        Este modelo está vinculado a{" "}
+                        <span className="font-bold">{productCount}</span>{" "}
+                        produto{productCount !== 1 ? "s" : ""}. Alterações
+                        impactarão futuras tarefas geradas por eles.
                       </p>
                     </div>
                   )}
-                  <DrawerSection icon={<Package className="h-3.5 w-3.5" />} title="Produtos vinculados" badge={productCount}>
+                  <DrawerSection
+                    icon={<Package className="h-3.5 w-3.5" />}
+                    title="Produtos vinculados"
+                    badge={productCount}
+                  >
                     {productLinks.length > 0 ? (
                       <ul className="space-y-3">
                         {productLinks.map((link) => (
-                          <li key={link.id} className="flex items-center gap-4 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 hover:border-indigo-300 hover:shadow-md transition-all">
+                          <li
+                            key={link.id}
+                            className="flex items-center gap-4 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 hover:border-indigo-300 hover:shadow-md transition-all"
+                          >
                             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center shrink-0">
                               <Package className="h-4 w-4 text-indigo-500" />
                             </div>
@@ -722,8 +903,14 @@ function ModelDetailDrawer({
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm font-semibold text-slate-800 truncate">{link.product.name}</p>
-                              {link.product.category && <p className="text-xs text-slate-400 truncate">{link.product.category}</p>}
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {link.product.name}
+                              </p>
+                              {link.product.category && (
+                                <p className="text-xs text-slate-400 truncate">
+                                  {link.product.category}
+                                </p>
+                              )}
                             </div>
                             {link.phase && (
                               <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full shrink-0 font-medium">
@@ -739,8 +926,13 @@ function ModelDetailDrawer({
                           <Package className="h-7 w-7 text-slate-300" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-600">Nenhum produto vinculado</p>
-                          <p className="text-xs text-slate-400 mt-1">Este modelo ainda não está associado a nenhum produto.</p>
+                          <p className="text-sm font-semibold text-slate-600">
+                            Nenhum produto vinculado
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Este modelo ainda não está associado a nenhum
+                            produto.
+                          </p>
                         </div>
                       </div>
                     )}
@@ -754,18 +946,34 @@ function ModelDetailDrawer({
         {/* -- FOOTER --------------------------------------------------------- */}
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-9 gap-1.5 text-slate-500">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-9 gap-1.5 text-slate-500"
+            >
               <X className="h-3.5 w-3.5" /> Fechar
             </Button>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => onDuplicate(model)} disabled={updating} className="h-9 gap-1.5 text-slate-600">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDuplicate(model)}
+                disabled={updating}
+                className="h-9 gap-1.5 text-slate-600"
+              >
                 <Copy className="h-3.5 w-3.5" /> Duplicar
               </Button>
               {model.status !== "em_revisao" && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => onStatusChange(model, model.status === "ativa" ? "inativa" : "ativa")}
+                  onClick={() =>
+                    onStatusChange(
+                      model,
+                      model.status === "ativa" ? "inativa" : "ativa",
+                    )
+                  }
                   disabled={updating}
                   className={cn(
                     "h-9 gap-1.5",
@@ -775,9 +983,13 @@ function ModelDetailDrawer({
                   )}
                 >
                   {model.status === "ativa" ? (
-                    <><PauseCircle className="h-3.5 w-3.5" /> Inativar</>
+                    <>
+                      <PauseCircle className="h-3.5 w-3.5" /> Inativar
+                    </>
                   ) : (
-                    <><PlayCircle className="h-3.5 w-3.5" /> Ativar</>
+                    <>
+                      <PlayCircle className="h-3.5 w-3.5" /> Ativar
+                    </>
                   )}
                 </Button>
               )}
@@ -795,7 +1007,9 @@ function ModelDetailDrawer({
               <Button
                 size="sm"
                 className="h-9 gap-1.5 btn-brand border-0 shadow-md"
-                onClick={() => { /* TODO: open edit panel */ }}
+                onClick={() => {
+                  /* TODO: open edit panel */
+                }}
               >
                 <Pencil className="h-3.5 w-3.5" /> Editar modelo
               </Button>
@@ -884,8 +1098,7 @@ export default function AdminModelosTarefasPage() {
           );
         if (typeof p.sortKey === "string" || p.sortKey === null)
           setSortKey(p.sortKey);
-        if (p.sortDir === "asc" || p.sortDir === "desc")
-          setSortDir(p.sortDir);
+        if (p.sortDir === "asc" || p.sortDir === "desc") setSortDir(p.sortDir);
       }
     } catch (_) {}
     setPrefsLoaded(true);
@@ -922,6 +1135,24 @@ export default function AdminModelosTarefasPage() {
   // Drawer
   const [selectedModel, setSelectedModel] = useState<CatalogTask | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const navigate = useNavigate();
+  const { modeloId: urlModeloId } = useParams<{ modeloId?: string }>();
+
+  // Deep-link: open model drawer from URL param
+  useEffect(() => {
+    if (!urlModeloId) return;
+    apiClient
+      .getCatalogTask(urlModeloId)
+      .then((model: any) => {
+        setSelectedModel(model);
+        setDrawerOpen(true);
+      })
+      .catch(() => {
+        setSelectedModel({ id: urlModeloId } as any);
+        setDrawerOpen(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlModeloId]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Create dialog
@@ -1003,8 +1234,7 @@ export default function AdminModelosTarefasPage() {
       if (filterType !== "all" && m.task_type !== filterType) return false;
       if (filterCategory !== "all" && m.category !== filterCategory)
         return false;
-      const linkCount =
-        m._count?.product_links ?? m.product_links?.length ?? 0;
+      const linkCount = m._count?.product_links ?? m.product_links?.length ?? 0;
       if (filterLinkedMode === "linked" && linkCount === 0) return false;
       if (filterLinkedMode === "unlinked" && linkCount > 0) return false;
 
@@ -1033,7 +1263,10 @@ export default function AdminModelosTarefasPage() {
         const min = Number(advanced.minLinks);
         if (Number.isFinite(min) && linkCount < min) return false;
       }
-      if (advanced.subcategory !== "all" && m.subcategory !== advanced.subcategory)
+      if (
+        advanced.subcategory !== "all" &&
+        m.subcategory !== advanced.subcategory
+      )
         return false;
       if (advanced.complexity !== "all" && m.complexity !== advanced.complexity)
         return false;
@@ -1051,7 +1284,14 @@ export default function AdminModelosTarefasPage() {
               l.product?.name?.toLowerCase().includes(q) ||
               l.product?.id?.toLowerCase().includes(q),
           ) ?? false;
-        if (!inName && !inCode && !inCategory && !inType && !inDesc && !inProduct)
+        if (
+          !inName &&
+          !inCode &&
+          !inCategory &&
+          !inType &&
+          !inDesc &&
+          !inProduct
+        )
           return false;
       }
       return true;
@@ -1126,17 +1366,17 @@ export default function AdminModelosTarefasPage() {
 
   const hasActiveFilters = Boolean(
     search ||
-      filterStatus !== "all" ||
-      filterType !== "all" ||
-      filterCategory !== "all" ||
-      filterLinkedMode !== "all" ||
-      advanced.createdFrom ||
-      advanced.createdTo ||
-      advanced.updatedFrom ||
-      advanced.updatedTo ||
-      advanced.minLinks ||
-      advanced.subcategory !== "all" ||
-      advanced.complexity !== "all",
+    filterStatus !== "all" ||
+    filterType !== "all" ||
+    filterCategory !== "all" ||
+    filterLinkedMode !== "all" ||
+    advanced.createdFrom ||
+    advanced.createdTo ||
+    advanced.updatedFrom ||
+    advanced.updatedTo ||
+    advanced.minLinks ||
+    advanced.subcategory !== "all" ||
+    advanced.complexity !== "all",
   );
 
   const advancedActiveCount =
@@ -1191,6 +1431,7 @@ export default function AdminModelosTarefasPage() {
         const full = await apiClient.getCatalogTask(created.id);
         setSelectedModel(full as CatalogTask);
         setDrawerOpen(true);
+        navigate(`/admin/modelos-tarefas/${created.id}`, { replace: true });
       }
     } catch (e) {
       console.error(e);
@@ -1611,7 +1852,10 @@ export default function AdminModelosTarefasPage() {
                           type="date"
                           value={advanced.createdFrom}
                           onChange={(e) => {
-                            setAdvanced({ ...advanced, createdFrom: e.target.value });
+                            setAdvanced({
+                              ...advanced,
+                              createdFrom: e.target.value,
+                            });
                             setPage(1);
                           }}
                           className="h-8 text-xs"
@@ -1625,7 +1869,10 @@ export default function AdminModelosTarefasPage() {
                           type="date"
                           value={advanced.createdTo}
                           onChange={(e) => {
-                            setAdvanced({ ...advanced, createdTo: e.target.value });
+                            setAdvanced({
+                              ...advanced,
+                              createdTo: e.target.value,
+                            });
                             setPage(1);
                           }}
                           className="h-8 text-xs"
@@ -1639,7 +1886,10 @@ export default function AdminModelosTarefasPage() {
                           type="date"
                           value={advanced.updatedFrom}
                           onChange={(e) => {
-                            setAdvanced({ ...advanced, updatedFrom: e.target.value });
+                            setAdvanced({
+                              ...advanced,
+                              updatedFrom: e.target.value,
+                            });
                             setPage(1);
                           }}
                           className="h-8 text-xs"
@@ -1653,7 +1903,10 @@ export default function AdminModelosTarefasPage() {
                           type="date"
                           value={advanced.updatedTo}
                           onChange={(e) => {
-                            setAdvanced({ ...advanced, updatedTo: e.target.value });
+                            setAdvanced({
+                              ...advanced,
+                              updatedTo: e.target.value,
+                            });
                             setPage(1);
                           }}
                           className="h-8 text-xs"
@@ -1663,14 +1916,18 @@ export default function AdminModelosTarefasPage() {
 
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                        <Hash className="h-3 w-3" /> Quantidade mínima de produtos vinculados
+                        <Hash className="h-3 w-3" /> Quantidade mínima de
+                        produtos vinculados
                       </Label>
                       <Input
                         type="number"
                         min={0}
                         value={advanced.minLinks}
                         onChange={(e) => {
-                          setAdvanced({ ...advanced, minLinks: e.target.value });
+                          setAdvanced({
+                            ...advanced,
+                            minLinks: e.target.value,
+                          });
                           setPage(1);
                         }}
                         placeholder="0"
@@ -1889,9 +2146,20 @@ export default function AdminModelosTarefasPage() {
         {/* Table */}
         {!loading && !error && sorted.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div
+              className="overflow-auto allka-table-scroll"
+              style={{ maxHeight: "calc(100vh - 18rem)" }}
+            >
               <table className="w-full text-sm min-w-[800px]">
-                <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
+                <thead
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 2,
+                    background: "var(--table-head)",
+                    boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                  }}
+                >
                   <tr>
                     {isCol("code") && (
                       <Th
@@ -2005,6 +2273,9 @@ export default function AdminModelosTarefasPage() {
                               onClick={() => {
                                 setSelectedModel(model);
                                 setDrawerOpen(true);
+                                navigate(`/admin/modelos-tarefas/${model.id}`, {
+                                  replace: true,
+                                });
                               }}
                             >
                               <p className="font-medium text-slate-800 dark:text-slate-100 leading-snug hover:text-blue-600 transition-colors line-clamp-1">
@@ -2107,6 +2378,10 @@ export default function AdminModelosTarefasPage() {
                                     onClick={() => {
                                       setSelectedModel(model);
                                       setDrawerOpen(true);
+                                      navigate(
+                                        `/admin/modelos-tarefas/${model.id}`,
+                                        { replace: true },
+                                      );
                                     }}
                                   >
                                     <Package className="h-3.5 w-3.5" />
@@ -2191,6 +2466,10 @@ export default function AdminModelosTarefasPage() {
                                 onClick={() => {
                                   setSelectedModel(model);
                                   setDrawerOpen(true);
+                                  navigate(
+                                    `/admin/modelos-tarefas/${model.id}`,
+                                    { replace: true },
+                                  );
                                 }}
                               >
                                 <Eye className="h-3.5 w-3.5" /> Ver detalhes
@@ -2321,7 +2600,10 @@ export default function AdminModelosTarefasPage() {
       <ModelDetailDrawer
         model={selectedModel}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false);
+          navigate("/admin/modelos-tarefas", { replace: true });
+        }}
         onStatusChange={handleStatusChange}
         onDuplicate={handleDuplicate}
         updatingId={updatingId}
@@ -2447,9 +2729,9 @@ export default function AdminModelosTarefasPage() {
             <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
               <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <span>
-                O modelo será criado com status{" "}
-                <strong>Em revisão</strong>. Após validação, altere para{" "}
-                <strong>Ativo</strong> para que possa ser vinculado a produtos.
+                O modelo será criado com status <strong>Em revisão</strong>.
+                Após validação, altere para <strong>Ativo</strong> para que
+                possa ser vinculado a produtos.
               </span>
             </div>
           </div>

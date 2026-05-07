@@ -16,7 +16,7 @@ import type {
 } from "./contexts/product-context";
 
 export interface BackendProduct {
-  id: string;
+  id: string | number;
   name: string;
   description: string | null;
   short_description: string | null;
@@ -124,7 +124,7 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
   }));
 
   return {
-    id: b.id,
+    id: String(b.id),
     name: b.name,
     description: b.description ?? "",
     category: b.category,

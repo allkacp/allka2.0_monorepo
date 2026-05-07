@@ -23,6 +23,8 @@ const ROLES: Array<{
   emoji: string;
   accountType: AccountType;
   accountSubType: AccountSubType;
+  previewName: string;
+  previewEmail: string;
 }> = [
   {
     id: "admin",
@@ -35,6 +37,8 @@ const ROLES: Array<{
     emoji: "🛡️",
     accountType: "admin",
     accountSubType: null,
+    previewName: "Admin Allka",
+    previewEmail: "admin@allka.test",
   },
   {
     id: "nomade",
@@ -47,6 +51,8 @@ const ROLES: Array<{
     emoji: "🧭",
     accountType: "nomades",
     accountSubType: null,
+    previewName: "Nômade Teste",
+    previewEmail: "nomade@allka.test",
   },
   {
     id: "empresa",
@@ -59,6 +65,8 @@ const ROLES: Array<{
     emoji: "🏢",
     accountType: "empresas",
     accountSubType: "company",
+    previewName: "Company Teste",
+    previewEmail: "company@allka.test",
   },
   {
     id: "agencia",
@@ -71,6 +79,8 @@ const ROLES: Array<{
     emoji: "💼",
     accountType: "agencias",
     accountSubType: null,
+    previewName: "Agência Teste",
+    previewEmail: "agencia@allka.test",
   },
   {
     id: "parceiro",
@@ -83,6 +93,8 @@ const ROLES: Array<{
     emoji: "🤝",
     accountType: "parceiro",
     accountSubType: null,
+    previewName: "Partner Teste",
+    previewEmail: "partner@allka.test",
   },
   {
     id: "lider",
@@ -95,6 +107,8 @@ const ROLES: Array<{
     emoji: "🎯",
     accountType: "lider",
     accountSubType: null,
+    previewName: "Líder de Performance",
+    previewEmail: "lider.performance@allka.test",
   },
 ];
 
@@ -112,7 +126,7 @@ function isOnLoginPage(pathname: string) {
 export function DevRoleSwitcher() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { setAccountType } = useAccountType();
+  const { setAccountType, setPreviewUser } = useAccountType();
   const [open, setOpen] = useState(false);
 
   const active = getActiveRole(pathname);
@@ -155,9 +169,12 @@ export function DevRoleSwitcher() {
               <button
                 key={role.id}
                 onClick={() => {
+                  // 1. Update account type (role / permissions / sidebar)
                   setAccountType(role.accountType, role.accountSubType);
-                  // If currently on any login page, navigate to that role's login page
-                  // Otherwise navigate to the role's dashboard
+                  // 2. Update preview user name shown in the header
+                  setPreviewUser(role.previewName, role.previewEmail);
+                  // 3. Navigate: if on a login page go to that role's login,
+                  //    otherwise go to the role's dashboard
                   navigate(
                     isOnLoginPage(pathname) ? role.loginPath : role.path,
                   );

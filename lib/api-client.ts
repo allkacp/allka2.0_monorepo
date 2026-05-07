@@ -65,6 +65,13 @@ class ApiClient {
     });
 
     if (!res.ok) {
+      // Auto-logout on 401: clear token and emit event for App.tsx to handle navigation
+      if (res.status === 401) {
+        this.clearToken();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("allka:unauthorized"));
+        }
+      }
       let msg = `HTTP ${res.status}`;
       try {
         const j = await res.json();
@@ -209,8 +216,25 @@ class ApiClient {
     return this.get(`/projects/${id}`);
   }
 
+  async getProjectLog(id: string | number) {
+    return this.get(`/projects/${id}/log`);
+  }
+
   async createProject(data: Record<string, any>) {
     return this.post("/projects", data);
+  }
+
+  async checkProjectName(params: {
+    title: string;
+    client_id?: string;
+    agency?: string;
+    exclude_id?: string;
+  }): Promise<{ duplicate: boolean; conflictId?: string }> {
+    const q = new URLSearchParams({ title: params.title });
+    if (params.client_id) q.set("client_id", params.client_id);
+    if (params.agency) q.set("agency", params.agency);
+    if (params.exclude_id) q.set("exclude_id", params.exclude_id);
+    return this.get(`/projects/check-name?${q.toString()}`);
   }
 
   async updateProject(id: string | number, data: Record<string, any>) {
@@ -397,19 +421,27 @@ class ApiClient {
 
   // ─── Financial / Invoices ─────────────────────────────────────────────────
   async getInvoices(filters?: Record<string, any>) {
-    return this.get("/billing", filters);
+    return this.get("/billing/invoices", filters);
   }
 
   async getInvoice(id: string | number) {
-    return this.get(`/billing/${id}`);
+    return this.get(`/billing/invoices/${id}`);
   }
 
   async createInvoice(data: Record<string, any>) {
-    return this.post("/billing", data);
+    return this.post("/billing/invoices", data);
   }
 
   async updateInvoice(id: string | number, data: Record<string, any>) {
-    return this.put(`/billing/${id}`, data);
+    return this.put(`/billing/invoices/${id}`, data);
+  }
+
+  async deleteInvoice(id: string | number) {
+    return this.del(`/billing/invoices/${id}`);
+  }
+
+  async getBillingStats() {
+    return this.get("/billing/stats");
   }
 
   async getFinancialStats() {
@@ -423,6 +455,10 @@ class ApiClient {
 
   async updateWithdrawal(id: string | number, data: Record<string, any>) {
     return this.put(`/financial/withdrawals/${id}`, data);
+  }
+
+  async deleteWithdrawal(id: string | number) {
+    return this.del(`/financial/withdrawals/${id}`);
   }
 
   async requestWithdrawal(data: Record<string, any>) {
@@ -502,6 +538,14 @@ class ApiClient {
 
   async deleteCourse(id: string | number) {
     return this.del(`/allkademy/courses/${id}`);
+  }
+
+  async addCourseModule(courseId: string | number, data: Record<string, any>) {
+    return this.post(`/allkademy/courses/${courseId}/modules`, data);
+  }
+
+  async addModuleLesson(moduleId: string | number, data: Record<string, any>) {
+    return this.post(`/allkademy/modules/${moduleId}/lessons`, data);
   }
 
   async getMyEnrollments(userId?: string | number) {

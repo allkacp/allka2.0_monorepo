@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
   TermAcceptanceGate,
@@ -14,6 +14,7 @@ import { Footer } from "@/components/footer";
 import { MobileLayoutWrapper } from "@/components/mobile-layout-wrapper";
 
 import { AccountTypeProvider } from "@/contexts/account-type-context";
+import { useAccountType } from "@/contexts/account-type-context";
 import { SidebarProvider } from "@/contexts/sidebar-context";
 import { CompanyProvider } from "@/contexts/company-context";
 import { SettingsProvider } from "@/contexts/settings-context";
@@ -194,20 +195,50 @@ const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
 
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
-const LiderDashboardPage = React.lazy(() => import("@/app/lider/dashboard/page"));
-const LiderQualificacaoPage = React.lazy(() => import("@/app/lider/qualificacao/page"));
+const LiderDashboardPage = React.lazy(
+  () => import("@/app/lider/dashboard/page"),
+);
+const LiderQualificacaoPage = React.lazy(
+  () => import("@/app/lider/qualificacao/page"),
+);
 const LiderTarefasPage = React.lazy(() => import("@/app/lider/tarefas/page"));
-const LiderDevolvidasPage = React.lazy(() => import("@/app/lider/devolvidas/page"));
-const LiderHistoricoPage = React.lazy(() => import("@/app/lider/historico/page"));
+const LiderDevolvidasPage = React.lazy(
+  () => import("@/app/lider/devolvidas/page"),
+);
+const LiderHistoricoPage = React.lazy(
+  () => import("@/app/lider/historico/page"),
+);
 const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
+  // Preview mode: in development, skip token check entirely so the
+  // DevRoleSwitcher can work without real authentication.
+  if (import.meta.env.DEV) return <>{children}</>;
+
   const token = localStorage.getItem("allka_token");
   if (!token) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
+}
+
+// ─── Fallback inteligente por perfil ─────────────────────────────────────
+// Evita que perfis não-admin sejam redirecionados para /admin/dashboard
+// quando acessam uma rota desconhecida.
+function ProfileAwareFallback() {
+  const { accountType } = useAccountType();
+  const destinations: Record<string, string> = {
+    admin: "/admin/dashboard",
+    agencias: "/agencia/dashboard",
+    nomades: "/nomades/dashboard",
+    empresas: "/company/dashboard",
+    parceiro: "/parceiro/dashboard",
+    lider: "/lider/dashboard",
+  };
+  return (
+    <Navigate to={destinations[accountType] ?? "/admin/dashboard"} replace />
+  );
 }
 
 const PageLoader = () => <BrandPageLoader text="Carregando…" />;
@@ -376,6 +407,25 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+
+  // Handle 401 from any API call: redirect to the appropriate login page
+  useEffect(() => {
+    const handler = () => {
+      const path = window.location.pathname;
+      const loginPath =
+        path.startsWith("/nomades") ? "/nomades/login" :
+        path.startsWith("/agencia") ? "/agencia/login" :
+        path.startsWith("/parceiro") ? "/parceiro/login" :
+        path.startsWith("/lider") ? "/lider/login" :
+        path.startsWith("/company") || path.startsWith("/empresa") ? "/company/login" :
+        "/login";
+      if (!path.includes("/login")) navigate(loginPath, { replace: true });
+    };
+    window.addEventListener("allka:unauthorized", handler);
+    return () => window.removeEventListener("allka:unauthorized", handler);
+  }, [navigate]);
+
   return (
     <AccountTypeProvider>
       <Routes>
@@ -456,6 +506,10 @@ export default function App() {
                     element={<AdminUsuariosPage />}
                   />
                   <Route
+                    path="/admin/usuarios/:userId"
+                    element={<AdminUsuariosPage />}
+                  />
+                  <Route
                     path="/admin/usuarios-internos"
                     element={<AdminUsuariosInternosPage />}
                   />
@@ -464,9 +518,17 @@ export default function App() {
                     path="/admin/empresas"
                     element={<AdminEmpresasPage />}
                   />
+                  <Route
+                    path="/admin/empresas/:empresaId"
+                    element={<AdminEmpresasPage />}
+                  />
                   <Route path="/admin/nomades" element={<AdminNomadesPg />} />
                   <Route
                     path="/admin/projetos"
+                    element={<AdminProjetosPage />}
+                  />
+                  <Route
+                    path="/admin/projetos/:projectId"
                     element={<AdminProjetosPage />}
                   />
                   <Route
@@ -474,7 +536,15 @@ export default function App() {
                     element={<AdminProdutosPage />}
                   />
                   <Route
+                    path="/admin/produtos/:produtoId"
+                    element={<AdminProdutosPage />}
+                  />
+                  <Route
                     path="/admin/catalogo-produtos"
+                    element={<AdminCatalogoProdutosPage />}
+                  />
+                  <Route
+                    path="/admin/catalogo-produtos/:produtoId"
                     element={<AdminCatalogoProdutosPage />}
                   />
                   <Route
@@ -483,7 +553,15 @@ export default function App() {
                   />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
                   <Route
+                    path="/admin/tarefas/:tarefaId"
+                    element={<AdminTarefasPage />}
+                  />
+                  <Route
                     path="/admin/modelos-tarefas"
+                    element={<AdminModelosTarefasPage />}
+                  />
+                  <Route
+                    path="/admin/modelos-tarefas/:modeloId"
                     element={<AdminModelosTarefasPage />}
                   />
                   <Route path="/admin/niveis" element={<AdminNiveisPage />} />
@@ -672,10 +750,7 @@ export default function App() {
                     path="/lider/qualificacao"
                     element={<LiderQualificacaoPage />}
                   />
-                  <Route
-                    path="/lider/tarefas"
-                    element={<LiderTarefasPage />}
-                  />
+                  <Route path="/lider/tarefas" element={<LiderTarefasPage />} />
                   <Route
                     path="/lider/devolvidas"
                     element={<LiderDevolvidasPage />}
@@ -684,16 +759,10 @@ export default function App() {
                     path="/lider/historico"
                     element={<LiderHistoricoPage />}
                   />
-                  <Route
-                    path="/lider/perfil"
-                    element={<LiderPerfilPage />}
-                  />
+                  <Route path="/lider/perfil" element={<LiderPerfilPage />} />
 
-                  {/* Fallback */}
-                  <Route
-                    path="*"
-                    element={<Navigate to="/admin/dashboard" replace />}
-                  />
+                  {/* Fallback — redireciona para o dashboard do perfil ativo */}
+                  <Route path="*" element={<ProfileAwareFallback />} />
                 </Routes>
               </AppLayout>
             </RequireAuth>
@@ -701,7 +770,8 @@ export default function App() {
         />
       </Routes>
       <CookieConsentBanner />
-      <DevRoleSwitcher />
+      {/* DevRoleSwitcher só aparece em desenvolvimento — nunca em produção */}
+      {import.meta.env.DEV && <DevRoleSwitcher />}
     </AccountTypeProvider>
   );
 }

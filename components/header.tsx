@@ -131,7 +131,8 @@ export function Header() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
-  const { accountType, unlockAccountType } = useAccountType();
+  const { accountType, unlockAccountType, previewUserName, previewUserEmail } =
+    useAccountType();
   const { userProfile, updateUserProfile } = useSidebar();
   const { theme, setTheme } = useSettings();
   const partner = usePartner();
@@ -390,7 +391,7 @@ export function Header() {
     menuItems: [],
   });
 
-  const ctx = (() => {
+  let ctx = (() => {
     if (accountType === "parceiro") {
       const p = partner.profile;
       if (!p) return PLACEHOLDER("Parceiro", "/parceiro/dashboard");
@@ -534,6 +535,37 @@ export function Header() {
         ],
       };
     }
+    if (accountType === "lider") {
+      const name = userProfile.name || "Líder";
+      return {
+        name,
+        email: userProfile.email || "",
+        initials: getInitials(name),
+        roleLabel: "Líder",
+        levelBadge: null,
+        wallet: null,
+        stat: null,
+        points: null,
+        level: null,
+        nextLevel: null,
+        tasks: null,
+        settingsPath: "/lider/perfil",
+        menuItems: [
+          { label: "Meu Perfil", icon: User, path: "/lider/perfil" },
+          { label: "Dashboard", icon: Activity, path: "/lider/dashboard" },
+          {
+            label: "Para Qualificar",
+            icon: CheckSquare,
+            path: "/lider/qualificacao",
+          },
+          {
+            label: "Tarefas da Área",
+            icon: FolderOpen,
+            path: "/lider/tarefas",
+          },
+        ],
+      };
+    }
     const name = userProfile.name || "Admin Sistema";
     return {
       name,
@@ -560,6 +592,17 @@ export function Header() {
       ],
     };
   })();
+
+  // In dev preview mode, override name/email/initials so the header always
+  // shows the selected preview profile — not the real authenticated user.
+  if (import.meta.env.DEV && previewUserName) {
+    ctx = {
+      ...ctx,
+      name: previewUserName,
+      email: previewUserEmail ?? ctx.email,
+      initials: getInitials(previewUserName),
+    };
+  }
 
   const cfg = ACCOUNT_CONFIG[accountType] ?? ACCOUNT_CONFIG.admin;
 

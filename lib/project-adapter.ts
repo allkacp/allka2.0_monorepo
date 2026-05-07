@@ -16,6 +16,7 @@ export interface FrontendProject {
   budget: number;
   spent: number;
   createdDate: string;
+  createdAt: string; // raw ISO timestamp for tooltip
   startDate: string;
   deadline: string;
   team: number;
@@ -92,6 +93,7 @@ export function adaptApiProject(api: any): FrontendProject {
     budget: api.budget ?? api.value ?? 0,
     spent: api.spent ?? 0,
     createdDate: formatDateBR(api.created_at),
+    createdAt: api.created_at || "",
     startDate: formatDateISO(api.start_date),
     deadline: formatDateISO(api.end_date),
     team: api.team_size ?? 0,
@@ -101,7 +103,7 @@ export function adaptApiProject(api: any): FrontendProject {
     overdue: api.overdue ?? false,
     value: api.value ?? 0,
     fromLead: api.from_lead ?? false,
-    tasks: api._count?.task_executions ?? 0,
+    tasks: api._count?.project_tasks ?? 0,
     isActive: activeStatuses.includes(api.status),
     lifecycle: api.lifecycle || "avulso",
     billingConfig:

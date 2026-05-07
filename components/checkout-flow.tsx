@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,10 @@ interface CheckoutFlowProps {
   presetCommissionRate?: number;
   /** ID do projeto já criado � usado para registrar pagamento sandbox */
   projectId?: string;
+  /** Modo do checkout: "agency" = agência paga preço base; "client" = cliente paga preço final */
+  checkoutMode?: "agency" | "client";
+  /** Total que o cliente paga (referência para exibição no checkout da agência) */
+  clientTotalRef?: number;
 }
 
 export interface CheckoutData {
@@ -127,7 +132,10 @@ export function CheckoutFlow({
   savedCards,
   presetCommissionRate,
   projectId,
+  checkoutMode,
+  clientTotalRef,
 }: CheckoutFlowProps) {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
   const [projectMode, setProjectMode] = useState<"existing" | "new">(
@@ -140,7 +148,8 @@ export function CheckoutFlow({
   >("idle");
   const [payingError, setPayingError] = useState<string | null>(null);
   const [sandboxResult, setSandboxResult] = useState<any | null>(null);
-  const [pendingCheckoutData, setPendingCheckoutData] = useState<CheckoutData | null>(null);
+  const [pendingCheckoutData, setPendingCheckoutData] =
+    useState<CheckoutData | null>(null);
 
   // Client data
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -189,7 +198,9 @@ export function CheckoutFlow({
   const [userBalances, setUserBalances] = useState({ credits: 0, allkoins: 0 });
 
   // Payer mode, commission, saved cards
-  const [payerMode, setPayerMode] = useState<"self" | "client">("self");
+  const [payerMode, setPayerMode] = useState<"self" | "client">(
+    checkoutMode === "client" ? "client" : "self",
+  );
   const [commissionRate, setCommissionRate] = useState(
     presetCommissionRate ?? 0,
   );
@@ -323,8 +334,7 @@ export function CheckoutFlow({
     const clientName = (preselectedClient as any)?.name || "";
     const amount = sandboxResult?.payment?.amount ?? getTotalPrice();
     const date = new Date().toLocaleDateString("pt-BR");
-    const transactionId =
-      sandboxResult?.payment?.id || `FAKE-${Date.now()}`;
+    const transactionId = sandboxResult?.payment?.id || `FAKE-${Date.now()}`;
     const fmt = (v: number) =>
       new Intl.NumberFormat("pt-BR", {
         style: "currency",
@@ -489,6 +499,31 @@ export function CheckoutFlow({
           notes: "Pagamento de teste via checkout sandbox",
         });
 
+        // Fallback: fetch real task count to ensure UI shows the correct
+        // number even if the backend response is missing the new fields.
+        try {
+          const tasksRes: any = await apiClient.getProjectTasks({
+            project_id: projectId,
+            limit: 500,
+          });
+          const taskList: any[] = Array.isArray(tasksRes)
+            ? tasksRes
+            : tasksRes?.data ?? [];
+          const totalTasksReal = taskList.length;
+          if (
+            (result?.totalTarefasProjeto ?? 0) === 0 &&
+            totalTasksReal > 0
+          ) {
+            result.totalTarefasProjeto = totalTasksReal;
+            // If nothing was newly created in this call, mark them as ignored
+            if (!result.tarefasCriadasAgora) {
+              result.tarefasIgnoradasAgora = totalTasksReal;
+            }
+          }
+        } catch (fetchErr) {
+          console.warn("[checkout] fallback task count failed:", fetchErr);
+        }
+
         setSandboxResult(result);
         setPendingCheckoutData(checkoutData);
         setPayingState("success");
@@ -565,67 +600,182 @@ export function CheckoutFlow({
     </div>
   );
 
-  const renderStep1 = () => (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-3 mb-4">
-        <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
-          <ShoppingBag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Revisar Itens
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Confirme os produtos selecionados
-          </p>
-        </div>
-      </div>
+  const COMPLEXITY_LABELS: Record<string, { label: string; cls: string }> = {
+    basic:        { label: "Básico",        cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
+    intermediate: { label: "Intermediário", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+    advanced:     { label: "Avançado",      cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+    premium:      { label: "Premium",       cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  };
 
-      <ScrollArea className="h-[300px]">
-        <div className="space-y-3 pr-4">
-          {items.map((item) => (
-            <Card key={item.product.id} className="p-3">
-              <div className="flex gap-3">
-                <div className="relative w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                  {item.product.image ? (
-                    <img
-                      src={item.product.image || "/placeholder.svg"}
-                      alt={item.product.name}
-                      className="absolute inset-0 w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <ShoppingBag className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-sm text-gray-900 dark:text-white">
-                    {item.product.name}
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Quantidade: {item.quantity}
-                  </p>
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1">
-                    {formatCurrency(item.product.basePrice * item.quantity)}
-                  </p>
+  const renderStep1 = () => {
+    const subtotal    = getTotalPrice();
+    const commission  = subtotal * (commissionRate / 100);
+    const clientTotal = subtotal + commission;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center space-x-3 mb-2">
+          <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
+            <ShoppingBag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revisar Itens</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Confirme os produtos e comissão antes de avançar</p>
+          </div>
+        </div>
+
+        <ScrollArea className="h-[260px]">
+          <div className="space-y-3 pr-3">
+            {items.map((item) => {
+              const addonsTotal    = (item.selectedAddons || []).reduce((s, a) => s + a.price, 0);
+              const unitPrice      = item.product.basePrice + addonsTotal;
+              const lineTotal      = unitPrice * item.quantity;
+              const lineCommission = lineTotal * (commissionRate / 100);
+              const cx             = COMPLEXITY_LABELS[item.product.complexity] ?? COMPLEXITY_LABELS.basic;
+              return (
+                <Card key={item.id ?? item.product.id} className="overflow-hidden">
+                  <div className="flex gap-3 p-3">
+                    {/* Thumbnail */}
+                    <div className="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                      {item.product.image ? (
+                        <img src={item.product.image} alt={item.product.name}
+                          className="absolute inset-0 w-full h-full object-cover rounded-lg" />
+                      ) : (
+                        <ShoppingBag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-semibold text-sm text-gray-900 dark:text-white leading-tight">
+                          {item.product.name}
+                        </h4>
+                        <span className="text-sm font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                          {formatCurrency(lineTotal)}
+                        </span>
+                      </div>
+
+                      {/* Badges */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.product.category && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300 font-medium">
+                            {item.product.category}
+                          </span>
+                        )}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cx.cls}`}>
+                          {cx.label}
+                        </span>
+                      </div>
+
+                      {/* Short description */}
+                      {item.product.shortDescription && (
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-1 leading-tight">
+                          {item.product.shortDescription}
+                        </p>
+                      )}
+
+                      {/* Variation */}
+                      {item.selectedVariation && (
+                        <p className="text-[11px] text-violet-600 dark:text-violet-400 mt-1">
+                          Variação: <span className="font-medium">{item.selectedVariation.name}</span>
+                        </p>
+                      )}
+
+                      {/* Addons */}
+                      {item.selectedAddons && item.selectedAddons.length > 0 && (
+                        <div className="mt-0.5 space-y-0.5">
+                          {item.selectedAddons.map((addon) => (
+                            <p key={addon.id} className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                              + {addon.name} ({formatCurrency(addon.price)})
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Unit × qty */}
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {formatCurrency(unitPrice)} × {item.quantity} un.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Per-item commission row — always visible */}
+                  <div className="px-3 pb-2.5 pt-2 flex items-center justify-between text-[11px] border-t border-dashed border-gray-100 dark:border-slate-700">
+                    <span className="flex items-center gap-1 text-gray-400">
+                      <Percent className="h-3 w-3" />
+                      Comissão {commissionRate > 0 ? `${commissionRate}%` : "(sem comissão)"}
+                    </span>
+                    <span className={commissionRate > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-gray-300 dark:text-slate-600"}>
+                      {commissionRate > 0 ? `+ ${formatCurrency(lineCommission)}` : "—"}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </ScrollArea>
+
+        {/* Commission input (only when not preset) */}
+        {presetCommissionRate == null && (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Percent className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Comissão da agência</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">Acréscimo sobre o valor base cobrado ao cliente</p>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
-      </ScrollArea>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <input
+                  type="number" min={0} max={100} step={1}
+                  value={commissionRate}
+                  onChange={e => setCommissionRate(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  className="w-16 h-8 text-sm font-bold text-center rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <span className="text-sm font-bold text-amber-700 dark:text-amber-300">%</span>
+              </div>
+            </div>
+          </div>
+        )}
 
-      <div className="border-t border-gray-200 dark:border-slate-700 pt-3">
-        <div className="flex items-center justify-between">
-          <span className="text-base font-semibold text-gray-900 dark:text-white">
-            Total
-          </span>
-          <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            {formatCurrency(getTotalPrice())}
-          </span>
+        {/* Summary footer */}
+        <div className="border-t border-gray-200 dark:border-slate-700 pt-3 space-y-1.5">
+          <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+            <span>Subtotal ({items.length} {items.length === 1 ? "produto" : "produtos"}) — preço base</span>
+            <span className="font-medium text-gray-700 dark:text-gray-200">{formatCurrency(subtotal)}</span>
+          </div>
+
+          <div className={`flex items-center justify-between text-sm ${commissionRate > 0 ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-slate-600"}`}>
+            <span className="flex items-center gap-1">
+              <Percent className="h-3.5 w-3.5" />
+              {commissionRate > 0
+                ? `Comissão ${commissionRate}% (margem da agência)`
+                : "Comissão — sem acréscimo (0%)"}
+            </span>
+            <span className={commissionRate > 0 ? "font-semibold" : ""}>
+              {commissionRate > 0 ? `+ ${formatCurrency(commission)}` : "—"}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700">
+            <div>
+              <p className="text-base font-semibold text-gray-900 dark:text-white">
+                {commissionRate > 0 ? "Total cobrado ao cliente" : "Total"}
+              </p>
+              {commissionRate > 0 && (
+                <p className="text-[11px] text-gray-400">Você paga {formatCurrency(subtotal)} · Margem: {formatCurrency(commission)}</p>
+              )}
+            </div>
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {formatCurrency(clientTotal)}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <div className="space-y-4">
@@ -969,8 +1119,28 @@ export function CheckoutFlow({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
             <FlaskConical className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-              AMBIENTE DE TESTE &mdash; Nenhum pagamento real será processado. Use o cartão Visa &bull;&bull;&bull;&bull; 4242.
+              AMBIENTE DE TESTE &mdash; Nenhum pagamento real será processado.
+              Use o cartão Visa &bull;&bull;&bull;&bull; 4242.
             </p>
+          </div>
+        )}
+        {/* Checkout mode badge */}
+        {checkoutMode && (
+          <div
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold ${
+              checkoutMode === "agency"
+                ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300"
+                : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-300"
+            }`}
+          >
+            {checkoutMode === "agency" ? (
+              <Building2 className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <Users className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {checkoutMode === "agency"
+              ? "Checkout da Agência — cobrança pelo preço base"
+              : "Checkout do Cliente — cobrança pelo preço final"}
           </div>
         )}
         <div className="flex items-center space-x-3 mb-4">
@@ -987,38 +1157,40 @@ export function CheckoutFlow({
           </div>
         </div>
 
-        {/* Payer mode toggle */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Quem vai pagar?
-          </Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setPayerMode("self")}
-              className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
-                payerMode === "self"
-                  ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                  : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
-              }`}
-            >
-              <Wallet className="h-4 w-4" />
-              Eu mesmo (agência)
-            </button>
-            <button
-              type="button"
-              onClick={() => setPayerMode("client")}
-              className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
-                payerMode === "client"
-                  ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400"
-                  : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              Cliente paga
-            </button>
+        {/* Payer mode toggle — hidden when checkoutMode is locked */}
+        {!checkoutMode && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Quem vai pagar?
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPayerMode("self")}
+                className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                  payerMode === "self"
+                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                    : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+                }`}
+              >
+                <Wallet className="h-4 w-4" />
+                Eu mesmo (agência)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayerMode("client")}
+                className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                  payerMode === "client"
+                    ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400"
+                    : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                Cliente paga
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Commission � hidden when preset from project panel */}
         {presetCommissionRate == null && (
@@ -1048,49 +1220,89 @@ export function CheckoutFlow({
         )}
 
         {/* Price summary */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-          <div className="space-y-1 text-sm">
-            {payerMode === "client" ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    Valor base
-                  </span>
-                  <span className="font-medium">
-                    {formatCurrency(totalPrice)}
-                  </span>
-                </div>
-                {commissionRate > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      + Comissão ({commissionRate.toFixed(1)}%)
-                    </span>
-                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(clientTotal - totalPrice)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between border-t border-blue-200 dark:border-blue-700 pt-1 mt-1">
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    Total para o cliente
-                  </span>
-                  <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                    {formatCurrency(clientTotal)}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-900 dark:text-white">
-                  Total
-                </span>
-                <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                  {formatCurrency(totalPrice)}
+        {checkoutMode === "agency" ? (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600 dark:text-gray-400">
+                Preço base (cobrado agora)
+              </span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {formatCurrency(totalPrice)}
+              </span>
+            </div>
+            {clientTotalRef != null && clientTotalRef > 0 && (
+              <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-400 border-t border-blue-200 dark:border-blue-700 pt-1.5 mt-1">
+                <span>Ref. preço ao cliente</span>
+                <span className="font-semibold">
+                  {formatCurrency(clientTotalRef)}
                 </span>
               </div>
             )}
+            <div className="flex items-center justify-between border-t border-blue-200 dark:border-blue-700 pt-1.5 mt-1">
+              <span className="font-bold text-gray-900 dark:text-white">
+                Total cobrado agora
+              </span>
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {formatCurrency(totalPrice)}
+              </span>
+            </div>
           </div>
-        </div>
+        ) : checkoutMode === "client" ? (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-900 dark:text-white">
+                Total final ao cliente
+              </span>
+              <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(totalPrice)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <div className="space-y-1 text-sm">
+              {payerMode === "client" ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Valor base
+                    </span>
+                    <span className="font-medium">
+                      {formatCurrency(totalPrice)}
+                    </span>
+                  </div>
+                  {commissionRate > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        + Comissão ({commissionRate.toFixed(1)}%)
+                      </span>
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(clientTotal - totalPrice)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-blue-200 dark:border-blue-700 pt-1 mt-1">
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      Total para o cliente
+                    </span>
+                    <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                      {formatCurrency(clientTotal)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    Total
+                  </span>
+                  <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    {formatCurrency(totalPrice)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {payerMode === "self" ? (
           <>
@@ -1641,322 +1853,328 @@ export function CheckoutFlow({
   };
 
   const renderStep5 = () => {
-    const project = preselectedProject ?? (projectMode === "existing" ? selectedProject : newProject);
-    const client = preselectedClient ?? (clientMode === "existing" ? selectedClient : newClient);
+    const project =
+      preselectedProject ??
+      (projectMode === "existing" ? selectedProject : newProject);
+    const client =
+      preselectedClient ??
+      (clientMode === "existing" ? selectedClient : newClient);
     const totalPrice = getTotalPrice();
-    const clientTotal = getClientTotal();
-    const payTotal = payerMode === "client" ? clientTotal : totalPrice;
-    const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`;
-    const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}`;
-    const selectedCard = selectedSavedCardId
-      ? allSavedCards.find((c) => c.id === selectedSavedCardId)
-      : null;
-    const payTypeLabel: Record<string, string> = {
-      credit_card: "Cartão de Crédito",
-      pix: "Pix",
-      boleto: "Boleto Bancário",
-      credits: "Créditos da Plataforma",
-      allkoins: "Allkoins",
-    };
+    const payTotal = payerMode === "client" ? getClientTotal() : totalPrice;
+    const isAgency = checkoutMode === "agency";
+    const isClientMode = checkoutMode === "client";
+
+    // Conceptual 4-step stepper
+    const conceptualSteps = [
+      { label: "Dados do projeto", Icon: FolderKanban },
+      { label: "Revisao", Icon: ShoppingBag },
+      { label: "Revisar e confirmar", Icon: Check },
+      { label: "Resultado", Icon: PartyPopper },
+    ];
+    const activeConceptual = 2; // 0-indexed: "Revisar e confirmar"
 
     return (
-      <div className="space-y-4">
-        {/* Section header */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{
-              background:
-                "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
-            }}
-          >
-            <Check className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-              Revisar e Confirmar
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Verifique os dados antes de finalizar o pagamento
-            </p>
-          </div>
-          {projectId && (
-            <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-              <FlaskConical className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                TESTE
-              </span>
-            </div>
-          )}
+      <div className="space-y-5">
+        {/* Stepper */}
+        <div className="flex items-start">
+          {conceptualSteps.map((s, i) => {
+            const isActive = i === activeConceptual;
+            const isDone = i < activeConceptual;
+            const { Icon } = s;
+            return (
+              <div key={i} className="flex items-start flex-1">
+                <div className="flex flex-col items-center w-full">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                      isActive
+                        ? "text-white shadow-md"
+                        : isDone
+                          ? "bg-green-500 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                    }`}
+                    style={
+                      isActive
+                        ? {
+                            background:
+                              "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                          }
+                        : {}
+                    }
+                  >
+                    {isDone ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Icon className="h-3.5 w-3.5" />
+                    )}
+                  </div>
+                  <span
+                    className={`text-[9px] font-semibold mt-1 text-center leading-tight px-0.5 ${
+                      isActive
+                        ? "text-blue-600 dark:text-blue-400"
+                        : isDone
+                          ? "text-green-600 dark:text-green-500"
+                          : "text-slate-400 dark:text-slate-500"
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+                {i < conceptualSteps.length - 1 && (
+                  <div
+                    className={`h-0.5 flex-1 mt-3.5 mx-1 rounded-full ${
+                      i < activeConceptual
+                        ? "bg-green-400"
+                        : "bg-slate-200 dark:bg-slate-700"
+                    }`}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        <ScrollArea className="h-[340px]">
-          <div className="space-y-3 pr-4">
-            {/* Project card */}
-            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-100 dark:border-slate-800">
-                <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                  Projeto
-                </span>
-                <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700 text-xs font-medium text-cyan-700 dark:text-cyan-300">
-                  Ag. Pagamento
-                </span>
-              </div>
-              <div className="px-3 py-2.5 bg-white dark:bg-slate-900 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <div className="col-span-2">
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    Nome
-                  </p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {(project as any)?.name || "�"}
-                  </p>
-                </div>
-                {(project as any)?.agency && (
-                  <div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      Empresa
-                    </p>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      {(project as any).agency}
-                    </p>
-                  </div>
-                )}
-                {(client as any)?.name && (
-                  <div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      Cliente
-                    </p>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      {(client as any).name}
-                    </p>
-                  </div>
-                )}
-                {(project as any)?.consultant && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      Consultor
-                    </p>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      {(project as any).consultant}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Ambiente de teste */}
+        {projectId && (
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
+            <FlaskConical className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              AMBIENTE DE TESTE - Nenhum pagamento real sera processado
+            </p>
+          </div>
+        )}
 
-            {/* Products card */}
-            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-100 dark:border-slate-800">
-                <ShoppingBag className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                  Produtos
-                </span>
-                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
-                  {items.length} {items.length === 1 ? "item" : "itens"}
-                </span>
-              </div>
-              <div className="divide-y divide-gray-50 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                {items.map((item) => (
-                  <div
-                    key={item.product.id}
-                    className="flex items-center gap-3 px-3 py-2.5"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 flex items-center justify-center shrink-0 overflow-hidden">
-                      {item.product.image ? (
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <ShoppingBag className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {item.product.name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Qtd: {item.quantity}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                        {formatCurrency(item.product.basePrice * item.quantity)}
-                      </p>
-                      {item.quantity > 1 && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500">
-                          {formatCurrency(item.product.basePrice)}/un
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50">
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                    Subtotal
-                  </span>
-                  <span
-                    className="text-base font-bold bg-clip-text text-transparent"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
-                    }}
-                  >
-                    {formatCurrency(totalPrice)}
-                  </span>
-                </div>
-              </div>
+        {/* Projeto */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-linear-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-2">
+              <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                Projeto
+              </span>
             </div>
-
-            {/* Payment card */}
-            <div className="rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-b border-gray-100 dark:border-slate-800">
-                <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                  Pagamento
+            <div className="flex items-center gap-1.5">
+              {checkoutMode && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    isAgency
+                      ? "bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300"
+                      : "bg-emerald-100 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-300"
+                  }`}
+                >
+                  {isAgency ? (
+                    <Building2 className="h-2.5 w-2.5" />
+                  ) : (
+                    <Users className="h-2.5 w-2.5" />
+                  )}
+                  {isAgency ? "Agencia" : "Cliente"}
                 </span>
-                {projectId && (
-                  <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-xs font-medium text-amber-700 dark:text-amber-400">
-                    <FlaskConical className="h-2.5 w-2.5" />
-                    FAKE_SANDBOX
-                  </span>
-                )}
-              </div>
-              <div className="px-3 py-3 space-y-2.5 bg-white dark:bg-slate-900 text-sm">
-                {paymentMethod === "single" ? (
-                  <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                    {selectedPaymentType === "credit_card" && (
-                      <CreditCard className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
-                    )}
-                    {selectedPaymentType === "pix" && (
-                      <Smartphone className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
-                    )}
-                    {selectedPaymentType === "boleto" && (
-                      <FileText className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
-                    )}
-                    {selectedPaymentType === "credits" && (
-                      <Wallet className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
-                    )}
-                    {selectedPaymentType === "allkoins" && (
-                      <Coins className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
-                    )}
-                    <span>
-                      {payTypeLabel[selectedPaymentType] || selectedPaymentType}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="font-medium text-gray-900 dark:text-white text-xs mb-1">
-                      Pagamento Dividido:
-                    </p>
-                    {Object.entries(splitPayments).map(([type, data]) => {
-                      if (!data.enabled || data.amount === 0) return null;
-                      const labels: Record<string, string> = {
-                        credit_card: "Cartão de Crédito",
-                        pix: "Pix",
-                        boleto: "Boleto",
-                        credits: "Créditos",
-                        allkoins: "Allkoins",
-                      };
-                      return (
-                        <p key={type} className="text-gray-700 dark:text-gray-300">
-                          · {labels[type]}: {formatCurrency(data.amount)}
-                        </p>
-                      );
-                    })}
-                  </div>
-                )}
-                {selectedPaymentType === "credit_card" && selectedCard && (
-                  <div className="flex items-center gap-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 px-3 py-2">
-                    <CreditCard className="h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedCard.brand} ⬢⬢⬢⬢ {selectedCard.lastDigits}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {selectedCard.holder} · {selectedCard.expiry}
-                      </p>
-                    </div>
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                  </div>
-                )}
-                <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-slate-700">
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    {payerMode === "client" ? "Total ao cliente" : "Total a pagar"}
-                  </span>
-                  <span
-                    className="text-lg font-bold bg-clip-text text-transparent"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
-                    }}
-                  >
-                    {formatCurrency(payTotal)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Checkout links */}
-            <div className="rounded-xl border border-blue-200/60 dark:border-blue-800/50 overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-2 bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-blue-100 dark:border-blue-900/30">
-                <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                  Links de Checkout
-                </span>
-              </div>
-              <div className="px-3 py-3 space-y-2.5 bg-linear-to-br from-blue-50/60 to-purple-50/60 dark:from-blue-900/10 dark:to-purple-900/10">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Seu link de pagamento
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
-                      {selfLink}
-                    </code>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 h-7 px-2"
-                      onClick={() => navigator.clipboard?.writeText(selfLink)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Link para o cliente
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 truncate text-gray-700 dark:text-gray-300">
-                      {clientLink}
-                    </code>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 h-7 px-2"
-                      onClick={() => navigator.clipboard?.writeText(clientLink)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              )}
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700 text-[10px] font-bold text-cyan-700 dark:text-cyan-300">
+                Ag. Pagamento
+              </span>
             </div>
           </div>
-        </ScrollArea>
+          <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-3 bg-white dark:bg-slate-900 text-sm">
+            <div className="col-span-2">
+              <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                Nome do projeto
+              </p>
+              <p className="font-semibold text-slate-800 dark:text-white">
+                {(project as any)?.name || "?"}
+              </p>
+            </div>
+            {(project as any)?.agency && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                  Empresa
+                </p>
+                <p className="text-slate-700 dark:text-slate-300">
+                  {(project as any).agency}
+                </p>
+              </div>
+            )}
+            {(client as any)?.name && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                  Cliente
+                </p>
+                <p className="text-slate-700 dark:text-slate-300">
+                  {(client as any).name}
+                </p>
+              </div>
+            )}
+            {(project as any)?.consultant && (
+              <div className="col-span-2">
+                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                  Consultor responsavel
+                </p>
+                <p className="text-slate-700 dark:text-slate-300">
+                  {(project as any).consultant}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Produtos */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-linear-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                Produtos contratados
+              </span>
+            </div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {items.length} {items.length === 1 ? "item" : "itens"}
+            </span>
+          </div>
+          <div className="bg-white dark:bg-slate-900 divide-y divide-slate-50 dark:divide-slate-800">
+            {items.map((item) => (
+              <div
+                key={item.product.id}
+                className="flex items-center gap-3 px-4 py-2.5"
+              >
+                <div className="w-8 h-8 rounded-lg bg-linear-to-br from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 flex items-center justify-center shrink-0 overflow-hidden">
+                  {item.product.image ? (
+                    <img
+                      src={item.product.image}
+                      alt={item.product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ShoppingBag className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 dark:text-white truncate">
+                    {item.product.name}
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    Qtd: {item.quantity} &middot;{" "}
+                    {formatCurrency(item.product.basePrice)}/un
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                    {formatCurrency(item.product.basePrice * item.quantity)}
+                  </p>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Subtotal
+              </span>
+              <span
+                className="text-base font-bold bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                }}
+              >
+                {formatCurrency(totalPrice)}
+              </span>
+            </div>
+            {isAgency && clientTotalRef != null && clientTotalRef > 0 && (
+              <div className="flex items-center justify-between px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20">
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  Ref. preco ao cliente (com comissao)
+                </span>
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  {formatCurrency(clientTotalRef)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pagamento */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-linear-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                Pagamento
+              </span>
+            </div>
+            {projectId && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                <FlaskConical className="h-2.5 w-2.5" />
+                FAKE_SANDBOX
+              </span>
+            )}
+          </div>
+          <div className="px-4 py-3 space-y-3 bg-white dark:bg-slate-900">
+            {/* Sandbox card visual */}
+            <div
+              className="rounded-xl p-3.5 flex items-center gap-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, #1e3a8a 0%, #312e81 60%, #4c1d95 100%)",
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-white/50 text-[9px] font-bold uppercase tracking-widest mb-1">
+                  Cartao de teste sandbox
+                </p>
+                <p className="text-white font-bold text-sm tracking-[0.2em] font-mono">
+                  &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull;
+                  &bull;&bull;&bull;&bull; 4242
+                </p>
+                <p className="text-white/60 text-xs mt-1">
+                  VINICIUS GUARDIA &middot; 12/30
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-white/40 text-[9px] font-bold uppercase tracking-wide mb-0.5">
+                  Bandeira
+                </p>
+                <p className="text-white font-bold text-base italic">Visa</p>
+              </div>
+            </div>
+            {/* Gateway */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-500 dark:text-slate-400">
+                Gateway
+              </span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                FAKE_SANDBOX
+              </span>
+            </div>
+            {/* Total */}
+            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-2.5">
+              <span className="font-bold text-slate-800 dark:text-white text-sm">
+                {isAgency
+                  ? "Total base cobrado agora"
+                  : isClientMode
+                    ? "Total ao cliente"
+                    : payerMode === "client"
+                      ? "Total ao cliente"
+                      : "Total a pagar"}
+              </span>
+              <span
+                className="text-xl font-black bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                }}
+              >
+                {formatCurrency(payTotal)}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
-
   const renderStep6 = () => {
     const tCriadasAgora: number = sandboxResult?.tarefasCriadasAgora ?? 0;
-    const tProcessados: number = sandboxResult?.produtosProcessadosNaCompra ?? 0;
+    const tIgnoradas: number = sandboxResult?.tarefasIgnoradasAgora ?? 0;
+    const tTotal: number = sandboxResult?.totalTarefasProjeto ?? 0;
+    const tProcessados: number =
+      sandboxResult?.produtosProcessadosNaCompra ?? 0;
+    const semModelo: string[] = sandboxResult?.produtosSemModelo ?? [];
     const amount = sandboxResult?.payment?.amount ?? getTotalPrice();
     const projectName = (preselectedProject as any)?.name || "";
 
@@ -1967,7 +2185,9 @@ export function CheckoutFlow({
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" }}
+              style={{
+                background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+              }}
             >
               <PartyPopper className="h-8 w-8 text-white" />
             </div>
@@ -2000,9 +2220,7 @@ export function CheckoutFlow({
             </div>
             <div className="px-3 py-3 space-y-2 bg-white dark:bg-slate-900 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400">
-                  Cartão
-                </span>
+                <span className="text-gray-500 dark:text-gray-400">Cartão</span>
                 <span className="font-medium text-gray-900 dark:text-white">
                   Visa &bull;&bull;&bull;&bull; 4242
                 </span>
@@ -2044,32 +2262,62 @@ export function CheckoutFlow({
             <div className="px-3 py-2.5 bg-white dark:bg-slate-900 space-y-1.5 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500 dark:text-gray-400">
-                  Produtos processados nesta compra
+                  Produtos contratados
                 </span>
                 <span className="font-semibold text-gray-900 dark:text-white">
-                  {tProcessados}
+                  {tProcessados > 0 ? tProcessados : items.length}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500 dark:text-gray-400">
-                  Tarefas criadas agora
+                  Tarefas abertas para lançamento
                 </span>
                 <span
-                  className={`font-semibold ${tCriadasAgora > 0 ? "text-violet-700 dark:text-violet-300" : "text-gray-500 dark:text-gray-400"}`}
+                  className={`font-semibold ${(tTotal || tCriadasAgora + tIgnoradas) > 0 ? "text-violet-700 dark:text-violet-300" : "text-gray-500 dark:text-gray-400"}`}
                 >
-                  {tCriadasAgora}
+                  {tTotal || tCriadasAgora + tIgnoradas}
                 </span>
               </div>
+              {tCriadasAgora > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    ↳ criadas agora
+                  </span>
+                  <span className="text-xs font-semibold text-violet-600 dark:text-violet-400">
+                    {tCriadasAgora}
+                  </span>
+                </div>
+              )}
+              {tIgnoradas > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    ↳ já existiam (idempotência)
+                  </span>
+                  <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                    {tIgnoradas}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="px-3 py-2 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
-              {tCriadasAgora === 0 ? (
-                <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Nenhuma nova tarefa foi criada nesta contratação.
-                </p>
-              ) : (
+              {tCriadasAgora > 0 ? (
                 <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
                   Foram abertas {tCriadasAgora}{" "}
                   {tCriadasAgora === 1 ? "tarefa" : "tarefas"} para lançamento.
+                </p>
+              ) : tTotal > 0 || tIgnoradas > 0 ? (
+                <p className="text-sm text-violet-700 dark:text-violet-300">
+                  ✓ Projeto pronto para lançamento — {tTotal || tIgnoradas}{" "}
+                  {(tTotal || tIgnoradas) === 1 ? "tarefa disponível" : "tarefas disponíveis"} no projeto.
+                </p>
+              ) : semModelo.length > 0 ? (
+                <p className="text-sm text-red-700 dark:text-red-400">
+                  Nenhuma tarefa gerada — produtos sem modelo ativo:{" "}
+                  {semModelo.join(", ")}.
+                </p>
+              ) : (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Nenhuma tarefa foi criada. Verifique os modelos dos produtos.
                 </p>
               )}
             </div>
@@ -2081,8 +2329,8 @@ export function CheckoutFlow({
             <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
               As tarefas abertas têm o prazo de expiração de{" "}
               <strong>30 dias</strong> a partir da data de hoje. Caso o
-              lançamento não seja feito, a tarefa será expirada e não poderá
-              ser reutilizada.
+              lançamento não seja feito, a tarefa será expirada e não poderá ser
+              reutilizada.
             </p>
           </div>
         </div>
@@ -2173,6 +2421,8 @@ export function CheckoutFlow({
                     type="button"
                     onClick={() => {
                       if (pendingCheckoutData) onComplete(pendingCheckoutData);
+                      const pid = sandboxResult?.project?.id;
+                      if (pid) navigate(`/admin/projetos/${pid}`);
                     }}
                     className="flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
                     style={{
@@ -2192,6 +2442,8 @@ export function CheckoutFlow({
                           ...pendingCheckoutData,
                           openTab: "tarefas",
                         });
+                      const pid = sandboxResult?.project?.id;
+                      if (pid) navigate(`/admin/projetos/${pid}?tab=tarefas`);
                     }}
                   >
                     Ver tarefas
@@ -2263,19 +2515,30 @@ export function CheckoutFlow({
                 <button
                   type="button"
                   onClick={handleComplete}
-                  className="flex-1 flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                  disabled={payingState === "processing"}
+                  className="flex-1 flex items-center justify-center gap-2 h-11 px-5 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
                   style={{
                     background:
                       "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
-                    boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
+                    boxShadow: "0 4px 18px rgba(37,88,255,0.40)",
                   }}
                 >
-                  {projectId ? (
-                    <FlaskConical className="h-4 w-4" />
+                  {payingState === "processing" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processando pagamento...
+                    </>
+                  ) : projectId ? (
+                    <>
+                      <FlaskConical className="h-4 w-4" />
+                      Pagar agora — teste
+                    </>
                   ) : (
-                    <Check className="h-4 w-4" />
+                    <>
+                      <Check className="h-4 w-4" />
+                      Finalizar Compra
+                    </>
                   )}
-                  {projectId ? "Pagar agora (teste)" : "Finalizar Compra"}
                 </button>
               ) : (
                 <Button

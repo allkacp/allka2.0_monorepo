@@ -22,6 +22,7 @@ import {
 import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { QuickContactActions } from "@/components/quick-contact-actions";
+import { CopyLinkButton } from "@/components/copy-link-button";
 
 interface UserViewHeaderProps {
   user: UserType;
@@ -337,6 +338,7 @@ export function UserViewHeader({
               )}
             </div>
           </TooltipProvider>
+          <CopyLinkButton />
         </div>
       }
       onClose={onClose}

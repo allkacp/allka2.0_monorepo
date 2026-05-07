@@ -201,7 +201,9 @@ export function ProjectCreateSlidePanel({
   >(initialData?.vault || []);
 
   // Maps productId → projectProductId after linking (used to update commission after checkout)
-  const [linkedProductIds, setLinkedProductIds] = useState<Record<string, string>>({});
+  const [linkedProductIds, setLinkedProductIds] = useState<
+    Record<string, string>
+  >({});
 
   const [paymentCards, setPaymentCards] = useState<
     Array<{
@@ -359,7 +361,9 @@ export function ProjectCreateSlidePanel({
         client_id: formData.client_id || undefined,
         // manager is stored as consultant (string) — no FK in backend
         consultant: formData.manager_id || undefined,
-        status: "awaiting-payment",
+        // Project starts as draft; status moves to "awaiting-payment" only
+        // when the user explicitly proceeds to checkout.
+        status: "draft",
         lifecycle: lifecycleNorm,
         type:
           customProjectType ||
@@ -404,24 +408,25 @@ export function ProjectCreateSlidePanel({
 
         // ── Link selected products to the newly-created project ────────────
         const newLinkedIds: Record<string, string> = {};
-        if (result?.id && !String(result.id).startsWith("local_") && selectedProducts.length > 0) {
+        if (
+          result?.id &&
+          !String(result.id).startsWith("local_") &&
+          selectedProducts.length > 0
+        ) {
           const pagadorDefault =
             payerType === "company" ? "CLIENTE" : "AGENCIA";
           for (const product of selectedProducts) {
-            const qty =
-              productQuantities[product.id] || product.quantity || 1;
+            const qty = productQuantities[product.id] || product.quantity || 1;
             try {
               const linked: any = await apiClient.linkProductToProject({
                 project_id: String(result.id),
                 product_id: String(product.id),
                 recurrence_snapshot: lifecycleNorm,
-                preco_final_cliente_snapshot:
-                  (product.finalPrice || 0) * qty,
+                preco_final_cliente_snapshot: (product.finalPrice || 0) * qty,
                 comissao_snapshot: 0, // updated after checkout with real commission
                 pagador_snapshot: pagadorDefault,
               });
-              const ppId =
-                linked?.project_product?.id ?? linked?.id ?? null;
+              const ppId = linked?.project_product?.id ?? linked?.id ?? null;
               if (ppId) newLinkedIds[product.id] = ppId;
             } catch (linkErr: any) {
               // 409 = already linked (idempotent) — ignore
@@ -615,7 +620,7 @@ export function ProjectCreateSlidePanel({
     setCustomizationModal(true);
   };
 
-  const handleContinueToCheckout = () => {
+  const handleContinueToCheckout = async () => {
     if (selectedProducts.length === 0) {
       toast({
         title: "Atenção",
@@ -624,14 +629,24 @@ export function ProjectCreateSlidePanel({
       });
       return;
     }
+    // Update project status to "awaiting-payment" now that the user is
+    // actively proceeding to checkout.
+    if (createdProject?.id && !String(createdProject.id).startsWith("local_")) {
+      try {
+        await apiClient.updateProject(String(createdProject.id), {
+          status: "awaiting-payment",
+        });
+      } catch {
+        // non-fatal — status will be corrected by fakeSandboxCheckout
+      }
+    }
     setShowCheckout(true);
   };
 
   const handleCheckoutComplete = async (checkoutData: CheckoutData) => {
     // ── Update each project-product with final commission + pagador ────────
     const commRate: number = checkoutData.commissionRate ?? 0;
-    const pagador =
-      checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
+    const pagador = checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
 
     for (const [productId, ppId] of Object.entries(linkedProductIds)) {
       const product = selectedProducts.find((p) => p.id === productId);
@@ -933,21 +948,44 @@ export function ProjectCreateSlidePanel({
   };
 
   const handleConfirmDraft = async () => {
-    const draftProject = {
-      ...formData,
-      status: "draft" as const,
-      id: Date.now(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      products: selectedProducts,
-    };
-    toast({
-      title: "Rascunho Salvo",
-      description: "O projeto foi salvo como rascunho.",
-    });
-    onSubmit(draftProject as any);
-    setShowDraftConfirm(false);
-    onClose();
+    setLoading(true);
+    try {
+      const lifecycleNorm: "avulso" | "mensal" =
+        formLifecycle === "Mensal" ? "mensal" : "avulso";
+
+      const draftData = {
+        title: formData.name,
+        description: formData.description,
+        client_id: formData.client_id || undefined,
+        consultant: formData.manager_id || undefined,
+        status: "draft" as const,
+        lifecycle: lifecycleNorm,
+        value: calculateTotal(),
+        start_date: formData.start_date || undefined,
+        end_date: formData.end_date || undefined,
+        budget: formData.budget
+          ? Number.parseFloat(formData.budget)
+          : undefined,
+      };
+
+      const created = await apiClient.createProject(draftData);
+
+      toast({
+        title: "Rascunho Salvo",
+        description: "O projeto foi salvo como rascunho.",
+      });
+      onSubmit(created as any);
+      setShowDraftConfirm(false);
+      onClose();
+    } catch {
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar o rascunho. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddCredential = (credential: any) => {
@@ -1007,8 +1045,12 @@ export function ProjectCreateSlidePanel({
           side="right"
           className="!w-auto !max-w-none p-0 border-0"
           hideOverlay={true}
-          onInteractOutside={(e) => { if (showCheckout) e.preventDefault(); }}
-          onEscapeKeyDown={(e) => { if (showCheckout) e.preventDefault(); }}
+          onInteractOutside={(e) => {
+            if (showCheckout) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (showCheckout) e.preventDefault();
+          }}
           style={{
             width: `calc(100vw - ${sidebarWidth}px)`,
             maxWidth: `calc(100vw - ${sidebarWidth}px)`,

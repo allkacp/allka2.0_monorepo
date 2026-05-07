@@ -96,11 +96,15 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       tarefasResult.warnings.push(errMsg);
     }
 
-    // Log for investigation when products exist but no new tasks were created
-    if (tarefasResult.generated === 0 && tarefasResult.produtos_processados > 0) {
+    // Log only when there's a genuine problem: products exist, nothing was created AND nothing was skipped
+    if (tarefasResult.generated === 0 && tarefasResult.skipped === 0 && tarefasResult.produtos_processados > 0) {
       console.warn(
-        `[payments] INVESTIGAR: projeto ${project_id} tem ${tarefasResult.produtos_processados} produto(s) mas nenhuma tarefa nova foi criada.` +
-        ` skipped=${tarefasResult.skipped}, sem_modelo=${tarefasResult.produtos_sem_modelo.length}, erros=${tarefasResult.erros_de_geracao.length}`,
+        `[payments] INVESTIGAR: projeto ${project_id} tem ${tarefasResult.produtos_processados} produto(s) mas nenhuma tarefa foi criada ou encontrada.` +
+        ` sem_modelo=${tarefasResult.produtos_sem_modelo.length}, erros=${tarefasResult.erros_de_geracao.length}`,
+      );
+    } else if (tarefasResult.skipped > 0) {
+      console.log(
+        `[payments] Idempotência OK: ${tarefasResult.skipped} tarefa(s) já existiam para projeto ${project_id}. Total no projeto: ${tarefasResult.total_tarefas}`,
       );
     }
 
@@ -125,6 +129,9 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       project_status: "in-progress",
       produtosProcessadosNaCompra: tarefasResult.produtos_processados,
       tarefasCriadasAgora: tarefasResult.generated,
+      tarefasIgnoradasAgora: tarefasResult.skipped,
+      totalTarefasProjeto: tarefasResult.total_tarefas,
+      produtosSemModelo: tarefasResult.produtos_sem_modelo,
       message,
     });
   } catch (err) {

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Tooltip,
   TooltipContent,
@@ -78,6 +79,8 @@ interface ProductCatalogViewProps {
   onConfirm?: () => void;
   /** Show a different title in panel mode */
   panelTitle?: string;
+  /** Pre-open a specific product by ID (deep link) */
+  initialProductId?: string;
 }
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -281,6 +284,7 @@ export function ProductCatalogView({
   onDecrease,
   onConfirm,
   panelTitle = "Selecionar Produtos",
+  initialProductId,
 }: ProductCatalogViewProps) {
   const { products, loading, error: productsError } = useProducts();
 
@@ -291,6 +295,18 @@ export function ProductCatalogView({
   const [search, setSearch] = useState("");
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // Deep-link: open product detail from initialProductId when products load
+  useEffect(() => {
+    if (!initialProductId || !products.length) return;
+    const found = products.find(
+      (p) => String(p.id) === String(initialProductId),
+    );
+    if (found) {
+      setDetailProduct(found);
+      setDetailOpen(true);
+    }
+  }, [initialProductId, products]);
   const [category, setCategory] = useState("Todos");
   const [sort, setSort] = useState("smart");
   const [recurrenceFilter, setRecurrenceFilter] = useState("all");
@@ -495,7 +511,9 @@ export function ProductCatalogView({
           <span className="text-red-500 text-2xl">⚠️</span>
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-slate-800">Erro ao carregar catálogo</p>
+          <p className="text-sm font-semibold text-slate-800">
+            Erro ao carregar catálogo
+          </p>
           <p className="text-xs text-slate-500 max-w-xs">{productsError}</p>
         </div>
       </div>

@@ -38,6 +38,7 @@ import { useAccountType } from "@/contexts/account-type-context";
 import { useProducts } from "@/lib/contexts/product-context";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
 import { ProductRatingDisplay } from "@/components/product-rating-display";
+import { CopyLinkButton } from "@/components/copy-link-button";
 
 function fmtBRL(n: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -412,13 +413,16 @@ export function ProductDetailSheet({
         style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         {/* Botão fechar absoluto — fica branco sobre o header escuro */}
-        <button
-          onClick={handleClose}
-          className="absolute top-3.5 right-3.5 z-20 rounded-full h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40"
-          aria-label="Fechar"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5">
+          <CopyLinkButton />
+          <button
+            onClick={handleClose}
+            className="rounded-full h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40"
+            aria-label="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
         {/* ══════════════════════════════════════════════════════════════
             HEADER — compacto: info (esq) | highlights (dir)

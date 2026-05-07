@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useSidebar } from "@/contexts/sidebar-context";
 import {
   X,
@@ -140,6 +141,8 @@ const VIEW_MODE_OPTIONS: Array<{
 export function ProjectBasketDrawer() {
   const basket = useProjectBasket();
   const { sidebarWidth } = useSidebar();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [projectPanelOpen, setProjectPanelOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   /** Loading state when preparing/opening the project creation drawer */
@@ -947,10 +950,26 @@ export function ProjectBasketDrawer() {
           if (v) setIsPreparingProject(false);
           // Do NOT clear basket here — only clear on successful project creation
         }}
-        onCreate={() => {
+        onCreate={(project) => {
           basket.clearBasket();
           setProjectPanelOpen(false);
           setIsPreparingProject(false);
+          handleClose();
+          // Navigate to the correct projects page so the user is not left on the catalog
+          if (project?.id) {
+            const path = location.pathname;
+            let basePath = "/admin";
+            if (path.startsWith("/agencia")) basePath = "/agencia";
+            else if (path.startsWith("/empresa")) basePath = "/empresa";
+            else if (path.startsWith("/company")) basePath = "/company";
+            else if (path.startsWith("/lider")) basePath = "/lider";
+            navigate(`${basePath}/projetos`, {
+              state: {
+                openProjectId: project.id,
+                openProjectTab: project.openTab ?? "dashboard",
+              },
+            });
+          }
         }}
         allowCompanySelect={true}
         draftProducts={basket.items.map((i) => ({

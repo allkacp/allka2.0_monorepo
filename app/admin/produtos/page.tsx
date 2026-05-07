@@ -9,6 +9,7 @@ import {
 import type React from "react";
 
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -115,6 +116,7 @@ import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useProducts } from "@/lib/contexts/product-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
 import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
 import { formatCurrency } from "@/lib/utils";
@@ -472,6 +474,24 @@ export default function AdminProdutosPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false); // Renamed from isCreateOpen
   const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+  const navigate = useNavigate();
+  const { produtoId: urlProdutoId } = useParams<{ produtoId?: string }>();
+
+  // Deep-link: open product sheet from URL param
+  useEffect(() => {
+    if (!urlProdutoId) return;
+    apiClient
+      .getProduct(urlProdutoId)
+      .then((product: any) => {
+        setSelectedProduct(product);
+        setIsViewSheetOpen(true);
+      })
+      .catch(() => {
+        setSelectedProduct({ id: urlProdutoId } as any);
+        setIsViewSheetOpen(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlProdutoId]);
   // ── Catalog tasks for the view sheet ────────────────────────────────────
   const [productCatalogTasks, setProductCatalogTasks] = useState<any[]>([]);
   const [catalogTasksLoading, setCatalogTasksLoading] = useState(false);
@@ -673,7 +693,7 @@ export default function AdminProdutosPage() {
     .filter((product) => {
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(product.id).includes(searchTerm.toLowerCase()) ||
         (product.description &&
           product.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -1000,6 +1020,7 @@ export default function AdminProdutosPage() {
   const handleViewProduct = (product: Product) => {
     setSelectedProduct(product);
     setIsViewSheetOpen(true);
+    navigate(`/admin/produtos/${product.id}`, { replace: true });
   };
 
   const handleDeleteProduct = async (productId: string) => {
@@ -1119,12 +1140,8 @@ export default function AdminProdutosPage() {
   const generateProductId = (category: string): string => {
     const sigla = CATEGORY_SIGLA[category] || "PROD";
     const prefix = `${sigla}-`;
-    const existing = (products || []).filter((p) => p.id.startsWith(prefix));
-    const maxNum = existing.reduce((max, p) => {
-      const num = parseInt(p.id.replace(prefix, ""), 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    return `${prefix}${String(maxNum + 1).padStart(4, "0")}`;
+    // IDs are now auto-increment integers — return empty string (server assigns the ID)
+    return "";
   };
 
   const handleCreateProduct = () => {
@@ -4113,7 +4130,13 @@ export default function AdminProdutosPage() {
       </Dialog>
 
       {/* Sheet: View product (read-only) */}
-      <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+      <Sheet
+        open={isViewSheetOpen}
+        onOpenChange={(v) => {
+          setIsViewSheetOpen(v);
+          if (!v) navigate("/admin/produtos", { replace: true });
+        }}
+      >
         <SheetContent
           side="right"
           className="p-0 flex flex-col"
@@ -4128,6 +4151,7 @@ export default function AdminProdutosPage() {
                 title={selectedProduct.name}
                 subtitle={`${selectedProduct.category}${selectedProduct.recurrence ? ` · ${selectedProduct.recurrence}` : ""} · ${formatCurrency(selectedProduct.finalPrice || 0)}`}
                 icon={<Package />}
+                right={<CopyLinkButton />}
               />
 
               <div className="flex-1 overflow-auto">

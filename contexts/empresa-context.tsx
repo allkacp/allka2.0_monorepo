@@ -159,7 +159,11 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
             startDate: p.start_date || p.startDate || "",
             deliveryDate: p.end_date || p.deliveryDate || p.delivery_date || "",
             completedDate: p.completedDate || "",
-            tasksDone: p._count?.task_executions || p.tasksDone || 0,
+            tasksDone:
+              p._count?.project_tasks ||
+              p._count?.task_executions ||
+              p.tasksDone ||
+              0,
             tasksTotal: p.tasksTotal || 0,
             nomadeCount: p.nomadeCount || 0,
             nomadeNames: (() => {

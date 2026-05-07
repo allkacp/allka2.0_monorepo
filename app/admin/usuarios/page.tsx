@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,6 +85,7 @@ import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { createPortal } from "react-dom";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
+import { apiClient } from "@/lib/api-client";
 import { useUsers } from "@/hooks/useUsers";
 import {
   DropdownMenu,
@@ -138,6 +140,24 @@ export default function UsuariosPage() {
   const [headerHeight, setHeaderHeight] = useState(64);
   const [footerHeight, setFooterHeight] = useState(40);
   const pageRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { userId: urlUserId } = useParams<{ userId?: string }>();
+
+  // Deep-link: open user panel from URL param
+  useEffect(() => {
+    if (!urlUserId) return;
+    apiClient
+      .getUser(urlUserId)
+      .then((user: any) => {
+        setSelectedUser(user);
+        setIsViewDialogOpen(true);
+      })
+      .catch(() => {
+        setSelectedUser({ id: urlUserId } as any);
+        setIsViewDialogOpen(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlUserId]);
   const {
     sortKey: userSortKey,
     sortDir: userSortDir,
@@ -587,6 +607,7 @@ export default function UsuariosPage() {
     switch (action) {
       case "view":
         setIsViewDialogOpen(true);
+        navigate(`/admin/usuarios/${user.id}`, { replace: true });
         break;
       case "block":
         setIsDeleteAlertOpen(true);
@@ -2292,7 +2313,10 @@ export default function UsuariosPage() {
               )}
 
             {/* Users Table */}
-            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div
+              className="overflow-auto allka-table-scroll"
+              style={{ maxHeight: "calc(100vh - 18rem)" }}
+            >
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
@@ -2300,7 +2324,9 @@ export default function UsuariosPage() {
                       className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky", top: 0, zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
                         background: "var(--table-head)",
                         boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
@@ -2318,7 +2344,9 @@ export default function UsuariosPage() {
                       className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky", top: 0, zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
                         background: "var(--table-head)",
                         boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
@@ -2329,7 +2357,9 @@ export default function UsuariosPage() {
                       className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky", top: 0, zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
                         background: "var(--table-head)",
                         boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
@@ -2351,7 +2381,9 @@ export default function UsuariosPage() {
                       className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky", top: 0, zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
                         background: "var(--table-head)",
                         boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
@@ -2373,7 +2405,9 @@ export default function UsuariosPage() {
                       className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky", top: 0, zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
                         background: "var(--table-head)",
                         boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                       }}
@@ -2408,7 +2442,8 @@ export default function UsuariosPage() {
                         zIndex: 3,
                         borderLeft: "1px solid rgba(148,163,184,0.25)",
                         background: "var(--table-head)",
-                        boxShadow: "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
+                        boxShadow:
+                          "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                       }}
                     >
                       Ações
@@ -2817,6 +2852,7 @@ export default function UsuariosPage() {
           onClose={() => {
             setIsViewDialogOpen(false);
             setSelectedUser(null);
+            navigate("/admin/usuarios", { replace: true });
           }}
           onRefresh={refetchUsers}
           user={selectedUser}

@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useParams } from "react-router-dom";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -12,6 +13,7 @@ import { type Product } from "@/lib/contexts/product-context";
 
 export default function AdminCatalogoProdutos() {
   const basket = useProjectBasket();
+  const { produtoId: urlProdutoId } = useParams<{ produtoId?: string }>();
 
   // Derive from basket context — single source of truth
   const selectedProducts = useMemo<CatalogSelectedProduct[]>(
@@ -73,6 +75,7 @@ export default function AdminCatalogoProdutos() {
         onRemove={handleRemove}
         onIncrease={handleIncrease}
         onDecrease={handleDecrease}
+        initialProductId={urlProdutoId}
       />
     </div>
   );

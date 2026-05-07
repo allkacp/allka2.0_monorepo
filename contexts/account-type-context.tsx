@@ -18,6 +18,11 @@ interface AccountTypeContextType {
   isLocked: boolean;
   lockAccountType: () => void;
   unlockAccountType: () => void;
+  /** Nome do usuário de preview (só em dev). Null quando não definido. */
+  previewUserName: string | null;
+  /** Email do usuário de preview (só em dev). Null quando não definido. */
+  previewUserEmail: string | null;
+  setPreviewUser: (name: string, email: string) => void;
 }
 
 const AccountTypeContext = createContext<AccountTypeContextType | undefined>(
@@ -58,6 +63,8 @@ function inferFromPath(path: string): {
 function loadStoredProfile(): {
   accountType: AccountType;
   accountSubType: AccountSubType;
+  previewUserName: string | null;
+  previewUserEmail: string | null;
 } {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
@@ -67,6 +74,8 @@ function loadStoredProfile(): {
         return {
           accountType: p.accountType,
           accountSubType: p.accountSubType ?? null,
+          previewUserName: p.previewUserName ?? null,
+          previewUserEmail: p.previewUserEmail ?? null,
         };
     }
   } catch {}
@@ -78,20 +87,30 @@ function loadStoredProfile(): {
         return {
           accountType: p.accountType,
           accountSubType: p.accountSubType ?? null,
+          previewUserName: p.previewUserName ?? null,
+          previewUserEmail: p.previewUserEmail ?? null,
         };
     }
   } catch {}
-  return inferFromPath(window.location.pathname);
+  const inferred = inferFromPath(window.location.pathname);
+  return { ...inferred, previewUserName: null, previewUserEmail: null };
 }
 
 export function AccountTypeProvider({ children }: { children: ReactNode }) {
   // Lazy initializer: reads localStorage synchronously on first render.
   // This means the FIRST render already has the correct profile — no flash.
+  const stored = loadStoredProfile();
   const [accountType, setAccountTypeState] = useState<AccountType>(
-    () => loadStoredProfile().accountType,
+    () => stored.accountType,
   );
   const [accountSubType, setAccountSubType] = useState<AccountSubType>(
-    () => loadStoredProfile().accountSubType,
+    () => stored.accountSubType,
+  );
+  const [previewUserName, setPreviewUserName] = useState<string | null>(
+    () => loadStoredProfile().previewUserName,
+  );
+  const [previewUserEmail, setPreviewUserEmail] = useState<string | null>(
+    () => loadStoredProfile().previewUserEmail,
   );
   const [isLocked, setIsLocked] = useState(false);
 
@@ -102,17 +121,28 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
     setAccountTypeState(type);
     setAccountSubType(subType);
 
-    // Always persist to the dedicated key so F5 restores the correct profile.
+    // Re-read current preview user values before persisting (they may already
+    // be updated by setPreviewUser called in the same event handler).
+    // We persist them via setPreviewUser, so here just persist accountType.
+    const raw = localStorage.getItem(PROFILE_KEY);
+    let stored: Record<string, unknown> = {};
+    try {
+      stored = raw ? JSON.parse(raw) : {};
+    } catch {}
     localStorage.setItem(
       PROFILE_KEY,
-      JSON.stringify({ accountType: type, accountSubType: subType }),
+      JSON.stringify({
+        ...stored,
+        accountType: type,
+        accountSubType: subType,
+      }),
     );
 
     // Also keep simulatedUser in sync for backward compatibility.
     try {
-      const raw = localStorage.getItem("simulatedUser");
-      if (raw) {
-        const user = JSON.parse(raw);
+      const su = localStorage.getItem("simulatedUser");
+      if (su) {
+        const user = JSON.parse(su);
         user.accountType = type;
         user.accountSubType = subType;
         localStorage.setItem("simulatedUser", JSON.stringify(user));
@@ -120,6 +150,25 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
     } catch {
       // simulatedUser absent or corrupt — ignore, PROFILE_KEY is the source of truth
     }
+  };
+
+  const setPreviewUser = (name: string, email: string) => {
+    setPreviewUserName(name);
+    setPreviewUserEmail(email);
+    // Persist alongside accountType so F5 restores the name too
+    const raw = localStorage.getItem(PROFILE_KEY);
+    let stored: Record<string, unknown> = {};
+    try {
+      stored = raw ? JSON.parse(raw) : {};
+    } catch {}
+    localStorage.setItem(
+      PROFILE_KEY,
+      JSON.stringify({
+        ...stored,
+        previewUserName: name,
+        previewUserEmail: email,
+      }),
+    );
   };
 
   const lockAccountType = () => setIsLocked(true);
@@ -134,6 +183,9 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
         isLocked,
         lockAccountType,
         unlockAccountType,
+        previewUserName,
+        previewUserEmail,
+        setPreviewUser,
       }}
     >
       {children}

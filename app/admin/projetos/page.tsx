@@ -1,5 +1,11 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
@@ -122,7 +128,10 @@ import {
 import { useProjects } from "@/hooks/useProjects";
 import { apiClient } from "@/lib/api-client";
 import { adaptApiProject, type FrontendProject } from "@/lib/project-adapter";
-import { ALLKA_BADGE_CLASS, PROJECT_STATUS_VARIANT } from "@/components/allka-badge";
+import {
+  ALLKA_BADGE_CLASS,
+  PROJECT_STATUS_VARIANT,
+} from "@/components/allka-badge";
 
 export default function AdminProjetosPage() {
   const {
@@ -153,7 +162,8 @@ export default function AdminProjetosPage() {
   const [modalMode, setModalMode] = useState<"view" | "edit" | "create">(
     "view",
   );
-  const [initialProjectTab, setInitialProjectTab] = useState<string>("dashboard");
+  const [initialProjectTab, setInitialProjectTab] =
+    useState<string>("dashboard");
   const [showWizard, setShowWizard] = useState(false);
   const [showProjectCreate, setShowProjectCreate] = useState(false);
   const [projectCreateData, setProjectCreateData] = useState<any>(null);
@@ -1180,17 +1190,78 @@ export default function AdminProjetosPage() {
     };
   }, [projectsData, dateRange, filterFromLead]);
 
+  const navigate = useNavigate();
+  const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
+  const [searchParams] = useSearchParams();
+
   const handleEditProject = (project: FrontendProject) => {
     setSelectedProject(project);
     setModalMode("edit");
     setModalOpen(true);
+    navigate(`/admin/projetos/${project.id}`, { replace: true });
   };
 
   const handleViewProject = (project: FrontendProject) => {
     setSelectedProject(project);
     setModalMode("view");
     setModalOpen(true);
+    if (project.id)
+      navigate(`/admin/projetos/${project.id}`, { replace: true });
   };
+
+  // ── Deep-link: open project from URL param or legacy location.state ────────
+  const location = useLocation();
+  const [_deepLinkHandled, setDeepLinkHandled] = useState(false);
+
+  useEffect(() => {
+    // Priority 1: URL param /admin/projetos/:projectId
+    if (urlProjectId) {
+      const tab = searchParams.get("tab") ?? "dashboard";
+      setInitialProjectTab(tab);
+      apiClient
+        .getProject(urlProjectId)
+        .then((raw: any) => {
+          const full = adaptApiProject(raw);
+          setInitialProjectTab(tab);
+          setSelectedProject(full);
+          setModalMode("view");
+          setModalOpen(true);
+        })
+        .catch(() => {
+          setSelectedProject({
+            id: urlProjectId,
+            name: "Projeto",
+          } as FrontendProject);
+          setModalMode("view");
+          setModalOpen(true);
+        });
+      return;
+    }
+
+    // Priority 2: legacy navigation state (from basket drawer / checkout)
+    const state = location.state as any;
+    if (!state?.openProjectId) return;
+    const projectId = state.openProjectId;
+    const tab = state.openProjectTab ?? "dashboard";
+    window.history.replaceState({}, "");
+    setInitialProjectTab(tab);
+    apiClient
+      .getProject(projectId)
+      .then((raw: any) => {
+        const full = adaptApiProject(raw);
+        setInitialProjectTab(tab);
+        handleViewProject(full);
+        navigate(
+          `/admin/projetos/${projectId}${tab !== "dashboard" ? `?tab=${tab}` : ""}`,
+          { replace: true },
+        );
+      })
+      .catch(() => {
+        handleViewProject({ id: projectId } as FrontendProject);
+        navigate(`/admin/projetos/${projectId}`, { replace: true });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlProjectId, location.state]);
 
   const handleCloneProject = (project: FrontendProject) => {
     setProjectToClone(project);
@@ -1501,7 +1572,9 @@ export default function AdminProjetosPage() {
     if (variant) {
       const cls = ALLKA_BADGE_CLASS[variant];
       return (
-        <span className={`allka-badge allka-badge-${cls ? cls.replace("allka-badge-", "") : variant.replace("projeto-", "allka-badge-projeto-")}`}>
+        <span
+          className={`allka-badge allka-badge-${cls ? cls.replace("allka-badge-", "") : variant.replace("projeto-", "allka-badge-projeto-")}`}
+        >
           {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
           {label}
         </span>
@@ -2336,7 +2409,10 @@ export default function AdminProjetosPage() {
               </div>
 
               {/* ── Table ── */}
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+              <div
+                className="overflow-auto allka-table-scroll"
+                style={{ maxHeight: "calc(100vh - 18rem)" }}
+              >
                 <table
                   className="w-full text-xs"
                   style={{
@@ -2400,7 +2476,8 @@ export default function AdminProjetosPage() {
                           zIndex: 3,
                           background: "var(--table-head)",
                           borderLeft: "1px solid rgba(148,163,184,0.25)",
-                          boxShadow: "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
+                          boxShadow:
+                            "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
                           width: 100,
                         }}
                       >
@@ -2653,12 +2730,28 @@ export default function AdminProjetosPage() {
                                   overflow: "hidden",
                                 }}
                               >
-                                <div className="flex items-center gap-1.5">
-                                  <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <span className="text-xs text-slate-500">
-                                    {project.createdDate}
-                                  </span>
-                                </div>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1.5 cursor-default">
+                                      <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                      <span className="text-xs text-slate-500">
+                                        {project.createdDate}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-xs max-w-[240px]">
+                                    {(() => {
+                                      try {
+                                        const d = new Date(
+                                          project.createdAt || "",
+                                        );
+                                        return `Criado em ${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+                                      } catch {
+                                        return project.createdDate || "–";
+                                      }
+                                    })()}
+                                  </TooltipContent>
+                                </Tooltip>
                               </td>
                             )}
 
@@ -2669,7 +2762,10 @@ export default function AdminProjetosPage() {
                                 position: "sticky",
                                 right: 0,
                                 zIndex: 1,
-                                background: rowIdx % 2 === 0 ? "var(--table-row)" : "var(--table-row-alt)",
+                                background:
+                                  rowIdx % 2 === 0
+                                    ? "var(--table-row)"
+                                    : "var(--table-row-alt)",
                                 borderLeft: "1px solid rgba(148,163,184,0.25)",
                                 boxShadow: "-2px 0 6px rgba(0,0,0,0.05)",
                               }}
@@ -4575,7 +4671,10 @@ export default function AdminProjetosPage() {
         <ProjectManagementModal
           project={selectedProject}
           open={modalOpen}
-          onOpenChange={setModalOpen}
+          onOpenChange={(open) => {
+            setModalOpen(open);
+            if (!open) navigate("/admin/projetos", { replace: true });
+          }}
           mode={modalMode}
           initialTab={initialProjectTab}
           onEdit={() => {
@@ -4641,15 +4740,25 @@ export default function AdminProjetosPage() {
               setShowProjectCreate(false);
               const openTab = project.openTab ?? "dashboard";
               setInitialProjectTab(openTab);
+              const tabParam = openTab !== "dashboard" ? `?tab=${openTab}` : "";
               try {
                 const raw: any = await apiClient.getProject(project.id);
                 const full = adaptApiProject(raw);
                 setInitialProjectTab(openTab);
-                handleViewProject(full);
+                setSelectedProject(full);
+                setModalMode("view");
+                setModalOpen(true);
+                navigate(`/admin/projetos/${project.id}${tabParam}`, {
+                  replace: true,
+                });
               } catch {
-                // Fallback: if API call fails, open modal with partial data
                 setInitialProjectTab(openTab);
-                handleViewProject(project as FrontendProject);
+                setSelectedProject(project as FrontendProject);
+                setModalMode("view");
+                setModalOpen(true);
+                navigate(`/admin/projetos/${project.id}${tabParam}`, {
+                  replace: true,
+                });
               }
             }
           }}

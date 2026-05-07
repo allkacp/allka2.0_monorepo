@@ -42,7 +42,6 @@ import type { MockClientItem, MockCompanyItem } from "@/lib/mock-companies";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel";
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
-import { useProjects } from "@/hooks/useProjects";
 import {
   exportProposalPDF,
   parseBrandGradient,
@@ -85,6 +84,7 @@ import {
 
 // ── Project status types & config ─────────────────────────────────────────────
 type ProjectStatus =
+  | "creating" // frontend-only — projeto ainda não foi persistido
   | "draft"
   | "pending-approval"
   | "awaiting-payment"
@@ -104,6 +104,13 @@ const PROJECT_STATUS_CONFIG: Record<
     btnSelected: string;
   }
 > = {
+  creating: {
+    label: "Em criação",
+    dot: "bg-violet-300",
+    color: "bg-violet-50 text-violet-600",
+    btn: "bg-violet-50 text-violet-600 hover:bg-violet-100",
+    btnSelected: "bg-violet-400 text-white shadow-md scale-105",
+  },
   draft: {
     label: "Rascunho",
     dot: "bg-slate-400",
@@ -336,11 +343,11 @@ export function ProjectCreateNewPanel({
   const [showCreateCompany, setShowCreateCompany] = useState(false);
   // (localCompanies defined above with the API companies state)
 
-  // Project name uniqueness
-  const { projects: existingProjects } = useProjects();
-  const existingProjectNames = existingProjects.map((p) =>
-    p.name.toLowerCase(),
-  );
+  // Project name uniqueness — checked against the API (context-aware)
+  const [nameCheckState, setNameCheckState] = useState<
+    "idle" | "checking" | "duplicate" | "ok"
+  >("idle");
+  const nameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [warnings, setWarnings] = useState<Record<string, string>>({});
 
   // Company data from API — lazy-loaded when panel opens
@@ -354,9 +361,16 @@ export function ProjectCreateNewPanel({
   const [showProductsStep, setShowProductsStep] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutPayerMode, setCheckoutPayerMode] = useState<
+    "agency" | "client"
+  >("agency");
   // Pre-created project (created before entering checkout so CheckoutFlow gets a real ID)
-  const [preCreatedProjectId, setPreCreatedProjectId] = useState<string | null>(null);
-  const [preLinkedProductIds, setPreLinkedProductIds] = useState<Record<string, string>>({});
+  const [preCreatedProjectId, setPreCreatedProjectId] = useState<string | null>(
+    null,
+  );
+  const [preLinkedProductIds, setPreLinkedProductIds] = useState<
+    Record<string, string>
+  >({});
   const [selectedProducts, setSelectedProducts] = useState<
     CatalogSelectedProduct[]
   >([]);
@@ -426,6 +440,7 @@ export function ProjectCreateNewPanel({
     if (open) {
       setFormData(buildFormFromInitial());
       setErrors({});
+      setNameCheckState("idle");
       setSubmitAttempted(false);
       setAvatarPreview(null);
       setOriginalRawSrc(null);
@@ -504,16 +519,21 @@ export function ProjectCreateNewPanel({
           name: pp.product_name_snapshot || pp.product?.name || "Produto",
           description: pp.product?.description || "",
           category: pp.product_category_snapshot || pp.product?.category || "",
-          finalPrice: Number(pp.preco_final_cliente_snapshot ?? pp.product?.base_price ?? 0),
+          finalPrice: Number(
+            pp.preco_final_cliente_snapshot ?? pp.product?.base_price ?? 0,
+          ),
           basePrice: Number(pp.product?.base_price ?? 0),
           image: pp.product?.image || "",
           quantity: 1,
         }));
         const qmap: Record<string, number> = {};
-        products.forEach((p) => { qmap[p.id] = 1; });
+        products.forEach((p) => {
+          qmap[p.id] = 1;
+        });
         const linkedMap: Record<string, string> = {};
         list.forEach((pp: any) => {
-          if (pp.product_id && pp.id) linkedMap[String(pp.product_id)] = String(pp.id);
+          if (pp.product_id && pp.id)
+            linkedMap[String(pp.product_id)] = String(pp.id);
         });
         setSelectedProducts(products);
         setProductQuantities(qmap);
@@ -525,7 +545,9 @@ export function ProjectCreateNewPanel({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [open, draftProjectId, draftProducts]);
 
   // Fetch companies lazily when panel opens (and allowCompanySelect is on)
@@ -647,6 +669,45 @@ export function ProjectCreateNewPanel({
     };
   }, [open, resolvedCompanyId]);
 
+  // Debounced duplicate-name check against the API
+  useEffect(() => {
+    if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current);
+    const name = formData.nome.trim();
+    if (!name) {
+      setNameCheckState("idle");
+      return;
+    }
+    setNameCheckState("checking");
+    nameCheckTimer.current = setTimeout(async () => {
+      try {
+        const result = await apiClient.checkProjectName({
+          title: name,
+          client_id: resolvedCompanyId ?? undefined,
+          agency: resolvedCompanyName || formData.agencia || undefined,
+          // exclude the current draft/project if editing
+          exclude_id:
+            preCreatedProjectId ??
+            (draftProjectId ? String(draftProjectId) : undefined),
+        });
+        setNameCheckState(result.duplicate ? "duplicate" : "ok");
+        // Mirror into errors so the field turns red live
+        setErrors((prev) => ({
+          ...prev,
+          nome: result.duplicate
+            ? "Já existe um projeto com esse nome para esta empresa."
+            : undefined,
+        }));
+      } catch {
+        // API unavailable — don't block the user, just clear the check
+        setNameCheckState("idle");
+      }
+    }, 500);
+    return () => {
+      if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.nome, resolvedCompanyId, formData.agencia]);
+
   // ── Helpers ──
   const updateField = <K extends keyof FormData>(
     field: K,
@@ -660,6 +721,8 @@ export function ProjectCreateNewPanel({
   const validateForm = (): boolean => {
     const e: FormErrors = {};
     if (!formData.nome.trim()) e.nome = "Nome do projeto é obrigatório";
+    else if (nameCheckState === "duplicate")
+      e.nome = "Já existe um projeto com esse nome para esta empresa.";
     if (!formData.tipo) e.tipo = "Tipo é obrigatório";
     // Empresa required only when allowCompanySelect is true (must pick one)
     if (allowCompanySelect && !resolvedCompanyId)
@@ -813,6 +876,21 @@ export function ProjectCreateNewPanel({
       }
     } catch (err: any) {
       console.error("[confirmSubmit]", err);
+      // 409 = duplicate project name
+      if (String(err?.message).includes("duplicate_project_name")) {
+        setNameCheckState("duplicate");
+        setErrors((prev) => ({
+          ...prev,
+          nome: "Já existe um projeto com esse nome para esta empresa.",
+        }));
+        toast({
+          title: "Nome duplicado",
+          description:
+            "Já existe um projeto com esse nome para esta empresa. Escolha outro nome.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erro ao salvar projeto",
         description: isDraft
@@ -1212,7 +1290,7 @@ export function ProjectCreateNewPanel({
       tipoComissao: "PERCENTUAL" as const,
       percentualComissao: productCommissions[id] || 0,
       valorComissao: 0,
-      pagador: "CLIENTE" as const,
+      pagador: "AGENCIA" as const,
     };
 
   const calcProductCommissionValue = (
@@ -1269,41 +1347,56 @@ export function ProjectCreateNewPanel({
     company: formData.clienteCnpj || formData.cliente,
   });
 
-  const convertProductsToCartItems = () =>
-    selectedProducts.map((p) => {
-      const id = String(p.id);
-      const qty = productQuantities[id] || p.quantity || 1;
-      const c = getProductCommission(id);
-      const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
-      // Checkout uses client-facing price: CLIENTE pays base+commission, AGENCIA pays base
-      const checkoutPrice =
-        c.pagador === "CLIENTE" ? p.finalPrice + commValue / qty : p.finalPrice;
-      return {
-        id,
-        product: {
+  // Build cart items for checkout, filtered by who pays.
+  // Agency mode: only AGENCIA-pay products at base price → total = calculateAgencyPayTotal()
+  // Client mode: only CLIENTE-pay products at client price → total = calculateClientPayTotal()
+  const convertProductsToCartItems = () => {
+    const mode = checkoutPayerMode;
+    return selectedProducts
+      .filter((p) => {
+        const id = String(p.id);
+        const c = getProductCommission(id);
+        return mode === "agency"
+          ? c.pagador === "AGENCIA"
+          : c.pagador === "CLIENTE";
+      })
+      .map((p) => {
+        const id = String(p.id);
+        const qty = productQuantities[id] || p.quantity || 1;
+        const c = getProductCommission(id);
+        const commValue = calcProductCommissionValue(id, p.finalPrice, qty);
+        // Agency: base price | Client: base + commission per unit
+        const unitPrice =
+          c.pagador === "CLIENTE"
+            ? p.finalPrice + commValue / qty
+            : p.finalPrice;
+        return {
           id,
-          name: p.name,
-          description: p.description || "",
-          shortDescription: p.description || "",
-          category: p.category || "",
-          tags: [],
-          basePrice: checkoutPrice,
-          complexity: "basic" as const,
-          visibility: {
-            company: true,
-            agency: true,
-            partner: true,
-            inHouse: true,
+          product: {
+            id,
+            name: p.name,
+            description: p.description || "",
+            shortDescription: p.description || "",
+            category: p.category || "",
+            tags: [],
+            basePrice: unitPrice,
+            complexity: "basic" as const,
+            visibility: {
+              company: true,
+              agency: true,
+              partner: true,
+              inHouse: true,
+            },
+            variations: [],
+            addons: [],
+            stats: { contractCount: 0, averageRating: 0, completionTime: "" },
+            demonstrations: [],
+            image: p.image || "",
           },
-          variations: [],
-          addons: [],
-          stats: { contractCount: 0, averageRating: 0, completionTime: "" },
-          demonstrations: [],
-          image: p.image || "",
-        },
-        quantity: qty,
-      };
-    });
+          quantity: qty,
+        };
+      });
+  };
 
   const handleCheckoutComplete = async (checkoutData: CheckoutData) => {
     // Payment was already registered in the backend by CheckoutFlow (fakeSandboxCheckout).
@@ -1317,8 +1410,7 @@ export function ProjectCreateNewPanel({
       return;
     }
     const commRate: number = checkoutData.commissionRate ?? 0;
-    const pagador =
-      checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
+    const pagador = checkoutData.payerMode === "client" ? "CLIENTE" : "AGENCIA";
 
     for (const [productId, ppId] of Object.entries(preLinkedProductIds)) {
       const product = selectedProducts.find((p) => String(p.id) === productId);
@@ -1342,7 +1434,11 @@ export function ProjectCreateNewPanel({
       description: "Pagamento aprovado. Projeto contratado com sucesso.",
       variant: "success",
     });
-    onCreate({ id: preCreatedProjectId, status: "in-progress", openTab: checkoutData.openTab });
+    onCreate({
+      id: preCreatedProjectId,
+      status: "in-progress",
+      openTab: checkoutData.openTab,
+    });
     handleClose();
   };
 
@@ -1392,7 +1488,11 @@ export function ProjectCreateNewPanel({
         const pid = String(product.id);
         const qty = productQuantities[pid] || product.quantity || 1;
         const c = getProductCommission(pid);
-        const commValue = calcProductCommissionValue(pid, product.finalPrice, qty);
+        const commValue = calcProductCommissionValue(
+          pid,
+          product.finalPrice,
+          qty,
+        );
         const clientUnitPrice =
           c.pagador === "CLIENTE"
             ? product.finalPrice + commValue / qty
@@ -1410,7 +1510,10 @@ export function ProjectCreateNewPanel({
           if (ppId) linkedMap[pid] = String(ppId);
         } catch (linkErr: any) {
           if (linkErr?.status !== 409) {
-            console.warn(`[handleProceedToCheckout] Falha ao vincular produto ${pid}:`, linkErr);
+            console.warn(
+              `[handleProceedToCheckout] Falha ao vincular produto ${pid}:`,
+              linkErr,
+            );
           }
         }
       }
@@ -1421,16 +1524,31 @@ export function ProjectCreateNewPanel({
       setShowCheckout(true);
     } catch (err: any) {
       console.error("[handleProceedToCheckout]", err);
+      // 409 = duplicate project name
+      if (String(err?.message).includes("duplicate_project_name")) {
+        setNameCheckState("duplicate");
+        setErrors((prev) => ({
+          ...prev,
+          nome: "Já existe um projeto com esse nome para esta empresa.",
+        }));
+        toast({
+          title: "Nome duplicado",
+          description:
+            "Já existe um projeto com esse nome para esta empresa. Escolha outro nome.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erro ao criar projeto",
-        description: "Não foi possível iniciar o checkout. Verifique os dados e tente novamente.",
+        description:
+          "Não foi possível iniciar o checkout. Verifique os dados e tente novamente.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleAvatarClick = () => {
     if (avatarPreview) setShowAvatarMenu((p) => !p);
@@ -1807,36 +1925,23 @@ export function ProjectCreateNewPanel({
                           value={formData.nome}
                           onChange={(e) => {
                             updateField("nome", e.target.value);
-                            if (warnings.nome)
-                              setWarnings((prev) => ({ ...prev, nome: "" }));
-                          }}
-                          onBlur={() => {
-                            if (
-                              formData.nome.trim() &&
-                              existingProjectNames.includes(
-                                formData.nome.trim().toLowerCase(),
-                              )
-                            ) {
-                              setWarnings((prev) => ({
-                                ...prev,
-                                nome: "Este nome já está em uso",
-                              }));
-                            } else {
-                              setWarnings((prev) => ({ ...prev, nome: "" }));
-                            }
+                            // Clear duplicate error so the debounce effect re-evaluates
+                            setErrors((prev) => ({ ...prev, nome: undefined }));
                           }}
                           className={cn(
                             "h-8 text-xs",
                             errors.nome && "border-red-400",
-                            !errors.nome && warnings.nome && "border-amber-400",
+                            !errors.nome &&
+                              nameCheckState === "checking" &&
+                              "border-slate-300",
                           )}
                         />
                         {errors.nome && (
                           <p className="text-xs text-red-500">{errors.nome}</p>
                         )}
-                        {!errors.nome && warnings.nome && (
-                          <p className="text-xs text-amber-600">
-                            {warnings.nome}
+                        {!errors.nome && nameCheckState === "checking" && (
+                          <p className="text-xs text-slate-400">
+                            Verificando nome...
                           </p>
                         )}
                       </div>
@@ -2810,7 +2915,8 @@ export function ProjectCreateNewPanel({
                 <div
                   className="relative shrink-0 px-6 py-5 overflow-hidden"
                   style={{
-                    background: "linear-gradient(135deg, #1a2060 0%, #2558FF 30%, #6E2C96 65%, #A61E86 100%)",
+                    background:
+                      "linear-gradient(135deg, #1a2060 0%, #2558FF 30%, #6E2C96 65%, #A61E86 100%)",
                   }}
                 >
                   {/* Decorative blobs */}
@@ -2828,7 +2934,10 @@ export function ProjectCreateNewPanel({
                           Revisar Projeto
                         </h2>
                         <p className="text-xs text-white/60 mt-0.5 max-w-xs truncate">
-                          {formData.nome ? `"${formData.nome}"` : "Novo projeto"} · Confira tudo antes de confirmar
+                          {formData.nome
+                            ? `"${formData.nome}"`
+                            : "Novo projeto"}{" "}
+                          · Confira tudo antes de confirmar
                         </p>
                       </div>
                     </div>
@@ -2837,7 +2946,10 @@ export function ProjectCreateNewPanel({
                         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20">
                           <Package className="h-3.5 w-3.5 text-white/70" />
                           <span className="text-xs font-semibold text-white/90">
-                            {selectedProducts.length} {selectedProducts.length === 1 ? "produto" : "produtos"}
+                            {selectedProducts.length}{" "}
+                            {selectedProducts.length === 1
+                              ? "produto"
+                              : "produtos"}
                           </span>
                           <span className="text-white/40 text-xs">·</span>
                           <span
@@ -2863,17 +2975,23 @@ export function ProjectCreateNewPanel({
                 {/* ── Two-column scrollable body ── */}
                 <div className="flex-1 overflow-y-auto bg-slate-50/80">
                   <div className="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-5 gap-4">
-
                     {/* ── LEFT COLUMN: main content (3/5) ── */}
                     <div className="lg:col-span-3 space-y-4">
-
                       {/* 1. Project Data */}
                       <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2"
-                          style={{ background: "linear-gradient(90deg, rgba(37,88,255,0.06) 0%, transparent 100%)" }}
+                        <div
+                          className="px-4 py-3 border-b border-slate-100 flex items-center gap-2"
+                          style={{
+                            background:
+                              "linear-gradient(90deg, rgba(37,88,255,0.06) 0%, transparent 100%)",
+                          }}
                         >
-                          <div className="h-6 w-6 rounded-lg flex items-center justify-center"
-                            style={{ background: "linear-gradient(135deg, #2558FF, #6E2C96)" }}
+                          <div
+                            className="h-6 w-6 rounded-lg flex items-center justify-center"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #2558FF, #6E2C96)",
+                            }}
                           >
                             <FolderKanban className="h-3.5 w-3.5 text-white" />
                           </div>
@@ -2884,54 +3002,99 @@ export function ProjectCreateNewPanel({
                         <div className="p-4 grid grid-cols-2 gap-x-5 gap-y-3.5">
                           {/* Nome */}
                           <div className="col-span-2">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Nome do Projeto</p>
-                            <p className="text-sm font-bold text-slate-900 truncate">{formData.nome || "—"}</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Nome do Projeto
+                            </p>
+                            <p className="text-sm font-bold text-slate-900 truncate">
+                              {formData.nome || "—"}
+                            </p>
                           </div>
                           {/* Tipo */}
                           <div>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Tipo</p>
-                            <p className="text-sm font-semibold text-slate-800">{formData.tipo || "—"}</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Tipo
+                            </p>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {formData.tipo || "—"}
+                            </p>
                           </div>
-                          {/* Status */}
+                          {/* Status — reflete o momento real do fluxo */}
                           <div>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Status</p>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-100 text-cyan-800">
-                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                              Ag. Pagamento
-                            </span>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Status
+                            </p>
+                            {(() => {
+                              const reviewStatus: ProjectStatus =
+                                preCreatedProjectId
+                                  ? "awaiting-payment"
+                                  : savedDraftId
+                                    ? "draft"
+                                    : "creating";
+                              const cfg = PROJECT_STATUS_CONFIG[reviewStatus];
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${cfg.color}`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`}
+                                  />
+                                  {cfg.label}
+                                </span>
+                              );
+                            })()}
                           </div>
                           {/* Empresa */}
                           <div>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Empresa</p>
-                            <p className="text-sm font-semibold text-slate-800 truncate">{resolvedCompanyName || formData.agencia || "—"}</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Empresa
+                            </p>
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              {resolvedCompanyName || formData.agencia || "—"}
+                            </p>
                           </div>
                           {/* Cliente */}
                           <div>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Cliente</p>
-                            <p className="text-sm font-semibold text-slate-800 truncate">{formData.cliente || "—"}</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Cliente
+                            </p>
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              {formData.cliente || "—"}
+                            </p>
                           </div>
                           {/* CNPJ */}
                           {formData.clienteCnpj && (
                             <div>
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">CNPJ / Doc.</p>
-                              <p className="text-sm font-semibold text-slate-800">{formData.clienteCnpj}</p>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                                CNPJ / Doc.
+                              </p>
+                              <p className="text-sm font-semibold text-slate-800">
+                                {formData.clienteCnpj}
+                              </p>
                             </div>
                           )}
                           {/* Consultor */}
                           <div className={formData.clienteCnpj ? "" : ""}>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Consultor Responsável</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                              Consultor Responsável
+                            </p>
                             <div className="flex items-center gap-1.5">
                               <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <p className="text-sm font-semibold text-slate-800 truncate">{formData.consultor || "—"}</p>
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {formData.consultor || "—"}
+                              </p>
                             </div>
                           </div>
                           {/* E-mail consultor */}
                           {formData.emailConsultor && (
                             <div>
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">E-mail do Consultor</p>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                                E-mail do Consultor
+                              </p>
                               <div className="flex items-center gap-1.5">
                                 <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                <p className="text-xs text-slate-600 truncate">{formData.emailConsultor}</p>
+                                <p className="text-xs text-slate-600 truncate">
+                                  {formData.emailConsultor}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -2940,19 +3103,27 @@ export function ProjectCreateNewPanel({
                             <div className="col-span-2 grid grid-cols-2 gap-5">
                               {formData.dataInicio && (
                                 <div>
-                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Data de Início</p>
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                                    Data de Início
+                                  </p>
                                   <div className="flex items-center gap-1.5">
                                     <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    <p className="text-sm font-semibold text-slate-800">{formData.dataInicio}</p>
+                                    <p className="text-sm font-semibold text-slate-800">
+                                      {formData.dataInicio}
+                                    </p>
                                   </div>
                                 </div>
                               )}
                               {formData.prazo && (
                                 <div>
-                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Prazo Final</p>
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                                    Prazo Final
+                                  </p>
                                   <div className="flex items-center gap-1.5">
                                     <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    <p className="text-sm font-semibold text-slate-800">{formData.prazo}</p>
+                                    <p className="text-sm font-semibold text-slate-800">
+                                      {formData.prazo}
+                                    </p>
                                   </div>
                                 </div>
                               )}
@@ -2963,12 +3134,20 @@ export function ProjectCreateNewPanel({
 
                       {/* 2. Products */}
                       <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"
-                          style={{ background: "linear-gradient(90deg, rgba(110,44,150,0.06) 0%, transparent 100%)" }}
+                        <div
+                          className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"
+                          style={{
+                            background:
+                              "linear-gradient(90deg, rgba(110,44,150,0.06) 0%, transparent 100%)",
+                          }}
                         >
                           <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg flex items-center justify-center"
-                              style={{ background: "linear-gradient(135deg, #6E2C96, #A61E86)" }}
+                            <div
+                              className="h-6 w-6 rounded-lg flex items-center justify-center"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, #6E2C96, #A61E86)",
+                              }}
                             >
                               <ShoppingBag className="h-3.5 w-3.5 text-white" />
                             </div>
@@ -2977,10 +3156,16 @@ export function ProjectCreateNewPanel({
                             </p>
                           </div>
                           {selectedProducts.length > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold"
-                              style={{ background: "linear-gradient(135deg, #6E2C96, #A61E86)", color: "white" }}
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[11px] font-bold"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, #6E2C96, #A61E86)",
+                                color: "white",
+                              }}
                             >
-                              {selectedProducts.length} {selectedProducts.length === 1 ? "item" : "itens"}
+                              {selectedProducts.length}{" "}
+                              {selectedProducts.length === 1 ? "item" : "itens"}
                             </span>
                           )}
                         </div>
@@ -2988,28 +3173,51 @@ export function ProjectCreateNewPanel({
                         {selectedProducts.length === 0 ? (
                           <div className="flex flex-col items-center py-10 text-center px-4">
                             <Package className="h-10 w-10 text-slate-200 mb-2" />
-                            <p className="text-sm font-medium text-slate-400">Nenhum produto adicionado</p>
-                            <p className="text-xs text-slate-300 mt-0.5">Volte para adicionar produtos</p>
+                            <p className="text-sm font-medium text-slate-400">
+                              Nenhum produto adicionado
+                            </p>
+                            <p className="text-xs text-slate-300 mt-0.5">
+                              Volte para adicionar produtos
+                            </p>
                           </div>
                         ) : (
-                          <div className="divide-y divide-slate-50">
+                          <div className="divide-y divide-slate-50 max-h-[420px] overflow-y-auto">
                             {selectedProducts.map((product, pIdx) => {
                               const id = String(product.id);
-                              const qty = productQuantities[id] || product.quantity || 1;
+                              const qty =
+                                productQuantities[id] || product.quantity || 1;
                               const baseUnit = product.finalPrice;
                               const baseTotal = baseUnit * qty;
                               const comm = getProductCommission(id);
-                              const commVal = calcProductCommissionValue(id, product.finalPrice, qty);
-                              const clientTotal = comm.pagador === "CLIENTE" ? baseTotal + commVal : baseTotal;
+                              const commVal = calcProductCommissionValue(
+                                id,
+                                product.finalPrice,
+                                qty,
+                              );
+                              const clientTotal =
+                                comm.pagador === "CLIENTE"
+                                  ? baseTotal + commVal
+                                  : baseTotal;
                               return (
-                                <div key={id} className="p-4 hover:bg-slate-50/60 transition-colors">
+                                <div
+                                  key={id}
+                                  className="p-4 hover:bg-slate-50/60 transition-colors"
+                                >
                                   <div className="flex items-start gap-3">
                                     {/* Thumbnail */}
-                                    <div className="h-12 w-12 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center"
-                                      style={{ background: "linear-gradient(135deg, #f0f4ff, #f5f0ff)" }}
+                                    <div
+                                      className="h-12 w-12 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center"
+                                      style={{
+                                        background:
+                                          "linear-gradient(135deg, #f0f4ff, #f5f0ff)",
+                                      }}
                                     >
                                       {product.image ? (
-                                        <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                                        <img
+                                          src={product.image}
+                                          alt={product.name}
+                                          className="h-full w-full object-cover"
+                                        />
                                       ) : (
                                         <Package className="h-5 w-5 text-violet-300" />
                                       )}
@@ -3023,17 +3231,24 @@ export function ProjectCreateNewPanel({
                                               {(product as any).code}
                                             </span>
                                           )}
-                                          <p className="text-sm font-bold text-slate-900 leading-snug truncate">{product.name}</p>
+                                          <p className="text-sm font-bold text-slate-900 leading-snug truncate">
+                                            {product.name}
+                                          </p>
                                           {(product as any).variation && (
                                             <p className="text-xs text-indigo-600 mt-0.5 font-medium">
-                                              Variação: {(product as any).variation}
+                                              Variação:{" "}
+                                              {(product as any).variation}
                                             </p>
                                           )}
                                         </div>
                                         <div className="text-right shrink-0">
-                                          <p className="text-sm font-extrabold text-slate-900">{formatCurrency(clientTotal)}</p>
+                                          <p className="text-sm font-extrabold text-slate-900">
+                                            {formatCurrency(clientTotal)}
+                                          </p>
                                           {qty > 1 && (
-                                            <p className="text-[10px] text-slate-400">unit. {formatCurrency(baseUnit)}</p>
+                                            <p className="text-[10px] text-slate-400">
+                                              unit. {formatCurrency(baseUnit)}
+                                            </p>
                                           )}
                                         </div>
                                       </div>
@@ -3058,25 +3273,148 @@ export function ProjectCreateNewPanel({
                                             {(product as any).deliveryDays}d
                                           </span>
                                         )}
-                                        {comm.pagador === "AGENCIA" ? (
-                                          <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold flex items-center gap-0.5">
-                                            <Building2 className="h-2.5 w-2.5" />
-                                            Agência paga
+                                      </div>
+                                      {/* ── Inline commission editor ── */}
+                                      <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                                        <span className="text-[10px] text-slate-400">
+                                          Base:{" "}
+                                          <span className="font-semibold text-slate-600">
+                                            {formatCurrency(baseTotal)}
                                           </span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold flex items-center gap-0.5">
-                                            <User className="h-2.5 w-2.5" />
-                                            Cliente paga
-                                          </span>
-                                        )}
-                                        {commVal > 0 && (
-                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-0.5"
-                                            style={{ background: "linear-gradient(135deg, rgba(37,88,255,0.1), rgba(110,44,150,0.1))", color: "#6E2C96", border: "1px solid rgba(110,44,150,0.2)" }}
+                                        </span>
+                                        <span className="text-slate-200 select-none">
+                                          ·
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <select
+                                            value={comm.tipoComissao}
+                                            onChange={(e) => {
+                                              const tipo = e.target.value as
+                                                | "PERCENTUAL"
+                                                | "VALOR_FIXO";
+                                              setProductCommissionData(
+                                                (prev) => ({
+                                                  ...prev,
+                                                  [id]: {
+                                                    ...getProductCommission(id),
+                                                    tipoComissao: tipo,
+                                                  },
+                                                }),
+                                              );
+                                            }}
+                                            className="h-6 px-1.5 text-[10px] rounded-md border border-slate-200 bg-white focus:outline-none focus:border-violet-400 cursor-pointer"
                                           >
+                                            <option value="PERCENTUAL">
+                                              %
+                                            </option>
+                                            <option value="VALOR_FIXO">
+                                              R$ Fixo
+                                            </option>
+                                          </select>
+                                          <div className="relative">
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              max={200}
+                                              step={0.5}
+                                              value={
+                                                comm.tipoComissao ===
+                                                "PERCENTUAL"
+                                                  ? comm.percentualComissao ||
+                                                    ""
+                                                  : comm.valorComissao || ""
+                                              }
+                                              placeholder="0"
+                                              onChange={(e) => {
+                                                const v =
+                                                  parseFloat(e.target.value) ||
+                                                  0;
+                                                const field =
+                                                  comm.tipoComissao ===
+                                                  "PERCENTUAL"
+                                                    ? "percentualComissao"
+                                                    : "valorComissao";
+                                                setProductCommissionData(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [id]: {
+                                                      ...getProductCommission(
+                                                        id,
+                                                      ),
+                                                      [field]: v,
+                                                    },
+                                                  }),
+                                                );
+                                                if (
+                                                  comm.tipoComissao ===
+                                                  "PERCENTUAL"
+                                                ) {
+                                                  setProductCommissions(
+                                                    (prev) => ({
+                                                      ...prev,
+                                                      [id]: v,
+                                                    }),
+                                                  );
+                                                }
+                                              }}
+                                              className="w-14 h-6 text-[10px] text-center rounded-md border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-4"
+                                            />
+                                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 pointer-events-none">
+                                              {comm.tipoComissao ===
+                                              "PERCENTUAL"
+                                                ? "%"
+                                                : "R$"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          {(
+                                            ["AGENCIA", "CLIENTE"] as const
+                                          ).map((opt) => (
+                                            <button
+                                              key={opt}
+                                              onClick={() =>
+                                                setProductCommissionData(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [id]: {
+                                                      ...getProductCommission(
+                                                        id,
+                                                      ),
+                                                      pagador: opt,
+                                                    },
+                                                  }),
+                                                )
+                                              }
+                                              className={cn(
+                                                "h-6 px-2 text-[9px] font-semibold rounded-md border transition-all",
+                                                comm.pagador === opt
+                                                  ? opt === "AGENCIA"
+                                                    ? "bg-blue-600 text-white border-blue-600"
+                                                    : "bg-emerald-600 text-white border-emerald-600"
+                                                  : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300",
+                                              )}
+                                            >
+                                              {opt === "AGENCIA"
+                                                ? "Agência"
+                                                : "Cliente"}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {commVal > 0 && (
+                                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
                                             <TrendingUp className="h-2.5 w-2.5" />
-                                            +{formatCurrency(commVal)} margem
+                                            +{formatCurrency(commVal)}
                                           </span>
                                         )}
+                                        <div className="ml-auto flex items-center gap-1.5 text-[10px]">
+                                          <span className="text-slate-400">
+                                            → Cliente:
+                                          </span>
+                                          <span className="font-bold text-slate-800">
+                                            {formatCurrency(clientTotal)}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -3097,14 +3435,36 @@ export function ProjectCreateNewPanel({
                         </div>
                         <div className="p-4 space-y-2.5">
                           {[
-                            { icon: <ShoppingBag className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />, text: "Os produtos serão vinculados ao projeto após a confirmação." },
-                            { icon: <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />, text: "Após o pagamento aprovado, tarefas de lançamento serão abertas automaticamente." },
-                            { icon: <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />, text: "Cada tarefa de lançamento terá prazo de 30 dias para ser iniciada." },
-                            { icon: <AlertCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />, text: "Tarefas não iniciadas dentro do prazo serão marcadas como expiradas." },
+                            {
+                              icon: (
+                                <ShoppingBag className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                              ),
+                              text: "Os produtos serão vinculados ao projeto após a confirmação.",
+                            },
+                            {
+                              icon: (
+                                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                              ),
+                              text: "Após o pagamento aprovado, tarefas de lançamento serão abertas automaticamente.",
+                            },
+                            {
+                              icon: (
+                                <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+                              ),
+                              text: "Cada tarefa de lançamento terá prazo de 30 dias para ser iniciada.",
+                            },
+                            {
+                              icon: (
+                                <AlertCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
+                              ),
+                              text: "Tarefas não iniciadas dentro do prazo serão marcadas como expiradas.",
+                            },
                           ].map((item, idx) => (
                             <div key={idx} className="flex items-start gap-2.5">
                               {item.icon}
-                              <p className="text-xs text-amber-900/80 leading-relaxed">{item.text}</p>
+                              <p className="text-xs text-amber-900/80 leading-relaxed">
+                                {item.text}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -3113,25 +3473,34 @@ export function ProjectCreateNewPanel({
 
                     {/* ── RIGHT COLUMN: financial (2/5) ── */}
                     <div className="lg:col-span-2 space-y-4">
-
                       {/* Financial Summary card */}
                       <div className="rounded-xl overflow-hidden border border-indigo-100 shadow-sm">
-                        <div className="px-4 py-3 flex items-center gap-2"
-                          style={{ background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)" }}
+                        <div
+                          className="px-4 py-3 flex items-center gap-2"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                          }}
                         >
                           <DollarSign className="h-4 w-4 text-white/80" />
-                          <p className="text-xs font-bold text-white uppercase tracking-widest">Resumo Financeiro</p>
+                          <p className="text-xs font-bold text-white uppercase tracking-widest">
+                            Resumo Financeiro
+                          </p>
                         </div>
                         <div className="p-4 bg-white space-y-2">
                           {/* Product count */}
                           <div className="flex items-center justify-between text-xs text-slate-500">
                             <span>Produtos</span>
-                            <span className="font-semibold text-slate-700">{selectedProducts.length}</span>
+                            <span className="font-semibold text-slate-700">
+                              {selectedProducts.length}
+                            </span>
                           </div>
                           {/* Base total (internal) */}
                           <div className="flex items-center justify-between text-xs text-slate-500">
                             <span>Total Base (Agência)</span>
-                            <span className="font-semibold text-slate-700">{formatCurrency(calculateTotal())}</span>
+                            <span className="font-semibold text-slate-700">
+                              {formatCurrency(calculateTotal())}
+                            </span>
                           </div>
                           {/* Commission (internal) */}
                           {calculateCommissionTotal() > 0 && (
@@ -3140,7 +3509,9 @@ export function ProjectCreateNewPanel({
                                 <TrendingUp className="h-3 w-3" />
                                 Margem / Comissão
                               </span>
-                              <span className="font-bold">+{formatCurrency(calculateCommissionTotal())}</span>
+                              <span className="font-bold">
+                                +{formatCurrency(calculateCommissionTotal())}
+                              </span>
                             </div>
                           )}
                           {/* Payer split */}
@@ -3150,25 +3521,32 @@ export function ProjectCreateNewPanel({
                                 <Building2 className="h-3 w-3" />
                                 Pago pela Agência
                               </span>
-                              <span className="font-semibold">{formatCurrency(calculateAgencyPayTotal())}</span>
+                              <span className="font-semibold">
+                                {formatCurrency(calculateAgencyPayTotal())}
+                              </span>
                             </div>
                           )}
                           {calculateClientPayTotal() > 0 && (
                             <div className="flex items-center justify-between text-xs text-slate-600">
                               <span className="flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                A pagar pelo Cliente
+                                <User className="h-3 w-3" />A pagar pelo Cliente
                               </span>
-                              <span className="font-semibold">{formatCurrency(calculateClientPayTotal())}</span>
+                              <span className="font-semibold">
+                                {formatCurrency(calculateClientPayTotal())}
+                              </span>
                             </div>
                           )}
                           {/* Divider */}
                           <div className="pt-2 mt-1 border-t border-slate-100">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-600">Total ao Cliente</span>
-                              <span className="text-base font-extrabold"
+                              <span className="text-xs font-bold text-slate-600">
+                                Total ao Cliente
+                              </span>
+                              <span
+                                className="text-base font-extrabold"
                                 style={{
-                                  background: "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
+                                  background:
+                                    "linear-gradient(135deg, #2558FF 0%, #A61E86 100%)",
                                   WebkitBackgroundClip: "text",
                                   WebkitTextFillColor: "transparent",
                                   backgroundClip: "text",
@@ -3179,122 +3557,22 @@ export function ProjectCreateNewPanel({
                             </div>
                           </div>
                           {/* Rate */}
-                          {calculateCommissionTotal() > 0 && calculateTotal() > 0 && (
-                            <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
-                              <span>Margem média</span>
-                              <span className="font-semibold text-emerald-500">
-                                {((calculateCommissionTotal() / calculateTotal()) * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                          )}
+                          {calculateCommissionTotal() > 0 &&
+                            calculateTotal() > 0 && (
+                              <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
+                                <span>Margem média</span>
+                                <span className="font-semibold text-emerald-500">
+                                  {(
+                                    (calculateCommissionTotal() /
+                                      calculateTotal()) *
+                                    100
+                                  ).toFixed(1)}
+                                  %
+                                </span>
+                              </div>
+                            )}
                         </div>
                       </div>
-
-                      {/* Per-product commission editor */}
-                      {selectedProducts.length > 0 && (
-                        <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2"
-                            style={{ background: "linear-gradient(90deg, rgba(16,185,129,0.06) 0%, transparent 100%)" }}
-                          >
-                            <div className="h-6 w-6 rounded-lg flex items-center justify-center bg-emerald-500">
-                              <Percent className="h-3.5 w-3.5 text-white" />
-                            </div>
-                            <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">Margens / Comissões</p>
-                          </div>
-                          <div className="divide-y divide-slate-50">
-                            {selectedProducts.map((product) => {
-                              const id = String(product.id);
-                              const qty = productQuantities[id] || product.quantity || 1;
-                              const baseCost = product.finalPrice * qty;
-                              const comm = getProductCommission(id);
-                              const commissionValue = calcProductCommissionValue(id, product.finalPrice, qty);
-                              const clientPrice = comm.pagador === "CLIENTE" ? baseCost + commissionValue : baseCost;
-                              return (
-                                <div key={id} className="p-3">
-                                  <p className="text-xs font-semibold text-slate-700 truncate mb-2">{product.name}</p>
-                                  <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div>
-                                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Tipo</p>
-                                      <select
-                                        value={comm.tipoComissao}
-                                        onChange={(e) => {
-                                          const tipo = e.target.value as "PERCENTUAL" | "VALOR_FIXO";
-                                          setProductCommissionData((prev) => ({
-                                            ...prev,
-                                            [id]: { ...getProductCommission(id), tipoComissao: tipo },
-                                          }));
-                                        }}
-                                        className="w-full h-7 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-violet-400 cursor-pointer"
-                                      >
-                                        <option value="PERCENTUAL">%</option>
-                                        <option value="VALOR_FIXO">R$ Fixo</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Valor</p>
-                                      <div className="relative">
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          max={200}
-                                          step={0.5}
-                                          value={comm.tipoComissao === "PERCENTUAL" ? comm.percentualComissao || "" : comm.valorComissao || ""}
-                                          placeholder="0"
-                                          onChange={(e) => {
-                                            const v = parseFloat(e.target.value) || 0;
-                                            const field = comm.tipoComissao === "PERCENTUAL" ? "percentualComissao" : "valorComissao";
-                                            setProductCommissionData((prev) => ({
-                                              ...prev,
-                                              [id]: { ...getProductCommission(id), [field]: v },
-                                            }));
-                                            if (comm.tipoComissao === "PERCENTUAL") {
-                                              setProductCommissions((prev) => ({ ...prev, [id]: v }));
-                                            }
-                                          }}
-                                          className="w-full h-7 text-xs text-center rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors pr-5"
-                                        />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
-                                          {comm.tipoComissao === "PERCENTUAL" ? "%" : "R$"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Pagador</p>
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                      {(["AGENCIA", "CLIENTE"] as const).map((opt) => (
-                                        <button
-                                          key={opt}
-                                          onClick={() => setProductCommissionData((prev) => ({
-                                            ...prev,
-                                            [id]: { ...getProductCommission(id), pagador: opt },
-                                          }))}
-                                          className={cn(
-                                            "h-7 text-[10px] font-semibold rounded-lg border transition-all",
-                                            comm.pagador === opt
-                                              ? opt === "AGENCIA"
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-emerald-600 text-white border-emerald-600"
-                                              : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300",
-                                          )}
-                                        >
-                                          {opt === "AGENCIA" ? "Agência" : "Cliente"}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  {commissionValue > 0 && (
-                                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                                      <span className="text-slate-400">Preço ao cliente</span>
-                                      <span className="font-bold text-slate-700">{formatCurrency(clientPrice)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -3316,22 +3594,71 @@ export function ProjectCreateNewPanel({
                         className="h-9 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
                       >
                         <Package className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Editar Produtos</span>
+                        <span className="hidden sm:inline">
+                          Editar Produtos
+                        </span>
                       </button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleExportPresentation}
                         disabled={exportingPDF || !!exportBlockReason}
-                        title={!exportingPDF && exportBlockReason ? exportBlockReason : undefined}
+                        title={
+                          !exportingPDF && exportBlockReason
+                            ? exportBlockReason
+                            : undefined
+                        }
                         className="h-9 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
                       >
-                        {exportingPDF ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                        <span className="hidden sm:inline">{exportingPDF ? "Gerando..." : "Exportar"}</span>
+                        {exportingPDF ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <FileDown className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {exportingPDF ? "Gerando..." : "Exportar"}
+                        </span>
                       </Button>
                     </div>
 
-                    <div className="flex-1" />
+                    <div className="flex items-center gap-1.5 flex-1 mx-1">
+                      <span className="text-[10px] font-semibold text-slate-500 shrink-0 hidden sm:block">
+                        Checkout:
+                      </span>
+                      <button
+                        onClick={() => setCheckoutPayerMode("agency")}
+                        title="Agência processa o pagamento pelo preço base"
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
+                          checkoutPayerMode === "agency"
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-blue-300",
+                        )}
+                      >
+                        <Building2 className="h-3 w-3" />
+                        Agência
+                      </button>
+                      <button
+                        onClick={() => setCheckoutPayerMode("client")}
+                        disabled={calculateClientPayTotal() === 0}
+                        title={
+                          calculateClientPayTotal() === 0
+                            ? "Nenhum produto com pagamento do cliente"
+                            : "Cliente processa o pagamento pelo preço final"
+                        }
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
+                          checkoutPayerMode === "client"
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300",
+                          calculateClientPayTotal() === 0 &&
+                            "opacity-40 cursor-not-allowed",
+                        )}
+                      >
+                        <User className="h-3 w-3" />
+                        Cliente
+                      </button>
+                    </div>
 
                     {/* Right group */}
                     <div className="flex items-center gap-2">
@@ -3343,8 +3670,16 @@ export function ProjectCreateNewPanel({
                         title={draftBlockReason ?? undefined}
                         className="h-9 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
                       >
-                        {loadingAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        <span className="hidden sm:inline">{loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}</span>
+                        {loadingAction === "draft" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {loadingAction === "draft"
+                            ? "Salvando..."
+                            : "Salvar Rascunho"}
+                        </span>
                       </Button>
                       <button
                         disabled={!!checkoutBlockReason || loading}
@@ -3352,7 +3687,8 @@ export function ProjectCreateNewPanel({
                         onClick={handleProceedToCheckout}
                         className="h-9 px-5 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
                         style={{
-                          background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                          background:
+                            "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
                           boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
                         }}
                       >
@@ -3362,7 +3698,9 @@ export function ProjectCreateNewPanel({
                           <CreditCard className="h-4 w-4" />
                         )}
                         {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
-                        {!loading && <ChevronRight className="h-3.5 w-3.5 opacity-70" />}
+                        {!loading && (
+                          <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -3794,8 +4132,9 @@ export function ProjectCreateNewPanel({
             preselectedClient={buildPreselectedClient()}
             preselectedProject={buildProject("awaiting-payment")}
             projectId={preCreatedProjectId ?? undefined}
-            payerType="agency"
-            presetCommissionRate={getWeightedCommissionRate()}
+            checkoutMode={checkoutPayerMode}
+            clientTotalRef={calculateClientPayTotal()}
+            presetCommissionRate={0}
           />
         </div>
       )}
