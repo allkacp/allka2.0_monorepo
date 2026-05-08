@@ -1,1 +1,0 @@
-﻿const {PrismaClient}=require("./node_modules/@prisma/client");const p=new PrismaClient();p.catalogTask.groupBy({by:["status"],_count:true}).then(r=>{r.forEach(x=>console.log(x.status,x._count));return p.catalogTask.count({where:{product_links:{some:{}}}})}).then(n=>console.log("with products:",n)).catch(e=>console.error(e.message)).finally(()=>p.$disconnect())

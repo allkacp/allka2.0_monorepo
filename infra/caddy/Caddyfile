@@ -1,0 +1,9 @@
+{$FRONTEND_DOMAIN:dev.allka.com.vc} {
+  encode zstd gzip
+  reverse_proxy frontend:80
+}
+
+{$API_DOMAIN:api-dev.allka.com.vc} {
+  encode zstd gzip
+  reverse_proxy backend:3001
+}

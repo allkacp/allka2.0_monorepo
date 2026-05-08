@@ -23,15 +23,15 @@ Pergunta antes de sair codando: **isso afeta frontend, backend ou banco?**
 
 | Eu mudei...                                                                      | Afeta                            |
 | -------------------------------------------------------------------------------- | -------------------------------- |
-| `.tsx` / `.ts` em `app/`, `components/`, `contexts/`, `hooks/`, `lib/`, `types/` | Frontend                         |
+| `.tsx` / `.ts` em `apps/frontend/app/`, `apps/frontend/components/`, `apps/frontend/contexts/`, `apps/frontend/hooks/`, `apps/frontend/lib/`, `apps/frontend/types/` | Frontend                         |
 | `.css`, `tailwind.config.*`, `postcss.config.*`, `index.html`                    | Frontend                         |
 | `.env.production`                                                                | Frontend (rebuild)               |
-| `backend/src/routes/*`, `backend/src/middleware/*`, `backend/app.js`             | Backend                          |
-| `backend/.env`                                                                   | Backend                          |
-| `backend/prisma/schema.prisma`                                                   | Banco + Backend                  |
-| `backend/prisma/seed*.ts` / `backend/seed-*.js`                                  | Dados (rodar manual após deploy) |
+| `apps/backend/src/routes/*`, `apps/backend/src/middleware/*`, `apps/backend/app.js`             | Backend                          |
+| `apps/backend/.env`                                                                   | Backend                          |
+| `apps/backend/prisma/schema.prisma`                                                   | Banco + Backend                  |
+| `apps/backend/prisma/seed*.ts` / `apps/backend/seed-*.js`                                  | Dados (rodar manual após deploy) |
 | `package.json` do front                                                          | Frontend (rebuild com install)   |
-| `backend/package.json`                                                           | Backend (instalar deps)          |
+| `apps/backend/package.json`                                                           | Backend (instalar deps)          |
 
 Depois, consulte [deploy.md](./deploy.md) para saber o que subir.
 
@@ -39,9 +39,9 @@ Depois, consulte [deploy.md](./deploy.md) para saber o que subir.
 
 ## Regras de ouro
 
-### 1. Nunca importar de `dev-mocks/` em código de produção
+### 1. Nunca importar de `apps/frontend/dev-mocks/` em código de produção
 
-O `lib/api-client-factory.ts` já separa mock e real. Se você escrever `import { mockProducts } from "dev-mocks/..."` em algum componente, ele vai para o bundle de produção.
+O `apps/frontend/lib/api-client-factory.ts` já separa mock e real. Se você escrever `import { mockProducts } from "dev-mocks/..."` em algum componente, ele vai para o bundle de produção.
 
 ### 2. Nunca hardcodear URL de API
 
@@ -49,7 +49,7 @@ Use `import.meta.env.VITE_API_URL` ou o `apiClient` pronto.
 
 ### 3. Nunca commitar `.env` com credenciais reais
 
-Só `.env.example` vai pro git. `backend/.env` e `dev-mocks/` estão no `.gitignore`.
+Só `.env.example` vai pro git. `apps/backend/.env` e `apps/frontend/dev-mocks/` estão no `.gitignore`.
 
 ### 4. Nunca rodar `prisma migrate dev` em produção
 
@@ -59,7 +59,7 @@ Só `prisma migrate deploy`. Ver [banco.md](./banco.md).
 
 `is_active = false` em vez de `DELETE`. Preserva histórico.
 
-### 6. Nunca editar `dist/` manualmente
+### 6. Nunca editar `apps/frontend/dist/` manualmente
 
 É gerado pelo `npm run build`. Qualquer alteração ali é perdida no próximo build.
 
@@ -85,13 +85,13 @@ Componentes devem tratar loading + erro graciosamente.
 
 Roteiro mental:
 
-1. **É uma tela?** → `app/<portal>/<rota>/page.tsx`
-2. **É um componente reutilizável?** → `components/<nome>.tsx`
-3. **É estado compartilhado?** → `contexts/` ou `lib/contexts/`
-4. **É chamada de API?** → `lib/api-client.ts` (frontend) + `backend/src/routes/<dominio>.ts` (backend)
-5. **É um campo novo no banco?** → `backend/prisma/schema.prisma`
-6. **É regra de negócio de preço?** → `lib/pricing-engine.ts`
-7. **É um texto/conteúdo de produto?** → `backend/seed-product-*.js`
+1. **É uma tela?** → `apps/frontend/app/<portal>/<rota>/page.tsx`
+2. **É um componente reutilizável?** → `apps/frontend/components/<nome>.tsx`
+3. **É estado compartilhado?** → `apps/frontend/contexts/` ou `apps/frontend/lib/contexts/`
+4. **É chamada de API?** → `apps/frontend/lib/api-client.ts` (frontend) + `apps/backend/src/routes/<dominio>.ts` (backend)
+5. **É um campo novo no banco?** → `apps/backend/prisma/schema.prisma`
+6. **É regra de negócio de preço?** → `apps/frontend/lib/pricing-engine.ts`
+7. **É um texto/conteúdo de produto?** → `apps/backend/seed-product-*.js`
 
 Quando em dúvida, **procurar arquivo similar existente** (`grep` no nome). A plataforma já tem ~70 componentes — reusar é mais rápido e mantém consistência.
 
@@ -101,34 +101,34 @@ Quando em dúvida, **procurar arquivo similar existente** (`grep` no nome). A pl
 
 ### Tela nova
 
-1. Criar pasta `app/<portal>/<rota>/` com `page.tsx`
+1. Criar pasta `apps/frontend/app/<portal>/<rota>/` com `page.tsx`
 2. Registrar rota em `App.tsx`
-3. Adicionar item na sidebar (`components/sidebar.tsx`)
+3. Adicionar item na sidebar (`apps/frontend/components/sidebar.tsx`)
 4. Usar `PageHeader` + layout padrão
 5. Listagens com `data-table`, ações via drawer lateral
 
 ### Endpoint novo
 
-1. Criar arquivo em `backend/src/routes/<dominio>.ts` (copiar estrutura de `products.ts`)
-2. Registrar em `backend/src/app.ts`: `app.use("/api/<dominio>", require("./routes/<dominio>"))`
+1. Criar arquivo em `apps/backend/src/routes/<dominio>.ts` (copiar estrutura de `products.ts`)
+2. Registrar em `apps/backend/src/app.ts`: `app.use("/api/<dominio>", require("./routes/<dominio>"))`
 3. Validar input com **zod**
 4. Autenticar com `verifyToken`
-5. Adicionar método no `lib/api-client.ts` do frontend
+5. Adicionar método no `apps/frontend/lib/api-client.ts` do frontend
 
 ### Campo novo num modelo
 
-1. Editar `backend/prisma/schema.prisma`
+1. Editar `apps/backend/prisma/schema.prisma`
 2. `npx prisma migrate dev --name <descricao>`
 3. Atualizar zod schema na rota
-4. Atualizar adapter (`lib/product-adapter.ts` etc.)
+4. Atualizar adapter (`apps/frontend/lib/product-adapter.ts` etc.)
 5. Atualizar interface no contexto do front
 6. Atualizar UI
 
 ### Componente novo
 
-1. Procurar primeiro em `components/` e `components/ui/` se já existe algo similar
+1. Procurar primeiro em `apps/frontend/components/` e `apps/frontend/components/ui/` se já existe algo similar
 2. Se não existe: criar com TypeScript, props tipadas, mobile-first
-3. Usar primitivos `components/ui/*`
+3. Usar primitivos `apps/frontend/components/ui/*`
 4. Ícones só Lucide
 5. Cores via CSS vars ou classes Tailwind semânticas
 
@@ -137,7 +137,7 @@ Quando em dúvida, **procurar arquivo similar existente** (`grep` no nome). A pl
 ## TypeScript
 
 - **Strict mode** está ligado. Evitar `any` — usar `unknown` + narrowing quando precisar.
-- Types globais vão em `types/`.
+- Types globais vão em `apps/frontend/types/`.
 - Types de contexto vão no próprio arquivo do contexto.
 - **Nunca** exportar `any`.
 
@@ -147,7 +147,7 @@ Quando em dúvida, **procurar arquivo similar existente** (`grep` no nome). A pl
 
 - Branch por feature: `feat/nome-curto`, `fix/descricao`, `docs/o-que`.
 - Commits em português, tempo presente: `adiciona campo X`, `corrige cálculo Y`.
-- Não commitar: `node_modules/`, `dist/`, `dev-mocks/`, `*.db`, `.env`.
+- Não commitar: `node_modules/`, `apps/frontend/dist/`, `apps/frontend/dev-mocks/`, `*.db`, `.env`.
 
 ---
 

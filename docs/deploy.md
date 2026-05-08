@@ -1,4 +1,4 @@
-﻿# Deploy
+# Deploy
 
 Guia prático de deploy da plataforma Allka 2026 no cPanel.
 
@@ -10,7 +10,7 @@ A plataforma tem **três artefatos** que sobem separadamente:
 
 | Artefato     | O que é                         | Onde fica no cPanel                             | Frequência típica         |
 | ------------ | ------------------------------- | ----------------------------------------------- | ------------------------- |
-| **Frontend** | Build estático (`dist/`)        | `public_html/`                                  | A cada mudança de tela/UI |
+| **Frontend** | Build estático (`apps/frontend/dist/`)        | `public_html/`                                  | A cada mudança de tela/UI |
 | **Backend**  | API Node + Prisma Client gerado | `/home/<user>/backend/` (Node app no cPanel)    | A cada mudança de API     |
 | **Banco**    | Migrations + seeds              | Aplicado pelo backend (`prisma migrate deploy`) | Só quando o schema muda   |
 
@@ -25,13 +25,13 @@ Use esta checagem mental:
 | Eu mudei...                                                            | Sobe frontend? |            Sobe backend?            | Roda migration? |
 | ---------------------------------------------------------------------- | :------------: | :---------------------------------: | :-------------: |
 | Componente React, página, CSS, texto na tela                           |       ✅       |                 ❌                  |       ❌        |
-| Arquivo dentro de `app/`, `components/`, `contexts/`, `hooks/`, `lib/` |       ✅       |                 ❌                  |       ❌        |
+| Arquivo dentro de `apps/frontend/app/`, `apps/frontend/components/`, `apps/frontend/contexts/`, `apps/frontend/hooks/`, `apps/frontend/lib/` |       ✅       |                 ❌                  |       ❌        |
 | `.env.production` (URL da API, flags VITE)                             |  ✅ (rebuild)  |                 ❌                  |       ❌        |
-| Rota em `backend/src/routes/*.ts`                                      |       ❌       |                 ✅                  |       ❌        |
+| Rota em `apps/backend/src/routes/*.ts`                                      |       ❌       |                 ✅                  |       ❌        |
 | Validação zod, middleware, lógica de handler                           |       ❌       |                 ✅                  |       ❌        |
-| `backend/prisma/schema.prisma`                                         |    depende¹    |                 ✅                  |       ✅        |
-| Seed (`backend/seed-*.js`, `prisma/seed.ts`)                           |       ❌       | ✅ (subir o arquivo) + rodar manual |       ❌        |
-| Tipo compartilhado em `types/` (frontend)                              |       ✅       |                 ❌                  |       ❌        |
+| `apps/backend/prisma/schema.prisma`                                         |    depende¹    |                 ✅                  |       ✅        |
+| Seed (`apps/backend/seed-*.js`, `prisma/seed.ts`)                           |       ❌       | ✅ (subir o arquivo) + rodar manual |       ❌        |
+| Tipo compartilhado em `apps/frontend/types/` (frontend)                              |       ✅       |                 ❌                  |       ❌        |
 
 ¹ Sobe frontend só se você ajustou interfaces/contextos no front por causa do novo campo.
 
@@ -78,7 +78,7 @@ npm run build
 
 1. Acessar **File Manager** → `public_html/`
 2. **Apagar** o conteúdo antigo (ou mover para `public_html_backup_<data>/`)
-3. Subir o conteúdo de `dist/` (não a pasta, **o conteúdo dela**)
+3. Subir o conteúdo de `apps/frontend/dist/` (não a pasta, **o conteúdo dela**)
 4. Garantir que o `.htaccess` está presente:
    ```apacheconf
    <IfModule mod_rewrite.c>
@@ -125,7 +125,7 @@ Configuradas em `.env.production` antes do `npm run build`:
 | `PORT`         | `3001` (ou o que o cPanel atribuir)                         | Porta interna         |
 | `CORS_ORIGIN`  | `https://app.allka.com.vc`                                  | Origin permitida      |
 
-> **Nunca commitar** `.env` real. O template é `backend/.env.production.example`.
+> **Nunca commitar** `.env` real. O template é `apps/backend/.env.production.example`.
 
 ---
 
@@ -135,10 +135,10 @@ Quando você adicionou ou alterou um modelo em `schema.prisma`:
 
 1. **Localmente**: criar a migration nomeada
    ```powershell
-   cd backend
+   cd apps/backend
    npx prisma migrate dev --name add_campo_x
    ```
-2. Verificar que `backend/prisma/migrations/<timestamp>_add_campo_x/migration.sql` foi gerado e está correto.
+2. Verificar que `apps/backend/prisma/migrations/<timestamp>_add_campo_x/migration.sql` foi gerado e está correto.
 3. Subir a pasta `migrations/` inteira para o servidor.
 4. SSH no servidor → `cd ~/backend && npx prisma migrate deploy`.
 5. **Restart** do app Node (Prisma Client é regenerado).
@@ -153,11 +153,11 @@ Mais detalhes em [banco.md](./banco.md#migrations).
 
 ### "Mudei só um texto numa tela"
 
-→ `npm run build` → subir `dist/` no `public_html/`. Pronto.
+→ `npm run build` → subir `apps/frontend/dist/` no `public_html/`. Pronto.
 
 ### "Adicionei rota nova no backend"
 
-→ Subir `backend/src/routes/...` + restart app Node. Frontend só sobe se você criou tela que consome essa rota.
+→ Subir `apps/backend/src/routes/...` + restart app Node. Frontend só sobe se você criou tela que consome essa rota.
 
 ### "Adicionei campo novo no produto"
 
@@ -169,7 +169,7 @@ Mais detalhes em [banco.md](./banco.md#migrations).
 
 ### "Trocar logo"
 
-→ Substituir arquivo em `public/` → `npm run build` → subir `dist/`.
+→ Substituir arquivo em `apps/frontend/public/` → `npm run build` → subir `apps/frontend/dist/`.
 
 ---
 

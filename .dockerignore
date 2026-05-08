@@ -1,0 +1,15 @@
+.git
+node_modules
+apps/*/node_modules
+dist
+apps/*/dist
+build
+out
+.next
+.cache
+.turbo
+logs
+*.log
+.env
+.env.*
+*.db

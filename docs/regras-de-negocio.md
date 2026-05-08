@@ -23,8 +23,8 @@ Regras e comportamentos já definidos que precisam ser respeitados pelo desenvol
 Admins podem ter **perfis de permissão** diferentes (`AdminProfile` + `AdminPermission`). Nem todo admin vê tudo.
 
 - Tela: `/admin/permissoes`
-- Lógica: `lib/user-permissions.ts`
-- Backend: `backend/src/routes/permissions.ts`
+- Lógica: `apps/frontend/lib/user-permissions.ts`
+- Backend: `apps/backend/src/routes/permissions.ts`
 
 ---
 
@@ -149,7 +149,7 @@ Todos geram `WalletTransaction` e podem ser sacados via `WithdrawalRequest`.
 
 - `Term` tem versão. A versão ativa vira obrigatória.
 - `TermAcceptance` registra quem aceitou qual versão.
-- Gate de UI: `components/term-acceptance-gate.tsx` bloqueia o uso da plataforma se tem termo pendente.
+- Gate de UI: `apps/frontend/components/term-acceptance-gate.tsx` bloqueia o uso da plataforma se tem termo pendente.
 
 ---
 

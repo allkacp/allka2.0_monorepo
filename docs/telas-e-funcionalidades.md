@@ -11,137 +11,137 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 ### Dashboard — `/admin/dashboard`
 
 - **Função**: visão geral da plataforma — KPIs, gráficos, atividade recente
-- **Editar em**: `app/admin/dashboard/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/dashboard/page.tsx`
 - **Componentes**: `recharts`, cards de métrica, `data-table`
 
 ### Configuração do Dashboard — `/admin/dashboard-config`
 
 - Permite ao admin escolher quais widgets aparecem
-- `app/admin/dashboard-config/page.tsx`
+- `apps/frontend/app/admin/dashboard-config/page.tsx`
 
 ### Empresas — `/admin/empresas`
 
 - CRUD de empresas clientes
 - Filtros, status, logs, tarefas, projetos por empresa
-- **Editar em**: `app/admin/empresas/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/empresas/page.tsx`
 - **Componentes**: `company-create-slide-panel`, `company-edit-slide-panel`, `company-view-slide-panel`, `company-logs-tab`, `company-tasks-tab`, `company-users-tab`, `projects-management-tab`, `terms-management-tab`
 
 ### Usuários — `/admin/usuarios` e `/admin/usuarios-internos`
 
 - Gestão de todas as contas (qualquer perfil) e usuários internos da operação
-- **Editar em**: `app/admin/usuarios/page.tsx`, `app/admin/usuarios-internos/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/usuarios/page.tsx`, `apps/frontend/app/admin/usuarios-internos/page.tsx`
 - **Componentes**: `user-create-slide-panel`, `user-view-slide-panel`, `user-view-header`, `permission-profile-slide-panel`
 
 ### Permissões — `/admin/permissoes`
 
 - Perfis de admin e permissões granulares (qual admin pode ver/editar quê)
-- **Editar em**: `app/admin/permissoes/page.tsx`
-- **Backend**: `backend/src/routes/permissions.ts`, modelos `AdminProfile` + `AdminPermission`
-- **Lógica frontend**: `lib/user-permissions.ts`
+- **Editar em**: `apps/frontend/app/admin/permissoes/page.tsx`
+- **Backend**: `apps/backend/src/routes/permissions.ts`, modelos `AdminProfile` + `AdminPermission`
+- **Lógica frontend**: `apps/frontend/lib/user-permissions.ts`
 
 ### Produtos — `/admin/produtos`
 
 - CRUD de produtos do catálogo (definição comercial)
-- **Editar em**: `app/admin/produtos/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/produtos/page.tsx`
 - **Domínio detalhado**: ver [produtos.md](./produtos.md)
 
 ### Catálogo de Produtos — `/admin/catalogo-produtos`
 
 - Visualização semelhante à do cliente — facilita curadoria e teste do drawer de detalhe
-- **Componente principal**: `components/product-catalog-view.tsx`
-- **Drawer de detalhe**: `components/product-detail-sheet.tsx`
+- **Componente principal**: `apps/frontend/components/product-catalog-view.tsx`
+- **Drawer de detalhe**: `apps/frontend/components/product-detail-sheet.tsx`
 
 ### Precificação — `/admin/precificacao`
 
 - Tabela de preços, margens, impostos, comissões
-- **Editar em**: `app/admin/precificacao/page.tsx`
-- **Engine**: `lib/pricing-engine.ts`
-- **Contexto**: `lib/contexts/pricing-context.tsx`
+- **Editar em**: `apps/frontend/app/admin/precificacao/page.tsx`
+- **Engine**: `apps/frontend/lib/pricing-engine.ts`
+- **Contexto**: `apps/frontend/lib/contexts/pricing-context.tsx`
 - **Constantes**: `constants/tax-rates.ts`
 
 ### Projetos — `/admin/projetos`
 
 - Lista de todos os projetos ativos da plataforma com filtros
-- **Editar em**: `app/admin/projetos/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/projetos/page.tsx`
 - **Componentes**: `project-create-slide-panel`, `project-view-slide-panel`, `project-wizard-slide-panel`, `project-management-modal`, `project-type-breakdown`
 
 ### Nômades — `/admin/nomades`
 
 - Gestão de freelancers: cadastro, qualificações, histórico
-- **Editar em**: `app/admin/nomades/page.tsx`
-- **Backend**: `backend/src/routes/nomades.ts`
+- **Editar em**: `apps/frontend/app/admin/nomades/page.tsx`
+- **Backend**: `apps/backend/src/routes/nomades.ts`
 
 ### Níveis e Programas — `/admin/niveis`, `/admin/niveis-nomades`, `/admin/programa-partner`
 
 - Configuração de níveis (gamificação) e do programa de parceiros
-- `app/admin/niveis/page.tsx`, `app/admin/niveis-nomades/page.tsx`, `app/admin/programa-partner/page.tsx`
+- `apps/frontend/app/admin/niveis/page.tsx`, `apps/frontend/app/admin/niveis-nomades/page.tsx`, `apps/frontend/app/admin/programa-partner/page.tsx`
 
 ### Especialidades — `/admin/especialidades`
 
 - Lista de especialidades (skills) que nômades podem ter
-- **Editar em**: `app/admin/especialidades/page.tsx`
-- **Backend**: `backend/src/routes/specialties.ts`
-- **Contexto**: `lib/contexts/specialty-context.tsx`
+- **Editar em**: `apps/frontend/app/admin/especialidades/page.tsx`
+- **Backend**: `apps/backend/src/routes/specialties.ts`
+- **Contexto**: `apps/frontend/lib/contexts/specialty-context.tsx`
 
 ### Allkademy — `/admin/allkademy`
 
 - Trilhas de cursos e habilitações
-- **Editar em**: `app/admin/allkademy/page.tsx`
-- **Backend**: `backend/src/routes/allkademy.ts` — modelos `Course`, `CourseModule`, `Lesson`, `CourseEnrollment`
+- **Editar em**: `apps/frontend/app/admin/allkademy/page.tsx`
+- **Backend**: `apps/backend/src/routes/allkademy.ts` — modelos `Course`, `CourseModule`, `Lesson`, `CourseEnrollment`
 
 ### Financeiro / Comissionamentos — `/admin/financeiro`, `/admin/comissionamentos`
 
 - Faturas, transações, comissões pagas/pendentes
-- **Editar em**: `app/admin/financeiro/page.tsx`, `app/admin/comissionamentos/page.tsx`
-- **Backend**: `backend/src/routes/financial.ts`, `billing.ts`
+- **Editar em**: `apps/frontend/app/admin/financeiro/page.tsx`, `apps/frontend/app/admin/comissionamentos/page.tsx`
+- **Backend**: `apps/backend/src/routes/financial.ts`, `billing.ts`
 
 ### Relatórios — `/admin/relatorios`
 
 - Relatórios consolidados (export PDF/Excel)
-- **Editar em**: `app/admin/relatorios/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/relatorios/page.tsx`
 - **Componentes**: `export-button`, `proposal-pdf-renderer`
 
 ### Disponibilidade — `/admin/disponibilidade`
 
 - Disponibilidade de nômades para alocação automática (matchmaking)
-- **Editar em**: `app/admin/disponibilidade/page.tsx`
+- **Editar em**: `apps/frontend/app/admin/disponibilidade/page.tsx`
 - **Modelo**: `MatchQueueEntry`
 
 ### Campanhas de Indicação — `/admin/campanhas-indicacao`
 
 - Campanhas para captação via parceiros
-- **Editar em**: `app/admin/campanhas-indicacao/page.tsx`
-- **Backend**: `backend/src/routes/campaigns.ts`
+- **Editar em**: `apps/frontend/app/admin/campanhas-indicacao/page.tsx`
+- **Backend**: `apps/backend/src/routes/campaigns.ts`
 
 ### Onboarding — `/admin/onboarding`
 
 - Fluxo de boas-vindas para novos clientes/parceiros
-- `app/admin/onboarding/page.tsx`
+- `apps/frontend/app/admin/onboarding/page.tsx`
 
 ### Termos — `/admin/terms`
 
 - Versionamento de termos de uso e contratos
-- **Editar em**: `app/admin/terms/page.tsx`
-- **Backend**: `backend/src/routes/terms.ts` — modelos `Term`, `TermAcceptance`
+- **Editar em**: `apps/frontend/app/admin/terms/page.tsx`
+- **Backend**: `apps/backend/src/routes/terms.ts` — modelos `Term`, `TermAcceptance`
 - **Componente**: `term-acceptance-gate`
 
 ### Notificações — `/admin/notifications`
 
 - Centro de notificações da plataforma
-- `app/admin/notifications/page.tsx`
+- `apps/frontend/app/admin/notifications/page.tsx`
 - **Componente**: `notification-preferences-panel`, `alerts-header-icon`
 
 ### Clientes — `/admin/clientes`
 
 - Visão pessoa-física dos clientes (B2C-ish)
-- `app/admin/clientes/page.tsx`
+- `apps/frontend/app/admin/clientes/page.tsx`
 - **Componente**: `client-create-slide-panel`
 
 ### Configurações / Sistema / Alertas — `/admin/configuracoes`, `/admin/sistema`, `/admin/alertas`
 
 - Settings globais, status do sistema, alertas operacionais
-- `app/admin/configuracoes/page.tsx`, `app/admin/sistema/page.tsx`, `app/admin/alertas/page.tsx`
-- **Contexto**: `contexts/settings-context.tsx`
+- `apps/frontend/app/admin/configuracoes/page.tsx`, `apps/frontend/app/admin/sistema/page.tsx`, `apps/frontend/app/admin/alertas/page.tsx`
+- **Contexto**: `apps/frontend/contexts/settings-context.tsx`
 
 ---
 
@@ -149,14 +149,14 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 
 | Rota                          | O que faz                                         | Editar em                                 |
 | ----------------------------- | ------------------------------------------------- | ----------------------------------------- |
-| `/nomades/dashboard`          | Painel com tarefas, ganhos, próximos compromissos | `app/nomades/dashboard/page.tsx`          |
-| `/nomades/tarefasdisponiveis` | Marketplace de tarefas                            | `app/nomades/tarefasdisponiveis/page.tsx` |
-| `/nomades/minhastarefas`      | Tarefas em execução                               | `app/nomades/minhastarefas/page.tsx`      |
-| `/nomades/habilitacoes`       | Testes e qualificações                            | `app/nomades/habilitacoes/page.tsx`       |
-| `/nomades/historico`          | Tarefas passadas                                  | `app/nomades/historico/page.tsx`          |
-| `/nomades/programa`           | Programa de pontos / níveis                       | `app/nomades/programa/page.tsx`           |
-| `/nomades/ganhos`             | Carteira, saques                                  | `app/nomades/ganhos/page.tsx`             |
-| `/nomades/perfil`             | Edição de perfil, especialidades                  | `app/nomades/perfil/page.tsx`             |
+| `/nomades/dashboard`          | Painel com tarefas, ganhos, próximos compromissos | `apps/frontend/app/nomades/dashboard/page.tsx`          |
+| `/nomades/tarefasdisponiveis` | Marketplace de tarefas                            | `apps/frontend/app/nomades/tarefasdisponiveis/page.tsx` |
+| `/nomades/minhastarefas`      | Tarefas em execução                               | `apps/frontend/app/nomades/minhastarefas/page.tsx`      |
+| `/nomades/habilitacoes`       | Testes e qualificações                            | `apps/frontend/app/nomades/habilitacoes/page.tsx`       |
+| `/nomades/historico`          | Tarefas passadas                                  | `apps/frontend/app/nomades/historico/page.tsx`          |
+| `/nomades/programa`           | Programa de pontos / níveis                       | `apps/frontend/app/nomades/programa/page.tsx`           |
+| `/nomades/ganhos`             | Carteira, saques                                  | `apps/frontend/app/nomades/ganhos/page.tsx`             |
+| `/nomades/perfil`             | Edição de perfil, especialidades                  | `apps/frontend/app/nomades/perfil/page.tsx`             |
 
 ---
 
@@ -164,12 +164,12 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 
 | Rota                 | O que faz            | Editar em                        |
 | -------------------- | -------------------- | -------------------------------- |
-| `/empresa/dashboard` | Painel da empresa    | `app/empresa/dashboard/page.tsx` |
-| `/empresa/projetos`  | Projetos contratados | `app/empresa/projetos/page.tsx`  |
-| `/empresa/tarefas`   | Tarefas em andamento | `app/empresa/tarefas/page.tsx`   |
-| `/empresa/faturas`   | Faturas e pagamentos | `app/empresa/faturas/page.tsx`   |
+| `/empresa/dashboard` | Painel da empresa    | `apps/frontend/app/empresa/dashboard/page.tsx` |
+| `/empresa/projetos`  | Projetos contratados | `apps/frontend/app/empresa/projetos/page.tsx`  |
+| `/empresa/tarefas`   | Tarefas em andamento | `apps/frontend/app/empresa/tarefas/page.tsx`   |
+| `/empresa/faturas`   | Faturas e pagamentos | `apps/frontend/app/empresa/faturas/page.tsx`   |
 
-**Contexto**: `contexts/empresa-context.tsx`
+**Contexto**: `apps/frontend/contexts/empresa-context.tsx`
 
 ---
 
@@ -177,12 +177,12 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 
 | Rota                  | O que faz                        | Editar em                         |
 | --------------------- | -------------------------------- | --------------------------------- |
-| `/agencia/dashboard`  | Painel                           | `app/agencia/dashboard/page.tsx`  |
-| `/agencia/projetos`   | Projetos dos clientes da agência | `app/agencia/projetos/page.tsx`   |
-| `/agencia/tarefas`    | Tarefas em andamento             | `app/agencia/tarefas/page.tsx`    |
-| `/agencia/financeiro` | MRR, faturamento                 | `app/agencia/financeiro/page.tsx` |
+| `/agencia/dashboard`  | Painel                           | `apps/frontend/app/agencia/dashboard/page.tsx`  |
+| `/agencia/projetos`   | Projetos dos clientes da agência | `apps/frontend/app/agencia/projetos/page.tsx`   |
+| `/agencia/tarefas`    | Tarefas em andamento             | `apps/frontend/app/agencia/tarefas/page.tsx`    |
+| `/agencia/financeiro` | MRR, faturamento                 | `apps/frontend/app/agencia/financeiro/page.tsx` |
 
-**Contexto**: `contexts/agencia-context.tsx`
+**Contexto**: `apps/frontend/contexts/agencia-context.tsx`
 
 ---
 
@@ -190,13 +190,13 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 
 | Rota                  | O que faz             | Editar em                         |
 | --------------------- | --------------------- | --------------------------------- |
-| `/parceiro/dashboard` | Painel                | `app/parceiro/dashboard/page.tsx` |
-| `/parceiro/agencias`  | Agências lideradas    | `app/parceiro/agencias/page.tsx`  |
-| `/parceiro/projetos`  | Projetos indicados    | `app/parceiro/projetos/page.tsx`  |
-| `/parceiro/comissoes` | Extrato de comissões  | `app/parceiro/comissoes/page.tsx` |
-| `/parceiro/saques`    | Solicitações de saque | `app/parceiro/saques/page.tsx`    |
+| `/parceiro/dashboard` | Painel                | `apps/frontend/app/parceiro/dashboard/page.tsx` |
+| `/parceiro/agencias`  | Agências lideradas    | `apps/frontend/app/parceiro/agencias/page.tsx`  |
+| `/parceiro/projetos`  | Projetos indicados    | `apps/frontend/app/parceiro/projetos/page.tsx`  |
+| `/parceiro/comissoes` | Extrato de comissões  | `apps/frontend/app/parceiro/comissoes/page.tsx` |
+| `/parceiro/saques`    | Solicitações de saque | `apps/frontend/app/parceiro/saques/page.tsx`    |
 
-**Contexto**: `contexts/partner-context.tsx`
+**Contexto**: `apps/frontend/contexts/partner-context.tsx`
 
 ---
 
@@ -204,18 +204,18 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 
 | Componente          | Função                          | Arquivo                                |
 | ------------------- | ------------------------------- | -------------------------------------- |
-| Header              | Cabeçalho contextual por portal | `components/header.tsx`                |
-| Sidebar             | Menu lateral com tema dinâmico  | `components/sidebar.tsx`               |
-| Footer              | Rodapé                          | `components/footer.tsx`                |
-| Mobile Bottom Nav   | Navegação inferior em mobile    | `components/mobile-bottom-nav.tsx`     |
-| Page Header         | Cabeçalho de página interna     | `components/page-header.tsx`           |
-| Data Table          | Tabela paginada genérica        | `components/data-table.tsx`            |
-| Pagination Controls | Paginação                       | `components/pagination-controls.tsx`   |
-| Items Per Page      | Selector de quantos por página  | `components/items-per-page-select.tsx` |
-| Confirmation Dialog | Modal de confirmação            | `components/confirmation-dialog.tsx`   |
-| Cookie Banner       | LGPD                            | `components/cookie-consent-banner.tsx` |
-| Chat Widget         | Chat flutuante                  | `components/chat-widget.tsx`           |
-| Dev Role Switcher   | Trocar portal em preview (dev)  | `components/dev-role-switcher.tsx`     |
+| Header              | Cabeçalho contextual por portal | `apps/frontend/components/header.tsx`                |
+| Sidebar             | Menu lateral com tema dinâmico  | `apps/frontend/components/sidebar.tsx`               |
+| Footer              | Rodapé                          | `apps/frontend/components/footer.tsx`                |
+| Mobile Bottom Nav   | Navegação inferior em mobile    | `apps/frontend/components/mobile-bottom-nav.tsx`     |
+| Page Header         | Cabeçalho de página interna     | `apps/frontend/components/page-header.tsx`           |
+| Data Table          | Tabela paginada genérica        | `apps/frontend/components/data-table.tsx`            |
+| Pagination Controls | Paginação                       | `apps/frontend/components/pagination-controls.tsx`   |
+| Items Per Page      | Selector de quantos por página  | `apps/frontend/components/items-per-page-select.tsx` |
+| Confirmation Dialog | Modal de confirmação            | `apps/frontend/components/confirmation-dialog.tsx`   |
+| Cookie Banner       | LGPD                            | `apps/frontend/components/cookie-consent-banner.tsx` |
+| Chat Widget         | Chat flutuante                  | `apps/frontend/components/chat-widget.tsx`           |
+| Dev Role Switcher   | Trocar portal em preview (dev)  | `apps/frontend/components/dev-role-switcher.tsx`     |
 
 ---
 

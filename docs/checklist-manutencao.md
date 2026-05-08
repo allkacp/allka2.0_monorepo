@@ -27,8 +27,8 @@ Checklists práticas para cada fase do trabalho.
 
 ### Desenvolvimento (backend)
 
-- [ ] Rota criada em `backend/src/routes/<dominio>.ts`
-- [ ] Registrada em `backend/src/app.ts`
+- [ ] Rota criada em `apps/backend/src/routes/<dominio>.ts`
+- [ ] Registrada em `apps/backend/src/app.ts`
 - [ ] Validação zod no input
 - [ ] `verifyToken` aplicado
 - [ ] Tratamento de erro retorna `{ error: "..." }`
@@ -37,7 +37,7 @@ Checklists práticas para cada fase do trabalho.
 
 ### Desenvolvimento (banco)
 
-- [ ] Schema atualizado em `backend/prisma/schema.prisma`
+- [ ] Schema atualizado em `apps/backend/prisma/schema.prisma`
 - [ ] Migration criada com `npx prisma migrate dev --name <descricao>`
 - [ ] SQL gerado foi revisado
 - [ ] Testei o reset local: `npx prisma migrate reset --force`
@@ -80,7 +80,7 @@ Checklists práticas para cada fase do trabalho.
 ### Build
 
 - [ ] `npm run build` executa sem erros
-- [ ] Pasta `dist/` foi gerada recente
+- [ ] Pasta `apps/frontend/dist/` foi gerada recente
 - [ ] Tamanho do bundle razoável (checar se não incluiu mock por engano)
 
 ### Banco
@@ -101,7 +101,7 @@ Checklists práticas para cada fase do trabalho.
 ### Frontend
 
 - [ ] Backup do `public_html/` (copiar para `public_html_backup_<data>/`)
-- [ ] Subir conteúdo de `dist/` no `public_html/`
+- [ ] Subir conteúdo de `apps/frontend/dist/` no `public_html/`
 - [ ] Confirmar que `.htaccess` está presente
 - [ ] Limpar cache do navegador (Ctrl+F5)
 

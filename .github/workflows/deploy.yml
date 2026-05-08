@@ -1,0 +1,169 @@
+name: Deploy dev VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-dev-vps
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_DOMAIN: dev.allka.com.vc
+  API_DOMAIN: api-dev.allka.com.vc
+  VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api-dev.allka.com.vc/api' }}
+  VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+  VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
+  MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
+  MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image names
+        id: images
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          short_sha="${GITHUB_SHA::7}"
+          echo "backend_image=${REGISTRY}/${repo}/backend:${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "backend_latest=${REGISTRY}/${repo}/backend:dev" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${REGISTRY}/${repo}/frontend:${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "frontend_latest=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend.prod.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.images.outputs.backend_image }}
+            ${{ steps.images.outputs.backend_latest }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/frontend.prod.Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=${{ env.VITE_API_URL }}
+            VITE_USE_MOCKS=false
+          tags: |
+            ${{ steps.images.outputs.frontend_image }}
+            ${{ steps.images.outputs.frontend_latest }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      - name: Validate required deploy secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+          : "${MYSQL_PASSWORD:?Set the MYSQL_PASSWORD secret}"
+          : "${MYSQL_ROOT_PASSWORD:?Set the MYSQL_ROOT_PASSWORD secret}"
+          : "${JWT_SECRET:?Set the JWT_SECRET secret}"
+
+      - name: Render deploy files
+        shell: bash
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend_image }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          mkdir -p .deploy/infra/caddy
+          cp docker-compose.prod.yml .deploy/docker-compose.yml
+          cp infra/caddy/Caddyfile .deploy/infra/caddy/Caddyfile
+
+          {
+            printf 'BACKEND_IMAGE=%s\n' "$BACKEND_IMAGE"
+            printf 'FRONTEND_IMAGE=%s\n' "$FRONTEND_IMAGE"
+            printf 'FRONTEND_DOMAIN=%s\n' "$FRONTEND_DOMAIN"
+            printf 'API_DOMAIN=%s\n' "$API_DOMAIN"
+            printf 'MYSQL_DATABASE=%s\n' "$MYSQL_DATABASE"
+            printf 'MYSQL_USER=%s\n' "$MYSQL_USER"
+            printf 'MYSQL_PASSWORD=%s\n' "$MYSQL_PASSWORD"
+            printf 'MYSQL_ROOT_PASSWORD=%s\n' "$MYSQL_ROOT_PASSWORD"
+          } > .deploy/.env
+
+          {
+            printf 'DATABASE_URL=mysql://%s:%s@mysql:3306/%s\n' "$MYSQL_USER" "$MYSQL_PASSWORD" "$MYSQL_DATABASE"
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'PORT=3001\n'
+            printf 'NODE_ENV=production\n'
+            printf 'FRONTEND_URL=https://%s\n' "$FRONTEND_DOMAIN"
+            printf 'CORS_ORIGIN=https://%s\n' "$FRONTEND_DOMAIN"
+          } > .deploy/.env.backend
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          install -m 600 /dev/null ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          ssh-keyscan -p "$VPS_SSH_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload compose files
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          remote="${VPS_USER}@${VPS_HOST}"
+          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env "$remote:${VPS_DEPLOY_PATH}/.env"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env.backend "$remote:${VPS_DEPLOY_PATH}/.env.backend"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
+
+      - name: Deploy on VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          remote="${VPS_USER}@${VPS_HOST}"
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml pull && docker compose --env-file .env -f docker-compose.yml up -d mysql && docker compose --env-file .env -f docker-compose.yml run --rm migrate && docker compose --env-file .env -f docker-compose.yml up -d backend frontend caddy && docker image prune -f"

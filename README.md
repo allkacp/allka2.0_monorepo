@@ -1,8 +1,8 @@
-﻿# Allka 2026 — Plataforma
+# Allka 2026 — Plataforma
 
 Plataforma de gestão para empresas, nômades digitais, agências e parceiros.
 
-**Stack**: React 18 + Vite 7 + TypeScript 5 + Tailwind CSS 4 (frontend) · Express 5 + Prisma + SQLite/PostgreSQL (backend) · Deploy em cPanel.
+**Stack**: React 18 + Vite 7 + TypeScript 5 + Tailwind CSS 4 (frontend) · Express 5 + Prisma + SQLite local/MySQL em produção (backend) · Docker + GitHub Actions + GHCR + Caddy no VPS.
 
 ---
 
@@ -25,8 +25,8 @@ O **admin** cria e gerencia produtos, empresas, projetos, nômades e configuraç
 ## Arquitetura resumida
 
 ```
-Frontend (React/Vite SPA)   →  Backend (Express/Prisma)  →  Banco (SQLite/Postgres)
- dist/ em public_html/          Node app no cPanel           prisma/*.db ou Postgres
+Frontend (React/Vite SPA)   →  Backend (Express/Prisma)  →  Banco
+ Nginx em container             Node em container             SQLite local / MySQL no VPS
 ```
 
 Detalhes em [docs/arquitetura.md](./docs/arquitetura.md).
@@ -45,22 +45,17 @@ npm run dev:mock
 ### Frontend + backend integrados
 
 ```powershell
-# terminal 1 — backend
-cd backend
-npm install
-npx prisma migrate dev
-npx tsx prisma/seed.ts
-node app.js       # sobe a API em http://localhost:3001
-
-# terminal 2 — frontend
 npm install
 npm run dev
 ```
 
+O comando raiz sobe o backend em `http://localhost:3001` e o frontend em `http://localhost:8080`.
+Para comandos específicos de banco, use `npm run <script> -w apps/backend` ou entre em `apps/backend`.
+
 ### Credenciais de teste (após seed)
 
 - **Admin**: `cp@lamego.com.vc` / `123@321`
-- Outros perfis: ver `backend/prisma/seed.ts`
+- Outros perfis: ver `apps/backend/prisma/seed.ts`
 
 Detalhes em [docs/arquitetura.md](./docs/arquitetura.md) e [docs/banco.md](./docs/banco.md).
 
@@ -68,15 +63,16 @@ Detalhes em [docs/arquitetura.md](./docs/arquitetura.md) e [docs/banco.md](./doc
 
 ## Deploy resumido
 
-Três artefatos independentes:
+O deploy principal de desenvolvimento roda no Hostinger KVM com containers separados:
 
-| Artefato                       | Sobe quando mudei...                                                                           | Para onde                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------- |
-| **Frontend** (`dist/`)         | qualquer coisa em `app/`, `components/`, `contexts/`, `lib/`, `hooks/`, CSS, `.env.production` | `public_html/` no cPanel      |
-| **Backend** (`app.js`, `src/`) | qualquer coisa em `backend/src/`, `backend/app.js`, dependências                               | app Node no cPanel (restart)  |
-| **Banco** (migrations)         | `backend/prisma/schema.prisma`                                                                 | SSH + `prisma migrate deploy` |
+| Serviço      | Imagem/infra                                    | Domínio                         |
+| ------------ | ----------------------------------------------- | ------------------------------- |
+| **Frontend** | imagem Nginx gerada por `docker/frontend.prod.Dockerfile` | `https://dev.allka.com.vc`      |
+| **Backend**  | imagem Node gerada por `docker/backend.prod.Dockerfile`    | `https://api-dev.allka.com.vc`  |
+| **Banco**    | `mysql:8.4` com volume Docker                   | rede interna do Compose         |
+| **Proxy**    | Caddy com HTTPS automático                      | portas 80/443 do VPS            |
 
-Guia completo, passo a passo e erros comuns em [docs/deploy.md](./docs/deploy.md).
+A workflow [deploy.yml](./.github/workflows/deploy.yml) publica imagens no GHCR, envia o Compose para o VPS por SSH, executa migrations MySQL e sobe os serviços. Guia completo em [docs/deploy-hostinger-kvm.md](./docs/deploy-hostinger-kvm.md). O guia antigo de cPanel continua em [docs/deploy.md](./docs/deploy.md) como referência histórica.
 
 ---
 
@@ -87,6 +83,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 | Documento                                                       | Conteúdo                                                                           |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [arquitetura.md](./docs/arquitetura.md)                         | Camadas, estrutura de pastas, fluxo frontend↔backend↔banco, onde editar cada parte |
+| [deploy-hostinger-kvm.md](./docs/deploy-hostinger-kvm.md)         | Deploy containerizado no Hostinger KVM via GitHub Actions, GHCR, MySQL e Caddy      |
 | [deploy.md](./docs/deploy.md)                                   | Deploy no cPanel — frontend, backend, banco, variáveis, erros comuns, checklists   |
 | [banco.md](./docs/banco.md)                                     | Prisma, schema, migrations, seeds, diferença local vs produção, cuidados           |
 | [produtos.md](./docs/produtos.md)                               | Produto pai, variações, tarefas, etapas, testes, briefing, catálogo, onde editar   |
@@ -101,7 +98,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 ## Observações importantes para novos devs
 
 1. **Três modos de execução**: `dev:mock` (sem backend), `dev` (com backend local), `build` (produção). Flag via `.env.<modo>`.
-2. **Drawer lateral é o padrão** para criar/editar (nunca modal centralizado). Referência: `components/company-create-slide-panel.tsx`.
+2. **Drawer lateral é o padrão** para criar/editar (nunca modal centralizado). Referência: `apps/frontend/components/company-create-slide-panel.tsx`.
 3. **Tema** vem de variáveis CSS do `SidebarContext` (`--app-brand-*`) — nunca hardcodear cor.
 4. **Produtos** têm base compartilhada (no pai) e diferenciais por variação — ver [docs/produtos.md](./docs/produtos.md).
 5. **Sempre testar em `mock` e `dev`** antes de subir.
@@ -117,24 +114,29 @@ A documentação técnica completa está em [`/docs`](./docs):
 
 ```
 allka-2026/
-├── app/              ← páginas por portal (admin, empresa, agencia, parceiro, nomades)
-├── components/       ← componentes React reutilizáveis (+ ui/ com primitivos shadcn)
-├── contexts/         ← contextos React globais (account-type, sidebar, company, ...)
-├── lib/              ← clientes de API, engine de pricing, contextos de domínio
-├── hooks/            ← hooks customizados
-├── types/            ← tipos TS compartilhados
-├── constants/        ← constantes de negócio (tax rates, ...)
-├── public/           ← assets estáticos
-├── dev-mocks/        ← dados e cliente mock (gitignored)
-├── backend/          ← API Express + Prisma
-│   ├── src/          ← rotas, middlewares, config
-│   ├── prisma/       ← schema, migrations, seed, dev.db
-│   ├── app.js        ← entry usado em produção
-│   └── seed-*.js     ← seeds pontuais (admin, PA0186)
+├── apps/
+│   ├── frontend/     ← SPA React/Vite, assets, mocks e configs do frontend
+│   │   ├── app/      ← páginas por portal (admin, empresa, agencia, parceiro, nomades)
+│   │   ├── components/
+│   │   ├── contexts/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── public/
+│   │   └── vite.config.ts
+│   └── backend/      ← API Express + Prisma
+│       ├── src/      ← rotas, middlewares, config
+│       ├── prisma/   ← schema, migrations, seed, dev.db
+│       ├── app.js    ← entry usado em produção
+│       └── seed-*.js ← seeds pontuais
+├── docker/           ← Dockerfiles de desenvolvimento e produção
+├── infra/            ← Caddy/Nginx e configs de produção
+├── scripts/          ← automações e utilitários
+├── services/         ← serviços auxiliares futuros
+├── installer/        ← bootstrap do VPS e instaladores futuros
+├── logs/             ← logs locais ignorados pelo Git
 ├── docs/             ← documentação técnica detalhada
-├── App.tsx           ← router raiz + providers
-├── main.tsx          ← bootstrap React
-└── vite.config.ts    ← configuração do bundler
+├── package.json      ← orquestração npm workspaces
+└── docker-compose.yml
 ```
 
 ---

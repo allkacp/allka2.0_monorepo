@@ -5,6 +5,7 @@ __v0_jsx-dev-runtime.ts
 
 # Mock data (apenas para desenvolvimento local)
 dev-mocks/
+apps/frontend/dev-mocks/
 
 # Dependencies
 node_modules/
@@ -13,6 +14,7 @@ node_modules/
 
 # Build outputs
 dist/
+apps/*/dist/
 build/
 out/
 .next/
@@ -28,7 +30,16 @@ out/
 .env
 .env.*
 !.env.example
-!.env.production
+!apps/*/.env.example
+!apps/*/.env.production.example
+
+# Runtime logs
+logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
 
 # OS
 .DS_Store

@@ -1,0 +1,93 @@
+name: allka-2026
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-allka}
+      MYSQL_USER: ${MYSQL_USER:-allka}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - allka_internal
+
+  migrate:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    restart: "no"
+    working_dir: /app/apps/backend
+    command: ["npm", "run", "db:deploy"]
+    env_file:
+      - ./.env.backend
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}
+      NODE_ENV: production
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - allka_internal
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    restart: unless-stopped
+    working_dir: /app/apps/backend
+    env_file:
+      - ./.env.backend
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}
+      NODE_ENV: production
+      PORT: 3001
+      FRONTEND_URL: https://${FRONTEND_DOMAIN:-dev.allka.com.vc}
+      CORS_ORIGIN: https://${FRONTEND_DOMAIN:-dev.allka.com.vc}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "3001"
+    networks:
+      - allka_internal
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - allka_internal
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-dev.allka.com.vc}
+      API_DOMAIN: ${API_DOMAIN:-api-dev.allka.com.vc}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - allka_internal
+
+volumes:
+  mysql_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  allka_internal:
+    driver: bridge

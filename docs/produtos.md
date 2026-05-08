@@ -1,4 +1,4 @@
-﻿# Produtos
+# Produtos
 
 Tudo sobre o domínio de produtos: estrutura, variações, etapas, testes, briefing e onde editar cada parte.
 
@@ -45,7 +45,7 @@ Product  (PA0001 — Gestão de Tráfego)
 
 ## Modelos no banco
 
-`backend/prisma/schema.prisma`:
+`apps/backend/prisma/schema.prisma`:
 
 ```prisma
 model Product {
@@ -92,16 +92,16 @@ O campo `metadata` é **JSON serializado** (string no banco, parseado no backend
 
 | O que editar                                               | Arquivo                                                      |
 | ---------------------------------------------------------- | ------------------------------------------------------------ |
-| **Schema** do produto (campos novos no banco)              | `backend/prisma/schema.prisma`                               |
-| **API** — rotas REST de produtos                           | `backend/src/routes/products.ts`                             |
-| **Conteúdo** do produto PA0001 (presentation, tasks, etc.) | `backend/seed-product-PA0001.js`                             |
-| **Adapter** backend → frontend (mapeia metadata)           | `lib/product-adapter.ts`                                     |
-| **Tipos/Contexto** de produto no front                     | `lib/contexts/product-context.tsx`                           |
-| **Tela do catálogo** (listagem para clientes)              | `components/product-catalog-view.tsx`                        |
-| **Drawer de detalhe** (ver/comprar produto)                | `components/product-detail-sheet.tsx`                        |
-| **CRUD admin** de produtos                                 | `app/admin/produtos/page.tsx`                                |
-| **Precificação** (motor de cálculo)                        | `lib/pricing-engine.ts` + `lib/contexts/pricing-context.tsx` |
-| **Tela de precificação admin**                             | `app/admin/precificacao/page.tsx`                            |
+| **Schema** do produto (campos novos no banco)              | `apps/backend/prisma/schema.prisma`                               |
+| **API** — rotas REST de produtos                           | `apps/backend/src/routes/products.ts`                             |
+| **Conteúdo** do produto PA0001 (presentation, tasks, etc.) | `apps/backend/seed-product-PA0001.js`                             |
+| **Adapter** backend → frontend (mapeia metadata)           | `apps/frontend/lib/product-adapter.ts`                                     |
+| **Tipos/Contexto** de produto no front                     | `apps/frontend/lib/contexts/product-context.tsx`                           |
+| **Tela do catálogo** (listagem para clientes)              | `apps/frontend/components/product-catalog-view.tsx`                        |
+| **Drawer de detalhe** (ver/comprar produto)                | `apps/frontend/components/product-detail-sheet.tsx`                        |
+| **CRUD admin** de produtos                                 | `apps/frontend/app/admin/produtos/page.tsx`                                |
+| **Precificação** (motor de cálculo)                        | `apps/frontend/lib/pricing-engine.ts` + `apps/frontend/lib/contexts/pricing-context.tsx` |
+| **Tela de precificação admin**                             | `apps/frontend/app/admin/precificacao/page.tsx`                            |
 
 ---
 
@@ -178,7 +178,7 @@ Mini-cards mostrados nos primeiros minutos do projeto (mensagem de boas-vindas).
 
 ### Opção B — via seed (recomendado para produtos complexos com tarefas, etapas, testes)
 
-1. **Copiar** `backend/seed-product-PA0001.js` → renomear para `seed-product-<CODIGO>.js`
+1. **Copiar** `apps/backend/seed-product-PA0001.js` → renomear para `seed-product-<CODIGO>.js`
 2. Ajustar:
    - `code`, `name`, `category`, `base_price`, `recurrence`, `delivery_days`
    - `metadata.presentation` (tagline, highlights, etc.)
@@ -187,7 +187,7 @@ Mini-cards mostrados nos primeiros minutos do projeto (mensagem de boas-vindas).
    - Variações (pelo menos 1)
 3. Rodar localmente:
    ```powershell
-   cd backend
+   cd apps/backend
    $env:DATABASE_URL="file:./prisma/dev.db"
    node seed-product-<CODIGO>.js
    ```
@@ -216,13 +216,13 @@ Mini-cards mostrados nos primeiros minutos do projeto (mensagem de boas-vindas).
 
 ## Catálogo de produtos (UI)
 
-`components/product-catalog-view.tsx`:
+`apps/frontend/components/product-catalog-view.tsx`:
 
 - Lista produtos ativos (`p.isActive === true`)
 - Filtros por categoria, busca textual, ordenação
 - Cada card abre o **drawer de detalhe** (`product-detail-sheet.tsx`)
 
-`components/product-detail-sheet.tsx`:
+`apps/frontend/components/product-detail-sheet.tsx`:
 
 - Header genérico (info do produto pai + Destaques)
 - Coluna esquerda: "Sua seleção" (reflete variação escolhida) + Para quem é + O que está incluído + Incluído em todas as opções + Entregas + ...
@@ -234,9 +234,9 @@ Mini-cards mostrados nos primeiros minutos do projeto (mensagem de boas-vindas).
 
 ## Pricing (precificação)
 
-- Engine: `lib/pricing-engine.ts`
-- Contexto: `lib/contexts/pricing-context.tsx`
-- Tela admin: `app/admin/precificacao/page.tsx`
+- Engine: `apps/frontend/lib/pricing-engine.ts`
+- Contexto: `apps/frontend/lib/contexts/pricing-context.tsx`
+- Tela admin: `apps/frontend/app/admin/precificacao/page.tsx`
 - Aplica margens, impostos (`constants/tax-rates.ts`), comissões e descontos sobre o `base_price` do produto e o preço da variação.
 
 ---

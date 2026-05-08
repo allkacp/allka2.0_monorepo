@@ -1,0 +1,44 @@
+{
+  "name": "allka-backend",
+  "version": "1.0.0",
+  "description": "Allka Platform API",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy --schema prisma/mysql/schema.prisma",
+    "db:generate:mysql": "prisma generate --schema prisma/mysql/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:products": "tsx seed-all-products.ts",
+    "db:seed:tasks": "tsx migrate-tasks.ts",
+    "db:seed:project-tasks": "node seed-in-progress.cjs",
+    "db:restore": "tsx restore-data.ts",
+    "db:studio": "prisma studio",
+    "db:reset": "echo '⛔  Proibido em automação. Use: prisma migrate reset --force (manualmente)'",
+    "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\""
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "prisma": "^5.22.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

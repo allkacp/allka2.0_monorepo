@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    working_dir: /repo/apps/backend
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: file:./dev.db
+      JWT_SECRET: local-development-secret
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./apps/backend:/repo/apps/backend
+      - ./apps/frontend/dev-mocks:/repo/apps/frontend/dev-mocks:ro
+      - /repo/node_modules
+      - /repo/apps/backend/node_modules
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    working_dir: /repo/apps/frontend
+    command: npm run dev -- --host 0.0.0.0
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+      VITE_USE_MOCKS: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./apps/frontend:/repo/apps/frontend
+      - /repo/node_modules
+      - /repo/apps/frontend/node_modules
+    depends_on:
+      - backend

@@ -1,4 +1,4 @@
-﻿# Banco de Dados
+# Banco de Dados
 
 Tudo sobre o banco da plataforma: schema, migrations, seeds, ambientes.
 
@@ -7,10 +7,10 @@ Tudo sobre o banco da plataforma: schema, migrations, seeds, ambientes.
 ## Tecnologia
 
 - **ORM**: [Prisma](https://www.prisma.io/) 5.22
-- **Local**: SQLite (arquivo `backend/prisma/dev.db`)
+- **Local**: SQLite (arquivo `apps/backend/prisma/dev.db`)
 - **Produção**: SQLite (`prod.db`) **ou** PostgreSQL — definido por `DATABASE_URL`
-- **Schema**: arquivo único `backend/prisma/schema.prisma` (fonte da verdade)
-- **Migrations**: pasta `backend/prisma/migrations/`
+- **Schema**: arquivo único `apps/backend/prisma/schema.prisma` (fonte da verdade)
+- **Migrations**: pasta `apps/backend/prisma/migrations/`
 
 ---
 
@@ -62,7 +62,7 @@ A plataforma tem **33 modelos**. Os mais importantes:
 | `Course` / `Lesson` / `CourseEnrollment` | Allkademy                                                                                          |
 | `AdminProfile` / `AdminPermission`       | Perfis e permissões granulares de admin                                                            |
 
-> A lista completa está sempre em [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
+> A lista completa está sempre em [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.prisma).
 
 ---
 
@@ -71,7 +71,7 @@ A plataforma tem **33 modelos**. Os mais importantes:
 ### Primeira vez
 
 ```powershell
-cd backend
+cd apps/backend
 npm install
 
 # Gera Prisma Client
@@ -87,7 +87,7 @@ npx tsx prisma/seed.ts
 node seed-admin.js
 ```
 
-### Variável de ambiente local (`backend/.env`)
+### Variável de ambiente local (`apps/backend/.env`)
 
 ```
 DATABASE_URL="file:./prisma/dev.db"
@@ -98,7 +98,7 @@ PORT=3001
 ### Reset completo (apaga tudo)
 
 ```powershell
-cd backend
+cd apps/backend
 npx prisma migrate reset --force
 # → roda migrations + seed automaticamente
 ```
@@ -112,7 +112,7 @@ npx prisma migrate reset --force
 Sempre que mudar o `schema.prisma`:
 
 ```powershell
-cd backend
+cd apps/backend
 npx prisma migrate dev --name <descricao_curta_em_snake_case>
 ```
 
@@ -159,12 +159,12 @@ npx prisma migrate status
 
 ### Seed principal
 
-`backend/prisma/seed.ts` — popula um conjunto consistente de dados (usuários de cada perfil, agências de exemplo, produtos básicos).
+`apps/backend/prisma/seed.ts` — popula um conjunto consistente de dados (usuários de cada perfil, agências de exemplo, produtos básicos).
 
 Rodar:
 
 ```powershell
-cd backend
+cd apps/backend
 npx tsx prisma/seed.ts
 # OU
 npx prisma db seed
@@ -174,10 +174,10 @@ npx prisma db seed
 
 | Arquivo                                | Cria/atualiza                                                              |
 | -------------------------------------- | -------------------------------------------------------------------------- |
-| `backend/seed-admin.js`                | Usuário `cp@lamego.com.vc` / `123@321` (admin)                             |
-| `backend/seed-product-PA0001.js`       | Produto Gestão de Tráfego com tarefas, etapas, variações, briefing, testes |
-| `backend/prisma/seed-levels.ts`        | Níveis de nômade e parceiro                                                |
-| `backend/prisma/seed-company-users.ts` | Usuários vinculados a empresas                                             |
+| `apps/backend/seed-admin.js`                | Usuário `cp@lamego.com.vc` / `123@321` (admin)                             |
+| `apps/backend/seed-product-PA0001.js`       | Produto Gestão de Tráfego com tarefas, etapas, variações, briefing, testes |
+| `apps/backend/prisma/seed-levels.ts`        | Níveis de nômade e parceiro                                                |
+| `apps/backend/prisma/seed-company-users.ts` | Usuários vinculados a empresas                                             |
 
 ### Quando rodar seeds em produção
 
@@ -197,7 +197,7 @@ npx prisma db seed
 | Aspecto          | Local                    | Produção                              |
 | ---------------- | ------------------------ | ------------------------------------- |
 | Arquivo          | `dev.db`                 | `prod.db` (ou Postgres)               |
-| Path             | `backend/prisma/dev.db`  | `~/backend/prisma/prod.db`            |
+| Path             | `apps/backend/prisma/dev.db`  | `~/apps/backend/prisma/prod.db`            |
 | Como criar       | `migrate dev`            | `migrate deploy`                      |
 | Reset permitido? | Sim                      | **NUNCA**                             |
 | Backup           | trivial (copiar arquivo) | obrigatório antes de migration grande |
@@ -207,7 +207,7 @@ npx prisma db seed
 
 ## Como saber se uma mudança impacta banco
 
-Pergunta-chave: **alterei `backend/prisma/schema.prisma`?**
+Pergunta-chave: **alterei `apps/backend/prisma/schema.prisma`?**
 
 - **Sim** → impacta banco. Precisa migration.
 - **Não, mas mudei seed** → impacta dados, não estrutura. Subir o seed e rodar manual.
@@ -221,7 +221,7 @@ Pergunta-chave: **alterei `backend/prisma/schema.prisma`?**
 1. **Backup antes de qualquer migration em produção**
 
    ```bash
-   cp ~/backend/prisma/prod.db ~/backups/prod-$(date +%Y%m%d-%H%M).db
+   cp ~/apps/backend/prisma/prod.db ~/backups/prod-$(date +%Y%m%d-%H%M).db
    ```
 
    Postgres: `pg_dump`.
@@ -247,7 +247,7 @@ Pergunta-chave: **alterei `backend/prisma/schema.prisma`?**
 ### Localmente
 
 ```powershell
-cd backend
+cd apps/backend
 npx prisma studio
 # → abre http://localhost:5555 com UI visual
 ```
@@ -264,7 +264,7 @@ npx prisma studio
 Ou via SQL direto (para SQLite):
 
 ```bash
-sqlite3 ~/backend/prisma/prod.db
+sqlite3 ~/apps/backend/prisma/prod.db
 .tables
 SELECT name FROM Product LIMIT 5;
 ```
