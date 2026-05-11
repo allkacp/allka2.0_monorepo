@@ -14,10 +14,6 @@ RUN npm ci --workspace apps/frontend
 
 COPY apps/frontend apps/frontend
 WORKDIR /app/apps/frontend
-# dev-mocks/ is gitignored; create a stub so the static import in api-client.ts resolves.
-# In production VITE_USE_MOCKS=false, so mockApiClient is never used at runtime.
-RUN mkdir -p dev-mocks && \
-    printf 'export const mockApiClient: any = new Proxy({}, { get: () => () => { throw new Error("mockApiClient not available in production"); } });\n' > dev-mocks/mock-api-client.ts
 RUN npx vite build
 
 FROM nginx:1.27-alpine AS runtime
