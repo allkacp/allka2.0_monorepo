@@ -13,7 +13,7 @@ RUN npm ci --workspace apps/backend
 
 COPY apps/backend apps/backend
 WORKDIR /app/apps/backend
-RUN npx prisma generate --schema prisma/mysql/schema.prisma
+RUN npx prisma generate
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime
