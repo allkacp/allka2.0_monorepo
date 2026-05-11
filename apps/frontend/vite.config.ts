@@ -7,7 +7,7 @@ import { componentTagger } from 'lovable-tagger'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   root: __dirname,
-  plugins: [react(), tailwindcss(), componentTagger()],
+  plugins: [react(), tailwindcss(), mode === 'development' && componentTagger()].filter(Boolean),
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, '.') },
