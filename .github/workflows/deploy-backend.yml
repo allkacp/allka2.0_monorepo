@@ -1,10 +1,16 @@
-name: Deploy dev VPS
+name: Deploy Backend
 
 on:
   push:
     branches:
       - main
       - master
+    paths:
+      - 'apps/backend/**'
+      - 'docker/backend.prod.Dockerfile'
+      - 'docker-compose.prod.yml'
+      - 'infra/**'
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +18,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-dev-vps
+  group: deploy-backend
   cancel-in-progress: true
 
 env:
@@ -26,7 +32,7 @@ env:
   MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     environment: dev
 
@@ -42,8 +48,8 @@ jobs:
           short_sha="${GITHUB_SHA::7}"
           echo "backend_image=${REGISTRY}/${repo}/backend:${short_sha}" >> "$GITHUB_OUTPUT"
           echo "backend_latest=${REGISTRY}/${repo}/backend:dev" >> "$GITHUB_OUTPUT"
-          echo "frontend_image=${REGISTRY}/${repo}/frontend:${short_sha}" >> "$GITHUB_OUTPUT"
-          echo "frontend_latest=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
+          # Frontend usa sempre a tag :dev existente no GHCR
+          echo "frontend_image=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -66,21 +72,6 @@ jobs:
             ${{ steps.images.outputs.backend_latest }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
-
-      - name: Build and push frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/frontend.prod.Dockerfile
-          push: true
-          build-args: |
-            VITE_API_URL=${{ env.VITE_API_URL }}
-            VITE_USE_MOCKS=false
-          tags: |
-            ${{ steps.images.outputs.frontend_image }}
-            ${{ steps.images.outputs.frontend_latest }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,scope=frontend,mode=max
 
       - name: Validate required deploy secrets
         shell: bash
@@ -152,11 +143,11 @@ jobs:
           remote="${VPS_USER}@${VPS_HOST}"
           ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
           scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env "$remote:${VPS_DEPLOY_PATH}/.env"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env.backend "$remote:${VPS_DEPLOY_PATH}/.env.backend"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
+          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env.backend        "$remote:${VPS_DEPLOY_PATH}/.env.backend"
           scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
 
-      - name: Deploy on VPS
+      - name: Deploy backend on VPS
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -165,5 +156,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
-          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml pull && docker compose --env-file .env -f docker-compose.yml up -d mysql && docker compose --env-file .env -f docker-compose.yml run --rm migrate && docker compose --env-file .env -f docker-compose.yml up -d backend frontend caddy && docker image prune -f"
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" \
+            "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" \
+            "cd '${VPS_DEPLOY_PATH}' && \
+             docker compose --env-file .env -f docker-compose.yml pull backend && \
+             docker compose --env-file .env -f docker-compose.yml up -d mysql && \
+             docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
+             docker compose --env-file .env -f docker-compose.yml up -d backend caddy && \
+             docker image prune -f"
