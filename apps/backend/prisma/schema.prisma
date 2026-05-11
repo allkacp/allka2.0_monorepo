@@ -1,35 +1,35 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-1.0.x", "rhel-openssl-1.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 // ─── Auth & Users ────────────────────────────────────────────────────────────
 
 model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
-  username         String?  @unique
+  id               String    @id @default(cuid())
+  email            String    @unique
+  username         String?   @unique
   password_hash    String
   name             String
-  role             String   @default("company_user")
+  role             String    @default("company_user")
   // company_user | company_admin | agency_user | agency_admin | nomad | admin | partner
-  account_type     String   @default("empresas")
+  account_type     String    @default("empresas")
   // empresas | agencias | nomades | admin | parceiro
-  is_active        Boolean  @default(true)
-  avatar           String?
+  is_active        Boolean   @default(true)
+  avatar           String?   @db.LongText
   phone            String?
   position         String?
   admin_profile_id String?
   company_id       String?
-  company          Company? @relation(fields: [company_id], references: [id])
+  company          Company?  @relation(fields: [company_id], references: [id])
   last_login       DateTime?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 
   nomade              Nomade?
   agency              Agency?
@@ -39,7 +39,7 @@ model User {
   sent_messages       ChatMessage[]      @relation("SentMessages")
   course_enrollments  CourseEnrollment[]
   lider_areas         LiderArea[]
-  tasks_como_lider    ProjectTask[] @relation("TaskLiderResponsavel")
+  tasks_como_lider    ProjectTask[]      @relation("TaskLiderResponsavel")
 
   @@map("users")
 }
@@ -49,8 +49,8 @@ model LiderArea {
   user_id               String
   user                  User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   area_nome             String
-  categorias_permitidas String?
-  produtos_permitidos   String?
+  categorias_permitidas String?  @db.LongText
+  produtos_permitidos   String?  @db.LongText
   ativo                 Boolean  @default(true)
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
@@ -69,9 +69,9 @@ model Company {
   status      String   @default("ativo")
   // ativo | inativo | prospecto | inadimplente
   segment     String?
-  address     String?
-  description String?
-  logo        String?
+  address     String?  @db.LongText
+  description String?  @db.LongText
+  logo        String?  @db.LongText
   website     String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
@@ -108,33 +108,33 @@ model Agency {
 // ─── Nômades ─────────────────────────────────────────────────────────────────
 
 model Nomade {
-  id                        String    @id @default(cuid())
-  user_id                   String?   @unique
-  user                      User?     @relation(fields: [user_id], references: [id])
-  name                      String
-  email                     String    @unique
-  whatsapp                  String?
-  avatar                    String?
-  level                     String    @default("bronze")
+  id                         String    @id @default(cuid())
+  user_id                    String?   @unique
+  user                       User?     @relation(fields: [user_id], references: [id])
+  name                       String
+  email                      String    @unique
+  whatsapp                   String?
+  avatar                     String?   @db.LongText
+  level                      String    @default("bronze")
   // bronze | silver | gold | platinum | diamond | leader
-  status                    String    @default("aguardando_aprovacao")
+  status                     String    @default("aguardando_aprovacao")
   // ativo | inativo | aguardando_aprovacao | reprovado | pausado
-  score                     Int       @default(0)
-  tasks_completed_quarter   Int       @default(0)
-  tasks_completed_total     Int       @default(0)
-  areas_of_interest         String?
+  score                      Int       @default(0)
+  tasks_completed_quarter    Int       @default(0)
+  tasks_completed_total      Int       @default(0)
+  areas_of_interest          String?   @db.LongText
   // JSON: string[]
-  registration_date         DateTime  @default(now())
-  last_access               DateTime?
-  terms_accepted            Boolean   @default(false)
-  is_leader                 Boolean   @default(false)
-  leader_id                 String?
-  min_monthly_goal          Float?
-  performance_avg_rating    Float     @default(0)
-  performance_on_time       Float     @default(0)
-  performance_rejection_rate Float    @default(0)
-  created_at                DateTime  @default(now())
-  updated_at                DateTime  @updatedAt
+  registration_date          DateTime  @default(now())
+  last_access                DateTime?
+  terms_accepted             Boolean   @default(false)
+  is_leader                  Boolean   @default(false)
+  leader_id                  String?
+  min_monthly_goal           Float?
+  performance_avg_rating     Float     @default(0)
+  performance_on_time        Float     @default(0)
+  performance_rejection_rate Float     @default(0)
+  created_at                 DateTime  @default(now())
+  updated_at                 DateTime  @updatedAt
 
   qualifications      Qualification[]
   wallet_transactions WalletTransaction[]
@@ -151,29 +151,29 @@ model Nomade {
 // Complementa o modelo Qualification (mantido para compatibilidade).
 
 model NomadeHabilidade {
-  id                String   @id @default(cuid())
-  nomade_id         String
-  nomade            Nomade   @relation(fields: [nomade_id], references: [id], onDelete: Cascade)
+  id        String @id @default(cuid())
+  nomade_id String @db.VarChar(30)
+  nomade    Nomade @relation(fields: [nomade_id], references: [id], onDelete: Cascade)
 
-  area              String
+  area String @db.VarChar(50)
   // Performance | Design | Conteúdo | Web | Audiovisual
 
-  categoria_produto String?
+  categoria_produto String? @db.VarChar(100)
   // Categoria do produto, e.g., "Performance e Anúncios Patrocinados"
 
-  produto_id        String?
+  produto_id String? @db.VarChar(30)
   // Produto específico (opcional) — link suave, sem FK forçada para evitar cascata
 
-  modelo_tarefa_id  String?
+  modelo_tarefa_id String? @db.VarChar(30)
   // CatalogTask específica (opcional) — link suave
 
-  nota_media        Float    @default(0)
-  disponibilidade   String   @default("disponivel")
+  nota_media      Float  @default(0)
+  disponibilidade String @default("disponivel")
   // disponivel | indisponivel | pausado
 
-  ativo             Boolean  @default(true)
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  ativo      Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@unique([nomade_id, area, categoria_produto, produto_id, modelo_tarefa_id])
   @@map("nomade_habilidades")
@@ -188,9 +188,9 @@ model NomadeLevel {
   max_score    Int?
   color        String?
   icon         String?
-  benefits     String?
+  benefits     String?  @db.LongText
   // JSON: string[]
-  requirements String?
+  requirements String?  @db.LongText
   // JSON: { label: string, value: string }[]
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
@@ -199,27 +199,27 @@ model NomadeLevel {
 }
 
 model PartnerLevel {
-  id                      String   @id @default(cuid())
-  name                    String   @unique
-  description             String?
-  icon                    String?
-  color                   String?
-  gradient                String?
-  min_mrr                 Int      @default(0)
-  max_mrr                 Int?
-  led_agencies_min        Int      @default(0)
-  led_agencies_mrr_min    Int      @default(0)
-  premium_project_limit   Int?
-  commission_rate         Float    @default(0)
-  extra_discount          Float    @default(0)
-  receives_leads_premium  Boolean  @default(false)
-  requires_partner        Boolean  @default(false)
-  level_up_bonus_credits  Int      @default(0)
-  benefits                String?
+  id                     String   @id @default(cuid())
+  name                   String   @unique
+  description            String?  @db.LongText
+  icon                   String?
+  color                  String?
+  gradient               String?
+  min_mrr                Int      @default(0)
+  max_mrr                Int?
+  led_agencies_min       Int      @default(0)
+  led_agencies_mrr_min   Int      @default(0)
+  premium_project_limit  Int?
+  commission_rate        Float    @default(0)
+  extra_discount         Float    @default(0)
+  receives_leads_premium Boolean  @default(false)
+  requires_partner       Boolean  @default(false)
+  level_up_bonus_credits Int      @default(0)
+  benefits               String?  @db.LongText
   // JSON: string[]
-  sort_order              Int      @default(0)
-  created_at              DateTime @default(now())
-  updated_at              DateTime @updatedAt
+  sort_order             Int      @default(0)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
 
   @@map("partner_levels")
 }
@@ -248,10 +248,10 @@ model WalletTransaction {
   type          String
   // credit | debit | bonus | penalty | withdrawal
   amount        Float
-  description   String
+  description   String   @db.LongText
   date          DateTime @default(now())
-  receipt       String?
-  justification String?
+  receipt       String?  @db.LongText
+  justification String?  @db.LongText
 
   @@map("wallet_transactions")
 }
@@ -275,40 +275,40 @@ model BankAccount {
 // ─── Projects & Tasks ─────────────────────────────────────────────────────────
 
 model Project {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  client_id   String?
-  client      Company?  @relation(fields: [client_id], references: [id])
-  status      String    @default("draft")
+  id                   String    @id @default(cuid())
+  title                String
+  description          String?   @db.LongText
+  client_id            String?
+  client               Company?  @relation(fields: [client_id], references: [id])
+  status               String    @default("draft")
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled | paid
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled
-  lifecycle   String    @default("avulso")
+  lifecycle            String    @default("avulso")
   // avulso | mensal
-  type        String?
+  type                 String?
   // Marketing Digital | Desenvolvimento Web | Design | E-commerce | Desenvolvimento Mobile | Consultoria
-  value       Float     @default(0)
-  budget      Float     @default(0)
-  spent       Float     @default(0)
-  progress    Int       @default(0)
-  agency      String?
-  company_type String?
+  value                Float     @default(0)
+  budget               Float     @default(0)
+  spent                Float     @default(0)
+  progress             Int       @default(0)
+  agency               String?
+  company_type         String?
   // company | agency | nomad
-  consultant       String?
-  consultant_email String?
-  team_size   Int       @default(0)
-  nomades     String?
+  consultant           String?
+  consultant_email     String?
+  team_size            Int       @default(0)
+  nomades              String?   @db.LongText
   // JSON: string[]
-  bitrix_sync          Boolean @default(false)
-  portfolio_permission Boolean @default(false)
-  overdue     Boolean   @default(false)
-  from_lead   Boolean   @default(false)
+  bitrix_sync          Boolean   @default(false)
+  portfolio_permission Boolean   @default(false)
+  overdue              Boolean   @default(false)
+  from_lead            Boolean   @default(false)
   billing_day          Int?
   billing_start_date   String?
-  start_date  DateTime?
-  end_date    DateTime?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  start_date           DateTime?
+  end_date             DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
 
   task_executions TaskExecution[]
   invoices        Invoice[]
@@ -322,10 +322,10 @@ model Project {
 model Specialty {
   id              String   @id @default(cuid())
   name            String
-  description     String?
+  description     String?  @db.LongText
   hourly_rate     Float    @default(0)
   category        String
-  required_skills String?
+  required_skills String?  @db.LongText
   // JSON: string[]
   is_active       Boolean  @default(true)
   created_at      DateTime @default(now())
@@ -337,23 +337,23 @@ model Specialty {
 }
 
 model TaskTemplate {
-  id                   String    @id @default(cuid())
+  id                   String     @id @default(cuid())
   name                 String
-  description          String?
+  description          String?    @db.LongText
   specialty_id         String?
   specialty            Specialty? @relation(fields: [specialty_id], references: [id])
-  base_price           Float     @default(0)
-  complexity           String    @default("basic")
+  base_price           Float      @default(0)
+  complexity           String     @default("basic")
   // basic | intermediate | advanced | premium
   category             String?
-  tags                 String?
+  tags                 String?    @db.LongText
   // JSON: string[]
-  estimated_hours      Float     @default(1)
-  profit_margin        Float     @default(30)
-  emergency_multiplier Float     @default(1.5)
-  is_active            Boolean   @default(true)
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  estimated_hours      Float      @default(1)
+  profit_margin        Float      @default(30)
+  emergency_multiplier Float      @default(1.5)
+  is_active            Boolean    @default(true)
+  created_at           DateTime   @default(now())
+  updated_at           DateTime   @updatedAt
 
   executions TaskExecution[]
 
@@ -361,28 +361,28 @@ model TaskTemplate {
 }
 
 model TaskExecution {
-  id           String    @id @default(cuid())
+  id           String        @id @default(cuid())
   project_id   String?
-  project      Project?     @relation(fields: [project_id], references: [id])
+  project      Project?      @relation(fields: [project_id], references: [id])
   template_id  String?
   template     TaskTemplate? @relation(fields: [template_id], references: [id])
   nomade_id    String?
-  nomade       Nomade?      @relation(fields: [nomade_id], references: [id])
+  nomade       Nomade?       @relation(fields: [nomade_id], references: [id])
   title        String
-  description  String?
-  status       String    @default("draft")
+  description  String?       @db.LongText
+  status       String        @default("draft")
   // draft | launched | in_progress | returned | paused | agency_approval | client_approval | approved | rejected | expired
-  priority     String    @default("medium")
+  priority     String        @default("medium")
   // low | medium | high | urgent
-  type         String    @default("standard")
+  type         String        @default("standard")
   // standard | qualification | learning
   due_date     DateTime?
   delivered_at DateTime?
   approved_at  DateTime?
   rating       Float?
-  feedback     String?
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
+  feedback     String?       @db.LongText
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
 
   @@map("task_executions")
 }
@@ -392,24 +392,24 @@ model TaskExecution {
 model Product {
   id                String   @id @default(cuid())
   name              String
-  description       String?
+  description       String?  @db.LongText
   short_description String?
   category          String
-  tags              String?
+  tags              String?  @db.LongText
   // JSON: string[]
   base_price        Float    @default(0)
   complexity        String   @default("basic")
   // basic | intermediate | advanced | premium
   visibility        String   @default("{\"company\":true,\"agency\":true,\"partner\":false,\"inHouse\":false}")
   // JSON: ProductVisibility
-  image             String?
-  demonstrations    String?
+  image             String?  @db.LongText
+  demonstrations    String?  @db.LongText
   // JSON: string[]
   contract_count    Int      @default(0)
   average_rating    Float    @default(0)
   completion_time   String?
   is_active         Boolean  @default(true)
-  metadata          String?
+  metadata          String?  @db.LongText
   // JSON: extras do frontend (tasks, recurrence, summaryDescription, pricing calc, etc.)
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
@@ -424,22 +424,22 @@ model Product {
 }
 
 model ProductVariation {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   product_id        String
-  product           Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  product           Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
   name              String
   // ex: "Até 2 campanhas"
-  description       String?
+  description       String?   @db.LongText
   // descrição complementar da variação
-  price             Float    @default(0)
+  price             Float     @default(0)
   // preço absoluto desta variação
-  price_modifier    Float    @default(0)
+  price_modifier    Float     @default(0)
   // modificador relativo sobre o preço base (legado/alternativo)
   deadline_days     Int?
   // prazo de entrega em dias corridos
-  scope_description String?
+  scope_description String?   @db.LongText
   // descrição do escopo/quantidade desta variação
-  features          String?
+  features          String?   @db.LongText
   // JSON: string[] — bullet points do que inclui/muda nesta variação
   sort_order        Int       @default(0)
   is_active         Boolean   @default(true)
@@ -457,7 +457,7 @@ model ProductAddon {
   product_id  String
   product     Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
   name        String
-  description String?
+  description String?  @db.LongText
   price       Float    @default(0)
   category    String?
   created_at  DateTime @default(now())
@@ -468,17 +468,17 @@ model ProductAddon {
 // ─── Catalog Tasks (Cadastro de Tarefas) ─────────────────────────────────────
 
 model CatalogTask {
-  id          String   @id @default(cuid())
-  code        String   @unique
+  id          String  @id @default(cuid())
+  code        String  @unique
   // ex: "CT-001", gerado automaticamente
   name        String
   category    String
   // ex: "Design e Criação" | "Performance" | "Estratégia"
   subcategory String?
-  task_type   String   @default("execution")
+  task_type   String  @default("execution")
   // execution | review | approval | qualification | support
-  description String?
-  objective   String?
+  description String? @db.LongText
+  objective   String? @db.LongText
 
   // Execution config
   default_deadline_days Int?
@@ -494,24 +494,24 @@ model CatalogTask {
   requires_files        Boolean @default(false)
 
   // Rich content (JSON fields)
-  steps                   String?
+  steps              String? @db.LongText
   // JSON: TaskStep[]
-  checklist               String?
+  checklist          String? @db.LongText
   // JSON: ChecklistItem[]
-  briefing_questions      String?
+  briefing_questions String? @db.LongText
   // JSON: BriefingQuestion[]
-  required_files          String?
+  required_files     String? @db.LongText
   // JSON: string[]
-  execution_rules         String?
+  execution_rules    String? @db.LongText
   // JSON: string[]
-  conclusion_rules        String?
-  internal_guidance       String?
+  conclusion_rules   String? @db.LongText
+  internal_guidance  String? @db.LongText
 
   // Status
-  status     String   @default("ativa")
+  status    String  @default("ativa")
   // ativa | inativa | em_revisao
-  is_active  Boolean  @default(true)
-  notes      String?
+  is_active Boolean @default(true)
+  notes     String? @db.LongText
   // internal observations
 
   created_at DateTime @default(now())
@@ -526,7 +526,7 @@ model CatalogTask {
 // ─── Product ↔ CatalogTask (many-to-many join) ───────────────────────────────
 
 model ProductCatalogTask {
-  id              String  @id @default(cuid())
+  id              String @id @default(cuid())
   product_id      String
   catalog_task_id String
 
@@ -534,11 +534,11 @@ model ProductCatalogTask {
   catalog_task CatalogTask @relation(fields: [catalog_task_id], references: [id], onDelete: Cascade)
 
   // Link-specific overrides
-  sort_order    Int     @default(0)
-  is_mandatory  Boolean @default(true)
-  phase         String?
+  sort_order   Int     @default(0)
+  is_mandatory Boolean @default(true)
+  phase        String?
   // ex: "E01", "E02" — etapa do produto onde esta tarefa entra
-  notes         String?
+  notes        String? @db.LongText
   // observação específica deste produto
 
   created_at DateTime @default(now())
@@ -550,19 +550,19 @@ model ProductCatalogTask {
 // ─── ProjectProduct — Product linked to a Project ────────────────────────────
 
 model ProjectProduct {
-  id                        String            @id @default(cuid())
-  project_id                String
-  project                   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  product_id                String
-  product                   Product           @relation(fields: [product_id], references: [id])
-  variation_id              String?
-  variation                 ProductVariation? @relation(fields: [variation_id], references: [id])
+  id           String            @id @default(cuid())
+  project_id   String
+  project      Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  product_id   String
+  product      Product           @relation(fields: [product_id], references: [id])
+  variation_id String?
+  variation    ProductVariation? @relation(fields: [variation_id], references: [id])
 
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
   product_code_snapshot     String?
   product_category_snapshot String
-  product_price_snapshot    Float             @default(0)
+  product_price_snapshot    Float   @default(0)
   recurrence_snapshot       String?
   // avulso | mensal
 
@@ -606,42 +606,42 @@ model ProjectTask {
   category_snapshot String?
 
   // Globally unique operational task code — T000001, T000002, …
-  task_code         String? @unique
+  task_code String? @unique
 
   // Task fields
-  title        String
-  description  String?
-  status       String @default("PARA_LANCAMENTO")
+  title                  String
+  description            String? @db.LongText
+  status                 String  @default("PARA_LANCAMENTO")
   // PARA_LANCAMENTO | EM_LANCAMENTO | AGUARDANDO_INFORMACOES | LIBERADA_PARA_EXECUCAO
   // | EM_EXECUCAO | EM_REVISAO | EM_APROVACAO | CONCLUIDA | CANCELADA | AGUARDANDO_NOMADE
-  priority     String @default("medium")
+  priority               String  @default("medium")
   // low | medium | high | urgent
-  assignee_id              String?
-  responsavel_agencia_id   String?
-  nomade_responsavel_id    String?
-  lider_responsavel_id     String?
+  assignee_id            String?
+  responsavel_agencia_id String?
+  nomade_responsavel_id  String?
+  lider_responsavel_id   String?
   // User.id of the leader assigned to qualify this task
 
-  due_date               DateTime?
-  start_date             DateTime?
-  completed_at           DateTime?
-  data_lancamento        DateTime?
+  due_date                DateTime?
+  start_date              DateTime?
+  completed_at            DateTime?
+  data_lancamento         DateTime?
   data_liberacao_execucao DateTime?
-  data_inicio_execucao   DateTime?
-  data_conclusao         DateTime?
+  data_inicio_execucao    DateTime?
+  data_conclusao          DateTime?
   // Prazo de 30 dias para lançar a tarefa — após esta data ela expira automaticamente
-  lancamento_expires_at  DateTime?
+  lancamento_expires_at   DateTime?
 
-  sort_order Int    @default(0)
+  sort_order Int     @default(0)
   fase       String?
   // kept for backward compat
   phase      String?
 
   // JSON snapshots (preserve checklist/steps/briefing from model at time of creation)
-  checklist_snapshot String?
-  steps_snapshot     String?
-  briefing_snapshot  String?
-  observations       String?
+  checklist_snapshot String? @db.LongText
+  steps_snapshot     String? @db.LongText
+  briefing_snapshot  String? @db.LongText
+  observations       String? @db.LongText
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -650,7 +650,7 @@ model ProjectTask {
   briefing_answers   TaskBriefingAnswer[]
   attachments        TaskAttachment[]
   assignment_history TaskAssignmentHistory[]
-  lider_responsavel  User?                  @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
+  lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   @@map("project_tasks")
 }
@@ -658,21 +658,21 @@ model ProjectTask {
 // ─── ProjectTaskStage ─────────────────────────────────────────────────────
 
 model ProjectTaskStage {
-  id               String      @id @default(cuid())
-  project_task_id  String
-  project_task     ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  id              String      @id @default(cuid())
+  project_task_id String
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
 
-  catalog_step_ref  String?
+  catalog_step_ref          String?
   // reference code from the source CatalogTask step JSON
-  titulo            String
-  descricao         String?
-  ordem             Int     @default(0)
-  status            String  @default("PENDENTE")
+  titulo                    String
+  descricao                 String? @db.LongText
+  ordem                     Int     @default(0)
+  status                    String  @default("PENDENTE")
   // PENDENTE | EM_ANDAMENTO | CONCLUIDA | BLOQUEADA
-  obrigatoria              Boolean @default(true)
+  obrigatoria               Boolean @default(true)
   depende_da_etapa_anterior Boolean @default(true)
-  briefing_necessario  Boolean @default(false)
-  checklist_snapshot   String?
+  briefing_necessario       Boolean @default(false)
+  checklist_snapshot        String? @db.LongText
   // JSON: ChecklistItem[]
 
   created_at DateTime @default(now())
@@ -690,11 +690,11 @@ model TaskBriefingAnswer {
 
   question_key  String
   // matches the key from briefing_snapshot JSON
-  question_text String
-  answer        String?
-  files         String?
+  question_text String  @db.LongText
+  answer        String? @db.LongText
+  files         String? @db.LongText
   // JSON: { name, url, size, mime_type }[]
-  links         String?
+  links         String? @db.LongText
   // JSON: string[]
 
   created_at DateTime @default(now())
@@ -711,15 +711,15 @@ model TaskAttachment {
   project_task_id String
   project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
 
-  type          String  @default("file")
+  type         String  @default("file")
   // file | link | reference | delivery
-  name          String
-  url           String
-  size          Int?
+  name         String
+  url          String  @db.LongText
+  size         Int?
   // bytes
-  mime_type     String?
-  observations  String?
-  uploaded_by   String?
+  mime_type    String? @db.LongText
+  observations String? @db.LongText
+  uploaded_by  String?
   // user id or name
 
   created_at DateTime @default(now())
@@ -742,7 +742,7 @@ model TaskAssignmentHistory {
   automatico  Boolean @default(true)
   resultado   String
   // "atribuido" | "sem_nomade_disponivel"
-  detalhes    String?
+  detalhes    String? @db.LongText
   // JSON: extra info (eligible candidates, rejection reason, etc.)
 
   created_at DateTime @default(now())
@@ -757,7 +757,7 @@ model SystemAlert {
   type        String
   // "nomade_nao_encontrado" | "tarefa_atrasada" | etc.
   title       String
-  message     String
+  message     String    @db.LongText
   severity    String    @default("warning")
   // "info" | "warning" | "error"
   entity_type String?
@@ -783,7 +783,7 @@ model Invoice {
   // pending | paid | overdue | cancelled
   due_date       DateTime?
   paid_at        DateTime?
-  description    String?
+  description    String?   @db.LongText
   invoice_number String?
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
@@ -801,7 +801,7 @@ model WithdrawalRequest {
   pix_key       String?
   pix_key_type  String?
   // cpf | email | phone | random
-  notes         String?
+  notes         String?   @db.LongText
   reviewed_by   String?
   reviewed_at   DateTime?
   scheduled_for DateTime?
@@ -817,11 +817,11 @@ model WithdrawalRequest {
 model Term {
   id                   String   @id @default(cuid())
   title                String
-  content              String
+  content              String   @db.LongText
   version              String
   acceptance_level     String   @default("usuario")
   // empresa | usuario
-  target_account_types String?
+  target_account_types String?  @db.LongText
   // JSON: string[]
   is_active            Boolean  @default(true)
   created_at           DateTime @default(now())
@@ -880,7 +880,7 @@ model ChatMessage {
   conversation    Conversation @relation(fields: [conversation_id], references: [id])
   sender_id       String
   sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
-  content         String
+  content         String       @db.LongText
   is_read         Boolean      @default(false)
   created_at      DateTime     @default(now())
 
@@ -892,9 +892,9 @@ model ChatMessage {
 model Course {
   id           String   @id @default(cuid())
   title        String
-  description  String?
+  description  String?  @db.LongText
   category     String
-  thumbnail    String?
+  thumbnail    String?  @db.LongText
   duration     Int?
   is_published Boolean  @default(false)
   is_free      Boolean  @default(true)
@@ -927,7 +927,7 @@ model Lesson {
   title        String
   content_type String       @default("video")
   // video | text | quiz
-  content_url  String?
+  content_url  String?      @db.LongText
   duration     Int?
   order        Int          @default(0)
   created_at   DateTime     @default(now())
@@ -954,7 +954,7 @@ model CourseEnrollment {
 model AdminProfile {
   id          String   @id @default(cuid())
   name        String   @unique
-  description String?
+  description String?  @db.LongText
   is_master   Boolean  @default(false)
   is_active   Boolean  @default(true)
   created_at  DateTime @default(now())
@@ -972,7 +972,7 @@ model AdminPermission {
   module     String
   action     String
   // view | edit | create | delete | not_applicable
-  resource   String?
+  resource   String?      @db.LongText
   created_at DateTime     @default(now())
 
   @@unique([profile_id, module, action])
@@ -982,22 +982,22 @@ model AdminPermission {
 // ─── Partners & Campaigns ─────────────────────────────────────────────────────
 
 model PartnerProfile {
-  id              String   @id @default(cuid())
-  user_id         String   @unique
-  user            User     @relation(fields: [user_id], references: [id])
-  balance         Float    @default(0)
-  total_earned    Float    @default(0)
-  total_withdrawn Float    @default(0)
-  referral_link   String?
-  referral_code   String?  @unique
-  status          String   @default("pending")
+  id                 String   @id @default(cuid())
+  user_id            String   @unique
+  user               User     @relation(fields: [user_id], references: [id])
+  balance            Float    @default(0)
+  total_earned       Float    @default(0)
+  total_withdrawn    Float    @default(0)
+  referral_link      String?
+  referral_code      String?  @unique
+  status             String   @default("pending")
   // active | suspended | pending
-  pix_key         String?
-  pix_key_type    String?
+  pix_key            String?
+  pix_key_type       String?
   // cpf | email | phone | random
   linked_campaign_id String?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
 
   commissions PartnerCommission[]
 
@@ -1078,7 +1078,7 @@ model Payment {
   fake_transaction_id String?
   card_last_digits    String?
   card_holder         String?
-  notes               String?
+  notes               String?   @db.LongText
   paid_at             DateTime?
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt

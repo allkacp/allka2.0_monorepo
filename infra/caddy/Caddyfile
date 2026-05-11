@@ -1,9 +1,13 @@
-{$FRONTEND_DOMAIN:dev.allka.com.vc} {
+{$FRONTEND_DOMAIN:allka.store} {
   encode zstd gzip
   reverse_proxy frontend:80
 }
 
-{$API_DOMAIN:api-dev.allka.com.vc} {
+www.{$FRONTEND_DOMAIN:allka.store} {
+  redir https://{$FRONTEND_DOMAIN:allka.store}{uri} permanent
+}
+
+{$API_DOMAIN:api.allka.store} {
   encode zstd gzip
   reverse_proxy backend:3001
 }

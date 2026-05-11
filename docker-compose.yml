@@ -1,4 +1,24 @@
 services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: allka
+      MYSQL_USER: allka
+      MYSQL_PASSWORD: allka_dev
+      MYSQL_ROOT_PASSWORD: allka_root_dev
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uallka -pallka_dev --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+
   backend:
     build:
       context: .
@@ -8,7 +28,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: file:./dev.db
+      DATABASE_URL: mysql://allka:allka_dev@mysql:3306/allka
       JWT_SECRET: local-development-secret
     ports:
       - "3001:3001"
@@ -17,6 +37,9 @@ services:
       - ./apps/frontend/dev-mocks:/repo/apps/frontend/dev-mocks:ro
       - /repo/node_modules
       - /repo/apps/backend/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   frontend:
     build:
@@ -35,3 +58,6 @@ services:
       - /repo/apps/frontend/node_modules
     depends_on:
       - backend
+
+volumes:
+  mysql_dev_data:

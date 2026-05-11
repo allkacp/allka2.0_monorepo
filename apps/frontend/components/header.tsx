@@ -753,7 +753,7 @@ export function Header() {
           {/* Greeting + date */}
           <div className="hidden lg:block shrink-0">
             <p className="text-lg font-bold text-white leading-tight tracking-tight">
-              {greeting}, {firstName}! 👋
+              {greeting}, {firstName}!
             </p>
             <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">
               {today}

@@ -46,8 +46,8 @@ services:
       DATABASE_URL: mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}
       NODE_ENV: production
       PORT: 3001
-      FRONTEND_URL: https://${FRONTEND_DOMAIN:-dev.allka.com.vc}
-      CORS_ORIGIN: https://${FRONTEND_DOMAIN:-dev.allka.com.vc}
+      FRONTEND_URL: https://${FRONTEND_DOMAIN:-allka.store}
+      CORS_ORIGIN: https://${FRONTEND_DOMAIN:-allka.store}
     depends_on:
       mysql:
         condition: service_healthy
@@ -71,8 +71,8 @@ services:
       - frontend
       - backend
     environment:
-      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-dev.allka.com.vc}
-      API_DOMAIN: ${API_DOMAIN:-api-dev.allka.com.vc}
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-allka.store}
+      API_DOMAIN: ${API_DOMAIN:-api.allka.store}
     ports:
       - "80:80"
       - "443:443"

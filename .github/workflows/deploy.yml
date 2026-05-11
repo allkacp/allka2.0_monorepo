@@ -17,9 +17,9 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_DOMAIN: dev.allka.com.vc
-  API_DOMAIN: api-dev.allka.com.vc
-  VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api-dev.allka.com.vc/api' }}
+  FRONTEND_DOMAIN: allka.store
+  API_DOMAIN: api.allka.store
+  VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.allka.store/api' }}
   VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
   VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
