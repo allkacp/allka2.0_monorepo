@@ -163,5 +163,5 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml pull backend && \
              docker compose --env-file .env -f docker-compose.yml up -d mysql && \
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
-             docker compose --env-file .env -f docker-compose.yml up -d backend caddy && \
+             docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
              docker image prune -f"

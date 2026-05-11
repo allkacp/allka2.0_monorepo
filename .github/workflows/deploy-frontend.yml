@@ -146,5 +146,6 @@ jobs:
           ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
              docker compose --env-file .env -f docker-compose.yml pull frontend && \
-             docker compose --env-file .env -f docker-compose.yml up -d frontend caddy && \
+             docker compose --env-file .env -f docker-compose.yml up -d --no-deps frontend && \
+             docker compose --env-file .env -f docker-compose.yml up -d caddy && \
              docker image prune -f"
