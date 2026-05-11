@@ -575,14 +575,14 @@ export function ChatWidget() {
           onClick={handleOpen}
           title="Abrir chat"
           className={cn(
-            "fixed right-0 z-50 -translate-y-1/2",
+            "fixed right-0 z-50",
             "flex flex-col items-center justify-center gap-1.5",
             "py-3.5 px-2 rounded-l-xl",
             "text-white shadow-lg border border-white/15",
             "hover:px-2.5 transition-all duration-200",
           )}
           style={{
-            top: "65%",
+            bottom: "20px",
             background:
               "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
           }}

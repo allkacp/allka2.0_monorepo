@@ -139,7 +139,7 @@ export function DevRoleSwitcher() {
   return (
     <div
       className="fixed right-0 z-[9999]"
-      style={{ top: "50%", transform: "translateY(-50%)" }}
+      style={{ bottom: "80px" }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
