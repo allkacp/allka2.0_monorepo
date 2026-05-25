@@ -5316,7 +5316,7 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              {/* Ticket Médio Geral */
+              {/* Ticket Médio Geral */}
               <div className="mb-6 p-4 bg-success/10 rounded-lg border border-success/30">
                 <div className="flex items-center justify-between">
                   <div>
