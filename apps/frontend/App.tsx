@@ -34,6 +34,9 @@ import { ProjectBasketProvider } from "@/contexts/project-basket-context";
 const AdminDashboardPage = React.lazy(
   () => import("@/app/admin/dashboard/page"),
 );
+const DashboardSharePage = React.lazy(
+  () => import("@/app/dashboard/share/page"),
+);
 const AdminDashboardConfigPage = React.lazy(
   () => import("@/app/admin/dashboard-config/page"),
 );
@@ -475,6 +478,16 @@ export default function App() {
           element={
             <Suspense fallback={<PageLoader />}>
               <LiderLoginPage />
+            </Suspense>
+          }
+        />
+
+        {/* ─── Rota pública de share de dashboard/widget ─────────────────── */}
+        <Route
+          path="/dashboard/share/:token"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <DashboardSharePage />
             </Suspense>
           }
         />

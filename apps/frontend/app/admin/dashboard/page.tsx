@@ -61,6 +61,10 @@ import {
   Share2,
   SlidersHorizontal,
   ImageDown,
+  Copy,
+  Link2,
+  History,
+  Database,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -102,68 +106,77 @@ import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
-const generateDashboardData = (_from?: any, _to?: any): any => ({
+const generateDashboardData = (from?: Date, to?: Date): any => {
+  const now = new Date();
+  const f = from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const t = to ?? now;
+  const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000));
+  const m = days / 30; // multiplier relative to 30-day base
+  const sc = (base: number) => Math.round(base * m); // scale financial/count
+  const scSoft = (base: number) => Math.round(base * (0.5 + m * 0.5)); // softer scale for counts
+  return ({
   revenue: {
-    total: 270800,
+    total: sc(270800),
     growth: 18.1,
     totalGrowth: 18.1,
     series: [],
-    trendData: [180000, 205000, 215000, 230000, 248000, 270800],
-    creditPlan: 114000,
+    trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map(v => Math.round(v * m / 1)),
+    creditPlan: sc(114000),
     creditPlanGrowth: 18,
-    recurring: 97600,
+    recurring: sc(97600),
     recurringGrowth: 8,
-    oneTime: 59200,
+    oneTime: sc(59200),
     oneTimeGrowth: 14,
   },
   activeProjects: {
-    total: 127,
+    total: scSoft(127),
     growth: 5.2,
     series: [],
-    agencies: 48,
+    agencies: scSoft(48),
     agenciesGrowth: 7,
-    leadPremium: 63,
+    leadPremium: scSoft(63),
     leadPremiumGrowth: 9,
-    nomades: 16,
+    nomades: scSoft(16),
     nomadesGrowth: 3,
-    newTotal: 22,
-    newAgencies: 9,
-    newLeadPremium: 10,
-    newNomades: 3,
+    newTotal: sc(22),
+    newAgencies: sc(9),
+    newLeadPremium: sc(10),
+    newNomades: sc(3),
   },
   creditPlans: {
-    total: 114000,
+    total: sc(114000),
     growth: 18,
     series: [],
-    basic: { revenue: 38000, newContracts: 12, growth: 8 },
-    partner: { revenue: 45000, newContracts: 9, growth: 22 },
-    premium: { revenue: 31000, newContracts: 5, growth: 14 },
+    basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
+    partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
+    premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
   },
   mrr: {
-    total: 97600,
+    total: sc(97600),
     growth: 8,
     series: [],
-    newMrr: 12400,
-    expansion: 5200,
-    contraction: 1800,
-    churnRevenue: 3100,
-    baseMrr: 89600,
-    netChange: 12700,
-    trendData: [72000, 78000, 82000, 86000, 91000, 97600],
+    newMrr: sc(12400),
+    expansion: sc(5200),
+    contraction: sc(1800),
+    churnRevenue: sc(3100),
+    baseMrr: sc(89600),
+    netChange: sc(12700),
+    trendGrowth: 12,
+    trendData: [72000, 78000, 82000, 86000, 91000, 97600].map(v => sc(v)),
   },
   churn: {
     total: 0,
     growth: 0,
     series: [],
-    inactiveAccounts: 23,
+    inactiveAccounts: sc(23),
     inactiveGrowth: 4,
-    agencies: 8,
-    leadPremium: 5,
-    nomades: 7,
-    free: 3,
-    cancelledProjects: 11,
+    agencies: sc(8),
+    leadPremium: sc(5),
+    nomades: sc(7),
+    free: sc(3),
+    cancelledProjects: sc(11),
     cancelledGrowth: 2,
-    revenueChurn: 9300,
+    revenueChurn: sc(9300),
     revenueChurnRate: 3.2,
   },
   averageTicket: {
@@ -193,34 +206,34 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
     hist15kplus: 30,
   },
   accountsReceivable: {
-    total: 187400,
+    total: sc(187400),
     growth: 12,
     series: [],
-    creditPlans: 98200,
-    postPaid: 54700,
-    others: 34500,
-    received: 143600,
+    creditPlans: sc(98200),
+    postPaid: sc(54700),
+    others: sc(34500),
+    received: sc(143600),
   },
   platformActivities: {
-    activeAgencies: 34,
+    activeAgencies: scSoft(34),
     avgSessionMinutes: 47,
-    mau: 1240,
-    dau: 312,
-    sessions: 8740,
-    actionsExecuted: 52300,
-    trendData: [420, 510, 480, 630, 590, 710, 680],
+    mau: scSoft(1240),
+    dau: scSoft(312),
+    sessions: sc(8740),
+    actionsExecuted: sc(52300),
+    trendData: [420, 510, 480, 630, 590, 710, 680].map(v => sc(v)),
   },
   nomads: {
-    total: 148,
+    total: scSoft(148),
     growth: 6,
-    active: 112,
+    active: scSoft(112),
     activeGrowth: 9,
-    inactive: 36,
+    inactive: scSoft(36),
     inactiveChange: -3,
-    newInPeriod: 14,
-    churn: 5,
+    newInPeriod: sc(14),
+    churn: sc(5),
     retention30d: 82,
-    trendData: [95, 100, 104, 108, 110, 112],
+    trendData: [95, 100, 104, 108, 110, 112].map(v => scSoft(v)),
   },
   nomadsIndicators: {
     deliveryRate: 94.3,
@@ -267,65 +280,65 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
       contribution: "R$ 19k",
     },
   ],
-  statusOverview: {
-    projects: {
-      ongoing: 42,
-      approved: 18,
-      completed: 156,
-      cancelled: 7,
-      delayed: 11,
-    },
-    tasks: { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
-    leads: { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
-  },
   tasks: {
-    total: 552,
+    total: sc(552),
     items: [],
-    completed: 412,
+    completed: sc(412),
     completedGrowth: 8,
-    inProgress: 57,
+    inProgress: scSoft(57),
     inProgressGrowth: 4,
-    contracted: 83,
+    contracted: scSoft(83),
     contractedGrowth: 12,
-    cancelled: 14,
+    cancelled: sc(14),
     cancelledChange: -2,
     slaCompliance: 91.4,
   },
   activeUsers: {
-    total: 284,
-    empresas: 92,
+    total: scSoft(284),
+    empresas: scSoft(92),
     empresasGrowth: 5,
-    agencias: 61,
+    agencias: scSoft(61),
     agenciasGrowth: 7,
-    nomades: 112,
+    nomades: scSoft(112),
     nomadesGrowth: 9,
-    admins: 19,
+    admins: scSoft(19),
     adminsGrowth: 3,
     series: [],
   },
   partnerProgram: {
-    total: 38,
+    total: scSoft(38),
     items: [],
-    invitesSent: 124,
-    pending: 47,
-    accepted: 38,
+    invitesSent: sc(124),
+    pending: scSoft(47),
+    accepted: scSoft(38),
     diamond: 3,
     platinum: 6,
     gold: 11,
     silver: 12,
     bronze: 6,
-    mrrGenerated: 22400,
+    mrrGenerated: sc(22400),
   },
   cmv: {
-    totalCosts: 87400,
-    revenue: 270800,
+    totalCosts: sc(87400),
+    revenue: sc(270800),
     cmvPercent: 32.3,
     prevCmvPercent: 34.1,
-    nomades: { value: 42800, percent: 49 },
-    impostos: { value: 18200, percent: 21 },
-    comissoes: { value: 14900, percent: 17 },
-    outros: { value: 11500, percent: 13 },
+    nomades: { value: sc(42800), percent: 49 },
+    impostos: { value: sc(18200), percent: 21 },
+    comissoes: { value: sc(14900), percent: 17 },
+    outros: { value: sc(11500), percent: 13 },
     variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
+  },
+  statusOverview: {
+    projects: {
+      ongoing: scSoft(42),
+      approved: scSoft(18),
+      completed: sc(156),
+      cancelled: sc(7),
+      delayed: scSoft(11),
+    },
+    tasks: { contracted: scSoft(83), inProgress: scSoft(57), completed: sc(412), archived: sc(34) },
+    leads: { new: scSoft(29), contacted: scSoft(15), proposal: scSoft(8), won: sc(12), lost: sc(5) },
   },
   metrics: {},
   activity: [],
@@ -337,7 +350,14 @@ const generateDashboardData = (_from?: any, _to?: any): any => ({
   permissionMatrix: [],
   managementTools: [],
 });
+};
 import { Switch } from "@/components/ui/switch"; // Added Switch
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
@@ -586,6 +606,104 @@ const formatDate = (date: Date, formatStr: string) => {
 //   </div>
 // )
 
+// ─── Historical (manual) data system ────────────────────────────────────────
+type ManualDataEntry = {
+  // Financeiro
+  revenue_total?: number;
+  mrr_total?: number;
+  creditPlans_total?: number;
+  accountsReceivable_total?: number;
+  cmv_totalCosts?: number;
+  // Projetos & Tarefas
+  activeProjects_total?: number;
+  tasks_total?: number;
+  tasks_completed?: number;
+  tasks_inProgress?: number;
+  tasks_slaCompliance?: number;
+  // Nômades & Parceiros
+  nomads_total?: number;
+  nomads_active?: number;
+  partnerProgram_total?: number;
+  partnerProgram_invitesSent?: number;
+  partnerProgram_mrrGenerated?: number;
+  // Churn, Ticket & LTV
+  churn_revenueChurnRate?: number;
+  churn_revenueChurn?: number;
+  averageTicket_general?: number;
+  ltv_value?: number;
+};
+
+const MANUAL_WIDGET_MAP: Record<keyof ManualDataEntry, string> = {
+  revenue_total: "revenue",
+  mrr_total: "mrr",
+  creditPlans_total: "creditPlans",
+  accountsReceivable_total: "accountsReceivable",
+  cmv_totalCosts: "cmv",
+  activeProjects_total: "activeProjectsWidget",
+  tasks_total: "tasks",
+  tasks_completed: "tasks",
+  tasks_inProgress: "tasks",
+  tasks_slaCompliance: "tasks",
+  nomads_total: "nomads",
+  nomads_active: "nomads",
+  partnerProgram_total: "partnerProgram",
+  partnerProgram_invitesSent: "partnerProgram",
+  partnerProgram_mrrGenerated: "partnerProgram",
+  churn_revenueChurnRate: "churn",
+  churn_revenueChurn: "churn",
+  averageTicket_general: "averageTicket",
+  ltv_value: "ltv",
+};
+
+const mergeManualData = (base: any, entry: ManualDataEntry): any => {
+  const m = { ...base };
+  if (entry.revenue_total != null) m.revenue = { ...m.revenue, total: entry.revenue_total };
+  if (entry.mrr_total != null) m.mrr = { ...m.mrr, total: entry.mrr_total };
+  if (entry.creditPlans_total != null) m.creditPlans = { ...m.creditPlans, total: entry.creditPlans_total };
+  if (entry.accountsReceivable_total != null) m.accountsReceivable = { ...m.accountsReceivable, total: entry.accountsReceivable_total };
+  if (entry.cmv_totalCosts != null) m.cmv = { ...m.cmv, totalCosts: entry.cmv_totalCosts };
+  if (entry.activeProjects_total != null) m.activeProjects = { ...m.activeProjects, total: entry.activeProjects_total };
+  const tasksOverride: any = {};
+  if (entry.tasks_total != null) tasksOverride.total = entry.tasks_total;
+  if (entry.tasks_completed != null) tasksOverride.completed = entry.tasks_completed;
+  if (entry.tasks_inProgress != null) tasksOverride.inProgress = entry.tasks_inProgress;
+  if (entry.tasks_slaCompliance != null) tasksOverride.slaCompliance = entry.tasks_slaCompliance;
+  if (Object.keys(tasksOverride).length) m.tasks = { ...m.tasks, ...tasksOverride };
+  if (entry.nomads_total != null) m.nomads = { ...m.nomads, total: entry.nomads_total };
+  if (entry.nomads_active != null) m.nomads = { ...m.nomads, active: entry.nomads_active };
+  const ppOverride: any = {};
+  if (entry.partnerProgram_total != null) ppOverride.total = entry.partnerProgram_total;
+  if (entry.partnerProgram_invitesSent != null) ppOverride.invitesSent = entry.partnerProgram_invitesSent;
+  if (entry.partnerProgram_mrrGenerated != null) ppOverride.mrrGenerated = entry.partnerProgram_mrrGenerated;
+  if (Object.keys(ppOverride).length) m.partnerProgram = { ...m.partnerProgram, ...ppOverride };
+  if (entry.churn_revenueChurnRate != null) m.churn = { ...m.churn, revenueChurnRate: entry.churn_revenueChurnRate };
+  if (entry.churn_revenueChurn != null) m.churn = { ...m.churn, revenueChurn: entry.churn_revenueChurn };
+  if (entry.averageTicket_general != null) m.averageTicket = { ...m.averageTicket, general: entry.averageTicket_general };
+  if (entry.ltv_value != null) m.ltv = { ...m.ltv, value: entry.ltv_value };
+  return m;
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Share system ──────────────────────────────────────────────────────────────
+type ShareConfig = {
+  target: { id: string; title: string; type: "widget" | "dashboard" };
+  permission: "view" | "comment";
+  pin?: string;
+  expiry?: Date;
+};
+
+const generatePublicToken = (config: ShareConfig): string => {
+  const payload = {
+    target: config.target,
+    permission: config.permission,
+    pin: config.pin ?? null,
+    expiry: config.expiry ? config.expiry.toISOString() : null,
+    issued: new Date().toISOString(),
+  };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+};
+// ───────────────────────────────────────────────────────────────────────────────
+
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
   const { toast } = useToast(); // Get toast function
@@ -704,6 +822,14 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // ── Historical data (persisted in localStorage) ──────────────────────────
+  const [historicalData, setHistoricalData] = useState<Record<string, ManualDataEntry>>(() => {
+    try {
+      const saved = localStorage.getItem("dashboard_historical_data");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
   // Period-aware dashboard data — recomputed whenever the selected period changes
   const dashboardData = useMemo(() => {
     const { from, to } = getDateRangeFromPeriod(
@@ -711,9 +837,16 @@ export default function AdminDashboardPage() {
       globalPeriod.from,
       globalPeriod.to,
     );
-    return generateDashboardData(from, to);
+    const base = generateDashboardData(from, to);
+    // Merge manual data if the period covers exactly one calendar month
+    if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
+      const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
+      const entry = historicalData[key];
+      if (entry) return mergeManualData(base, entry);
+    }
+    return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to]);
+  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to, historicalData]);
 
   // Convenience aliases used throughout widget JSX
   const rv = dashboardData.revenue;
@@ -1018,16 +1151,34 @@ export default function AdminDashboardPage() {
     widgetId: string;
     widgetTitle: string;
   }) => (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => exportWidgetToPng(widgetId, widgetTitle)}
-      className="h-7 w-7 p-0 hover:bg-primary/10"
-      title="Exportar widget como PNG"
-      data-export-button
-    >
-      <Download className="h-3.5 w-3.5" />
-    </Button>
+    <>
+      {manualAffectedWidgets.has(widgetId) && (
+        <Badge className="text-[10px] h-5 px-1.5 shrink-0 gap-0.5 bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
+          <Database className="h-2.5 w-2.5" />
+          Manual
+        </Badge>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => openWidgetShareDialog(widgetId, widgetTitle)}
+        className="h-7 w-7 p-0 hover:bg-primary/10"
+        title="Compartilhar widget"
+        data-share-button
+      >
+        <Share2 className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => exportWidgetToPng(widgetId, widgetTitle)}
+        className="h-7 w-7 p-0 hover:bg-primary/10"
+        title="Exportar widget como PNG"
+        data-export-button
+      >
+        <Download className="h-3.5 w-3.5" />
+      </Button>
+    </>
   );
 
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
@@ -1309,7 +1460,78 @@ export default function AdminDashboardPage() {
   >([]);
   const [professionalSearch, setProfessionalSearch] = useState("");
 
-  // Undeclared Variables Fixes
+  // ── Public share dialog state ──────────────────────────────────────────────
+  const [showPublicShareDialog, setShowPublicShareDialog] = useState(false);
+  const [shareTarget, setShareTarget] = useState<ShareConfig["target"] | null>(null);
+  const [sharePermission, setSharePermission] = useState<"view" | "comment">("view");
+  const [sharePinEnabled, setSharePinEnabled] = useState(false);
+  const [sharePin, setSharePin] = useState("");
+  const [shareExpiryEnabled, setShareExpiryEnabled] = useState(false);
+  const [shareExpiry, setShareExpiry] = useState("");
+  const [generatedShareLink, setGeneratedShareLink] = useState("");
+  const [shareActiveTab, setShareActiveTab] = useState("permission");
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Historical modal states ──────────────────────────────────────────────────
+  const [showHistoricalModal, setShowHistoricalModal] = useState(false);
+  const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
+  const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
+  const setHistField = (key: keyof ManualDataEntry, value: string) => {
+    const num = value === "" ? undefined : Number(value);
+    setHistFormData((prev) => ({ ...prev, [key]: num }));
+  };
+
+  // Active manual entry for current period
+  const activeManualKey = useMemo(() => {
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type, globalPeriod.from, globalPeriod.to,
+    );
+    if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
+      return `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to]);
+
+  const activeManualEntry = activeManualKey ? (historicalData[activeManualKey] ?? null) : null;
+
+  const manualAffectedWidgets = useMemo<Set<string>>(() => {
+    if (!activeManualEntry) return new Set();
+    const s = new Set<string>();
+    (Object.keys(activeManualEntry) as Array<keyof ManualDataEntry>).forEach((k) => {
+      if (activeManualEntry[k] != null && MANUAL_WIDGET_MAP[k]) s.add(MANUAL_WIDGET_MAP[k]);
+    });
+    return s;
+  }, [activeManualEntry]);
+
+  // Historical handlers
+  const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  const openHistoricalModal = (key?: string) => {
+    const k = key ?? (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    })();
+    setHistModalKey(k);
+    setHistFormData(historicalData[k] ?? {});
+    setShowHistoricalModal(true);
+  };
+
+  const saveHistoricalEntry = () => {
+    const updated = { ...historicalData, [histModalKey]: histFormData as ManualDataEntry };
+    setHistoricalData(updated);
+    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    setShowHistoricalModal(false);
+    const [y, m] = histModalKey.split("-").map(Number);
+    toast({ title: "Dados históricos salvos", description: `Dados de ${MONTH_NAMES[m - 1]}/${y} registrados com sucesso.` });
+  };
+
+  const deleteHistoricalEntry = (key: string) => {
+    const updated = { ...historicalData };
+    delete updated[key];
+    setHistoricalData(updated);
+    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+  };
   const handleOpenShareDialog = (dashboardId: string) => {
     setSharingDashboardId(dashboardId);
     const dashboard = savedDashboards.find((d) => d.id === dashboardId);
@@ -1319,6 +1541,55 @@ export default function AdminDashboardPage() {
     }
     setShowShareDialog(true);
   };
+
+  // ── Public share handlers ─────────────────────────────────────────────────
+  const openWidgetShareDialog = (widgetId: string, widgetTitle: string) => {
+    setShareTarget({ id: widgetId, title: widgetTitle, type: "widget" });
+    setSharePermission("view");
+    setSharePinEnabled(false);
+    setSharePin("");
+    setShareExpiryEnabled(false);
+    setShareExpiry("");
+    setGeneratedShareLink("");
+    setShareActiveTab("permission");
+    setShowPublicShareDialog(true);
+  };
+
+  const openDashboardPublicShare = () => {
+    const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
+    setShareTarget({
+      id: currentDashboardId ?? "default",
+      title: currentDb?.name ?? "Dashboard",
+      type: "dashboard",
+    });
+    setSharePermission("view");
+    setSharePinEnabled(false);
+    setSharePin("");
+    setShareExpiryEnabled(false);
+    setShareExpiry("");
+    setGeneratedShareLink("");
+    setShareActiveTab("permission");
+    setShowPublicShareDialog(true);
+  };
+
+  const handleGenerateShareLink = () => {
+    if (!shareTarget) return;
+    const config: ShareConfig = {
+      target: shareTarget,
+      permission: sharePermission,
+      pin: sharePinEnabled && sharePin.length === 4 ? sharePin : undefined,
+      expiry: shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
+    };
+    const token = generatePublicToken(config);
+    setGeneratedShareLink(`${window.location.origin}/dashboard/share/${token}`);
+  };
+
+  const handleCopyShareLink = () => {
+    if (!generatedShareLink) return;
+    navigator.clipboard.writeText(generatedShareLink);
+    toast({ title: "Link copiado!", description: "O link foi copiado para a área de transferência." });
+  };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const handleSaveEditedDashboard = () => {
     if (!editingDashboardId || !editingDashboardName.trim()) return;
@@ -4167,13 +4438,19 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                    {globalPeriod.label}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <WidgetExportButton
+                      widgetId={widget.type}
+                      widgetTitle={getWidgetTitle(widget.type)}
+                    />
+                    <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                      {globalPeriod.label}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total Active Projects */}
+                {/* Total Active Projects */}}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
                     <h3 className="text-3xl font-bold">{apW.total}</h3>
@@ -4354,13 +4631,19 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                    {globalPeriod.label}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <WidgetExportButton
+                      widgetId={widget.type}
+                      widgetTitle={getWidgetTitle(widget.type)}
+                    />
+                    <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                      {globalPeriod.label}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total Revenue from Credit Plans */}
+                {/* Total Revenue from Credit Plans */}}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
                     <h3 className="text-3xl font-bold">
@@ -4813,7 +5096,7 @@ export default function AdminDashboardPage() {
 
       case "churn":
         return (
-          <Card className="overflow-hidden border-destructive/20">
+          <Card className="overflow-hidden border-destructive/20" data-widget-id={widget.type}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -4827,12 +5110,18 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="text-destructive border-destructive/30"
-                >
-                  {globalPeriod.label}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <WidgetExportButton
+                    widgetId={widget.type}
+                    widgetTitle="CHURN"
+                  />
+                  <Badge
+                    variant="outline"
+                    className="text-destructive border-destructive/30"
+                  >
+                    {globalPeriod.label}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -4947,7 +5236,18 @@ export default function AdminDashboardPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 bg-transparent"
-                  onClick={() => {}}
+                  onClick={() =>
+                    openChartModal(
+                      widget.type,
+                      "CHURN — Tendência",
+                      "bar",
+                      [
+                        { date: "Inativados", value: churnW.inactiveAccounts },
+                        { date: "Proj. Cancel.", value: churnW.cancelledProjects },
+                        { date: "Rev. Churn (k)", value: Math.round(churnW.revenueChurn / 1000) },
+                      ],
+                    )
+                  }
                 >
                   <FileText className="h-3 w-3" />
                   Ver Detalhes
@@ -4956,7 +5256,7 @@ export default function AdminDashboardPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 bg-transparent"
-                  onClick={() => {}}
+                  onClick={() => exportWidgetToPng(widget.type, "CHURN")}
                 >
                   <Download className="h-3 w-3" />
                   Exportar
@@ -4977,7 +5277,7 @@ export default function AdminDashboardPage() {
 
       case "averageTicket":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="border-b bg-gradient-to-r from-success/10 to-chart-3/10">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
@@ -4992,11 +5292,23 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <FileDown className="h-4 w-4" />
-                    <span className="hidden sm:inline">Exportar</span>
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                  <WidgetExportButton
+                    widgetId={widget.type}
+                    widgetTitle={getWidgetTitle(widget.type)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() =>
+                      openChartModal(
+                        widget.type,
+                        "Ticket Médio — Tendência",
+                        "line",
+                        atW.trendData.map((v, i) => ({ date: `M${i + 1}`, value: v })),
+                      )
+                    }
+                  >
                     <ExternalLink className="h-4 w-4" />
                     <span className="hidden sm:inline">Detalhes</span>
                   </Button>
@@ -5004,7 +5316,7 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              {/* Ticket Médio Geral */}
+              {/* Ticket Médio Geral */
               <div className="mb-6 p-4 bg-success/10 rounded-lg border border-success/30">
                 <div className="flex items-center justify-between">
                   <div>
@@ -5152,7 +5464,7 @@ export default function AdminDashboardPage() {
 
       case "ltv":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-chart-4" />
@@ -5164,16 +5476,33 @@ export default function AdminDashboardPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" className="h-8 px-2">
-                  <FileText className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 px-2">
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() =>
+                    openChartModal(
+                      widget.type,
+                      "LTV — Por Tipo de Conta",
+                      "bar",
+                      [
+                        { date: "Agências", value: ltvW.agencies },
+                        { date: "Lead Premium", value: ltvW.leadPremium },
+                        { date: "Nômades", value: ltvW.nomades },
+                      ],
+                    )
+                  }
+                >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* LTV Geral */}
+              {/* LTV Geral */
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-3xl font-bold">
@@ -5396,7 +5725,7 @@ export default function AdminDashboardPage() {
         };
 
         return (
-          <Card>
+          <Card data-widget-id={widget.type}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <Calculator className="h-5 w-5 text-warning" />
@@ -5408,9 +5737,10 @@ export default function AdminDashboardPage() {
                 <Button variant="ghost" size="sm">
                   <FileText className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
-                  <Download className="h-4 w-4" />
-                </Button>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -5576,7 +5906,7 @@ export default function AdminDashboardPage() {
 
       case "platformActivities":
         return (
-          <Card key={widget.id} className="overflow-hidden">
+          <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-info" />
@@ -5584,13 +5914,10 @@ export default function AdminDashboardPage() {
                   Atividades da Plataforma
                 </CardTitle>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => alert("Ver detalhes")}
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -5732,7 +6059,7 @@ export default function AdminDashboardPage() {
 
       case "nomads":
         return (
-          <Card className="p-6">
+          <Card className="p-6" data-widget-id={widget.type}>
             <div className="space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
@@ -5752,10 +6079,10 @@ export default function AdminDashboardPage() {
                     <span className="hidden min-[380px]:inline">Ver lista</span>
                     <span className="min-[380px]:hidden text-xs">Lista</span>
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Download className="h-4 w-4" />
-                    <span className="hidden min-[380px]:inline">Exportar</span>
-                  </Button>
+                  <WidgetExportButton
+                    widgetId={widget.type}
+                    widgetTitle={getWidgetTitle(widget.type)}
+                  />
                 </div>
               </div>
 
@@ -5893,7 +6220,7 @@ export default function AdminDashboardPage() {
 
       case "nomadsRanking":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
@@ -5914,10 +6241,10 @@ export default function AdminDashboardPage() {
                     <span className="hidden sm:inline">Ver todos</span>
                     <ArrowRightIcon className="h-3 w-3" />
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Download className="h-4 w-4" />
-                    <span className="hidden sm:inline">Exportar</span>
-                  </Button>
+                  <WidgetExportButton
+                    widgetId={widget.type}
+                    widgetTitle={getWidgetTitle(widget.type)}
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -6318,7 +6645,13 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                   </div>
-                  <WidgetPeriodSelector widgetId={widget.id} />
+                  <div className="flex items-center gap-2">
+                    <WidgetExportButton
+                      widgetId={widget.type}
+                      widgetTitle={getWidgetTitle(widget.type)}
+                    />
+                    <WidgetPeriodSelector widgetId={widget.id} />
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -6400,6 +6733,19 @@ export default function AdminDashboardPage() {
                   variant="outline"
                   size="sm"
                   className="w-full border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 bg-transparent"
+                  onClick={() =>
+                    openChartModal(
+                      widget.type,
+                      "Contas a Receber — Composição",
+                      "bar",
+                      [
+                        { date: "Planos de Crédito", value: arW.creditPlans },
+                        { date: "Pós-pagos", value: arW.postPaid },
+                        { date: "Outros", value: arW.others },
+                        { date: "Recebido", value: arW.received },
+                      ],
+                    )
+                  }
                 >
                   Ver Detalhes
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -6411,18 +6757,24 @@ export default function AdminDashboardPage() {
 
       case "tasks":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-chart-3/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-success/20 rounded-lg shrink-0">
-                  <CheckSquare className="h-5 w-5 text-success" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
+                    <CheckSquare className="h-5 w-5 text-success" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">Tarefas (Resumo)</CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Executadas, em execução e contratadas
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-base">Tarefas (Resumo)</CardTitle>
-                  <p className="text-xs text-muted-foreground truncate">
-                    Executadas, em execução e contratadas
-                  </p>
-                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </div>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
@@ -6488,20 +6840,26 @@ export default function AdminDashboardPage() {
 
       case "nomadsIndicators":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-2 border-b bg-gradient-to-r from-chart-4/10 to-chart-3/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-chart-4/20 rounded-lg shrink-0">
-                  <Users className="h-5 w-5 text-chart-4" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-chart-4/20 rounded-lg shrink-0">
+                    <Users className="h-5 w-5 text-chart-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">
+                      Indicadores dos Nômades
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">
+                      KPIs de desempenho e qualidade
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-base">
-                    Indicadores dos Nômades
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground truncate">
-                    KPIs de desempenho e qualidade
-                  </p>
-                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </div>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
@@ -6560,18 +6918,24 @@ export default function AdminDashboardPage() {
 
       case "activeUsers":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-info/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-success/20 rounded-lg shrink-0">
-                  <UserCheck className="h-5 w-5 text-success" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
+                    <UserCheck className="h-5 w-5 text-success" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-base">Usuários Ativos</CardTitle>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Ativos por tipo de conta no período
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-base">Usuários Ativos</CardTitle>
-                  <p className="text-xs text-muted-foreground truncate">
-                    Ativos por tipo de conta no período
-                  </p>
-                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </div>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
@@ -6632,7 +6996,7 @@ export default function AdminDashboardPage() {
 
       case "partnerProgram":
         return (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-2 border-b bg-linear-to-r from-amber-500/10 to-yellow-400/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -6648,25 +7012,31 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
-                <Link
-                  to="/admin/programa-partner"
-                  className="text-xs text-primary hover:underline shrink-0 flex items-center gap-1"
-                >
-                  Gerenciar
-                  <svg
-                    className="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
+                <div className="flex items-center gap-2">
+                  <WidgetExportButton
+                    widgetId={widget.type}
+                    widgetTitle={getWidgetTitle(widget.type)}
+                  />
+                  <Link
+                    to="/admin/programa-partner"
+                    className="text-xs text-primary hover:underline shrink-0 flex items-center gap-1"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </Link>
+                    Gerenciar
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </Link>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
@@ -7161,6 +7531,33 @@ export default function AdminDashboardPage() {
             </PopoverContent>
           </Popover>
 
+          {/* Dados Históricos */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openHistoricalModal()}
+            className="h-8 px-3 gap-1.5 text-xs font-medium border-amber-200 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-500 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400"
+          >
+            <History className="h-3.5 w-3.5" />
+            Histórico
+            {Object.keys(historicalData).length > 0 && (
+              <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] h-4 w-4 flex items-center justify-center shrink-0">
+                {Object.keys(historicalData).length}
+              </span>
+            )}
+          </Button>
+
+          {/* Compartilhar Dashboard */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openDashboardPublicShare}
+            className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            Compartilhar
+          </Button>
+
           {/* Editar Dashboard */}
           <Button
             onClick={() => {
@@ -7600,6 +7997,199 @@ export default function AdminDashboardPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Public Share Dialog ───────────────────────────────────────────── */}
+      <Dialog open={showPublicShareDialog} onOpenChange={setShowPublicShareDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-4 w-4 text-primary" />
+              Compartilhar via Link
+            </DialogTitle>
+            <DialogDescription>
+              {shareTarget
+                ? `${shareTarget.type === "widget" ? "Widget" : "Dashboard"}: ${shareTarget.title}`
+                : "Configure as opções e gere um link público"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={shareActiveTab} onValueChange={setShareActiveTab} className="w-full">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="permission">Permissão</TabsTrigger>
+              <TabsTrigger value="pin">PIN</TabsTrigger>
+              <TabsTrigger value="expiry">Expiração</TabsTrigger>
+            </TabsList>
+
+            {/* Permissão */}
+            <TabsContent value="permission" className="space-y-3 pt-2">
+              <p className="text-sm text-muted-foreground">
+                Quem acessar o link poderá:
+              </p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setSharePermission("view")}
+                  className={cn(
+                    "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
+                    sharePermission === "view"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <div className={cn(
+                    "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                    sharePermission === "view" ? "border-primary" : "border-muted-foreground",
+                  )}>
+                    {sharePermission === "view" && (
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Somente Visualizar</p>
+                    <p className="text-xs text-muted-foreground">Acesso de leitura aos dados do dashboard</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSharePermission("comment")}
+                  className={cn(
+                    "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
+                    sharePermission === "comment"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <div className={cn(
+                    "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                    sharePermission === "comment" ? "border-primary" : "border-muted-foreground",
+                  )}>
+                    {sharePermission === "comment" && (
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Visualizar + Comentar</p>
+                    <p className="text-xs text-muted-foreground">Pode adicionar comentários e anotações</p>
+                  </div>
+                </button>
+              </div>
+            </TabsContent>
+
+            {/* PIN */}
+            <TabsContent value="pin" className="space-y-3 pt-2">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="text-sm font-medium">Proteger com PIN</p>
+                  <p className="text-xs text-muted-foreground">Solicitar um PIN de 4 dígitos para acessar</p>
+                </div>
+                <Switch
+                  checked={sharePinEnabled}
+                  onCheckedChange={(v) => {
+                    setSharePinEnabled(v);
+                    if (!v) setSharePin("");
+                    setGeneratedShareLink("");
+                  }}
+                />
+              </div>
+              {sharePinEnabled && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="share-pin" className="text-sm">PIN (4 dígitos)</Label>
+                  <Input
+                    id="share-pin"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={sharePin}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                      setSharePin(v);
+                      setGeneratedShareLink("");
+                    }}
+                    placeholder="••••"
+                    className="text-center tracking-[0.5em] text-lg w-28"
+                  />
+                  {sharePinEnabled && sharePin.length > 0 && sharePin.length < 4 && (
+                    <p className="text-xs text-destructive">Digite exatamente 4 dígitos</p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Expiração */}
+            <TabsContent value="expiry" className="space-y-3 pt-2">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="text-sm font-medium">Definir Expiração</p>
+                  <p className="text-xs text-muted-foreground">O link deixa de funcionar após essa data</p>
+                </div>
+                <Switch
+                  checked={shareExpiryEnabled}
+                  onCheckedChange={(v) => {
+                    setShareExpiryEnabled(v);
+                    if (!v) setShareExpiry("");
+                    setGeneratedShareLink("");
+                  }}
+                />
+              </div>
+              {shareExpiryEnabled && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="share-expiry" className="text-sm">Data de expiração</Label>
+                  <Input
+                    id="share-expiry"
+                    type="date"
+                    value={shareExpiry}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      setShareExpiry(e.target.value);
+                      setGeneratedShareLink("");
+                    }}
+                  />
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          {/* Generated Link */}
+          <div className="space-y-2 pt-1">
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={handleGenerateShareLink}
+                disabled={sharePinEnabled && sharePin.length !== 4}
+              >
+                <Link2 className="h-4 w-4 mr-1.5" />
+                Gerar Link
+              </Button>
+            </div>
+            {generatedShareLink && (
+              <div className="flex gap-2 items-center">
+                <Input
+                  readOnly
+                  value={generatedShareLink}
+                  className="text-xs font-mono bg-muted/40"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={handleCopyShareLink}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copiar
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPublicShareDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ──────────────────────────────────────────────────────────────────── */}
+
       {selectedMetric && (
         <MetricChartModal
           open={chartModalOpen}
@@ -7610,6 +8200,212 @@ export default function AdminDashboardPage() {
           data={selectedMetric.data}
         />
       )}
+
+      {/* ── Historical Data Modal ─────────────────────────────────────────── */}
+      <Dialog open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-amber-500" />
+              Dados Históricos Manuais
+            </DialogTitle>
+            <DialogDescription>
+              Insira dados reais para um mês específico. Serão aplicados sobre os dados gerados quando o período do dashboard corresponder a esse mês.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Month picker + saved entries count */}
+          <div className="flex items-center gap-3 py-2 border-b border-border/40">
+            <Label className="text-sm font-medium shrink-0">Mês / Ano:</Label>
+            <Input
+              type="month"
+              value={histModalKey}
+              onChange={(e) => {
+                setHistModalKey(e.target.value);
+                setHistFormData(historicalData[e.target.value] ?? {});
+              }}
+              className="w-44"
+            />
+            {historicalData[histModalKey] && (
+              <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
+                Dados salvos
+              </Badge>
+            )}
+          </div>
+
+          {/* 4 collapsible groups */}
+          <Accordion type="multiple" defaultValue={["financeiro"]} className="space-y-1">
+
+            {/* Group 1: Financeiro */}
+            <AccordionItem value="financeiro" className="border rounded-lg px-3">
+              <AccordionTrigger className="text-sm font-semibold py-3">
+                💰 Financeiro
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid grid-cols-2 gap-3 pb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Receita Total (R$)</Label>
+                    <Input type="number" placeholder="ex: 85000" value={histFormData.revenue_total ?? ""} onChange={(e) => setHistField("revenue_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">MRR (R$)</Label>
+                    <Input type="number" placeholder="ex: 42000" value={histFormData.mrr_total ?? ""} onChange={(e) => setHistField("mrr_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Planos de Crédito (qtd)</Label>
+                    <Input type="number" placeholder="ex: 120" value={histFormData.creditPlans_total ?? ""} onChange={(e) => setHistField("creditPlans_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Contas a Receber (R$)</Label>
+                    <Input type="number" placeholder="ex: 15000" value={histFormData.accountsReceivable_total ?? ""} onChange={(e) => setHistField("accountsReceivable_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">CMV — Custo Total (R$)</Label>
+                    <Input type="number" placeholder="ex: 18000" value={histFormData.cmv_totalCosts ?? ""} onChange={(e) => setHistField("cmv_totalCosts", e.target.value)} />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Group 2: Projetos & Tarefas */}
+            <AccordionItem value="projetos" className="border rounded-lg px-3">
+              <AccordionTrigger className="text-sm font-semibold py-3">
+                📋 Projetos &amp; Tarefas
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid grid-cols-2 gap-3 pb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Projetos Ativos (qtd)</Label>
+                    <Input type="number" placeholder="ex: 38" value={histFormData.activeProjects_total ?? ""} onChange={(e) => setHistField("activeProjects_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tarefas Totais (qtd)</Label>
+                    <Input type="number" placeholder="ex: 540" value={histFormData.tasks_total ?? ""} onChange={(e) => setHistField("tasks_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tarefas Concluídas (qtd)</Label>
+                    <Input type="number" placeholder="ex: 312" value={histFormData.tasks_completed ?? ""} onChange={(e) => setHistField("tasks_completed", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tarefas Em Progresso (qtd)</Label>
+                    <Input type="number" placeholder="ex: 95" value={histFormData.tasks_inProgress ?? ""} onChange={(e) => setHistField("tasks_inProgress", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">SLA Compliance (%)</Label>
+                    <Input type="number" placeholder="ex: 89" min="0" max="100" value={histFormData.tasks_slaCompliance ?? ""} onChange={(e) => setHistField("tasks_slaCompliance", e.target.value)} />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Group 3: Nômades & Parceiros */}
+            <AccordionItem value="nomades" className="border rounded-lg px-3">
+              <AccordionTrigger className="text-sm font-semibold py-3">
+                🌍 Nômades &amp; Parceiros
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid grid-cols-2 gap-3 pb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Nômades Total (qtd)</Label>
+                    <Input type="number" placeholder="ex: 210" value={histFormData.nomads_total ?? ""} onChange={(e) => setHistField("nomads_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Nômades Ativos (qtd)</Label>
+                    <Input type="number" placeholder="ex: 178" value={histFormData.nomads_active ?? ""} onChange={(e) => setHistField("nomads_active", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Parceiros Ativos (qtd)</Label>
+                    <Input type="number" placeholder="ex: 45" value={histFormData.partnerProgram_total ?? ""} onChange={(e) => setHistField("partnerProgram_total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Convites Enviados (qtd)</Label>
+                    <Input type="number" placeholder="ex: 90" value={histFormData.partnerProgram_invitesSent ?? ""} onChange={(e) => setHistField("partnerProgram_invitesSent", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">MRR Gerado Parceiros (R$)</Label>
+                    <Input type="number" placeholder="ex: 6200" value={histFormData.partnerProgram_mrrGenerated ?? ""} onChange={(e) => setHistField("partnerProgram_mrrGenerated", e.target.value)} />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Group 4: Churn, Ticket & LTV */}
+            <AccordionItem value="indicadores" className="border rounded-lg px-3">
+              <AccordionTrigger className="text-sm font-semibold py-3">
+                📊 Churn, Ticket &amp; LTV
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid grid-cols-2 gap-3 pb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Churn de Receita (%)</Label>
+                    <Input type="number" placeholder="ex: 3.2" step="0.1" value={histFormData.churn_revenueChurnRate ?? ""} onChange={(e) => setHistField("churn_revenueChurnRate", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Receita Perdida — Churn (R$)</Label>
+                    <Input type="number" placeholder="ex: 1800" value={histFormData.churn_revenueChurn ?? ""} onChange={(e) => setHistField("churn_revenueChurn", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Ticket Médio Geral (R$)</Label>
+                    <Input type="number" placeholder="ex: 950" value={histFormData.averageTicket_general ?? ""} onChange={(e) => setHistField("averageTicket_general", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">LTV (R$)</Label>
+                    <Input type="number" placeholder="ex: 11400" value={histFormData.ltv_value ?? ""} onChange={(e) => setHistField("ltv_value", e.target.value)} />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {/* Saved entries list */}
+          {Object.keys(historicalData).length > 0 && (
+            <div className="border-t border-border/40 pt-3 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Meses com dados salvos:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(historicalData)
+                  .sort(([a], [b]) => b.localeCompare(a))
+                  .map(([key]) => {
+                    const [y, m] = key.split("-").map(Number);
+                    return (
+                      <div key={key} className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-0.5">
+                        <button
+                          onClick={() => {
+                            setHistModalKey(key);
+                            setHistFormData(historicalData[key] ?? {});
+                          }}
+                          className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                        >
+                          {MONTH_NAMES[m - 1]}/{y}
+                        </button>
+                        <button
+                          onClick={() => deleteHistoricalEntry(key)}
+                          className="text-amber-400 hover:text-red-500 ml-0.5"
+                          title="Remover"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowHistoricalModal(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={saveHistoricalEntry}
+              disabled={!histModalKey}
+              className="btn-brand"
+            >
+              <Save className="h-4 w-4 mr-1.5" />
+              Salvar Dados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dashboard Panel */}
       {(isEditDashboardModalOpen || isEditPanelClosing) &&

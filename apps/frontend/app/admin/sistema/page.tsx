@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
 import { Card } from "@/components/ui/card";
@@ -25,7 +25,7 @@ import {
   Settings, Bug, Shield, Info, Link2, Link2Off, Pencil,
   Trash2, TestTube2, Globe, Lock, MessageSquare, Bot,
   CreditCard, Mail, ChevronDown, ChevronUp, EyeOff,
-  AlertCircle, CheckCircle, FileText,
+  AlertCircle, CheckCircle, FileText, Search,
 } from "lucide-react";
 
 function GaugeBar({ value, thresholds = [60, 80] }) {
@@ -250,7 +250,7 @@ function ConnectorCard({ connector, onEdit, onDisconnect, onDelete, onTest }) {
           </code>
           {connector.baseUrl && (
             <a href={connector.baseUrl} target="_blank" rel="noreferrer"
-              className="text-[10px] text-blue-500 hover:underline truncate max-w-[100px] hidden md:block">
+              className="text-[10px] text-blue-500 hover:underline truncate max-w-25 hidden md:block">
               {connector.baseUrl.replace("https://", "")}
             </a>
           )}
@@ -528,6 +528,9 @@ export default function AdminSistemaPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [logFilterConnector, setLogFilterConnector] = useState("all");
   const [logFilterAction, setLogFilterAction] = useState("all");
+  const [connectorSearch, setConnectorSearch] = useState("");
+  const [connectorFilter, setConnectorFilter] = useState("all");
+  const [logLevelFilter, setLogLevelFilter] = useState("all");
 
   const load = useCallback(async () => {
     try {
@@ -589,6 +592,25 @@ export default function AdminSistemaPage() {
     const matchA = logFilterAction === "all" || l.action === logFilterAction;
     return matchC && matchA;
   });
+
+  const filteredConnectors = useMemo(() => {
+    let arr = connectors;
+    if (connectorFilter !== "all") arr = arr.filter(c => c.status === connectorFilter);
+    if (connectorSearch.trim()) {
+      const q = connectorSearch.toLowerCase();
+      arr = arr.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        c.subtitle.toLowerCase().includes(q)
+      );
+    }
+    return arr;
+  }, [connectors, connectorFilter, connectorSearch]);
+
+  const filteredSysLogs = useMemo(() => {
+    if (logLevelFilter === "all") return MOCK_LOGS;
+    return MOCK_LOGS.filter(l => l.level === logLevelFilter);
+  }, [logLevelFilter]);
 
   const connectorNames = [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.connector))];
   const actionKeys = [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.action))];
@@ -675,7 +697,7 @@ export default function AdminSistemaPage() {
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {services.map((svc, i) => (
-                <div key={i} className={`px-4 py-3.5 flex items-center gap-3 ${i % 2 === 0 ? "bg-[var(--table-row)]" : "bg-[var(--table-row-alt)]"} hover:bg-[var(--table-row-hover)] transition-colors`}>
+                <div key={i} className={`px-4 py-3.5 flex items-center gap-3 ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}>
                   <ServiceDot status={svc.status} />
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{svc.name}</span>
                   <span className="text-xs text-slate-400 hidden sm:block">Reiniciado {svc.restart}</span>
@@ -694,16 +716,43 @@ export default function AdminSistemaPage() {
         </TabsContent>
 
         <TabsContent value="logs">
-          <Card className="overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Logs Recentes do Sistema</h3>
+          <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mr-auto">Logs do Sistema</h3>
+              <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                {filteredSysLogs.length} de{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{MOCK_LOGS.length}</span>
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {[
+                  { key: "all",     label: "Todos" },
+                  { key: "info",    label: "Info",  dot: "#3b82f6" },
+                  { key: "warning", label: "Aviso", dot: "#f59e0b" },
+                  { key: "error",   label: "Erro",  dot: "#ef4444" },
+                ].map(({ key, label, dot }) => {
+                  const active = logLevelFilter === key;
+                  return (
+                    <button key={key} onClick={() => setLogLevelFilter(key)}
+                      style={active && dot ? { background: dot, border: `2px solid ${dot}`, color: "#fff", boxShadow: `0 2px 10px ${dot}55` } : {}}
+                      className={`h-8 px-3 rounded-lg text-xs font-semibold border-2 transition-all flex items-center gap-1.5 ${
+                        active && !dot
+                          ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent shadow"
+                          : active ? ""
+                          : "bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-600 hover:border-slate-400"
+                      }`}>
+                      {dot && <span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background: active ? "rgba(255,255,255,0.7)" : dot, flexShrink:0 }} />}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {MOCK_LOGS.map((log, i) => {
+              {filteredSysLogs.map((log, i) => {
                 const lv = LOG_LEVELS[log.level] || LOG_LEVELS.info;
                 const Ico = log.level === "error" ? XCircle : log.level === "warning" ? AlertTriangle : Info;
                 return (
-                  <div key={log.id} className={`px-4 py-3 flex items-start gap-3 ${i % 2 === 0 ? "bg-[var(--table-row)]" : "bg-[var(--table-row-alt)]"}`}>
+                  <div key={log.id} className={`px-4 py-3 flex items-start gap-3 ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"}`}>
                     <Ico className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${log.level === "error" ? "text-red-500" : log.level === "warning" ? "text-amber-500" : "text-blue-400"}`} />
                     <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 h-4 shrink-0 ${lv.cls}`}>{lv.label}</Badge>
                     <p className="text-xs text-slate-600 dark:text-slate-400 flex-1 leading-relaxed">{log.msg}</p>
@@ -716,66 +765,100 @@ export default function AdminSistemaPage() {
         </TabsContent>
 
         <TabsContent value="conectores" className="space-y-6">
-          <div className="flex items-center gap-2 flex-wrap">
-            {[
-              { label: "Conectados",       value: connectors.filter(c => c.status === "connected").length,    cls: "text-emerald-600" },
-              { label: "Desconectados",    value: connectors.filter(c => c.status === "disconnected").length, cls: "text-slate-400" },
-              { label: "Em teste",         value: connectors.filter(c => c.status === "testing").length,      cls: "text-blue-500" },
-              { label: "Não configurados", value: connectors.filter(c => c.status === "unconfigured").length, cls: "text-slate-400" },
-              { label: "DPA pendente/sem", value: connectors.filter(c => c.dpa !== "ok").length,              cls: "text-amber-600" },
-            ].map(({ label, value, cls }) => (
-              <div key={label} className="flex items-center gap-1.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5">
-                <span className={`text-sm font-bold tabular-nums ${cls}`}>{value}</span>
-                <span className="text-[10px] text-slate-400">{label}</span>
+          <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input placeholder="Buscar conector…" className="pl-9 h-9 text-sm w-full"
+                  value={connectorSearch} onChange={e => setConnectorSearch(e.target.value)} />
               </div>
-            ))}
-          </div>
+              <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                {filteredConnectors.length} de{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{connectors.length}</span>{" "}
+                conector{connectors.length !== 1 ? "es" : ""}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                {[
+                  { key: "all",          label: "Todos" },
+                  { key: "connected",    label: "Conectado",    dot: "#10b981" },
+                  { key: "testing",      label: "Em teste",     dot: "#3b82f6" },
+                  { key: "disconnected", label: "Desconectado", dot: "#94a3b8" },
+                  { key: "unconfigured", label: "Não config.",  dot: "#64748b" },
+                ].map(({ key, label, dot }) => {
+                  const active = connectorFilter === key;
+                  return (
+                    <button key={key} onClick={() => setConnectorFilter(key)}
+                      style={active && dot ? { background: dot, border: `2px solid ${dot}`, color: "#fff", boxShadow: `0 2px 10px ${dot}55` } : {}}
+                      className={`h-8 px-3 rounded-lg text-xs font-semibold border-2 transition-all flex items-center gap-1.5 ${
+                        active && !dot
+                          ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent shadow"
+                          : active ? ""
+                          : "bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-600 hover:border-slate-400"
+                      }`}>
+                      {dot && <span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background: active ? "rgba(255,255,255,0.7)" : dot, flexShrink:0 }} />}
+                      {label}
+                      {key !== "all" && <span style={{ fontSize:"9px", opacity:0.8, marginLeft:1 }}>{connectors.filter(c => c.status === key).length}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="p-4">
+              {filteredConnectors.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-8">Nenhum conector encontrado.</p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredConnectors.map(c => (
+                  <ConnectorCard
+                    key={c.id}
+                    connector={c}
+                    onEdit={setEditTarget}
+                    onDisconnect={setDisconnectTarget}
+                    onDelete={setDeleteTarget}
+                    onTest={handleTest}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 bg-slate-50/40 dark:bg-slate-900/20 flex-wrap">
+              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background:"#10b981" }} />{connectors.filter(c=>c.status==="connected").length} Conectados</span>
+              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background:"#3b82f6" }} />{connectors.filter(c=>c.status==="testing").length} Em teste</span>
+              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background:"#94a3b8" }} />{connectors.filter(c=>c.status==="disconnected").length} Desconectados</span>
+              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span style={{ width:8, height:8, borderRadius:"50%", display:"inline-block", background:"#f59e0b" }} />{connectors.filter(c=>c.dpa!=="ok").length} DPA pendente</span>
+            </div>
+          </Card>
 
           <div>
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-slate-400" /> Integrações
+              <ClipboardList className="h-4 w-4 text-slate-400" /> Registro de atividade
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {connectors.map(c => (
-                <ConnectorCard
-                  key={c.id}
-                  connector={c}
-                  onEdit={setEditTarget}
-                  onDisconnect={setDisconnectTarget}
-                  onDelete={setDeleteTarget}
-                  onTest={handleTest}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-slate-400" /> Registro de atividade
-              </h3>
-              <div className="flex items-center gap-2">
-                <Select value={logFilterConnector} onValueChange={setLogFilterConnector}>
-                  <SelectTrigger size="sm" className="h-7 text-xs w-40">
-                    <SelectValue placeholder="Conector..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos conectores</SelectItem>
-                    {connectorNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={logFilterAction} onValueChange={setLogFilterAction}>
-                  <SelectTrigger size="sm" className="h-7 text-xs w-36">
-                    <SelectValue placeholder="Ação..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas ações</SelectItem>
-                    {actionKeys.map(a => <SelectItem key={a} value={a}>{ACTION_LABELS[a]?.label ?? a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
+                <span className="text-xs text-slate-400 whitespace-nowrap">
+                  {filteredLogs.length} de{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{MOCK_CONNECTOR_LOGS.length}</span>{" "}registros
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Select value={logFilterConnector} onValueChange={setLogFilterConnector}>
+                    <SelectTrigger size="sm" className="h-7 text-xs w-40">
+                      <SelectValue placeholder="Conector..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos conectores</SelectItem>
+                      {connectorNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logFilterAction} onValueChange={setLogFilterAction}>
+                    <SelectTrigger size="sm" className="h-7 text-xs w-36">
+                      <SelectValue placeholder="Ação..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas ações</SelectItem>
+                      {actionKeys.map(a => <SelectItem key={a} value={a}>{ACTION_LABELS[a]?.label ?? a}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <Card className="overflow-hidden">
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredLogs.length === 0 && (
                   <p className="px-4 py-6 text-xs text-slate-400 text-center">Nenhum registro encontrado.</p>
@@ -784,7 +867,7 @@ export default function AdminSistemaPage() {
                   const act = ACTION_LABELS[log.action];
                   const isError = log.result.startsWith("erro");
                   return (
-                    <div key={log.id} className={`px-4 py-2.5 flex items-center gap-3 text-xs ${i % 2 === 0 ? "bg-[var(--table-row)]" : "bg-[var(--table-row-alt)]"}`}>
+                    <div key={log.id} className={`px-4 py-2.5 flex items-center gap-3 text-xs ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"}`}>
                       <span className="text-[10px] text-slate-400 shrink-0 tabular-nums w-24">{log.ts}</span>
                       <span className="font-medium text-slate-700 dark:text-slate-200 w-36 shrink-0 truncate">{log.connector}</span>
                       {act && (
