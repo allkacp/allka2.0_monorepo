@@ -3424,11 +3424,11 @@ export default function AdminDashboardPage() {
                   <p className="text-sm font-semibold mb-3">Avaliação por Segmento</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {[
-                      { label: "Nômades",       value: mp.avgRating.breakdown.nomades },
-                      { label: "Agências",      value: mp.avgRating.breakdown.agencies },
-                      { label: "Lead Premium",  value: mp.avgRating.breakdown.leadPremium },
-                      { label: "Suporte",       value: mp.avgRating.breakdown.support },
-                      { label: "Projetos",      value: mp.avgRating.breakdown.projects },
+                      { label: "Nômades",       value: Number(mp.avgRating.breakdown.nomades) },
+                      { label: "Agências",      value: Number(mp.avgRating.breakdown.agencies) },
+                      { label: "Lead Premium",  value: Number(mp.avgRating.breakdown.leadPremium) },
+                      { label: "Suporte",       value: Number(mp.avgRating.breakdown.support) },
+                      { label: "Projetos",      value: Number(mp.avgRating.breakdown.projects) },
                     ].map((s) => (
                       <div key={s.label} className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{s.label}</span>
