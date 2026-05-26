@@ -4306,7 +4306,7 @@ export default function AdminDashboardPage() {
                 )}
                 <button
                   onClick={() => openWidgetShareDialog(widget.type, "Receita")}
-                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors rounded-l-lg"
+                  className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-l-lg"
                   title="Compartilhar widget"
                 >
                   <Share2 className="h-3.5 w-3.5" />
@@ -4316,7 +4316,7 @@ export default function AdminDashboardPage() {
                 <div className="relative">
                   <button
                     onClick={() => setShowExportDropdown(showExportDropdown === widget.type ? null : widget.type)}
-                    className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors rounded-r-lg"
+                    className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
                     title="Exportar widget"
                     data-export-button
                   >
@@ -4325,10 +4325,10 @@ export default function AdminDashboardPage() {
                   {showExportDropdown === widget.type && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowExportDropdown(null)} />
-                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[110px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
+                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
                         <button
                           onClick={() => { exportWidgetToPng(widget.type, "Receita"); setShowExportDropdown(null); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
                         >
                           <ImageDown className="h-3.5 w-3.5 text-muted-foreground" />
                           Exportar PNG
@@ -4336,7 +4336,7 @@ export default function AdminDashboardPage() {
                         <div className="h-px bg-border/50" />
                         <button
                           onClick={() => { exportWidgetToPdf(widget.type, "Receita"); setShowExportDropdown(null); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
                         >
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                           Exportar PDF
