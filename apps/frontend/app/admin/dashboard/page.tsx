@@ -6845,8 +6845,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
-                <div className="flex items-center gap-3 pr-20">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-16">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
@@ -6861,6 +6861,8 @@ export default function AdminDashboardPage() {
                       Contas a receber por categoria
                     </p>
                   </div>
+                </div>
+                <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
@@ -6885,16 +6887,16 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Breakdown por categoria */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     Composição por Tipo
                   </h3>
-
+                  <div className="grid grid-cols-2 gap-3">
                   {/* Planos de Crédito */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors">
+                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors">
                     <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
                         Planos de Crédito
                       </span>
                     </div>
@@ -6904,10 +6906,10 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Pós-pagos */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
+                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
                         Pós-pagos
                       </span>
                     </div>
@@ -6917,10 +6919,10 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Outros Contratos */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
+                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
                     <div className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                      <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                      <FileDown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
                         Outros Contratos
                       </span>
                     </div>
@@ -6928,6 +6930,7 @@ export default function AdminDashboardPage() {
                       R$ {arW.others.toLocaleString("pt-BR")},00
                     </span>
                   </div>
+                </div>
                 </div>
 
                 {/* Total Recebido no Período */}
