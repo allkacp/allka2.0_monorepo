@@ -3879,7 +3879,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           {/* Scrollable content — overflow-y-scroll keeps scrollbar always visible */}
-          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll">
+          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll transition-opacity duration-150" key={`${detailsWidgetId}-${modalPeriod.label}`}>
             {renderContent()}
           </div>
         </DialogContent>
@@ -9003,7 +9003,7 @@ export default function AdminDashboardPage() {
       )}
 
       {/* ── Widget Details Modal ──────────────────────────────────────────── */}
-      <WidgetDetailsModal />
+      {WidgetDetailsModal()}
 
       {/* ── Historical Data Modal ─────────────────────────────────────────── */}
       <Dialog open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
