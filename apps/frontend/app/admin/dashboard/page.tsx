@@ -4450,7 +4450,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total Active Projects */}}
+                {/* Total Active Projects */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
                     <h3 className="text-3xl font-bold">{apW.total}</h3>
@@ -4643,7 +4643,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total Revenue from Credit Plans */}}
+                {/* Total Revenue from Credit Plans */}
                 <div className="pb-4 border-b">
                   <div className="flex items-baseline gap-2">
                     <h3 className="text-3xl font-bold">
