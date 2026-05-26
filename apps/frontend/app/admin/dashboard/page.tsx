@@ -1192,7 +1192,7 @@ export default function AdminDashboardPage() {
     widgetId: string;
     widgetTitle: string;
   }) => (
-    <div className="flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
+    <div className="absolute top-3 right-3 z-10 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
       {manualAffectedWidgets.has(widgetId) && (
         <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1 rounded-l-lg">
           <Database className="h-3 w-3" />
@@ -3338,8 +3338,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3438,8 +3438,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3525,8 +3525,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3604,8 +3604,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3684,8 +3684,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3810,8 +3810,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -3962,8 +3962,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4041,8 +4041,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4118,8 +4118,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4222,8 +4222,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4532,8 +4532,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4725,8 +4725,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4900,8 +4900,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="h-full border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -4915,6 +4915,10 @@ export default function AdminDashboardPage() {
                     {globalPeriod.label}
                   </Badge>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* MRR Explanation Info */}
@@ -5202,8 +5206,8 @@ export default function AdminDashboardPage() {
       case "churn":
         return (
           <Card className="overflow-hidden border-destructive/20" data-widget-id={widget.type}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+            <CardHeader className="pb-3 relative">
+              <div className="flex items-center justify-between pr-20">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-destructive/10">
                     <TrendingDown className="h-5 w-5 text-destructive" />
@@ -5383,8 +5387,8 @@ export default function AdminDashboardPage() {
       case "averageTicket":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="border-b bg-gradient-to-r from-success/10 to-chart-3/10">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardHeader className="border-b bg-gradient-to-r from-success/10 to-chart-3/10 relative">
+              <div className="flex items-center justify-between gap-2 flex-wrap pr-20">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="p-2 bg-success/20 rounded-lg shrink-0">
                     <DollarSign className="h-5 w-5 text-success" />
@@ -5570,7 +5574,7 @@ export default function AdminDashboardPage() {
       case "ltv":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-chart-4" />
                 <CardTitle className="text-base font-semibold">
@@ -5831,7 +5835,7 @@ export default function AdminDashboardPage() {
 
         return (
           <Card data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
               <div className="flex items-center gap-2">
                 <Calculator className="h-5 w-5 text-warning" />
                 <CardTitle className="text-base font-medium">
@@ -6012,7 +6016,7 @@ export default function AdminDashboardPage() {
       case "platformActivities":
         return (
           <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
               <div className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-info" />
                 <CardTitle className="text-base font-semibold">
@@ -6164,10 +6168,10 @@ export default function AdminDashboardPage() {
 
       case "nomads":
         return (
-          <Card className="p-6" data-widget-id={widget.type}>
+          <Card className="p-6 relative" data-widget-id={widget.type}>
             <div className="space-y-4">
               {/* Header */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pr-20">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-chart-2/10">
                     <Users className="h-5 w-5 text-chart-2" />
@@ -6326,8 +6330,8 @@ export default function AdminDashboardPage() {
       case "nomadsRanking":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardHeader className="pb-3 relative">
+              <div className="flex items-center justify-between gap-2 flex-wrap pr-20">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="p-2 bg-warning-muted rounded-lg shrink-0">
                     <Trophy className="h-5 w-5 text-warning" />
@@ -6426,8 +6430,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -6460,6 +6464,10 @@ export default function AdminDashboardPage() {
                     </Button>
                   </div>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
@@ -6528,8 +6536,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -6541,6 +6549,10 @@ export default function AdminDashboardPage() {
                   </div>
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Projects Section */}
@@ -6739,8 +6751,8 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center justify-between pr-20">
                   <div className="flex items-center gap-2">
                     {isCustomizeMode && (
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
