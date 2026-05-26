@@ -938,6 +938,7 @@ export default function AdminDashboardPage() {
   const [viewMode, setViewMode] = useState<"conclude" | "default">("default");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao");
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
@@ -1957,6 +1958,14 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // intentionally empty - mounted
+  }, []);
+
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    const handleScroll = () => setIsHeaderCompact(main.scrollTop > 72);
+    main.addEventListener("scroll", handleScroll, { passive: true });
+    return () => main.removeEventListener("scroll", handleScroll);
   }, []);
 
   const widgetLibrary: WidgetLibraryItem[] = [
@@ -7457,17 +7466,43 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="container mx-auto space-y-4 px-0 py-0">
-      {/* Dashboard Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Painel Administrativo
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Visão geral da plataforma em tempo real
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+      {/* Sticky Dashboard Header */}
+      <div
+        className={cn(
+          "sticky top-0 z-20 -mx-14 px-14 transition-all duration-300",
+          isHeaderCompact
+            ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
+            : "bg-transparent",
+        )}
+      >
+        {/* Dashboard Header */}
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3",
+            isHeaderCompact ? "py-2" : "pt-0 pb-0",
+          )}
+        >
+          <div className="overflow-hidden">
+            <h1
+              className={cn(
+                "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                isHeaderCompact ? "text-base" : "text-3xl",
+              )}
+            >
+              Painel Administrativo
+            </h1>
+            <p
+              className={cn(
+                "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
+                isHeaderCompact
+                  ? "max-h-0 opacity-0 mt-0 mb-0"
+                  : "max-h-[24px] opacity-100 mt-0.5",
+              )}
+            >
+              Visão geral da plataforma em tempo real
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
           {/* Dashboard selector dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -7673,8 +7708,8 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Compact Controls Bar */}
-      <div className="flex flex-wrap items-center gap-2">
+        {/* Period Controls Bar */}
+        <div className={cn("flex flex-wrap items-center gap-2", isHeaderCompact ? "pb-2" : "pb-3")}>
         {/* Period selector */}
         <div className="flex items-center gap-0.5 bg-muted/60 rounded-xl p-1 border border-border/40">
           <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
@@ -7852,6 +7887,8 @@ export default function AdminDashboardPage() {
           <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
           {globalPeriod.label}
         </span>
+        </div>
+        {/* end sticky header */}
       </div>
 
       {/* Export capture area: metrics + widgets */}
