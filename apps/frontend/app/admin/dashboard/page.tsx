@@ -65,7 +65,6 @@ import {
   Link2,
   History,
   Database,
-  FileText,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
