@@ -6546,7 +6546,6 @@ export default function AdminDashboardPage() {
                 )}
 
                 {/* Actions */}
-                </div>
               </div>
             </CardContent>
           </Card>
