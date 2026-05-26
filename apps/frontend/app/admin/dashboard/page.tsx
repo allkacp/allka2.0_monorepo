@@ -1010,6 +1010,7 @@ export default function AdminDashboardPage() {
       from: string;
       to: string;
       label: string;
+      periodKey?: string;
     };
   }
 
@@ -1018,6 +1019,7 @@ export default function AdminDashboardPage() {
     if (override && override.mode === "custom" && override.customPeriod) {
       return {
         from: new Date(override.customPeriod.from),
+        periodKey: override.customPeriod.periodKey,
         to: new Date(override.customPeriod.to),
         label: override.customPeriod.label,
       };
@@ -1082,7 +1084,7 @@ export default function AdminDashboardPage() {
         {
           widgetId,
           mode: "custom",
-          customPeriod: { from, to, label },
+          customPeriod: { from, to, label, periodKey: period },
         },
       ];
     });
@@ -2174,7 +2176,7 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const getMetricsForPeriod = () => {
+  const getMetricsForPeriod = (periodTypeOverride?: string, widgetPeriodKey?: string) => {
     const baseMetrics = {
       "7d": {
         totalUsers: { value: "2,847", change: 8.5, trend: "up" as const },
@@ -2290,16 +2292,28 @@ export default function AdminDashboardPage() {
       },
     };
     // @ts-ignore
-    const key =
-      globalPeriod.type === "last_7_days" ||
-      globalPeriod.type === "today" ||
-      globalPeriod.type === "yesterday"
-        ? "7d"
-        : globalPeriod.type === "this_quarter"
-          ? "90d"
-          : globalPeriod.type === "custom"
-            ? "custom"
+    // Widget period keys ("7days", "30days", etc.) take priority, then global period type
+    let key: string;
+    if (widgetPeriodKey) {
+      key =
+        widgetPeriodKey === "today" || widgetPeriodKey === "7days"
+          ? "7d"
+          : widgetPeriodKey === "90days" || widgetPeriodKey === "365days"
+            ? "90d"
             : "30d";
+    } else {
+      const resolvedType = periodTypeOverride ?? globalPeriod.type;
+      key =
+        resolvedType === "last_7_days" ||
+        resolvedType === "today" ||
+        resolvedType === "yesterday"
+          ? "7d"
+          : resolvedType === "this_quarter"
+            ? "90d"
+            : resolvedType === "custom"
+              ? "custom"
+              : "30d";
+    }
     return baseMetrics[key as keyof typeof baseMetrics];
   };
 
@@ -3048,8 +3062,9 @@ export default function AdminDashboardPage() {
     avgRating: "Avaliação Média",
   };
 
-  const renderMetricCard = (metricType: MetricType) => {
-    const metric = metrics[metricType];
+  const renderMetricCard = (metricType: MetricType, metricsSource?: typeof metrics) => {
+    const metricsData = metricsSource ?? metrics;
+    const metric = metricsData[metricType];
     if (!metric || !metricCards.find((m) => m.id === metricType)?.visible)
       return null;
 
@@ -3351,8 +3366,9 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
-                <div className="flex items-center gap-3 pr-20">
+              <CardHeader className="pb-3 relative">
+                {/* Title row */}
+                <div className="flex items-center gap-3 pr-16">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
@@ -3367,21 +3383,22 @@ export default function AdminDashboardPage() {
                       Métricas principais da plataforma
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <WidgetPeriodSelector widgetId={widget.id} />
-                    <Button
-                      variant={isEditingMetrics ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setIsEditingMetrics(!isEditingMetrics)}
-                      className={cn(
-                        "text-xs transition-all duration-300",
-                        isEditingMetrics && "shadow-lg shadow-primary/30",
-                      )}
-                    >
-                      <Edit2 className="h-3 w-3 mr-1" />
-                      {isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
-                    </Button>
-                  </div>
+                </div>
+                {/* Controls row */}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                  <Button
+                    variant={isEditingMetrics ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                    className={cn(
+                      "text-xs ml-auto transition-all duration-300 h-7",
+                      isEditingMetrics && "shadow-lg shadow-primary/30",
+                    )}
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    {isEditingMetrics ? "Concluir" : "Editar Widgets"}
+                  </Button>
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -3426,10 +3443,23 @@ export default function AdminDashboardPage() {
                   </div>
                 )}
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                  {metricCards
-                    .filter((m) => m.visible)
-                    .sort((a, b) => a.order - b.order)
-                    .map((metricCard) => renderMetricCard(metricCard.id))}
+                  {(() => {
+                    // Compute widget-specific metrics based on per-widget period override
+                    const wp = effectivePeriod as { periodKey?: string };
+                    const widgetBase = getMetricsForPeriod(undefined, wp.periodKey);
+                    const widgetMetrics = !apiStats ? widgetBase : {
+                      ...widgetBase,
+                      totalUsers: { ...widgetBase.totalUsers, value: (apiStats.nomades?.total ?? 0).toLocaleString("pt-BR") },
+                      activeUsers: { ...widgetBase.activeUsers, value: (apiStats.nomades?.active ?? 0).toLocaleString("pt-BR") },
+                      companies: { ...widgetBase.companies, value: (apiStats.companies?.total ?? 0).toLocaleString("pt-BR") },
+                      activeProjects: { ...widgetBase.activeProjects, value: (apiStats.projects?.active ?? 0).toLocaleString("pt-BR") },
+                      revenue: { ...widgetBase.revenue, value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k` },
+                    };
+                    return metricCards
+                      .filter((m) => m.visible)
+                      .sort((a, b) => a.order - b.order)
+                      .map((metricCard) => renderMetricCard(metricCard.id, widgetMetrics));
+                  })()}
                 </div>
               </CardContent>
             </Card>
