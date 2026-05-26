@@ -4502,6 +4502,122 @@ export default function AdminDashboardPage() {
             </div>
           );
 
+        case "adminProfiles":
+          return (
+            <div className="space-y-3">
+              {/* Summary */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl border border-chart-4/20 bg-chart-4/5 text-center">
+                  <Shield className="h-6 w-6 text-chart-4 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-chart-4">{adminProfilesData.length}</p>
+                  <p className="text-xs text-muted-foreground">Perfis ativos</p>
+                </div>
+                <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-center">
+                  <Users className="h-6 w-6 text-primary mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-primary">{adminProfilesData.reduce((s, p) => s + p.users, 0)}</p>
+                  <p className="text-xs text-muted-foreground">Admins totais</p>
+                </div>
+              </div>
+              {/* Profile grid */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {adminProfilesData.map((profile, index) => (
+                  <div key={index} className="p-3 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <Badge className={`text-[10px] px-1.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}>{profile.name}</Badge>
+                      <span className="text-xs text-muted-foreground shrink-0">{profile.users} us.</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">{profile.permissions}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{profile.description}</p>
+                    </div>
+                    <Link to="/admin/permissoes">
+                      <button className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mt-1">
+                        Gerenciar Permissões <ArrowRightIcon className="h-3 w-3" />
+                      </button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "permissionMatrix":
+          return (
+            <div className="space-y-4">
+              {/* Header summary */}
+              <div className="grid grid-cols-4 gap-2">
+                {(["Master","Financeiro","Comercial","Operacional"] as const).map((role, i) => {
+                  const colors = ["text-destructive border-destructive/20 bg-destructive/5","text-success border-success/20 bg-success/5","text-info border-info/20 bg-info/5","text-chart-4 border-chart-4/20 bg-chart-4/5"];
+                  const keys = ["master","financeiro","comercial","operacional"] as const;
+                  const count = permissionMatrixData.filter(r => r[keys[i]]).length;
+                  return (
+                    <div key={role} className={`p-2.5 rounded-xl border text-center ${colors[i]}`}>
+                      <p className="text-lg font-bold">{count}</p>
+                      <p className="text-[10px] font-medium truncate">{role}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Full matrix */}
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-3 font-semibold text-xs">Módulo</th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-destructive">Master</th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-success">Fin.</th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-info">Com.</th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-chart-4">Op.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {permissionMatrixData.map((row, index) => (
+                      <tr key={index} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-xs">{row.module}</td>
+                        <td className="text-center py-2.5 px-3">{row.master ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
+                        <td className="text-center py-2.5 px-3">{row.financeiro ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
+                        <td className="text-center py-2.5 px-3">{row.comercial ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
+                        <td className="text-center py-2.5 px-3">{row.operacional ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-info/5 border border-info/20">
+                <Key className="h-4 w-4 text-info mt-0.5 shrink-0" />
+                <p className="text-xs text-muted-foreground"><strong>Nota:</strong> Apenas o usuário Master pode criar e gerenciar outros perfis administrativos.</p>
+              </div>
+            </div>
+          );
+
+        case "managementTools":
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Acesse as principais ferramentas de gerenciamento da plataforma.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { to: "/admin/usuarios",      icon: Users,       label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",              border: "border-info/20",        bg: "bg-info/5",        text: "text-info" },
+                  { to: "/admin/permissoes",    icon: Shield,      label: "Gerenciar Permissões",         desc: "Criar e editar perfis administrativos",         border: "border-destructive/20", bg: "bg-destructive/5", text: "text-destructive" },
+                  { to: "/admin/relatorios",    icon: FileText,    label: "Relatórios Financeiros",        desc: "Visualizar receitas e pagamentos",               border: "border-success/20",     bg: "bg-success/5",     text: "text-success" },
+                  { to: "/admin/configuracoes", icon: Settings,    label: "Configurações da Plataforma",  desc: "Ajustar parâmetros do sistema",                 border: "border-warning/20",     bg: "bg-warning/5",     text: "text-warning" },
+                  { to: "/admin/disputas",      icon: AlertCircle, label: "Resolver Disputas",            desc: "Mediar conflitos entre usuários",               border: "border-chart-4/20",     bg: "bg-chart-4/5",     text: "text-chart-4" },
+                  { to: "/admin/logs",          icon: Activity,    label: "Logs do Sistema",              desc: "Monitorar atividades e erros",                  border: "border-border/40",      bg: "bg-muted/30",      text: "text-foreground" },
+                ] as const).map((tool) => {
+                  const Icon = tool.icon;
+                  return (
+                    <Link key={tool.to} to={tool.to}>
+                      <div className={`p-3 rounded-xl border ${tool.border} ${tool.bg} hover:opacity-80 transition-opacity`}>
+                        <Icon className={`h-5 w-5 ${tool.text} mb-1.5`} />
+                        <p className={`text-xs font-semibold ${tool.text}`}>{tool.label}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{tool.desc}</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+
         case "performers":
           return (
             <div className="space-y-3">
@@ -5050,75 +5166,38 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
-                    <Shield className="h-4 w-4 text-chart-4" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0"><Shield className="h-4 w-4 text-chart-4" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Perfis de acesso e permissões
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Perfis de acesso e permissões</p>
                   </div>
+                  <Badge variant="outline" className="text-xs shrink-0">{adminProfilesData.reduce((s, p) => s + p.users, 0)} usuários</Badge>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
                   {adminProfilesData.map((profile, index) => (
-                    <div
-                      key={index}
-                      className="group p-5 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
-                    >
+                    <div key={index} className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <Badge
-                          className={cn(
-                            "text-xs font-semibold bg-gradient-to-r text-white shadow-sm",
-                            profile.color,
-                          )}
-                        >
-                          {profile.name}
-                        </Badge>
-                        <span className="text-sm font-semibold text-muted-foreground">
-                          {profile.users} usuário{profile.users > 1 ? "s" : ""}
-                        </span>
+                        <Badge className={`text-[10px] px-1.5 py-0.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}>{profile.name}</Badge>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{profile.users} us.</span>
                       </div>
-                      <h4 className="font-semibold text-base text-foreground">
-                        {profile.permissions}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {profile.description}
-                      </p>
-                      <div className="pt-3 border-t">
-                        <Link to="/admin/permissoes">
-                          <button className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors">
-                            Gerenciar Permissões
-                            <ArrowRightIcon className="h-3 w-3" />
-                          </button>
-                        </Link>
-                      </div>
+                      <p className="text-xs font-semibold leading-tight">{profile.permissions}</p>
+                      <p className="text-[10px] text-muted-foreground line-clamp-2">{profile.description}</p>
+                      <Link to="/admin/permissoes">
+                        <button className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1 mt-0.5">
+                          Gerenciar <ArrowRightIcon className="h-2.5 w-2.5" />
+                        </button>
+                      </Link>
                     </div>
                   ))}
                 </div>
@@ -5138,123 +5217,44 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
-                    <Lock className="h-4 w-4 text-warning" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Lock className="h-4 w-4 text-warning" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Matriz de acesso por módulo
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Matriz de acesso por módulo</p>
                   </div>
+                  <Badge variant="outline" className="text-xs shrink-0">{permissionMatrixData.length} módulos</Badge>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto rounded-xl border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr className="border-b">
-                        <th className="text-left py-4 px-4 font-semibold">
-                          Módulo
-                        </th>
-                        <th className="text-center py-4 px-4 font-semibold text-destructive">
-                          Master
-                        </th>
-                        <th className="text-center py-4 px-4 font-semibold text-success">
-                          Financeiro
-                        </th>
-                        <th className="text-center py-4 px-4 font-semibold text-info">
-                          Comercial
-                        </th>
-                        <th className="text-center py-4 px-4 font-semibold text-chart-4">
-                          Operacional
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {permissionMatrixData.map((row, index) => (
-                        <tr
-                          key={index}
-                          className="border-b hover:bg-muted/30 transition-colors"
-                        >
-                          <td className="py-4 px-4 font-medium">
-                            {row.module}
-                          </td>
-                          <td className="text-center py-4 px-4">
-                            {row.master ? (
-                              <CheckCircle2 className="h-5 w-5 text-success mx-auto" />
-                            ) : (
-                              <span className="text-muted-foreground/30">
-                                —
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-center py-4 px-4">
-                            {row.financeiro ? (
-                              <CheckCircle2 className="h-5 w-5 text-success mx-auto" />
-                            ) : (
-                              <span className="text-muted-foreground/30">
-                                —
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-center py-4 px-4">
-                            {row.comercial ? (
-                              <CheckCircle2 className="h-5 w-5 text-success mx-auto" />
-                            ) : (
-                              <span className="text-muted-foreground/30">
-                                —
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-center py-4 px-4">
-                            {row.operacional ? (
-                              <CheckCircle2 className="h-5 w-5 text-success mx-auto" />
-                            ) : (
-                              <span className="text-muted-foreground/30">
-                                —
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <CardContent className="px-4 pb-4">
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 mb-2 px-2.5">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Módulo</span>
+                  <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide text-center w-12">Master</span>
+                  <span className="text-[10px] font-semibold text-success uppercase tracking-wide text-center w-12">Fin.</span>
+                  <span className="text-[10px] font-semibold text-info uppercase tracking-wide text-center w-12">Com.</span>
                 </div>
-                <div className="mt-4 p-4 bg-info-muted rounded-xl border-2 border-info/20">
-                  <p className="text-sm text-info-foreground flex items-start gap-2">
-                    <Key className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      <strong>Nota:</strong> Apenas o usuário Master pode criar
-                      e gerenciar outros perfis administrativos. O sistema de
-                      permissões será detalhado em uma tela específica de
-                      gerenciamento.
-                    </span>
-                  </p>
+                <div className="space-y-1.5">
+                  {permissionMatrixData.map((row, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 items-center p-2.5 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <span className="text-xs font-medium truncate">{row.module}</span>
+                      <div className="w-12 flex justify-center">{row.master ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
+                      <div className="w-12 flex justify-center">{row.financeiro ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
+                      <div className="w-12 flex justify-center">{row.comercial ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-info/5 border border-info/20">
+                  <Key className="h-3.5 w-3.5 text-info mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-muted-foreground">Apenas Master pode criar outros perfis administrativos.</p>
                 </div>
               </CardContent>
             </Card>
@@ -5272,149 +5272,43 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-muted rounded-lg shrink-0">
-                    <Settings className="h-4 w-4 text-muted-foreground" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-muted rounded-lg shrink-0"><Settings className="h-4 w-4 text-muted-foreground" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Ferramentas de gerenciamento
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Ferramentas de gerenciamento</p>
                   </div>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
-                  <Link to="/admin/usuarios">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-info/5 to-info/10 hover:from-info/10 hover:to-info/20 dark:from-info/10 dark:to-info/5 dark:hover:from-info/20 dark:hover:to-info/10",
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "font-semibold mb-1 text-info-foreground",
-                        )}
-                      >
-                        Gerenciar Usuários
-                      </p>
-                      <p className={cn("text-sm text-info")}>
-                        Criar, editar e desativar contas
-                      </p>
-                    </button>
-                  </Link>
-                  <Link to="/admin/permissoes">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-destructive/5 to-destructive/10 hover:from-destructive/10 hover:to-destructive/20 dark:from-destructive/10 dark:to-destructive/5 dark:hover:from-destructive/20 dark:hover:to-destructive/10",
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "font-semibold mb-1 text-destructive-foreground",
-                        )}
-                      >
-                        Gerenciar Permissões
-                      </p>
-                      <p className={cn("text-sm text-destructive")}>
-                        Criar e editar perfis administrativos
-                      </p>
-                    </button>
-                  </Link>
-                  <Link to="/admin/relatorios">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-success/5 to-success/10 hover:from-success/10 hover:to-success/20 dark:from-success/10 dark:to-success/5 dark:hover:from-success/20 dark:hover:to-success/10",
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "font-semibold mb-1 text-success-foreground",
-                        )}
-                      >
-                        Relatórios Financeiros
-                      </p>
-                      <p className={cn("text-sm text-success")}>
-                        Visualizar receitas e pagamentos
-                      </p>
-                    </button>
-                  </Link>
-                  <Link to="/admin/configuracoes">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-chart-4/5 to-chart-4/10 hover:from-chart-4/10 hover:to-chart-4/20 dark:from-chart-4/10 dark:to-chart-4/5 dark:hover:from-chart-4/20 dark:hover:to-chart-4/10",
-                      )}
-                    >
-                      <p className={cn("font-semibold mb-1 text-chart-4")}>
-                        Configurações da Plataforma
-                      </p>
-                      <p className={cn("text-sm text-chart-4")}>
-                        Ajustar parâmetros do sistema
-                      </p>
-                    </button>
-                  </Link>
-                  <Link to="/admin/disputas">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-warning/5 to-warning/10 hover:from-warning/10 hover:to-warning/20 dark:from-warning/10 dark:to-warning/5 dark:hover:from-warning/20 dark:hover:to-warning/10",
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "font-semibold mb-1 text-warning-foreground",
-                        )}
-                      >
-                        Resolver Disputas
-                      </p>
-                      <p className={cn("text-sm text-warning")}>
-                        Mediar conflitos entre usuários
-                      </p>
-                    </button>
-                  </Link>
-                  <Link to="/admin/logs">
-                    <button
-                      className={cn(
-                        "w-full p-4 text-left rounded-xl border-0 shadow-md transition-all hover:shadow-lg",
-                        "bg-gradient-to-br from-muted/5 to-muted/10 hover:from-muted/10 hover:to-muted/20 dark:from-muted/10 dark:to-muted/5 dark:hover:from-muted/20 dark:hover:to-muted/10",
-                      )}
-                    >
-                      <p className={cn("font-semibold mb-1 text-foreground")}>
-                        Logs do Sistema
-                      </p>
-                      <p className={cn("text-sm text-muted-foreground")}>
-                        Monitorar atividades e erros
-                      </p>
-                    </button>
-                  </Link>
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { to: "/admin/usuarios",      label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",            border: "border-info/20",        bg: "bg-info/5 hover:bg-info/10",           text: "text-info",        icon: Users },
+                    { to: "/admin/permissoes",    label: "Gerenciar Permissões",         desc: "Criar e editar perfis administrativos",       border: "border-destructive/20", bg: "bg-destructive/5 hover:bg-destructive/10", text: "text-destructive",  icon: Shield },
+                    { to: "/admin/relatorios",    label: "Relatórios Financeiros",        desc: "Visualizar receitas e pagamentos",            border: "border-success/20",     bg: "bg-success/5 hover:bg-success/10",     text: "text-success",     icon: FileText },
+                    { to: "/admin/configuracoes", label: "Configurações da Plataforma",   desc: "Ajustar parâmetros do sistema",             border: "border-warning/20",     bg: "bg-warning/5 hover:bg-warning/10",     text: "text-warning",     icon: Settings },
+                    { to: "/admin/disputas",      label: "Resolver Disputas",             desc: "Mediar conflitos entre usuários",            border: "border-chart-4/20",     bg: "bg-chart-4/5 hover:bg-chart-4/10",     text: "text-chart-4",     icon: AlertCircle },
+                    { to: "/admin/logs",          label: "Logs do Sistema",               desc: "Monitorar atividades e erros",               border: "border-border/40",      bg: "bg-muted/30 hover:bg-muted/50",        text: "text-foreground",  icon: Activity },
+                  ] as const).map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <Link key={tool.to} to={tool.to}>
+                        <div className={`p-3 rounded-xl border ${tool.border} ${tool.bg} transition-colors`}>
+                          <Icon className={`h-4 w-4 ${tool.text} mb-1.5`} />
+                          <p className={`text-xs font-semibold ${tool.text} leading-tight`}>{tool.label}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{tool.desc}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
