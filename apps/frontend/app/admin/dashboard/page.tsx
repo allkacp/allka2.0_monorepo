@@ -3446,36 +3446,55 @@ export default function AdminDashboardPage() {
         case "revenue":
           return (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Receita Total</p>
+                    <p className="text-3xl font-bold mt-0.5">R$ {(rv.total / 1000).toFixed(1)}k</p>
+                    <p className="text-xs text-muted-foreground mt-1">no período selecionado</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">+{rv.totalGrowth}%</p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
+                </div>
+              </div>
+              {/* 2-per-row plan cards */}
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Total", value: `R$ ${rv.total.toLocaleString("pt-BR")}`, change: `+${rv.growth}%`, bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
-                  { label: "Planos de Crédito", value: `R$ ${rv.creditPlan.toLocaleString("pt-BR")}`, change: `+${rv.creditPlanGrowth}%`, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
-                  { label: "Recorrente", value: `R$ ${rv.recurring.toLocaleString("pt-BR")}`, change: `+${rv.recurringGrowth}%`, bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
+                  { label: "Plano de Crédito",  value: rv.creditPlan, growth: rv.creditPlanGrowth, bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",       text: "text-sky-700 dark:text-sky-300",       color: "bg-sky-500" },
+                  { label: "Compra Recorrente", value: rv.recurring,  growth: rv.recurringGrowth,  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300",   color: "bg-amber-500" },
                 ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-base font-bold ${item.text}`}>{item.value}</p>
-                    <p className="text-xs text-success">{item.change}</p>
+                  <div key={item.label} className={`p-3 rounded-xl border ${item.bg}`}>
+                    <div className="flex items-center gap-1.5 mb-1.5"><div className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`} /><span className={`text-xs font-medium ${item.text} truncate`}>{item.label}</span></div>
+                    <p className="text-lg font-bold">R$ {(item.value / 1000).toFixed(1)}k</p>
+                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden"><div className={`h-full ${item.color} rounded-full`} style={{ width: `${(item.value / Math.max(1, rv.total)) * 100}%` }} /></div>
+                    <p className="text-[10px] text-success mt-1">+{item.growth}%  ·  {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}% do total</p>
                   </div>
                 ))}
               </div>
-              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                <p className="text-sm font-semibold mb-3">Distribuição da Receita</p>
-                {[
-                  { label: "Planos de Crédito", value: rv.creditPlan, color: "bg-blue-500" },
-                  { label: "Recorrente", value: rv.recurring, color: "bg-purple-500" },
-                  { label: "Avulso", value: rv.oneTime, color: "bg-amber-500" },
-                ].map(item => (
-                  <div key={item.label} className="mb-2">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">{item.label}</span>
-                      <span className="font-medium">R$ {item.value.toLocaleString("pt-BR")}</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.value / rv.total) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
+              {/* Avulso full row */}
+              <div className="p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-emerald-500" /><span className="text-sm font-medium">Compra Avulsa</span></div>
+                  <div><span className="text-sm font-bold">R$ {(rv.oneTime / 1000).toFixed(1)}k</span><span className="text-xs text-success ml-2">+{rv.oneTimeGrowth}%</span></div>
+                </div>
+                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%` }} /></div>
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Composição da Receita</p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  <div className="bg-sky-500 transition-all" style={{ width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%` }} />
+                  <div className="bg-amber-500 transition-all" style={{ width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%` }} />
+                  <div className="bg-emerald-500 transition-all" style={{ width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%` }} />
+                </div>
+                <div className="flex gap-4 mt-2">
+                  {[["bg-sky-500","Crédito"],["bg-amber-500","Recorrente"],["bg-emerald-500","Avulso"]].map(([c,l]) => (
+                    <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                  ))}
+                </div>
               </div>
             </div>
           );
@@ -3723,15 +3742,63 @@ export default function AdminDashboardPage() {
         case "churn":
           return (
             <div className="space-y-4">
+              {/* Hero 2 cols */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 text-center">
-                  <p className="text-xs text-muted-foreground">Taxa de Churn</p>
-                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300">{churnW.rate}%</p>
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800">
+                  <p className="text-xs text-muted-foreground">Clientes Inativados</p>
+                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300 mt-0.5">{churnW.inactiveAccounts}</p>
+                  <p className="text-xs text-destructive font-medium mt-1">+{churnW.inactiveGrowth}%</p>
                 </div>
-                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-center">
-                  <p className="text-xs text-muted-foreground">Clientes Perdidos</p>
-                  <p className="text-3xl font-bold text-red-700 dark:text-red-300">{churnW.lost}</p>
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                  <p className="text-xs text-muted-foreground">Revenue Churn</p>
+                  <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-0.5">R$ {(churnW.revenueChurn / 1000).toFixed(1)}k</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">Taxa: {churnW.revenueChurnRate}%</p>
                 </div>
+              </div>
+              {/* Account type 2x2 grid */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Por tipo de conta</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Agências",     value: churnW.agencies,    bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
+                    { label: "Lead Premium", value: churnW.leadPremium, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+                    { label: "Nômades",      value: churnW.nomades,     bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
+                    { label: "Free",         value: churnW.free,        bg: "bg-muted/20",                                                                text: "text-muted-foreground" },
+                  ].map(t => (
+                    <div key={t.label} className={`flex items-center justify-between p-3 rounded-xl border ${t.bg}`}>
+                      <span className="text-sm text-muted-foreground">{t.label}</span>
+                      <span className={`text-xl font-bold ${t.text}`}>{t.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Projetos cancelados */}
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Projetos Cancelados</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold">{churnW.cancelledProjects}</span>
+                  <Badge variant="destructive" className="gap-1">
+                    <TrendingUp className="h-3 w-3" />+{churnW.cancelledGrowth}%
+                  </Badge>
+                </div>
+              </div>
+              {/* Revenue Churn bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Perda de MRR</span>
+                  <span className="font-semibold text-destructive">{churnW.revenueChurnRate}% do total</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${Math.min(100, churnW.revenueChurnRate * 5)}%` }} />
+                </div>
+              </div>
+              {/* Alert */}
+              <div className="flex items-start gap-2 p-3 rounded-xl border border-destructive/20 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive">Churn de clientes aumentou {churnW.inactiveGrowth}% vs período anterior. Considere ações de retenção.</p>
               </div>
             </div>
           );
@@ -3792,10 +3859,62 @@ export default function AdminDashboardPage() {
         case "averageTicket":
           return (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                <p className="text-sm text-muted-foreground">Ticket Médio</p>
-                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">R$ {atW.average?.toLocaleString("pt-BR") ?? "—"}</p>
-                {atW.growth != null && <p className="text-xs text-success mt-1">+{atW.growth}%</p>}
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ticket Médio Geral</p>
+                    <p className="text-3xl font-bold mt-0.5">R$ {atW.general.toLocaleString("pt-BR")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">+{atW.generalGrowth}%</p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
+                </div>
+              </div>
+              {/* 2x2 type grid */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Por Tipo de Conta</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Agências",     value: 1750, growth: 6, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
+                    { label: "Lead Premium", value: 1120, growth: 2, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+                    { label: "Nômades",      value: 680,  growth: 1, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
+                    { label: "Free",         value: 0,    growth: 0, bg: "bg-muted/20",                                                               text: "text-muted-foreground" },
+                  ].map(t => (
+                    <div key={t.label} className={`p-3 rounded-xl border ${t.bg}`}>
+                      <p className="text-xs text-muted-foreground">{t.label}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
+                      {t.growth > 0 ? <p className="text-[10px] text-success">+{t.growth}%</p> : <p className="text-[10px] text-muted-foreground">—</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Per Project */}
+              <div className="flex items-center justify-between p-4 rounded-xl border border-success/30 bg-success/5">
+                <div>
+                  <p className="text-sm text-muted-foreground">Ticket por Projeto</p>
+                  <p className="text-2xl font-bold text-success">R$ {atW.perProject.toLocaleString("pt-BR")}</p>
+                </div>
+                <div className="flex items-center gap-1 text-success text-sm font-semibold">
+                  <TrendingUp className="h-5 w-5" />+{atW.perProjectGrowth}%
+                </div>
+              </div>
+              {/* Trend chart */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Tendência (últimos 6 meses)</p>
+                <div className="flex items-end gap-1.5 h-16">
+                  {atW.trendData.map((val, idx) => {
+                    const maxVal = Math.max(...atW.trendData, 1);
+                    const isLast = idx === atW.trendData.length - 1;
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                        <div className={cn("w-full rounded-t transition-all", isLast ? "bg-success" : "bg-success/30 hover:bg-success/60")} style={{ height: `${(val / maxVal) * 100}%` }} title={`R$ ${val}`} />
+                        <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J"][idx] ?? idx+1}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );
@@ -5412,222 +5531,128 @@ export default function AdminDashboardPage() {
           </div>
         );
 
-      case "revenue":
+      case "revenue": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wRvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).revenue;
         return (
-          <Card
-            className="overflow-hidden border-destructive/20"
+          <div
             key={widget.id}
             data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
-                  <DollarSign className="h-4 w-4 text-destructive" />
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                    <DollarSign className="h-4 w-4 text-success" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">Receita</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Total e por tipo de plano</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Receita</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Total e por tipo de plano
-                  </p>
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle="Receita" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                {/* Hero */}
+                <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-success/10 border border-success/20">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Receita Total</p>
+                    <p className="text-3xl font-bold tracking-tight">R$ {(wRvW.total / 1000).toFixed(1)}k</p>
+                    <p className="text-xs text-muted-foreground mt-1">Receita total no período</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
+                      <ArrowUp className="h-4 w-4" />+{wRvW.totalGrowth}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              {/* ── Action buttons — floating top-right ── */}
-              <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
-                {manualAffectedWidgets.has(widget.type) && (
-                  <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1 rounded-l-lg">
-                    <Database className="h-3 w-3" />
-                    Manual
-                  </span>
-                )}
-                <button
-                  onClick={() => openWidgetShareDialog(widget.type, "Receita")}
-                  className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-l-lg"
-                  title="Compartilhar widget"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                </button>
-                <div className="w-px h-4 bg-border/60 shrink-0" />
-                {/* Export dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowExportDropdown(showExportDropdown === widget.type ? null : widget.type)}
-                    className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
-                    title="Exportar widget"
-                    data-export-button
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </button>
-                  {showExportDropdown === widget.type && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowExportDropdown(null)} />
-                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
-                        <button
-                          onClick={() => { exportWidgetToPng(widget.type, "Receita"); setShowExportDropdown(null); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
-                        >
-                          <ImageDown className="h-3.5 w-3.5 text-muted-foreground" />
-                          Exportar PNG
-                        </button>
-                        <div className="h-px bg-border/50" />
-                        <button
-                          onClick={() => { exportWidgetToPdf(widget.type, "Receita"); setShowExportDropdown(null); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
-                        >
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          Exportar PDF
-                        </button>
+                {/* 2-per-row plan type cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* Crédito */}
+                  <div className="p-3 rounded-xl border bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+                      <span className="text-xs font-medium text-sky-700 dark:text-sky-300 truncate">Plano de Crédito</span>
+                    </div>
+                    <p className="text-lg font-bold">R$ {(wRvW.creditPlan / 1000).toFixed(1)}k</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="h-2.5 w-2.5 text-success" />
+                      <span className="text-[10px] font-semibold text-success">+{wRvW.creditPlanGrowth}%</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">{((wRvW.creditPlan / Math.max(1, wRvW.total)) * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1 bg-sky-100 dark:bg-sky-950 rounded-full overflow-hidden">
+                      <div className="h-full bg-sky-500 rounded-full" style={{ width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%` }} />
+                    </div>
+                  </div>
+                  {/* Recorrente */}
+                  <div className="p-3 rounded-xl border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300 truncate">Compra Recorrente</span>
+                    </div>
+                    <p className="text-lg font-bold">R$ {(wRvW.recurring / 1000).toFixed(1)}k</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="h-2.5 w-2.5 text-success" />
+                      <span className="text-[10px] font-semibold text-success">+{wRvW.recurringGrowth}%</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">{((wRvW.recurring / Math.max(1, wRvW.total)) * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1 bg-amber-100 dark:bg-amber-950 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%` }} />
+                    </div>
+                  </div>
+                  {/* Avulso — full row */}
+                  <div className="col-span-2 p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Compra Avulsa</span>
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Revenue Total */}
-              <div className="pb-4 border-b">
-                <div className="flex items-baseline gap-2">
-                  <h3 className="text-3xl font-bold">
-                    R$ {(rv.total / 1000).toFixed(1)}k
-                  </h3>
-                  <span className="flex items-center gap-1 text-sm text-success font-semibold">
-                    <TrendingUp className="h-3.5 w-3.5" />+{rv.totalGrowth}%
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Receita total no período
-                </p>
-              </div>
-
-              {/* Breakdown by Type */}
-              <div className="space-y-3">
-                {/* Credit Plan Revenue */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-info-muted border border-info/50">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-2 w-2 rounded-full bg-info" />
-                      <span className="text-sm font-medium">
-                        Plano de Crédito
-                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-bold">R$ {(wRvW.oneTime / 1000).toFixed(1)}k</span>
+                        <span className="text-[10px] font-semibold text-success">+{wRvW.oneTimeGrowth}%</span>
+                      </div>
                     </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg font-semibold text-info-foreground">
-                        R$ {(rv.creditPlan / 1000).toFixed(1)}k
-                      </span>
-                      <span className="text-xs font-medium text-success">
-                        +{rv.creditPlanGrowth}%
-                      </span>
+                    <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%` }} />
                     </div>
-                  </div>
-                  {/* Mini bar chart */}
-                  <div className="flex items-end gap-0.5 h-8">
-                    <div
-                      className="w-1 bg-info/60 rounded-t"
-                      style={{ height: "45%" }}
-                    />
-                    <div
-                      className="w-1 bg-info/70 rounded-t"
-                      style={{ height: "60%" }}
-                    />
-                    <div
-                      className="w-1 bg-info/80 rounded-t"
-                      style={{ height: "75%" }}
-                    />
-                    <div
-                      className="w-1 bg-info rounded-t"
-                      style={{ height: "100%" }}
-                    />
                   </div>
                 </div>
-
-                {/* Recurring Revenue */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-chart-4/10 border border-chart-4/50">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-2 w-2 rounded-full bg-chart-4" />
-                      <span className="text-sm font-medium">
-                        Compra Recorrente
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg font-semibold text-chart-4">
-                        R$ {(rv.recurring / 1000).toFixed(1)}k
-                      </span>
-                      <span className="text-xs font-medium text-success">
-                        +{rv.recurringGrowth}%
-                      </span>
-                    </div>
+                {/* Composition bar */}
+                <div>
+                  <div className="flex h-2 rounded-full overflow-hidden bg-muted gap-px">
+                    <div className="bg-sky-500 transition-all" style={{ width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%` }} />
+                    <div className="bg-amber-500 transition-all" style={{ width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%` }} />
+                    <div className="bg-emerald-500 transition-all" style={{ width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%` }} />
                   </div>
-                  {/* Mini bar chart */}
-                  <div className="flex items-end gap-0.5 h-8">
-                    <div
-                      className="w-1 bg-chart-4/60 rounded-t"
-                      style={{ height: "50%" }}
-                    />
-                    <div
-                      className="w-1 bg-chart-4/70 rounded-t"
-                      style={{ height: "65%" }}
-                    />
-                    <div
-                      className="w-1 bg-chart-4/80 rounded-t"
-                      style={{ height: "80%" }}
-                    />
-                    <div
-                      className="w-1 bg-chart-4 rounded-t"
-                      style={{ height: "90%" }}
-                    />
+                  <div className="flex gap-3 mt-1.5">
+                    {[["bg-sky-500","Crédito"],["bg-amber-500","Recorrente"],["bg-emerald-500","Avulso"]].map(([c,l]) => (
+                      <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                    ))}
                   </div>
                 </div>
-
-                {/* One-Time Revenue */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-success-muted border border-success/50">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-2 w-2 rounded-full bg-success" />
-                      <span className="text-sm font-medium">Compra Avulsa</span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg font-semibold text-success-foreground">
-                        R$ {(rv.oneTime / 1000).toFixed(1)}k
-                      </span>
-                      <span className="text-xs font-medium text-success">
-                        +{rv.oneTimeGrowth}%
-                      </span>
-                    </div>
-                  </div>
-                  {/* Mini bar chart */}
-                  <div className="flex items-end gap-0.5 h-8">
-                    <div
-                      className="w-1 bg-success/60 rounded-t"
-                      style={{ height: "40%" }}
-                    />
-                    <div
-                      className="w-1 bg-success/70 rounded-t"
-                      style={{ height: "55%" }}
-                    />
-                    <div
-                      className="w-1 bg-success/80 rounded-t"
-                      style={{ height: "65%" }}
-                    />
-                    <div
-                      className="w-1 bg-success rounded-t"
-                      style={{ height: "70%" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Info note */}
-              <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/50">
-                <p className="text-xs text-muted-foreground text-center">
-                  Comparado ao mesmo período anterior
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                <p className="text-[10px] text-muted-foreground text-center">Comparado ao mesmo período anterior</p>
+              </CardContent>
+            </Card>
+          </div>
         );
+      }
 
       case "activeProjectsWidget":
         return (
@@ -6135,349 +6160,223 @@ export default function AdminDashboardPage() {
         );
       }
 
-      case "churn":
+      case "churn": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wChW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).churn;
         return (
-          <Card className="overflow-hidden border-destructive/20" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
-                  <TrendingDown className="h-4 w-4 text-destructive" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">CHURN</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Perda de clientes e receita
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle="CHURN"
-              />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Customer Churn Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-lg">
-                      Clientes Inativados
-                    </span>
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                    <TrendingDown className="h-4 w-4 text-destructive" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">
-                      {churnW.inactiveAccounts}
-                    </span>
-                    <Badge variant="destructive" className="gap-1">
-                      <TrendingUp className="h-3 w-3" />+{churnW.inactiveGrowth}
-                      %
-                    </Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">CHURN</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Perda de clientes e receita</p>
                   </div>
                 </div>
-
-                {/* Breakdown by account type */}
-                <div className="grid grid-cols-2 gap-2 pl-6">
-                  <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">
-                      Agências
-                    </span>
-                    <span className="font-semibold">{churnW.agencies}</span>
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle="CHURN" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                {/* Hero: 2 cols */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3 rounded-xl border bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Users className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                      <span className="text-[10px] text-muted-foreground">Clientes Inativados</span>
+                    </div>
+                    <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">{wChW.inactiveAccounts}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="h-2.5 w-2.5 text-destructive" />
+                      <span className="text-[10px] font-semibold text-destructive">+{wChW.inactiveGrowth}%</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">
-                      Lead Premium
-                    </span>
-                    <span className="font-semibold">{churnW.leadPremium}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">
-                      Nômades
-                    </span>
-                    <span className="font-semibold">{churnW.nomades}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">Free</span>
-                    <span className="font-semibold">{churnW.free}</span>
+                  <div className="p-3 rounded-xl border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <DollarSign className="h-3 w-3 text-red-600 dark:text-red-400" />
+                      <span className="text-[10px] text-muted-foreground">Revenue Churn</span>
+                    </div>
+                    <p className="text-lg font-bold text-red-700 dark:text-red-300">R$ {(wChW.revenueChurn / 1000).toFixed(1)}k</p>
+                    <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mt-1">Churn Rate: {wChW.revenueChurnRate}%</p>
                   </div>
                 </div>
-              </div>
-
-              <Separator />
-
-              {/* Project Churn Section */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                {/* Account type 2x2 grid */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Por tipo de conta</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Agências",     value: wChW.agencies,    bg: "bg-blue-50 dark:bg-blue-950/20",    text: "text-blue-700 dark:text-blue-300",    border: "border-blue-200 dark:border-blue-800" },
+                      { label: "Lead Premium", value: wChW.leadPremium, bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-800" },
+                      { label: "Nômades",      value: wChW.nomades,     bg: "bg-amber-50 dark:bg-amber-950/20",  text: "text-amber-700 dark:text-amber-300",  border: "border-amber-200 dark:border-amber-800" },
+                      { label: "Free",         value: wChW.free,        bg: "bg-muted/20",                       text: "text-muted-foreground",               border: "border-border/50" },
+                    ].map(t => (
+                      <div key={t.label} className={`flex items-center justify-between p-2.5 rounded-lg border ${t.bg} ${t.border}`}>
+                        <span className="text-xs text-muted-foreground">{t.label}</span>
+                        <span className={`text-base font-bold ${t.text}`}>{t.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Projetos cancelados */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-muted/20">
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">Projetos Cancelados</span>
+                    <span className="text-sm font-semibold">Projetos Cancelados</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">
-                      {churnW.cancelledProjects}
-                    </span>
-                    <Badge variant="destructive" className="gap-1">
-                      <TrendingUp className="h-3 w-3" />+
-                      {churnW.cancelledGrowth}%
+                    <span className="text-xl font-bold">{wChW.cancelledProjects}</span>
+                    <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0.5">
+                      <TrendingUp className="h-2.5 w-2.5" />+{wChW.cancelledGrowth}%
                     </Badge>
                   </div>
                 </div>
-              </div>
-
-              <Separator />
-
-              {/* Revenue Churn Section */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">Revenue Churn</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold text-destructive">
-                      R$ {churnW.revenueChurn.toLocaleString("pt-BR")}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Churn Rate:{" "}
-                      <span className="font-semibold text-destructive">
-                        {churnW.revenueChurnRate}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Visual bar showing churn percentage */}
-                <div className="space-y-1">
+                {/* Churn bar */}
+                <div className="space-y-1.5">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Perda de MRR</span>
-                    <span>{churnW.revenueChurnRate}% do total</span>
+                    <span className="font-semibold text-destructive">{wChW.revenueChurnRate}% do total</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-destructive"
-                      style={{ width: `${churnW.revenueChurnRate}%` }}
-                    />
+                    <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${Math.min(100, wChW.revenueChurnRate * 5)}%` }} />
                   </div>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 bg-transparent"
-                  onClick={() =>
-                    openChartModal(
-                      widget.type,
-                      "CHURN — Tendência",
-                      "bar",
-                      [
-                        { date: "Inativados", value: churnW.inactiveAccounts },
-                        { date: "Proj. Cancel.", value: churnW.cancelledProjects },
-                        { date: "Rev. Churn (k)", value: Math.round(churnW.revenueChurn / 1000) },
-                      ],
-                    )
-                  }
-                >
-                  <FileText className="h-3 w-3" />
-                  Ver Detalhes
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 bg-transparent"
-                  onClick={() => exportWidgetToPng(widget.type, "CHURN")}
-                >
-                  <Download className="h-3 w-3" />
-                  Exportar
-                </Button>
-              </div>
-
-              {/* Warning if churn increased significantly */}
-              <Alert variant="destructive" className="border-destructive/30">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm">
-                  Churn de clientes aumentou 5% vs período anterior. Considere
-                  ações de retenção.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         );
+      }
 
-      case "averageTicket":
+      case "averageTicket": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wAtW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).averageTicket;
+        const atTypes = [
+          { label: "Agências",     value: 1750, growth: 6,  bg: "bg-blue-50 dark:bg-blue-950/20",    text: "text-blue-700 dark:text-blue-300",    border: "border-blue-200 dark:border-blue-800" },
+          { label: "Lead Premium", value: 1120, growth: 2,  bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-800" },
+          { label: "Nômades",      value: 680,  growth: 1,  bg: "bg-amber-50 dark:bg-amber-950/20",  text: "text-amber-700 dark:text-amber-300",  border: "border-amber-200 dark:border-amber-800" },
+          { label: "Free",         value: 0,    growth: 0,  bg: "bg-muted/20",                       text: "text-muted-foreground",               border: "border-border/50" },
+        ];
         return (
-          <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-success/10 rounded-lg shrink-0">
-                  <DollarSign className="h-4 w-4 text-success" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Ticket Médio</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Valor médio por cliente e projeto
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
-            </CardHeader>
-            <CardContent className="p-6">
-              {/* Ticket Médio Geral */}
-              <div className="mb-6 p-4 bg-success/10 rounded-lg border border-success/30">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Ticket Médio Geral
-                    </p>
-                    <p className="text-3xl font-bold text-success">
-                      R$ {atW.general.toLocaleString("pt-BR")}
-                    </p>
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                    <DollarSign className="h-4 w-4 text-success" />
                   </div>
-                  <div className="flex items-center gap-2 text-success">
-                    <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">
-                      +{atW.generalGrowth}%
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">Ticket Médio</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Valor médio por cliente e projeto</p>
                   </div>
                 </div>
-              </div>
-
-              {/* Ticket Médio por Tipo de Conta */}
-              <div className="mb-6">
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Por Tipo de Conta
-                </h4>
-                <div className="space-y-3">
-                  {[
-                    {
-                      type: "Agências",
-                      value: "R$ 1.750",
-                      change: 6,
-                      color: "info",
-                    },
-                    {
-                      type: "Lead Premium",
-                      value: "R$ 1.120",
-                      change: 2,
-                      color: "chart_4",
-                    },
-                    {
-                      type: "Nômades",
-                      value: "R$ 680",
-                      change: 1,
-                      color: "warning",
-                    },
-                    { type: "Free", value: "R$ 0", change: 0, color: "muted" },
-                  ].map((item) => {
-                    const colorClasses = {
-                      info: "bg-info-muted border-info/20 text-info-foreground",
-                      chart_4: "bg-chart-4/10 border-chart-4/20 text-chart-4",
-                      warning:
-                        "bg-warning-muted border-warning/20 text-warning-foreground",
-                      muted: "bg-muted border-border text-muted-foreground",
-                    };
-
-                    return (
-                      <div
-                        key={item.type}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${colorClasses[item.color as keyof typeof colorClasses]}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {item.type}
-                          </p>
-                          <p className="text-base font-bold leading-tight">
-                            {item.value}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 ml-3 shrink-0">
-                          {item.change > 0 ? (
-                            <>
-                              <TrendingUp className="h-4 w-4 text-success" />
-                              <span className="text-sm font-semibold text-success">
-                                +{item.change}%
-                              </span>
-                            </>
-                          ) : item.change === 0 ? (
-                            <span className="text-sm text-muted-foreground">
-                              —
-                            </span>
-                          ) : (
-                            <>
-                              <TrendingDown className="h-4 w-4 text-destructive" />
-                              <span className="text-sm font-semibold text-destructive">
-                                {item.change}%
-                              </span>
-                            </>
-                          )}
-                        </div>
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                {/* Hero */}
+                <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Ticket Médio Geral</p>
+                      <p className="text-3xl font-bold tracking-tight text-success">R$ {wAtW.general.toLocaleString("pt-BR")}</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-success text-sm font-semibold">
+                      <TrendingUp className="h-4 w-4" />+{wAtW.generalGrowth}%
+                    </div>
+                  </div>
+                </div>
+                {/* 2x2 account type grid */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Por Tipo de Conta</p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {atTypes.map(t => (
+                      <div key={t.label} className={`p-3 rounded-xl border ${t.bg} ${t.border}`}>
+                        <p className="text-xs text-muted-foreground">{t.label}</p>
+                        <p className={`text-lg font-bold mt-0.5 ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
+                        {t.growth > 0 ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <TrendingUp className="h-2.5 w-2.5 text-success" />
+                            <span className="text-[10px] font-semibold text-success">+{t.growth}%</span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground mt-1">—</p>
+                        )}
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-
-              {/* Ticket Médio por Projeto */}
-              <div>
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Por Projeto
-                </h4>
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-success/10 to-chart-3/10 border-success/30">
+                {/* Per Project */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-success/30 bg-success/5">
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Ticket Médio por Projeto
-                    </p>
-                    <p className="text-2xl font-bold text-success">
-                      R$ {atW.perProject.toLocaleString("pt-BR")}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Por Projeto</p>
+                    <p className="text-xl font-bold text-success">R$ {wAtW.perProject.toLocaleString("pt-BR")}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-success">
-                    <TrendingUp className="h-5 w-5" />
-                    <span className="text-lg font-semibold">
-                      +{atW.perProjectGrowth}%
-                    </span>
+                  <div className="flex items-center gap-1 text-success text-sm font-semibold">
+                    <TrendingUp className="h-4 w-4" />+{wAtW.perProjectGrowth}%
                   </div>
                 </div>
-              </div>
-
-              {/* Mini Trend Chart */}
-              <div className="mt-6 p-4 bg-muted rounded-lg">
-                <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Tendência (últimos 6 meses)
-                </p>
-                <div className="flex items-end justify-between gap-1 h-16">
-                  {atW.trendData.map((val, idx) => {
-                    const maxVal = Math.max(...atW.trendData);
-                    const height = (val / maxVal) * 100;
-                    return (
-                      <div
-                        key={idx}
-                        className="flex-1 flex flex-col items-center gap-1"
-                      >
-                        <div
-                          className="w-full bg-gradient-to-t from-success to-success/80 rounded-sm transition-all hover:opacity-80"
-                          style={{ height: `${height}%` }}
-                          title={`R$ ${val}`}
-                        />
-                      </div>
-                    );
-                  })}
+                {/* Trend chart */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Tendência (últimos 6 meses)</p>
+                  <div className="flex items-end gap-1.5 h-16">
+                    {wAtW.trendData.map((val, idx) => {
+                      const maxVal = Math.max(...wAtW.trendData, 1);
+                      const isLast = idx === wAtW.trendData.length - 1;
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                          <div
+                            className={cn("w-full rounded-t transition-all", isLast ? "bg-success" : "bg-success/30 hover:bg-success/60")}
+                            style={{ height: `${(val / maxVal) * 100}%` }}
+                            title={`R$ ${val}`}
+                          />
+                          <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J"][idx] ?? idx+1}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         );
+      }
 
       case "ltv": {
         const effectivePeriod = getWidgetPeriod(widget.id);
