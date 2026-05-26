@@ -3789,52 +3789,55 @@ export default function AdminDashboardPage() {
 
     return (
       <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
-        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden" showCloseButton={false}>
+        <DialogContent className="!max-w-[1000px] w-[calc(100vw-2rem)] p-0 overflow-hidden" showCloseButton={false}>
           {/* Brand-gradient header */}
-          <div className="app-brand-header px-5 pt-4 pb-4 text-white">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="app-brand-header px-5 py-4 text-white">
+            {/* Top row: icon + title/subtitle | period badge + action buttons */}
+            <div className="flex items-center gap-3">
               {/* Icon */}
               <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
                 {cfg.icon}
               </div>
-              {/* Title + subtitle */}
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold leading-tight truncate">{title}</h2>
-                <p className="text-xs text-white/70 mt-0.5">{cfg.subtitle}</p>
+              {/* Title + subtitle — grows but never forces other items to wrap */}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold leading-tight truncate">{title}</h2>
+                <p className="text-xs text-white/70 mt-0.5 truncate">{cfg.subtitle}</p>
               </div>
               {/* Period badge */}
               <span className="inline-flex items-center text-[11px] bg-white/20 text-white rounded-full px-3 py-1 gap-1.5 font-medium shrink-0 whitespace-nowrap">
                 <svg className="h-3 w-3 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                 {modalPeriod.label}
               </span>
+              {/* Divider */}
+              <div className="h-6 w-px bg-white/20 shrink-0" />
               {/* Action icon buttons */}
-              <div className="flex items-center gap-1 shrink-0 ml-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}
                   title="Compartilhar"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
                 >
                   <Share2 className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => exportWidgetToPng(detailsWidgetId!, title)}
                   title="Exportar PNG"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
                 >
                   <Download className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setDetailsWidgetId(null)}
                   title="Fechar"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-red-500/60 active:scale-90 transition-all duration-150"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
-          {/* Content */}
-          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-auto">
+          {/* Scrollable content — overflow-y-scroll keeps scrollbar always visible */}
+          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll">
             {renderContent()}
           </div>
         </DialogContent>
