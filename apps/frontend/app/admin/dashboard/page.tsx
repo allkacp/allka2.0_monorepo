@@ -65,6 +65,7 @@ import {
   Link2,
   History,
   Database,
+  Eye,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -1214,8 +1215,16 @@ export default function AdminDashboardPage() {
         </span>
       )}
       <button
+        onClick={() => setDetailsWidgetId(widgetId)}
+        className="flex items-center justify-center h-7 w-7 cursor-pointer text-muted-foreground hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/40 active:scale-90 transition-all duration-150 rounded-l-lg"
+        title="Ver detalhes do widget"
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </button>
+      <div className="w-px h-4 bg-border/60 shrink-0" />
+      <button
         onClick={() => openWidgetShareDialog(widgetId, widgetTitle)}
-        className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-l-lg"
+        className="flex items-center justify-center h-7 w-7 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150"
         title="Compartilhar widget"
       >
         <Share2 className="h-3.5 w-3.5" />
@@ -1224,7 +1233,7 @@ export default function AdminDashboardPage() {
       <div className="relative">
         <button
           onClick={() => setShowExportDropdown(showExportDropdown === widgetId ? null : widgetId)}
-          className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
+          className="flex items-center justify-center h-7 w-7 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
           title="Exportar widget"
           data-export-button
         >
@@ -1549,6 +1558,7 @@ export default function AdminDashboardPage() {
 
   // ── Historical modal states ──────────────────────────────────────────────────
   const [showExportDropdown, setShowExportDropdown] = useState<string | null>(null);
+  const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
@@ -3309,6 +3319,283 @@ export default function AdminDashboardPage() {
     );
   };
 
+  // ── Widget Details Modal ───────────────────────────────────────────────────
+  const WidgetDetailsModal = () => {
+    if (!detailsWidgetId) return null;
+    const title = getWidgetTitle(detailsWidgetId);
+
+    const cfgMap: Record<string, { gradient: string; icon: React.ReactNode; subtitle: string }> = {
+      metrics:              { gradient: "from-violet-600 via-purple-600 to-indigo-700",  icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Métricas principais da plataforma" },
+      revenue:              { gradient: "from-emerald-600 via-green-600 to-teal-700",    icon: <DollarSign className="h-6 w-6" />,    subtitle: "Receita total e breakdown" },
+      platformActivities:   { gradient: "from-sky-600 via-blue-600 to-indigo-700",       icon: <Activity className="h-6 w-6" />,      subtitle: "Engajamento e atividades" },
+      accountsReceivable:   { gradient: "from-emerald-600 via-teal-600 to-green-700",    icon: <DollarSign className="h-6 w-6" />,    subtitle: "Contas a receber por categoria" },
+      mrr:                  { gradient: "from-blue-600 via-indigo-600 to-purple-700",    icon: <TrendingUp className="h-6 w-6" />,    subtitle: "Receita recorrente mensal" },
+      churn:                { gradient: "from-rose-600 via-red-600 to-pink-700",         icon: <TrendingDown className="h-6 w-6" />,  subtitle: "Análise de cancelamentos" },
+      creditPlans:          { gradient: "from-violet-600 via-purple-600 to-blue-700",    icon: <CreditCard className="h-6 w-6" />,    subtitle: "Planos de crédito ativos" },
+      activeProjectsWidget: { gradient: "from-orange-500 via-amber-500 to-yellow-600",   icon: <Briefcase className="h-6 w-6" />,     subtitle: "Projetos ativos por tipo" },
+      averageTicket:        { gradient: "from-amber-600 via-orange-500 to-yellow-500",   icon: <Calculator className="h-6 w-6" />,    subtitle: "Ticket médio por cliente" },
+      ltv:                  { gradient: "from-teal-600 via-cyan-600 to-sky-700",         icon: <Star className="h-6 w-6" />,          subtitle: "Valor vitalício do cliente" },
+      cmv:                  { gradient: "from-slate-600 via-zinc-600 to-gray-700",       icon: <Calculator className="h-6 w-6" />,    subtitle: "Custo de mercadoria vendida" },
+      nomads:               { gradient: "from-cyan-600 via-blue-500 to-indigo-600",      icon: <Users className="h-6 w-6" />,         subtitle: "Visão geral dos nômades" },
+      nomadsRanking:        { gradient: "from-amber-600 via-orange-500 to-red-500",      icon: <Trophy className="h-6 w-6" />,        subtitle: "Ranking de performance" },
+      tasks:                { gradient: "from-green-600 via-emerald-600 to-teal-600",    icon: <CheckSquare className="h-6 w-6" />,   subtitle: "Tarefas e execução" },
+      activity:             { gradient: "from-sky-500 via-blue-500 to-indigo-600",       icon: <Activity className="h-6 w-6" />,      subtitle: "Atividades recentes" },
+      alerts:               { gradient: "from-rose-600 via-pink-600 to-red-700",         icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
+      performers:           { gradient: "from-amber-500 via-orange-500 to-red-500",      icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
+      quickActions:         { gradient: "from-violet-600 via-purple-500 to-indigo-600",  icon: <Zap className="h-6 w-6" />,           subtitle: "Ações rápidas" },
+    };
+    const cfg = cfgMap[detailsWidgetId] ?? { gradient: "from-violet-600 via-purple-600 to-indigo-700", icon: <Settings className="h-6 w-6" />, subtitle: "Detalhes do widget" };
+
+    const renderContent = () => {
+      switch (detailsWidgetId) {
+        case "revenue":
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Total", value: `R$ ${rv.total.toLocaleString("pt-BR")}`, change: `+${rv.growth}%`, bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
+                  { label: "Planos de Crédito", value: `R$ ${rv.creditPlan.toLocaleString("pt-BR")}`, change: `+${rv.creditPlanGrowth}%`, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Recorrente", value: `R$ ${rv.recurring.toLocaleString("pt-BR")}`, change: `+${rv.recurringGrowth}%`, bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-base font-bold ${item.text}`}>{item.value}</p>
+                    <p className="text-xs text-success">{item.change}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                <p className="text-sm font-semibold mb-3">Distribuição da Receita</p>
+                {[
+                  { label: "Planos de Crédito", value: rv.creditPlan, color: "bg-blue-500" },
+                  { label: "Recorrente", value: rv.recurring, color: "bg-purple-500" },
+                  { label: "Avulso", value: rv.oneTime, color: "bg-amber-500" },
+                ].map(item => (
+                  <div key={item.label} className="mb-2">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-medium">R$ {item.value.toLocaleString("pt-BR")}</span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.value / rv.total) * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "platformActivities":
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Agências Ativas", value: paW.activeAgencies, change: "+7%" },
+                  { label: "Tempo médio/dia", value: `${paW.avgSessionMinutes} min`, change: "+4%" },
+                  { label: "MAU", value: paW.mau.toLocaleString("pt-BR"), change: "+5%" },
+                  { label: "DAU", value: paW.dau.toLocaleString("pt-BR"), change: "+3%" },
+                  { label: "Sessões", value: paW.sessions.toLocaleString("pt-BR"), change: "" },
+                  { label: "Ações executadas", value: paW.actionsExecuted.toLocaleString("pt-BR"), change: "" },
+                ].map(item => (
+                  <div key={item.label} className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className="text-lg font-bold text-sky-700 dark:text-sky-300">{item.value}</p>
+                    {item.change && <p className="text-xs text-success">{item.change}</p>}
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                <p className="text-sm font-semibold mb-3">Tendência — Últimos 7 dias</p>
+                <div className="flex items-end gap-1 h-20">
+                  {paW.trendData.map((value, idx) => (
+                    <div key={idx} className="flex-1 bg-sky-400 rounded-t transition-all" style={{ height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%` }} title={`Dia ${idx + 1}: ${value}`} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+
+        case "accountsReceivable":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm text-muted-foreground">Total a Receber</p>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">R$ {arW.total.toLocaleString("pt-BR")},00</p>
+                <p className="text-xs text-success mt-1">+{arW.growth}% vs. período anterior</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Planos de Crédito", value: arW.creditPlans, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Pós-pagos", value: arW.postPaid, bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
+                  { label: "Outros Contratos", value: arW.others, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
+                  { label: "Recebido no período", value: arW.received, bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800", text: "text-green-700 dark:text-green-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-base font-bold ${item.text}`}>R$ {item.value.toLocaleString("pt-BR")},00</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "mrr":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-muted-foreground">MRR Total</p>
+                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">R$ {mrrW.total.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-success mt-1">+{mrrW.growth}%</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Novo MRR", value: mrrW.newMrr, bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800", text: "text-success" },
+                  { label: "Expansão", value: mrrW.expansion, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-600 dark:text-blue-400" },
+                  { label: "Contração", value: mrrW.contraction, bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800", text: "text-destructive" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-base font-bold ${item.text}`}>R$ {item.value.toLocaleString("pt-BR")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "churn":
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 text-center">
+                  <p className="text-xs text-muted-foreground">Taxa de Churn</p>
+                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300">{churnW.rate}%</p>
+                </div>
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-center">
+                  <p className="text-xs text-muted-foreground">Clientes Perdidos</p>
+                  <p className="text-3xl font-bold text-red-700 dark:text-red-300">{churnW.lost}</p>
+                </div>
+              </div>
+            </div>
+          );
+
+        case "creditPlans":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
+                <p className="text-sm text-muted-foreground">Total em Planos</p>
+                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">R$ {cpW.total.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-success mt-1">+{cpW.growth}%</p>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Básico", data: cpW.basic, color: "bg-violet-500" },
+                  { label: "Parceiro", data: cpW.partner, color: "bg-blue-500" },
+                  { label: "Premium", data: cpW.premium, color: "bg-amber-500" },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${item.color}`} />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">R$ {item.data.revenue.toLocaleString("pt-BR")}</p>
+                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos · +{item.data.growth}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "activeProjectsWidget":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-muted-foreground">Total de Projetos Ativos</p>
+                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{apW.total}</p>
+                <p className="text-xs text-success mt-1">+{apW.growth}%</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Agências", value: apW.agencies, change: apW.agenciesGrowth, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Lead Premium", value: apW.leadPremium, change: apW.leadPremiumGrowth, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+                  { label: "Nômades", value: apW.nomades, change: apW.nomadesGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-xl font-bold ${item.text}`}>{item.value}</p>
+                    <p className="text-xs text-success">+{item.change}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "averageTicket":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">R$ {atW.average?.toLocaleString("pt-BR") ?? "—"}</p>
+                {atW.growth != null && <p className="text-xs text-success mt-1">+{atW.growth}%</p>}
+              </div>
+            </div>
+          );
+
+        case "ltv":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
+                <p className="text-sm text-muted-foreground">LTV Médio</p>
+                <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">R$ {ltvW.average?.toLocaleString("pt-BR") ?? "—"}</p>
+                {ltvW.growth != null && <p className="text-xs text-success mt-1">+{ltvW.growth}%</p>}
+              </div>
+            </div>
+          );
+
+        default:
+          return (
+            <div className="text-center py-8 space-y-2">
+              <div className="p-3 bg-muted/30 rounded-full w-fit mx-auto">
+                <Settings className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">Detalhes detalhados em breve para este widget.</p>
+            </div>
+          );
+      }
+    };
+
+    return (
+      <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          {/* Gradient header */}
+          <div className={`bg-linear-to-br ${cfg.gradient} p-6 text-white`}>
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+                {cfg.icon}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold leading-tight">{title}</h2>
+                <p className="text-sm text-white/70 mt-0.5">{cfg.subtitle}</p>
+              </div>
+            </div>
+          </div>
+          {/* Content */}
+          <div className="p-5 space-y-4 max-h-[55vh] overflow-y-auto">
+            {renderContent()}
+          </div>
+          {/* Footer */}
+          <div className="px-5 pb-5">
+            <Button variant="outline" className="w-full" onClick={() => setDetailsWidgetId(null)}>
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const renderWidget = (widget: WidgetState) => {
     const effectivePeriod = getWidgetPeriod(widget.id);
 
@@ -3379,7 +3666,7 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
               <CardHeader className="pb-3 relative">
                 {/* Title row */}
-                <div className="flex items-center gap-3 pr-16">
+                <div className="flex items-center gap-3 pr-20">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
@@ -6259,22 +6546,6 @@ export default function AdminDashboardPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 bg-transparent"
-                  >
-                    Ver detalhes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 bg-transparent"
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    Exportar
-                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -6846,7 +7117,7 @@ export default function AdminDashboardPage() {
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
               <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-16">
+                <div className="flex items-center gap-3 pr-20">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
@@ -6930,19 +7201,20 @@ export default function AdminDashboardPage() {
                       R$ {arW.others.toLocaleString("pt-BR")},00
                     </span>
                   </div>
-                </div>
-                </div>
 
-                {/* Total Recebido no Período */}
-                <div className="pt-3 border-t border-emerald-200 dark:border-emerald-800">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 dark:bg-green-950/20">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Recebido no período
-                    </span>
-                    <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                  {/* Recebido no período */}
+                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                        Recebido
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-green-700 dark:text-green-300">
                       R$ {arW.received.toLocaleString("pt-BR")},00
                     </span>
                   </div>
+                </div>
                 </div>
 
                 {/* Ver Detalhes Button */}
@@ -8432,6 +8704,9 @@ export default function AdminDashboardPage() {
           data={selectedMetric.data}
         />
       )}
+
+      {/* ── Widget Details Modal ──────────────────────────────────────────── */}
+      <WidgetDetailsModal />
 
       {/* ── Historical Data Modal ─────────────────────────────────────────── */}
       <Dialog open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
