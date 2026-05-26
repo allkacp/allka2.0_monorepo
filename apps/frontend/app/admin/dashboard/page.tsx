@@ -3982,7 +3982,6 @@ export default function AdminDashboardPage() {
                   })()}
                 </div>
               </CardContent>
-              )}
             </Card>
           </div>
         );
@@ -6657,7 +6656,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Main metrics */}}
+                {/* Main metrics */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">
@@ -7368,7 +7367,7 @@ export default function AdminDashboardPage() {
                 />
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total a Receber */}}
+                {/* Total a Receber */}
                 <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-muted-foreground">
