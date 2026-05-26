@@ -1916,6 +1916,12 @@ export default function AdminDashboardPage() {
   }, [isEditDashboardModalOpen]);
 
   useEffect(() => {
+    // Guard: skip saving until the initial load effect has populated state.
+    // currentDashboardId is null on the initial render and is only set
+    // after the load effect runs, so this prevents the save effect from
+    // overwriting localStorage with empty/default state on mount.
+    if (!currentDashboardId) return;
+
     // Ensure consistent structure when saving
     localStorage.setItem(
       "dashboard-widget-config",
@@ -1939,9 +1945,7 @@ export default function AdminDashboardPage() {
 
     // Save dashboards to localStorage whenever they change
     localStorage.setItem("saved-dashboards", JSON.stringify(savedDashboards));
-    if (currentDashboardId) {
-      localStorage.setItem("current-dashboard-id", currentDashboardId);
-    }
+    localStorage.setItem("current-dashboard-id", currentDashboardId);
   }, [
     widgets,
     metricCards,
