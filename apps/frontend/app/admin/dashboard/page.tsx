@@ -245,41 +245,11 @@ const generateDashboardData = (from?: Date, to?: Date): any => {
   },
   nomadsRanking: { items: [] },
   agenciesRanking: [
-    {
-      id: "1",
-      name: "Digital Works",
-      rating: 4.9,
-      projects: 23,
-      contribution: "R$ 48k",
-    },
-    {
-      id: "2",
-      name: "Criativa Lab",
-      rating: 4.8,
-      projects: 18,
-      contribution: "R$ 37k",
-    },
-    {
-      id: "3",
-      name: "Inovax Agency",
-      rating: 4.7,
-      projects: 15,
-      contribution: "R$ 31k",
-    },
-    {
-      id: "4",
-      name: "PixelForge",
-      rating: 4.6,
-      projects: 12,
-      contribution: "R$ 24k",
-    },
-    {
-      id: "5",
-      name: "BluePrint Co.",
-      rating: 4.5,
-      projects: 10,
-      contribution: "R$ 19k",
-    },
+    { id: "1", name: "Digital Works",  avatar: "DW", rating: 4.9, projects: 23, contribution: "R$ 48k", specialty: "Dev & Design",    color: "from-blue-500 to-indigo-600" },
+    { id: "2", name: "Criativa Lab",   avatar: "CL", rating: 4.8, projects: 18, contribution: "R$ 37k", specialty: "Branding",         color: "from-pink-500 to-rose-600" },
+    { id: "3", name: "Inovax Agency",  avatar: "IA", rating: 4.7, projects: 15, contribution: "R$ 31k", specialty: "Marketing 360",    color: "from-violet-500 to-purple-600" },
+    { id: "4", name: "PixelForge",     avatar: "PF", rating: 4.6, projects: 12, contribution: "R$ 24k", specialty: "UX/UI",            color: "from-cyan-500 to-teal-600" },
+    { id: "5", name: "BluePrint Co.",  avatar: "BP", rating: 4.5, projects: 10, contribution: "R$ 19k", specialty: "Arquitetura",      color: "from-amber-500 to-orange-600" },
   ],
   tasks: {
     total: sc(552),
@@ -344,7 +314,16 @@ const generateDashboardData = (from?: Date, to?: Date): any => {
   metrics: {},
   activity: [],
   alerts: [],
-  performers: [],
+  performers: [
+    { id: "1", name: "Carlos Mendonça",  avatar: "CM", rating: 4.9, projects: sc(34),   badge: "gold",   tasks: sc(128), revenue: `R$ ${sc(52)}k`, specialty: "Dev Full Stack" },
+    { id: "2", name: "Ana Beatriz Lima",  avatar: "AB", rating: 4.8, projects: sc(29),   badge: "gold",   tasks: sc(115), revenue: `R$ ${sc(44)}k`, specialty: "UI/UX Design" },
+    { id: "3", name: "Rafael Torres",     avatar: "RT", rating: 4.7, projects: sc(26),   badge: "gold",   tasks: sc(98),  revenue: `R$ ${sc(39)}k`, specialty: "Marketing Digital" },
+    { id: "4", name: "Juliana Ferreira",  avatar: "JF", rating: 4.6, projects: sc(22),   badge: "silver", tasks: sc(84),  revenue: `R$ ${sc(31)}k`, specialty: "Copywriting" },
+    { id: "5", name: "Marcos Oliveira",   avatar: "MO", rating: 4.6, projects: sc(21),   badge: "silver", tasks: sc(79),  revenue: `R$ ${sc(28)}k`, specialty: "Dev Backend" },
+    { id: "6", name: "Priscila Santos",   avatar: "PS", rating: 4.5, projects: sc(19),   badge: "silver", tasks: sc(71),  revenue: `R$ ${sc(24)}k`, specialty: "SEO" },
+    { id: "7", name: "Diego Cavalcante",  avatar: "DC", rating: 4.4, projects: sc(17),   badge: "bronze", tasks: sc(63),  revenue: `R$ ${sc(19)}k`, specialty: "Tráfego Pago" },
+    { id: "8", name: "Fernanda Costa",    avatar: "FC", rating: 4.3, projects: sc(15),   badge: "bronze", tasks: sc(57),  revenue: `R$ ${sc(16)}k`, specialty: "Social Media" },
+  ],
   userDistribution: [],
   systemAlerts: [],
   adminProfiles: [],
@@ -7286,78 +7265,103 @@ export default function AdminDashboardPage() {
 
       case "nomadsRanking": {
         const wPerfW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).performers;
+        const top3 = wPerfW.slice(0, 3);
+        const rest = wPerfW.slice(3);
+        const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
+        const podiumIdx   = top3.length >= 3 ? [1, 0, 2] : [0, 1, 2];
+        const medalColors = [
+          { ring: "ring-yellow-400", bg: "from-yellow-400 to-amber-500", shadow: "shadow-yellow-400/40", crown: "text-yellow-400", label: "bg-yellow-400/20 text-yellow-700 dark:text-yellow-400", barH: "h-20" },
+          { ring: "ring-slate-400",  bg: "from-slate-400 to-slate-500",  shadow: "shadow-slate-400/40",  crown: "text-slate-400",  label: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",    barH: "h-16" },
+          { ring: "ring-amber-600",  bg: "from-amber-600 to-orange-600", shadow: "shadow-amber-600/40",  crown: "text-amber-600",  label: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", barH: "h-14" },
+        ];
+        const posLabels = ["🥇 1º Lugar", "🥈 2º Lugar", "🥉 3º Lugar"];
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
+            <CardHeader className="pb-3 relative">
               <div className="flex items-center gap-3 pr-20">
                 <div className="p-2 bg-warning/10 rounded-lg shrink-0">
                   <Trophy className="h-4 w-4 text-warning" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    Ranking de Nômades
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Os melhores nômades da plataforma
-                  </p>
+                  <CardTitle className="text-base font-semibold leading-tight">Ranking de Nômades</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Os melhores nômades da plataforma</p>
                 </div>
               </div>
               <div className="mt-2">
                 <WidgetPeriodSelector widgetId={widget.id} />
               </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
+              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                {wPerfW.map((performer, index) => (
-                  <div
-                    key={performer.id}
-                    className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
-                  >
-                    <div className="flex-shrink-0">
-                      <div className="relative">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-warning to-warning flex items-center justify-center text-white font-bold text-base shadow-lg group-hover:shadow-warning/50 transition-shadow duration-300">
-                          {index + 1}
+            <CardContent className="px-4 pb-4 space-y-4">
+              {/* Podium — top 3 */}
+              {top3.length > 0 && (
+                <div className="flex items-end justify-center gap-3 pt-2">
+                  {podiumOrder.map((performer, pIdx) => {
+                    const rank = podiumIdx[pIdx];
+                    const mc = medalColors[rank];
+                    return (
+                      <div key={performer.id} className={`flex flex-col items-center gap-1.5 ${rank === 0 ? "scale-110 z-10" : ""}`}>
+                        {/* Crown for #1 */}
+                        {rank === 0 && <Trophy className="h-5 w-5 text-yellow-400 drop-shadow" />}
+                        {/* Avatar */}
+                        <div className={`relative ring-2 ${mc.ring} rounded-full shadow-lg ${mc.shadow}`}>
+                          <div className={`h-14 w-14 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-lg`}>
+                            {performer.avatar}
+                          </div>
+                          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-background rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none border">
+                            {rank + 1}
+                          </div>
                         </div>
-                        <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-                          <Award
-                            className={`h-4 w-4 ${index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : "text-chart-5"}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-semibold leading-none truncate">
-                        {performer.name}
-                      </p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Name */}
+                        <p className="text-xs font-semibold text-center leading-tight max-w-[72px] truncate">{performer.name.split(" ")[0]}</p>
+                        <p className="text-[10px] text-muted-foreground text-center max-w-[72px] truncate">{performer.specialty}</p>
+                        {/* Rating */}
                         <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 text-warning fill-warning" />
-                          <span className="text-xs font-medium">
-                            {performer.rating}
-                          </span>
+                          {[1,2,3,4,5].map(s => (
+                            <Star key={s} className={`h-2.5 w-2.5 ${s <= Math.round(performer.rating) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+                          ))}
                         </div>
-                        <span className="text-xs text-muted-foreground">•</span>
-                        <span className="text-xs text-muted-foreground">
-                          {performer.projects} proj.
-                        </span>
+                        <span className="text-[10px] font-bold">{performer.rating}</span>
+                        {/* Podium bar */}
+                        <div className={`w-14 ${mc.barH} bg-gradient-to-b ${mc.bg} rounded-t-lg opacity-80 flex items-start justify-center pt-1`}>
+                          <span className="text-white text-[9px] font-bold">{performer.projects} proj.</span>
+                        </div>
                       </div>
-                      <Badge
-                        className={`text-xs ${getBadgeColor(performer.badge)}`}
-                      >
-                        {performer.badge === "gold"
-                          ? "Ouro"
-                          : performer.badge === "silver"
-                            ? "Prata"
-                            : "Bronze"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Rest of ranking — compact list */}
+              {rest.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t">
+                  {rest.map((performer, idx) => {
+                    const rank = idx + 3;
+                    return (
+                      <div key={performer.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
+                        <span className="text-sm font-bold text-muted-foreground w-5 text-center">{rank + 1}</span>
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">
+                          {performer.avatar}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{performer.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Star className="h-3 w-3 text-warning fill-warning" />
+                          <span className="text-xs font-medium">{performer.rating}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">{performer.projects} proj.</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {wPerfW.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Nenhum nômade no ranking ainda.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
@@ -7365,6 +7369,10 @@ export default function AdminDashboardPage() {
 
       case "agenciesRanking": {
         const wAgRankW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).agenciesRanking;
+        const agTop3 = wAgRankW.slice(0, 3);
+        const agRest = wAgRankW.slice(3);
+        const agMedalIcons = ["🥇", "🥈", "🥉"];
+        const agMedalRings = ["ring-yellow-400 shadow-yellow-400/30", "ring-slate-400 shadow-slate-400/30", "ring-amber-600 shadow-amber-600/30"];
         return (
           <div
             key={widget.id}
@@ -7384,8 +7392,8 @@ export default function AdminDashboardPage() {
             )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -7394,63 +7402,65 @@ export default function AdminDashboardPage() {
                     <Building2 className="h-4 w-4 text-cyan-500" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Ranking das agências da plataforma
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Ranking das agências da plataforma</p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                  {wAgRankW.map((agency, index) => (
-                    <div
-                      key={agency.id}
-                      className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="relative">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow-lg group-hover:shadow-cyan-500/50 transition-shadow duration-300">
-                            {index + 1}
-                          </div>
+              <CardContent className="px-4 pb-4 space-y-4">
+                {/* Top 3 — large cards */}
+                <div className="grid grid-cols-3 gap-2">
+                  {agTop3.map((agency, idx) => (
+                    <div key={agency.id} className="relative flex flex-col items-center gap-2 p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors text-center">
+                      <span className="absolute top-1.5 left-2 text-sm leading-none">{agMedalIcons[idx]}</span>
+                      {/* Logo */}
+                      <div className={`ring-2 ${agMedalRings[idx]} rounded-full shadow-md mt-3`}>
+                        <div className={`h-12 w-12 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white font-bold text-base`}>
+                          {agency.avatar}
                         </div>
                       </div>
-                      <div className="flex-1 space-y-1 min-w-0">
-                        <p className="text-sm font-semibold leading-none truncate">
-                          {agency.name}
-                        </p>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <div className="flex items-center gap-0.5">
-                            <Star className="h-3 w-3 text-warning fill-warning" />
-                            <span className="text-xs font-medium">
-                              {agency.rating}
-                            </span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            •
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {agency.projects} proj.
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground truncate">
-                            {agency.contribution}
-                          </span>
-                        </div>
+                      <div>
+                        <p className="text-xs font-bold leading-tight truncate w-full">{agency.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{agency.specialty}</p>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        {[1,2,3,4,5].map(s => (
+                          <Star key={s} className={`h-2.5 w-2.5 ${s <= Math.round(agency.rating) ? "text-warning fill-warning" : "text-muted-foreground/30"}`} />
+                        ))}
+                      </div>
+                      <div className="flex gap-2 text-[10px]">
+                        <span className="font-semibold text-foreground">{agency.projects} proj.</span>
+                        <span className="font-bold text-emerald-600">{agency.contribution}</span>
                       </div>
                     </div>
                   ))}
                 </div>
+                {/* Rest — compact */}
+                {agRest.length > 0 && (
+                  <div className="space-y-1.5 pt-1 border-t">
+                    {agRest.map((agency, idx) => (
+                      <div key={agency.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors">
+                        <span className="text-xs font-bold text-muted-foreground w-5 text-center">{idx + 4}</span>
+                        <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {agency.avatar}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{agency.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{agency.specialty}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Star className="h-3 w-3 text-warning fill-warning" />
+                          <span className="text-xs font-medium">{agency.rating}</span>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 shrink-0">{agency.contribution}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -7459,6 +7469,49 @@ export default function AdminDashboardPage() {
 
       case "statusOverview": {
         const wSoW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).statusOverview;
+        const soSections = [
+          {
+            label: "Projetos",
+            icon: <Briefcase className="h-4 w-4" />,
+            iconBg: "bg-blue-500/10",
+            iconColor: "text-blue-500",
+            href: "/admin/projects",
+            items: [
+              { label: "Andamento", count: wSoW.projects.ongoing,   status: "ongoing",   bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   dot: "bg-blue-500" },
+              { label: "Aprovados",  count: wSoW.projects.approved,  status: "approved",  bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",  dot: "bg-green-500" },
+              { label: "Concluídos", count: wSoW.projects.completed, status: "completed", bg: "bg-emerald-500/10",text: "text-emerald-600 dark:text-emerald-400",dot: "bg-emerald-500" },
+              { label: "Cancelados", count: wSoW.projects.cancelled, status: "cancelled", bg: "bg-red-500/10",    text: "text-red-600 dark:text-red-400",      dot: "bg-red-500" },
+              { label: "Atraso",     count: wSoW.projects.delayed,   status: "delayed",   bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400",  dot: "bg-amber-500" },
+            ],
+          },
+          {
+            label: "Tarefas",
+            icon: <CheckSquare className="h-4 w-4" />,
+            iconBg: "bg-violet-500/10",
+            iconColor: "text-violet-500",
+            href: "/admin/tasks",
+            items: [
+              { label: "Contratadas", count: wSoW.tasks.contracted, status: "contracted", bg: "bg-purple-500/10",  text: "text-purple-600 dark:text-purple-400", dot: "bg-purple-500" },
+              { label: "Execução",    count: wSoW.tasks.inProgress, status: "inprogress", bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",     dot: "bg-blue-500" },
+              { label: "Concluídas",  count: wSoW.tasks.completed,  status: "completed",  bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",   dot: "bg-green-500" },
+              { label: "Arquivadas",  count: wSoW.tasks.archived,   status: "archived",   bg: "bg-slate-500/10",  text: "text-slate-600 dark:text-slate-400",   dot: "bg-slate-500" },
+            ],
+          },
+          {
+            label: "Leads",
+            icon: <Users className="h-4 w-4" />,
+            iconBg: "bg-cyan-500/10",
+            iconColor: "text-cyan-500",
+            href: "/admin/leads",
+            items: [
+              { label: "Novos",     count: wSoW.leads.new,       status: "new",      bg: "bg-cyan-500/10",   text: "text-cyan-600 dark:text-cyan-400",    dot: "bg-cyan-500" },
+              { label: "Contato",   count: wSoW.leads.contacted, status: "contacted",bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",    dot: "bg-blue-500" },
+              { label: "Proposta",  count: wSoW.leads.proposal,  status: "proposal", bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-500" },
+              { label: "Fechados",  count: wSoW.leads.won,       status: "won",      bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",   dot: "bg-green-500" },
+              { label: "Perdidos",  count: wSoW.leads.lost,      status: "lost",     bg: "bg-red-500/10",    text: "text-red-600 dark:text-red-400",       dot: "bg-red-500" },
+            ],
+          },
+        ];
         return (
           <div
             key={widget.id}
@@ -7478,8 +7531,8 @@ export default function AdminDashboardPage() {
             )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -7488,191 +7541,36 @@ export default function AdminDashboardPage() {
                     <LayoutGrid className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      Visão Geral por Status
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Status de projetos e tarefas
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">Visão Geral por Status</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Status de projetos, tarefas e leads</p>
                   </div>
+                </div>
+                <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Projects Section */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 text-muted-foreground flex items-center gap-2">
-                    <Briefcase className="h-4 w-4" />
-                    Projetos
-                  </h3>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2">
-                    {[
-                      {
-                        label: "Em andamento",
-                        count: wSoW.projects.ongoing,
-                        status: "ongoing",
-                        color: "blue",
-                      },
-                      {
-                        label: "Aprovados",
-                        count: wSoW.projects.approved,
-                        status: "approved",
-                        color: "green",
-                      },
-                      {
-                        label: "Concluídos",
-                        count: wSoW.projects.completed,
-                        status: "completed",
-                        color: "emerald",
-                      },
-                      {
-                        label: "Cancelados",
-                        count: wSoW.projects.cancelled,
-                        status: "cancelled",
-                        color: "red",
-                      },
-                      {
-                        label: "Em atraso",
-                        count: wSoW.projects.delayed,
-                        status: "delayed",
-                        color: "amber",
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.status}
-                        onClick={() => {
-                          window.location.href = `/admin/projects?status=${item.status}`;
-                        }}
-                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
-                      >
-                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
-                          {item.label}
-                        </div>
-                        <div
-                          className={`text-xl font-bold text-${item.color}-600`}
+              <CardContent className="px-4 pb-4 space-y-4">
+                {soSections.map((section) => (
+                  <div key={section.label}>
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${section.iconBg} mb-2`}>
+                      <span className={section.iconColor}>{section.icon}</span>
+                      <span className={`text-xs font-semibold ${section.iconColor}`}>{section.label}</span>
+                    </div>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1.5">
+                      {section.items.map((item) => (
+                        <button
+                          key={item.status}
+                          onClick={() => { window.location.href = `${section.href}?status=${item.status}`; }}
+                          className={`p-2.5 rounded-lg ${item.bg} hover:brightness-90 transition-all duration-200 text-left group`}
                         >
-                          {item.count}
-                        </div>
-                      </button>
-                    ))}
+                          <div className={`text-base font-bold leading-none ${item.text}`}>{item.count}</div>
+                          <div className="text-[10px] leading-tight text-muted-foreground mt-1 truncate">{item.label}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                {/* Tasks Section */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 text-muted-foreground flex items-center gap-2">
-                    <CheckSquare className="h-4 w-4" />
-                    Tarefas
-                  </h3>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(85px,1fr))] gap-2">
-                    {[
-                      {
-                        label: "Contratadas",
-                        count: wSoW.tasks.contracted,
-                        status: "contracted",
-                        color: "purple",
-                      },
-                      {
-                        label: "Em execução",
-                        count: wSoW.tasks.inProgress,
-                        status: "inprogress",
-                        color: "blue",
-                      },
-                      {
-                        label: "Concluídas",
-                        count: wSoW.tasks.completed,
-                        status: "completed",
-                        color: "green",
-                      },
-                      {
-                        label: "Arquivadas",
-                        count: wSoW.tasks.archived,
-                        status: "archived",
-                        color: "gray",
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.status}
-                        onClick={() => {
-                          window.location.href = `/admin/tasks?status=${item.status}`;
-                        }}
-                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
-                      >
-                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
-                          {item.label}
-                        </div>
-                        <div
-                          className={`text-xl font-bold text-${item.color}-600`}
-                        >
-                          {item.count}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Leads Section */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 text-muted-foreground flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Leads
-                  </h3>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2">
-                    {[
-                      {
-                        label: "Novos",
-                        count: wSoW.leads.new,
-                        status: "new",
-                        color: "cyan",
-                      },
-                      {
-                        label: "Em contato",
-                        count: wSoW.leads.contacted,
-                        status: "contacted",
-                        color: "blue",
-                      },
-                      {
-                        label: "Proposta enviada",
-                        count: wSoW.leads.proposal,
-                        status: "proposal",
-                        color: "purple",
-                      },
-                      {
-                        label: "Fechado",
-                        count: wSoW.leads.won,
-                        status: "won",
-                        color: "green",
-                      },
-                      {
-                        label: "Perdido",
-                        count: wSoW.leads.lost,
-                        status: "lost",
-                        color: "red",
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.status}
-                        onClick={() => {
-                          window.location.href = `/admin/leads?status=${item.status}`;
-                        }}
-                        className="p-2.5 rounded-lg border bg-card hover:bg-accent hover:shadow-md transition-all duration-200 text-left group"
-                      >
-                        <div className="text-[10px] leading-tight text-muted-foreground mb-1 group-hover:text-foreground transition-colors line-clamp-2">
-                          {item.label}
-                        </div>
-                        <div
-                          className={`text-xl font-bold text-${item.color}-600`}
-                        >
-                          {item.count}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </CardContent>
             </Card>
           </div>
