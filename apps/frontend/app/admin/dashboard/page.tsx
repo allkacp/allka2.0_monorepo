@@ -4376,6 +4376,141 @@ export default function AdminDashboardPage() {
           );
         }
 
+        case "performers":
+          return (
+            <div className="space-y-3">
+              {topPerformers.length === 0 ? (
+                <div className="text-center py-8 space-y-2">
+                  <Trophy className="h-8 w-8 text-warning mx-auto opacity-40" />
+                  <p className="text-sm text-muted-foreground">Nenhum nômade no ranking ainda.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Top 3 podium */}
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {topPerformers.slice(0, 3).map((performer, index) => {
+                      const mc = [
+                        { ring: "ring-yellow-400", bg: "from-yellow-400 to-amber-500", text: "text-yellow-700 dark:text-yellow-300", chip: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800" },
+                        { ring: "ring-slate-400",  bg: "from-slate-400 to-slate-500",  text: "text-slate-600 dark:text-slate-400",   chip: "bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-700" },
+                        { ring: "ring-amber-600",  bg: "from-amber-600 to-orange-600", text: "text-amber-700 dark:text-amber-400",   chip: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+                      ][index]!;
+                      return (
+                        <div key={performer.id} className={`p-3 rounded-xl border ring-1 ${mc.ring} ${mc.chip} text-center`}>
+                          <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-base mx-auto mb-1.5`}>
+                            {index + 1}
+                          </div>
+                          <p className={`text-xs font-bold truncate ${mc.text}`}>{performer.name.split(" ")[0]}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
+                          <div className="flex items-center justify-center gap-0.5 mt-1">
+                            <Star className="h-2.5 w-2.5 text-warning fill-warning" />
+                            <span className="text-[10px] font-medium">{performer.rating}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">{performer.projects} proj.</p>
+                          <p className={`text-[10px] font-semibold mt-0.5 ${mc.text}`}>{performer.revenue}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Rest — 2 per row */}
+                  {topPerformers.length > 3 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {topPerformers.slice(3).map((performer, idx) => (
+                        <div key={performer.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
+                          <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 text-muted-foreground">{idx + 4}</div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold truncate">{performer.name.split(" ")[0]}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Star className="h-2.5 w-2.5 text-warning fill-warning" />
+                              <span className="text-[10px]">{performer.rating}</span>
+                              <span className="text-[10px] text-muted-foreground">· {performer.projects} proj.</span>
+                            </div>
+                          </div>
+                          <Badge className={`text-[10px] h-4 px-1 shrink-0 ${getBadgeColor(performer.badge)}`}>
+                            {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+
+        case "alerts":
+          return (
+            <div className="space-y-4">
+              {/* Priority summary */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 text-center">
+                  <AlertCircle className="h-6 w-6 text-destructive mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-destructive">{systemAlerts.filter(a => a.priority === "high").length}</p>
+                  <p className="text-xs text-muted-foreground">Alta prioridade</p>
+                </div>
+                <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
+                  <AlertTriangle className="h-6 w-6 text-warning mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-warning">{systemAlerts.filter(a => a.priority === "medium").length}</p>
+                  <p className="text-xs text-muted-foreground">Média prioridade</p>
+                </div>
+              </div>
+              {/* Full alert list */}
+              <div className="space-y-2.5">
+                {systemAlerts.map((alert) => (
+                  <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-xl border ${getAlertColor(alert.type)}`}>
+                    <div className="mt-0.5 shrink-0">{getAlertIcon(alert.type)}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-sm font-semibold">{alert.title}</p>
+                        <Badge variant="outline" className={`text-xs shrink-0 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}>
+                          {alert.priority === "high" ? "Alta" : "Média"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs opacity-80">{alert.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* System log */}
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                <p className="text-sm font-semibold">Registro do sistema</p>
+                {systemAlertsData.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground truncate">{a.message}</span>
+                    <span className="text-muted-foreground shrink-0 ml-2">{a.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "quickActions":
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Acesse rapidamente as principais áreas de administração.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { to: "/admin/usuarios",      icon: Users,     label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",         border: "border-info/20",    bg: "bg-info/5",    text: "text-info" },
+                  { to: "/admin/nomades",       icon: UserCheck, label: "Gerenciar Nômades",            desc: "Ver e gerenciar a base de nômades",        border: "border-success/20", bg: "bg-success/5", text: "text-success" },
+                  { to: "/admin/projetos",      icon: Briefcase, label: "Ver Projetos",                 desc: "Todos os projetos ativos",                  border: "border-chart-4/20", bg: "bg-chart-4/5", text: "text-chart-4" },
+                  { to: "/admin/configuracoes", icon: Settings,  label: "Configurações",                desc: "Ajustar parâmetros do sistema",             border: "border-warning/20", bg: "bg-warning/5", text: "text-warning" },
+                  { to: "/admin/permissoes",    icon: Key,       label: "Permissões",                   desc: "Perfis e acessos administrativos",          border: "border-violet-200 dark:border-violet-800", bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-600 dark:text-violet-400" },
+                  { to: "/admin/relatorios",    icon: FileText,  label: "Relatórios",                   desc: "Financeiro e operacional",                  border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-950/20", text: "text-emerald-600 dark:text-emerald-400" },
+                ] as const).map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <Link key={action.to} to={action.to}>
+                      <div className={`p-3 rounded-xl border ${action.border} ${action.bg} hover:opacity-80 transition-opacity`}>
+                        <Icon className={`h-5 w-5 ${action.text} mb-1.5`} />
+                        <p className={`text-xs font-semibold ${action.text}`}>{action.label}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{action.desc}</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+
         default:
           return (
             <div className="text-center py-8 space-y-2">
@@ -5321,74 +5456,58 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
-                    <Bell className="h-4 w-4 text-warning" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Bell className="h-4 w-4 text-warning" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas ativos e prioridades
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Alertas ativos e prioridades</p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="text-xs backdrop-blur-sm shrink-0"
-                  >
-                    {systemAlerts.length} alertas
-                  </Badge>
+                  <Badge variant="outline" className="text-xs shrink-0">{systemAlerts.length} alertas</Badge>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-3">
-                {systemAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`flex items-start space-x-3 p-3 rounded-xl border-2 shadow-sm hover:shadow-md transition-all duration-200 ${getAlertColor(alert.type)}`}
-                  >
-                    <div className="mt-0.5">{getAlertIcon(alert.type)}</div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium leading-none">
-                          {alert.title}
-                        </p>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs backdrop-blur-sm ${
-                            alert.priority === "high"
-                              ? "bg-destructive/10 text-destructive border-destructive/50"
-                              : "bg-warning-muted text-warning-foreground border-warning/50"
-                          }`}
-                        >
-                          {alert.priority === "high" ? "Alta" : "Média"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs opacity-90">{alert.description}</p>
+              <CardContent className="space-y-2.5 px-4 pb-4">
+                {/* Priority summary 2-per-row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl border border-destructive/20 bg-destructive/5">
+                    <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Alta prioridade</p>
+                      <p className="text-sm font-bold text-destructive">{systemAlerts.filter(a => a.priority === "high").length}</p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl border border-warning/20 bg-warning/5">
+                    <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Média prioridade</p>
+                      <p className="text-sm font-bold text-warning">{systemAlerts.filter(a => a.priority === "medium").length}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Compact alert list */}
+                <div className="space-y-2">
+                  {systemAlerts.map((alert) => (
+                    <div key={alert.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${getAlertColor(alert.type)} transition-all duration-200 hover:shadow-sm`}>
+                      <div className="mt-0.5 shrink-0">{getAlertIcon(alert.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <p className="text-xs font-semibold truncate">{alert.title}</p>
+                          <Badge variant="outline" className={`text-[10px] shrink-0 h-4 px-1.5 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}>
+                            {alert.priority === "high" ? "Alta" : "Média"}
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] opacity-80 line-clamp-1">{alert.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -5405,100 +5524,53 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
-                    <Star className="h-4 w-4 text-warning" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Star className="h-4 w-4 text-warning" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Top nômades por desempenho
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Top nômades por desempenho</p>
                   </div>
                   <Link to="/admin/nomades" className="shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs hover:bg-primary/10"
-                    >
-                      Ver todos
-                      <ArrowRightIcon className="h-3 w-3 ml-1" />
-                    </Button>
+                    <Button variant="ghost" size="sm" className="text-xs hover:bg-primary/10">Ver todos <ArrowRightIcon className="h-3 w-3 ml-1" /></Button>
                   </Link>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
-                  {topPerformers.map((performer, index) => (
-                    <div
-                      key={performer.id}
-                      className="group flex items-center space-x-3 p-4 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="relative">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-warning to-warning flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:shadow-warning/50 transition-shadow duration-300">
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {topPerformers.map((performer, index) => {
+                    const rankColors = ["bg-yellow-500","bg-slate-400","bg-amber-600","bg-muted-foreground/60","bg-muted-foreground/50","bg-muted-foreground/40","bg-muted-foreground/30","bg-muted-foreground/20"];
+                    return (
+                      <div key={performer.id} className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${rankColors[index] ?? "bg-muted-foreground/20"}`}>
                             {index + 1}
                           </div>
-                          <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-                            <Award
-                              className={`h-5 w-5 ${index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : "text-chart-5"}`}
-                            />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold truncate">{performer.name.split(" ")[0]}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-semibold leading-none">
-                          {performer.name}
-                        </p>
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center space-x-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-0.5">
                             <Star className="h-3 w-3 text-warning fill-warning" />
-                            <span className="text-xs font-medium">
-                              {performer.rating}
-                            </span>
+                            <span className="text-xs font-medium">{performer.rating}</span>
+                            <span className="text-[10px] text-muted-foreground ml-1">· {performer.projects} proj.</span>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            •
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {performer.projects} projetos
-                          </span>
+                          <Badge className={`text-[10px] h-4 px-1.5 ${getBadgeColor(performer.badge)}`}>
+                            {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
+                          </Badge>
                         </div>
-                        <Badge
-                          className={`text-xs ${getBadgeColor(performer.badge)}`}
-                        >
-                          {performer.badge === "gold"
-                            ? "Ouro"
-                            : performer.badge === "silver"
-                              ? "Prata"
-                              : "Bronze"}
-                        </Badge>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -5516,87 +5588,40 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <Zap className="h-4 w-4 text-primary" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><Zap className="h-4 w-4 text-primary" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Atalhos de administração
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Atalhos de administração</p>
                   </div>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
-                  <Link to="/admin/usuarios">
-                    <Button
-                      variant="outline"
-                      className="w-full h-auto flex-col space-y-2 py-4 border-0 bg-gradient-to-br from-info/5 to-info/10 hover:from-info/10 hover:to-info/20 dark:from-info/10 dark:to-info/5 dark:hover:from-info/20 dark:hover:to-info/10"
-                    >
-                      <Users className="h-5 w-5 text-info" />
-                      <span className="text-xs font-medium text-info-foreground">
-                        Gerenciar Usuários
-                      </span>
-                    </Button>
-                  </Link>
-                  <Link to="/admin/nomades">
-                    <Button
-                      variant="outline"
-                      className="w-full h-auto flex-col space-y-2 py-4 border-0 bg-gradient-to-br from-success/5 to-success/10 hover:from-success/10 hover:to-success/20 dark:from-success/10 dark:to-success/5 dark:hover:from-success/20 dark:hover:to-success/10"
-                    >
-                      <UserCheck className="h-5 w-5 text-success" />
-                      <span className="text-xs font-medium text-success-foreground">
-                        Gerenciar Nômades
-                      </span>
-                    </Button>
-                  </Link>
-                  <Link to="/admin/projetos">
-                    <Button
-                      variant="outline"
-                      className="w-full h-auto flex-col space-y-2 py-4 border-0 bg-gradient-to-br from-chart-4/5 to-chart-4/10 hover:from-chart-4/10 hover:to-chart-4/20 dark:from-chart-4/10 dark:to-chart-4/5 dark:hover:from-chart-4/20 dark:hover:to-chart-4/10"
-                    >
-                      <Briefcase className="h-5 w-5 text-chart-4" />
-                      <span className="text-xs font-medium text-chart-4">
-                        Ver Projetos
-                      </span>
-                    </Button>
-                  </Link>
-                  <Link to="/admin/configuracoes">
-                    <Button
-                      variant="outline"
-                      className="w-full h-auto flex-col space-y-2 py-4 border-0 bg-gradient-to-br from-warning/5 to-warning/10 hover:from-warning/10 hover:to-warning/20 dark:from-warning/10 dark:to-warning/5 dark:hover:from-warning/20 dark:hover:to-warning/10"
-                    >
-                      <Activity className="h-5 w-5 text-warning" />
-                      <span className="text-xs font-medium text-warning-foreground">
-                        Configurações
-                      </span>
-                    </Button>
-                  </Link>
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { to: "/admin/usuarios",      icon: Users,     label: "Gerenciar Usuários",  border: "border-info/20",    bg: "bg-info/5 hover:bg-info/10",         text: "text-info" },
+                    { to: "/admin/nomades",       icon: UserCheck, label: "Gerenciar Nômades",   border: "border-success/20", bg: "bg-success/5 hover:bg-success/10",   text: "text-success" },
+                    { to: "/admin/projetos",      icon: Briefcase, label: "Ver Projetos",        border: "border-chart-4/20", bg: "bg-chart-4/5 hover:bg-chart-4/10",   text: "text-chart-4" },
+                    { to: "/admin/configuracoes", icon: Settings,  label: "Configurações",       border: "border-warning/20", bg: "bg-warning/5 hover:bg-warning/10",   text: "text-warning" },
+                  ] as const).map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <Link key={action.to} to={action.to}>
+                        <button className={`w-full p-3 rounded-xl border ${action.border} ${action.bg} transition-colors text-center space-y-1.5`}>
+                          <Icon className={`h-5 w-5 ${action.text} mx-auto`} />
+                          <p className={`text-xs font-medium ${action.text}`}>{action.label}</p>
+                        </button>
+                      </Link>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
