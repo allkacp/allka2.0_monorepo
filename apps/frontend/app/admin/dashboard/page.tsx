@@ -3789,43 +3789,53 @@ export default function AdminDashboardPage() {
 
     return (
       <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden">
-          {/* Brand-gradient header (follows sidebar theme) */}
-          <div className="app-brand-header px-5 pt-5 pb-4 text-white">
-            {/* pr-10 leaves space for the Dialog auto-close (X) button */}
-            <div className="flex items-center gap-3 min-w-0 pr-10">
+        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden" showCloseButton={false}>
+          {/* Brand-gradient header */}
+          <div className="app-brand-header px-5 pt-4 pb-4 text-white">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Icon */}
               <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
                 {cfg.icon}
               </div>
+              {/* Title + subtitle */}
               <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-bold leading-tight truncate">{title}</h2>
                 <p className="text-xs text-white/70 mt-0.5">{cfg.subtitle}</p>
               </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <span className="inline-flex items-center text-[11px] bg-white/20 text-white rounded-full px-3 py-1 gap-1.5 font-medium">
+              {/* Period badge */}
+              <span className="inline-flex items-center text-[11px] bg-white/20 text-white rounded-full px-3 py-1 gap-1.5 font-medium shrink-0 whitespace-nowrap">
                 <svg className="h-3 w-3 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                 {modalPeriod.label}
               </span>
+              {/* Action icon buttons */}
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                <button
+                  onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}
+                  title="Compartilhar"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => exportWidgetToPng(detailsWidgetId!, title)}
+                  title="Exportar PNG"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setDetailsWidgetId(null)}
+                  title="Fechar"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 active:scale-90 transition-all duration-150"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
           {/* Content */}
-          <div className="px-6 py-5 space-y-4 max-h-[62vh] overflow-y-auto">
+          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-auto">
             {renderContent()}
-          </div>
-          {/* Footer */}
-          <div className="px-6 pb-5 pt-3 border-t border-border/40 flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 gap-1.5 bg-transparent" onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}>
-              <Share2 className="h-3.5 w-3.5" />
-              Compartilhar
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1 gap-1.5 bg-transparent" onClick={() => exportWidgetToPng(detailsWidgetId!, title)}>
-              <Download className="h-3.5 w-3.5" />
-              Exportar PNG
-            </Button>
-            <Button size="sm" className="bg-transparent border border-border text-foreground hover:bg-muted" variant="ghost" onClick={() => setDetailsWidgetId(null)}>
-              Fechar
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
