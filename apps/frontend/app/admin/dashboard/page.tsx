@@ -3338,21 +3338,23 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <LayoutGrid className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Métricas principais da plataforma
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
+                  <div className="flex items-center gap-2 shrink-0">
                     <WidgetPeriodSelector widgetId={widget.id} />
                     <Button
                       variant={isEditingMetrics ? "default" : "outline"}
@@ -3368,6 +3370,10 @@ export default function AdminDashboardPage() {
                     </Button>
                   </div>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 {isEditingMetrics && metricCards.some((m) => !m.visible) && (
@@ -3438,21 +3444,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0">
+                    <Users className="h-4 w-4 text-chart-2" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Distribuição por tipo de conta
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
@@ -3525,22 +3537,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-destructive" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Alertas e notificações do sistema
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3">
                 {systemAlertsData.map((alert, index) => (
@@ -3604,22 +3621,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Shield className="h-5 w-5 text-chart-4" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
+                    <Shield className="h-4 w-4 text-chart-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Perfis de acesso e permissões
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
@@ -3684,22 +3706,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Lock className="h-5 w-5 text-warning" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Lock className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Matriz de acesso por módulo
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-xl border">
@@ -3810,22 +3837,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
-                      <Settings className="h-5 w-5 text-muted-foreground" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-muted rounded-lg shrink-0">
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Ferramentas de gerenciamento
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
@@ -3962,33 +3994,37 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-info/10 rounded-lg shrink-0">
+                    <Activity className="h-4 w-4 text-info" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Atividades recentes na plataforma
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <Link to="/admin/activity">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs hover:bg-primary/10"
-                      >
-                        Ver todas
-                        <ArrowRightIcon className="h-3 w-3 ml-1" />
-                      </Button>
-                    </Link>
-                  </div>
+                  <Link to="/admin/activity" className="shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs hover:bg-primary/10"
+                    >
+                      Ver todas
+                      <ArrowRightIcon className="h-3 w-3 ml-1" />
+                    </Button>
+                  </Link>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3">
                 {recentActivities.map((activity) => (
@@ -4041,29 +4077,33 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Bell className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Alertas ativos e prioridades
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <Badge
-                      variant="outline"
-                      className="text-xs backdrop-blur-sm"
-                    >
-                      {systemAlerts.length} alertas
-                    </Badge>
-                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-xs backdrop-blur-sm shrink-0"
+                  >
+                    {systemAlerts.length} alertas
+                  </Badge>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3">
                 {systemAlerts.map((alert) => (
@@ -4118,33 +4158,37 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Star className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Top nômades por desempenho
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <Link to="/admin/nomades">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs hover:bg-primary/10"
-                      >
-                        Ver todos
-                        <ArrowRightIcon className="h-3 w-3 ml-1" />
-                      </Button>
-                    </Link>
-                  </div>
+                  <Link to="/admin/nomades" className="shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs hover:bg-primary/10"
+                    >
+                      Ver todos
+                      <ArrowRightIcon className="h-3 w-3 ml-1" />
+                    </Button>
+                  </Link>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
@@ -4222,21 +4266,27 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <Zap className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Atalhos de administração
+                    </p>
                   </div>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
@@ -4297,25 +4347,24 @@ export default function AdminDashboardPage() {
             key={widget.id}
             data-widget-id={widget.type}
           >
-            <CardHeader className="pb-3 relative">
+            <CardHeader className="pb-4 relative">
               <div className="flex items-center gap-3 pr-20">
                 <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
-                  <DollarSign className="h-5 w-5 text-destructive" />
+                  <DollarSign className="h-4 w-4 text-destructive" />
                 </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-lg">Receita</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Total e por tipo de{" "}
-                    <span className="text-destructive/80 font-medium">plano</span>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">Receita</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Total e por tipo de plano
                   </p>
                 </div>
+                <Badge
+                  variant="outline"
+                  className="text-xs text-destructive border-destructive/30 shrink-0"
+                >
+                  {globalPeriod.label}
+                </Badge>
               </div>
-              <Badge
-                variant="outline"
-                className="mt-2 self-start text-xs text-destructive border-destructive/30"
-              >
-                {globalPeriod.label}
-              </Badge>
               {/* ── Action buttons — floating top-right ── */}
               <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
                 {manualAffectedWidgets.has(widget.type) && (
@@ -4532,27 +4581,30 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Briefcase className="h-5 w-5 text-primary" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Projetos ativos no período
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                      {globalPeriod.label}
-                    </Badge>
-                  </div>
+                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
+                    {globalPeriod.label}
+                  </Badge>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Total Active Projects */}
@@ -4725,27 +4777,30 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <CreditCard className="h-5 w-5 text-primary" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Receita por plano de crédito
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                      {globalPeriod.label}
-                    </Badge>
-                  </div>
+                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
+                    {globalPeriod.label}
+                  </Badge>
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Total Revenue from Credit Plans */}
@@ -4900,18 +4955,23 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="h-full border-0 shadow-lg">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-primary" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Receita recorrente mensal
+                    </p>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
                     {globalPeriod.label}
                   </Badge>
                 </div>
@@ -5206,32 +5266,28 @@ export default function AdminDashboardPage() {
       case "churn":
         return (
           <Card className="overflow-hidden border-destructive/20" data-widget-id={widget.type}>
-            <CardHeader className="pb-3 relative">
-              <div className="flex items-center justify-between pr-20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-destructive/10">
-                    <TrendingDown className="h-5 w-5 text-destructive" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">CHURN</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Perda de clientes e receita
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                  <TrendingDown className="h-4 w-4 text-destructive" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle="CHURN"
-                  />
-                  <Badge
-                    variant="outline"
-                    className="text-destructive border-destructive/30"
-                  >
-                    {globalPeriod.label}
-                  </Badge>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">CHURN</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Perda de clientes e receita
+                  </p>
                 </div>
+                <Badge
+                  variant="outline"
+                  className="text-destructive border-destructive/30 shrink-0"
+                >
+                  {globalPeriod.label}
+                </Badge>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle="CHURN"
+              />
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Customer Churn Section */}
@@ -5387,42 +5443,22 @@ export default function AdminDashboardPage() {
       case "averageTicket":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="border-b bg-gradient-to-r from-success/10 to-chart-3/10 relative">
-              <div className="flex items-center justify-between gap-2 flex-wrap pr-20">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
-                    <DollarSign className="h-5 w-5 text-success" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">Ticket Médio</CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Valor médio por cliente e projeto
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                  <DollarSign className="h-4 w-4 text-success" />
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() =>
-                      openChartModal(
-                        widget.type,
-                        "Ticket Médio — Tendência",
-                        "line",
-                        atW.trendData.map((v, i) => ({ date: `M${i + 1}`, value: v })),
-                      )
-                    }
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    <span className="hidden sm:inline">Detalhes</span>
-                  </Button>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">Ticket Médio</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Valor médio por cliente e projeto
+                  </p>
                 </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="p-6">
               {/* Ticket Médio Geral */}
@@ -5574,41 +5610,24 @@ export default function AdminDashboardPage() {
       case "ltv":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-chart-4" />
-                <CardTitle className="text-base font-semibold">
-                  LTV (Lifetime Value)
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Tempo médio × Ticket médio
-                </p>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
+                  <TrendingUp className="h-4 w-4 text-chart-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    LTV (Lifetime Value)
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Valor vitalício do cliente
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={() =>
-                    openChartModal(
-                      widget.type,
-                      "LTV — Por Tipo de Conta",
-                      "bar",
-                      [
-                        { date: "Agências", value: ltvW.agencies },
-                        { date: "Lead Premium", value: ltvW.leadPremium },
-                        { date: "Nômades", value: ltvW.nomades },
-                      ],
-                    )
-                  }
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="space-y-4">
               {/* LTV Geral */}
@@ -5835,22 +5854,24 @@ export default function AdminDashboardPage() {
 
         return (
           <Card data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
-              <div className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-warning" />
-                <CardTitle className="text-base font-medium">
-                  CMV (Custo de Mercadoria Vendida)
-                </CardTitle>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                  <Calculator className="h-4 w-4 text-warning" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    CMV (Custo de Mercadoria Vendida)
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Custos vs. receita da plataforma
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm">
-                  <FileText className="h-4 w-4" />
-                </Button>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Main CMV Display */}
@@ -6016,12 +6037,19 @@ export default function AdminDashboardPage() {
       case "platformActivities":
         return (
           <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 relative pr-20">
-              <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-info" />
-                <CardTitle className="text-base font-semibold">
-                  Atividades da Plataforma
-                </CardTitle>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-info/10 rounded-lg shrink-0">
+                  <Activity className="h-4 w-4 text-info" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Atividades da Plataforma
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Engajamento e tempo na plataforma
+                  </p>
+                </div>
               </div>
               <WidgetExportButton
                 widgetId={widget.type}
@@ -6168,32 +6196,25 @@ export default function AdminDashboardPage() {
 
       case "nomads":
         return (
-          <Card className="p-6 relative" data-widget-id={widget.type}>
-            <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-center justify-between pr-20">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-chart-2/10">
-                    <Users className="h-5 w-5 text-chart-2" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Nômades</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Visão rápida da base de nômades
-                    </p>
-                  </div>
+          <Card className="overflow-hidden" data-widget-id={widget.type}>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-chart-2/10 rounded-lg shrink-0">
+                  <Users className="h-4 w-4 text-chart-2" />
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <span className="hidden min-[380px]:inline">Ver lista</span>
-                    <span className="min-[380px]:hidden text-xs">Lista</span>
-                  </Button>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">Nômades</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Visão rápida da base de nômades
+                  </p>
                 </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            </CardHeader>
+            <CardContent className="space-y-4">
 
               {/* Total em cima - Destaque grande */}
               <div className="rounded-lg border-2 border-chart-2/30 bg-chart-2/5 p-4 text-center">
@@ -6323,39 +6344,31 @@ export default function AdminDashboardPage() {
                 <Award className="h-4 w-4 mr-2" />
                 Ver ranking de nômades
               </Button>
-            </div>
+            </CardContent>
           </Card>
         );
 
       case "nomadsRanking":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-3 relative">
-              <div className="flex items-center justify-between gap-2 flex-wrap pr-20">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-warning-muted rounded-lg shrink-0">
-                    <Trophy className="h-5 w-5 text-warning" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">
-                      Ranking de Nômades
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Os melhores nômades da plataforma
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                  <Trophy className="h-4 w-4 text-warning" />
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button variant="outline" size="sm" className="gap-1">
-                    <span className="hidden sm:inline">Ver todos</span>
-                    <ArrowRightIcon className="h-3 w-3" />
-                  </Button>
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Ranking de Nômades
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Os melhores nômades da plataforma
+                  </p>
                 </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
@@ -6430,38 +6443,21 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-cyan-500 shrink-0" />
-                      <span className="truncate">
-                        {getWidgetTitle(widget.type)}
-                      </span>
-                    </CardTitle>
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-cyan-500/10 rounded-lg shrink-0">
+                    <Building2 className="h-4 w-4 text-cyan-500" />
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Link to="/admin/agencias">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs bg-transparent gap-1"
-                      >
-                        <span className="hidden sm:inline">Ver todos</span>
-                        <ArrowRightIcon className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs bg-transparent gap-1.5"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span className="hidden sm:inline">Exportar</span>
-                    </Button>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Ranking das agências da plataforma
+                    </p>
                   </div>
                 </div>
                 <WidgetExportButton
@@ -6536,16 +6532,21 @@ export default function AdminDashboardPage() {
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <LayoutGrid className="h-5 w-5" />
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <LayoutGrid className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       Visão Geral por Status
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Status de projetos e tarefas
+                    </p>
                   </div>
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
@@ -6750,26 +6751,29 @@ export default function AdminDashboardPage() {
             )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center justify-between pr-20">
-                  <div className="flex items-center gap-2">
-                    {isCustomizeMode && (
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                    <CardTitle className="text-lg font-semibold">
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-emerald-600/10 rounded-lg shrink-0">
+                    <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Contas a receber por categoria
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <WidgetExportButton
-                      widgetId={widget.type}
-                      widgetTitle={getWidgetTitle(widget.type)}
-                    />
-                    <WidgetPeriodSelector widgetId={widget.id} />
-                  </div>
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Total a Receber */}
@@ -6875,24 +6879,22 @@ export default function AdminDashboardPage() {
       case "tasks":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-chart-3/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
-                    <CheckSquare className="h-5 w-5 text-success" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">Tarefas (Resumo)</CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Executadas, em execução e contratadas
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                  <CheckSquare className="h-4 w-4 text-success" />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">Tarefas (Resumo)</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Executadas, em execução e contratadas
+                  </p>
+                </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
@@ -6958,26 +6960,24 @@ export default function AdminDashboardPage() {
       case "nomadsIndicators":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-2 border-b bg-gradient-to-r from-chart-4/10 to-chart-3/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-chart-4/20 rounded-lg shrink-0">
-                    <Users className="h-5 w-5 text-chart-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">
-                      Indicadores dos Nômades
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      KPIs de desempenho e qualidade
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
+                  <Users className="h-4 w-4 text-chart-4" />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Indicadores dos Nômades
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    KPIs de desempenho e qualidade
+                  </p>
+                </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
@@ -7036,24 +7036,22 @@ export default function AdminDashboardPage() {
       case "activeUsers":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-2 border-b bg-gradient-to-r from-success/10 to-info/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-success/20 rounded-lg shrink-0">
-                    <UserCheck className="h-5 w-5 text-success" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">Usuários Ativos</CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Ativos por tipo de conta no período
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                  <UserCheck className="h-4 w-4 text-success" />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">Usuários Ativos</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ativos por tipo de conta no período
+                  </p>
+                </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
@@ -7114,47 +7112,24 @@ export default function AdminDashboardPage() {
       case "partnerProgram":
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-2 border-b bg-linear-to-r from-amber-500/10 to-yellow-400/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/20 rounded-lg shrink-0">
-                    <Award className="h-5 w-5 text-amber-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base">
-                      Programa Partner
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Convites e partners ativos por nível
-                    </p>
-                  </div>
+            <CardHeader className="pb-4 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-amber-500/10 rounded-lg shrink-0">
+                  <Award className="h-4 w-4 text-amber-500" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle={getWidgetTitle(widget.type)}
-                  />
-                  <Link
-                    to="/admin/programa-partner"
-                    className="text-xs text-primary hover:underline shrink-0 flex items-center gap-1"
-                  >
-                    Gerenciar
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </Link>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Programa Partner
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Convites e partners ativos por nível
+                  </p>
                 </div>
               </div>
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="p-4 space-y-4">
               {/* Invite stats row */}
