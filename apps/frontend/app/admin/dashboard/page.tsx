@@ -3806,28 +3806,61 @@ export default function AdminDashboardPage() {
         case "creditPlans":
           return (
             <div className="space-y-4">
+              {/* Hero */}
               <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
-                <p className="text-sm text-muted-foreground">Total em Planos</p>
-                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">R$ {cpW.total.toLocaleString("pt-BR")}</p>
-                <p className="text-xs text-success mt-1">+{cpW.growth}%</p>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total em Planos de Crédito</p>
+                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">R$ {(cpW.total / 1000).toFixed(0)}k</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-success text-sm font-semibold">
+                    <TrendingUp className="h-4 w-4" />+{cpW.growth}%
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                {[
-                  { label: "Básico", data: cpW.basic, color: "bg-violet-500" },
-                  { label: "Parceiro", data: cpW.partner, color: "bg-blue-500" },
-                  { label: "Premium", data: cpW.premium, color: "bg-amber-500" },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${item.color}`} />
-                      <span className="text-sm font-medium">{item.label}</span>
+              {/* 2-per-row plan grid */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Por Plano</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Básico",  data: cpW.basic,   bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300", bar: "bg-violet-500", positive: true },
+                    { label: "Partner", data: cpW.partner, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",         text: "text-blue-700 dark:text-blue-300",     bar: "bg-blue-500",   positive: true },
+                    { label: "Premium", data: cpW.premium, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300",   bar: "bg-amber-500",  positive: cpW.premium.growth >= 0 },
+                  ].map(p => {
+                    const pct = cpW.total > 0 ? Math.round((p.data.revenue / cpW.total) * 100) : 0;
+                    return (
+                      <div key={p.label} className={`p-3 rounded-xl border ${p.bg}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-muted-foreground">{p.label}</p>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">Novos: {p.data.newContracts}</Badge>
+                        </div>
+                        <p className={`text-xl font-bold ${p.text}`}>R$ {(p.data.revenue / 1000).toFixed(0)}k</p>
+                        <div className="h-1 bg-secondary rounded-full overflow-hidden mt-1.5 mb-1">
+                          <div className={`h-1 ${p.bar} rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[10px] text-muted-foreground">{pct}% do total</span>
+                          <span className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}>{p.positive ? "+" : ""}{p.data.growth}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Composition bar */}
+                  <div className="col-span-2 space-y-1.5 pt-1">
+                    <div className="flex gap-0.5 h-2 rounded-full overflow-hidden">
+                      {[
+                        { pct: cpW.total > 0 ? (cpW.basic.revenue / cpW.total) * 100 : 33, bar: "bg-violet-500" },
+                        { pct: cpW.total > 0 ? (cpW.partner.revenue / cpW.total) * 100 : 33, bar: "bg-blue-500" },
+                        { pct: cpW.total > 0 ? (cpW.premium.revenue / cpW.total) * 100 : 34, bar: "bg-amber-500" },
+                      ].map((s, i) => <div key={i} className={s.bar} style={{ width: `${s.pct}%` }} />)}
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold">R$ {item.data.revenue.toLocaleString("pt-BR")}</p>
-                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos{" · "}+{item.data.growth}%</p>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      {[{label:"Básico",bar:"bg-violet-500"},{label:"Partner",bar:"bg-blue-500"},{label:"Premium",bar:"bg-amber-500"}].map(l => (
+                        <div key={l.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${l.bar}`} /><span>{l.label}</span></div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           );
@@ -3835,23 +3868,62 @@ export default function AdminDashboardPage() {
         case "activeProjectsWidget":
           return (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                <p className="text-sm text-muted-foreground">Total de Projetos Ativos</p>
-                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{apW.total}</p>
-                <p className="text-xs text-success mt-1">+{apW.growth}%</p>
+              {/* Hero */}
+              <div className="flex items-end justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total de Projetos Ativos</p>
+                  <p className="text-3xl font-bold mt-0.5">{apW.total}</p>
+                </div>
+                <div className="text-right">
+                  <span className="flex items-center gap-1 text-sm font-semibold text-success justify-end"><TrendingUp className="h-4 w-4" />+{apW.growth}%</span>
+                  <p className="text-xs text-muted-foreground">vs anterior</p>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Agências", value: apW.agencies, change: apW.agenciesGrowth, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
-                  { label: "Lead Premium", value: apW.leadPremium, change: apW.leadPremiumGrowth, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
-                  { label: "Nômades", value: apW.nomades, change: apW.nomadesGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
-                ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-xl font-bold ${item.text}`}>{item.value}</p>
-                    <p className="text-xs text-success">+{item.change}%</p>
+              {/* 2x2 type grid */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Por Tipo de Conta</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Agências",     value: apW.agencies,    growth: apW.agenciesGrowth,    bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300" },
+                    { label: "Lead Premium", value: apW.leadPremium, growth: apW.leadPremiumGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",    text: "text-amber-700 dark:text-amber-300" },
+                    { label: "Nômades",      value: apW.nomades,     growth: apW.nomadesGrowth,     bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",        text: "text-teal-700 dark:text-teal-300" },
+                  ].map(t => (
+                    <div key={t.label} className={`p-3 rounded-xl border ${t.bg}`}>
+                      <p className="text-xs text-muted-foreground">{t.label}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>{t.value}</p>
+                      <p className="text-[10px] text-success">+{t.growth}%</p>
+                    </div>
+                  ))}
+                  {/* Novos no período */}
+                  <div className="p-3 rounded-xl border border-teal-200/60 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/10">
+                    <p className="text-xs text-muted-foreground">Novos no período</p>
+                    <p className="text-xl font-bold mt-0.5 text-teal-700 dark:text-teal-300">{apW.newTotal}</p>
+                    <div className="flex gap-2 text-[10px] mt-0.5">
+                      <span className="text-indigo-600 dark:text-indigo-400">Ag: {apW.newAgencies}</span>
+                      <span className="text-amber-600 dark:text-amber-400">LP: {apW.newLeadPremium}</span>
+                      <span className="text-teal-600 dark:text-teal-400">Nm: {apW.newNomades}</span>
+                    </div>
                   </div>
-                ))}
+                </div>
+              </div>
+              {/* Distribution bar */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground">Distribuição</p>
+                <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden">
+                  {[
+                    { value: apW.agencies,    color: "bg-indigo-500" },
+                    { value: apW.leadPremium, color: "bg-amber-500" },
+                    { value: apW.nomades,     color: "bg-teal-500" },
+                  ].map((s, i) => {
+                    const pct = apW.total > 0 ? (s.value / apW.total) * 100 : 33;
+                    return <div key={i} className={s.color} style={{ width: `${pct}%` }} />;
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  {[{label:"Agências",c:"bg-indigo-500"},{label:"Lead Premium",c:"bg-amber-500"},{label:"Nômades",c:"bg-teal-500"}].map(l => (
+                    <div key={l.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${l.c}`} />{l.label}</div>
+                  ))}
+                </div>
               </div>
             </div>
           );
@@ -5654,7 +5726,15 @@ export default function AdminDashboardPage() {
         );
       }
 
-      case "activeProjectsWidget":
+      case "activeProjectsWidget": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wApW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).activeProjects;
+        const apTypes = [
+          { label: "Agências",     value: wApW.agencies,    growth: wApW.agenciesGrowth,    newVal: wApW.newAgencies,    bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300", bar: ["bg-indigo-400/50","bg-indigo-400/65","bg-indigo-500/80","bg-indigo-600"] },
+          { label: "Lead Premium", value: wApW.leadPremium, growth: wApW.leadPremiumGrowth, newVal: wApW.newLeadPremium, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",   text: "text-amber-700 dark:text-amber-300",   bar: ["bg-amber-400/50","bg-amber-400/65","bg-amber-500/80","bg-amber-600"] },
+          { label: "Nômades",      value: wApW.nomades,     growth: wApW.nomadesGrowth,     newVal: wApW.newNomades,     bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",       text: "text-teal-700 dark:text-teal-300",     bar: ["bg-teal-400/50","bg-teal-400/65","bg-teal-500/80","bg-teal-600"] },
+        ];
+        const apBarHeights = [55, 70, 85, 100];
         return (
           <div
             key={widget.id}
@@ -5665,192 +5745,87 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <Briefcase className="h-4 w-4 text-primary" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><Briefcase className="h-4 w-4 text-primary" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Projetos ativos no período
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Projetos ativos no período</p>
                   </div>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Total Active Projects */}
-                <div className="pb-4 border-b">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{apW.total}</h3>
-                    <span className="text-sm font-medium flex items-center gap-1 text-success">
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      {apW.growth}%
+              <CardContent className="space-y-3 px-4 pb-4">
+                {/* Hero */}
+                <div className="flex items-end justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total de Projetos Ativos</p>
+                    <p className="text-3xl font-bold mt-0.5">{wApW.total}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
+                      <TrendingUp className="h-4 w-4" />+{wApW.growth}%
                     </span>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Projetos ativos no período
-                  </p>
                 </div>
-
-                {/* Projects Breakdown by Type */}
-                <div className="space-y-3">
-                  {/* Agency Projects */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 to-transparent dark:from-indigo-950/30 border border-indigo-200 dark:border-indigo-800">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="h-2 w-2 rounded-full bg-indigo-500" />
-                        <span className="text-sm font-medium">Agências</span>
+                {/* 2-per-row compact cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {apTypes.map(t => (
+                    <div key={t.label} className={`p-2.5 rounded-xl border ${t.bg}`}>
+                      <div className="flex items-start justify-between">
+                        <p className="text-xs text-muted-foreground">{t.label}</p>
+                        <div className="flex items-end gap-0.5 h-6">
+                          {apBarHeights.map((h, i) => (
+                            <div key={i} className={`w-1 ${t.bar[i]} rounded-t`} style={{ height: `${h}%` }} />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-semibold text-indigo-700 dark:text-indigo-300">
-                          {apW.agencies}
-                        </span>
-                        <span className="text-xs font-medium text-success">
-                          +{apW.agenciesGrowth}%
-                        </span>
-                      </div>
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>{t.value}</p>
+                      <p className="text-[10px] text-success">+{t.growth}%</p>
                     </div>
-                    {/* Mini bar chart */}
-                    <div className="flex items-end gap-0.5 h-8">
-                      <div
-                        className="w-1 bg-indigo-400/60 rounded-t"
-                        style={{ height: "55%" }}
-                      />
-                      <div
-                        className="w-1 bg-indigo-400/70 rounded-t"
-                        style={{ height: "70%" }}
-                      />
-                      <div
-                        className="w-1 bg-indigo-500/80 rounded-t"
-                        style={{ height: "85%" }}
-                      />
-                      <div
-                        className="w-1 bg-indigo-600 rounded-t"
-                        style={{ height: "100%" }}
-                      />
+                  ))}
+                  {/* Novos no período — full width */}
+                  <div className="col-span-2 flex items-center justify-between p-2.5 rounded-xl border border-teal-200/60 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/10">
+                    <div className="flex items-center gap-2">
+                      <Plus className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                      <span className="text-sm font-semibold">Novos no período:</span>
+                      <span className="text-sm font-bold text-teal-700 dark:text-teal-300">{wApW.newTotal}</span>
                     </div>
-                  </div>
-
-                  {/* Lead Premium Projects */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 to-transparent dark:from-amber-950/30 border border-amber-200 dark:border-amber-800">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="h-2 w-2 rounded-full bg-amber-500" />
-                        <span className="text-sm font-medium">
-                          Lead Premium
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-semibold text-amber-700 dark:text-amber-300">
-                          {apW.leadPremium}
-                        </span>
-                        <span className="text-xs font-medium text-success">
-                          +{apW.leadPremiumGrowth}%
-                        </span>
-                      </div>
-                    </div>
-                    {/* Mini bar chart */}
-                    <div className="flex items-end gap-0.5 h-8">
-                      <div
-                        className="w-1 bg-amber-400/60 rounded-t"
-                        style={{ height: "45%" }}
-                      />
-                      <div
-                        className="w-1 bg-amber-400/70 rounded-t"
-                        style={{ height: "65%" }}
-                      />
-                      <div
-                        className="w-1 bg-amber-500/80 rounded-t"
-                        style={{ height: "85%" }}
-                      />
-                      <div
-                        className="w-1 bg-amber-600 rounded-t"
-                        style={{ height: "100%" }}
-                      />
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span><span className="text-indigo-600 dark:text-indigo-400 font-medium">Agências: </span>{wApW.newAgencies}</span>
+                      <span>•</span>
+                      <span><span className="text-amber-600 dark:text-amber-400 font-medium">LP: </span>{wApW.newLeadPremium}</span>
                     </div>
                   </div>
                 </div>
-
-                {/* New Projects Section */}
-                <div className="p-3 rounded-lg bg-teal-50 to-transparent dark:from-teal-950/30 border border-teal-200/50 dark:border-teal-800/50">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Plus className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                    <span className="text-sm font-semibold text-teal-900 dark:text-teal-100">
-                      Novos no período: {apW.newTotal}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                        Agências:
-                      </span>{" "}
-                      {apW.newAgencies}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">
-                        Lead Premium:
-                      </span>{" "}
-                      {apW.newLeadPremium}
-                    </span>
-                  </div>
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1 text-xs bg-transparent"><FileText className="h-3.5 w-3.5 mr-1" />Ver detalhes</Button>
+                  <Button variant="outline" size="sm" className="flex-1 text-xs bg-transparent"><Download className="h-3.5 w-3.5 mr-1" />Exportar gráfico</Button>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs bg-transparent"
-                  >
-                    <FileText className="h-3.5 w-3.5 mr-1" />
-                    Ver detalhes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs bg-transparent"
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Exportar gráfico
-                  </Button>
-                </div>
-
-                {/* Info note */}
-                <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/50">
-                  <p className="text-xs text-muted-foreground text-center">
-                    Comparado ao mesmo período anterior
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground text-center">Comparado ao mesmo período anterior</p>
               </CardContent>
             </Card>
           </div>
         );
+      }
 
-      case "creditPlans":
+      case "creditPlans": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wCpW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).creditPlans;
+        const cpTotal = Math.max(1, wCpW.total);
+        const cpPlans = [
+          { label: "Básico",   data: wCpW.basic,   bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-700 dark:text-violet-300",  bar: "bg-violet-500", positive: true },
+          { label: "Partner",  data: wCpW.partner,  bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",          text: "text-blue-700 dark:text-blue-300",      bar: "bg-blue-500",   positive: true },
+          { label: "Premium",  data: wCpW.premium,  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",      text: "text-amber-700 dark:text-amber-300",    bar: "bg-amber-500",  positive: wCpW.premium.growth >= 0 },
+        ];
         return (
           <div
             key={widget.id}
@@ -5861,172 +5836,82 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <CreditCard className="h-4 w-4 text-primary" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><CreditCard className="h-4 w-4 text-primary" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Receita por plano de crédito
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Receita por plano de crédito</p>
                   </div>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Total Revenue from Credit Plans */}
-                <div className="pb-4 border-b">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">
-                      R$ {cpW.total.toLocaleString("pt-BR")}
-                    </h3>
-                    <span className="text-sm font-medium flex items-center gap-1 text-success">
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      {cpW.growth}%
-                    </span>
+              <CardContent className="space-y-3 px-4 pb-4">
+                {/* Hero */}
+                <div className="flex items-end justify-between p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total de entrada no período</p>
+                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">R$ {(wCpW.total / 1000).toFixed(0)}k</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Total de entrada no período
-                  </p>
+                  <div className="flex items-center gap-1 text-success text-sm font-semibold">
+                    <TrendingUp className="h-4 w-4" />+{wCpW.growth}%
+                  </div>
                 </div>
-
-                {/* Plans Breakdown */}
-                <div className="space-y-3">
-                  {/* Basic Plan */}
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                        <span className="font-medium">Básico</span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs ml-auto mr-2"
-                        >
-                          Novos: {cpW.basic.newContracts}
-                        </Badge>
+                {/* 2-per-row compact plan cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {cpPlans.map(p => {
+                    const pct = Math.round((p.data.revenue / cpTotal) * 100);
+                    return (
+                      <div key={p.label} className={`p-2.5 rounded-xl border ${p.bg}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs font-medium text-muted-foreground">{p.label}</p>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">Novos: {p.data.newContracts}</Badge>
+                        </div>
+                        <p className={`text-lg font-bold ${p.text}`}>R$ {(p.data.revenue / 1000).toFixed(0)}k</p>
+                        <div className="h-1 bg-secondary rounded-full overflow-hidden mt-1.5 mb-1">
+                          <div className={`h-1 ${p.bar} rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">{pct}% do total</span>
+                          <span className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}>{p.positive ? "+" : ""}{p.data.growth}%</span>
+                        </div>
                       </div>
+                    );
+                  })}
+                  {/* Composition bar spanning full width */}
+                  <div className="col-span-2 space-y-1.5">
+                    <div className="flex gap-0.5 h-2 rounded-full overflow-hidden">
+                      {cpPlans.map(p => (
+                        <div key={p.label} className={`${p.bar}`} style={{ width: `${Math.round((p.data.revenue / cpTotal) * 100)}%` }} />
+                      ))}
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-foreground">
-                        R$ {cpW.basic.revenue.toLocaleString("pt-BR")}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs justify-end">
-                        <TrendingUp className="h-3 w-3 text-success" />
-                        <span className="text-xs font-medium text-success">
-                          +{cpW.basic.growth}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Partner Plan */}
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                        <span className="font-medium">Partner</span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs ml-auto mr-2"
-                        >
-                          Novos: {cpW.partner.newContracts}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold">
-                        R$ {cpW.partner.revenue.toLocaleString("pt-BR")}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs justify-end">
-                        <TrendingUp className="h-3 w-3 text-success" />
-                        <span className="text-xs font-medium text-success">
-                          +{cpW.partner.growth}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Premium Plan */}
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                        <span className="font-medium">Premium</span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs ml-auto mr-2"
-                        >
-                          Novos: {cpW.premium.newContracts}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold">
-                        R$ {cpW.premium.revenue.toLocaleString("pt-BR")}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs justify-end">
-                        <TrendingDown className="h-3 w-3 text-destructive" />
-                        <span className="text-xs font-medium text-destructive">
-                          {cpW.premium.growth}%
-                        </span>
-                      </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      {cpPlans.map(p => (
+                        <div key={p.label} className="flex items-center gap-1">
+                          <div className={`h-1.5 w-1.5 rounded-full ${p.bar}`} />
+                          <span>{p.label}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 gap-1 bg-transparent"
-                  >
-                    <FileText className="h-3.5 w-3.5 mr-1" />
-                    Ver contratos
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 gap-1 bg-transparent"
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Exportar relatório
-                  </Button>
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1 gap-1 bg-transparent text-xs"><FileText className="h-3.5 w-3.5 mr-1" />Ver contratos</Button>
+                  <Button variant="outline" size="sm" className="flex-1 gap-1 bg-transparent text-xs"><Download className="h-3.5 w-3.5 mr-1" />Exportar relatório</Button>
                 </div>
-
-                {/* Info note */}
-                <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/50">
-                  <p className="text-xs text-muted-foreground text-center">
-                    Entrada = soma das primeiras cobranças no período
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground text-center">Entrada = soma das primeiras cobranças no período</p>
               </CardContent>
             </Card>
           </div>
         );
+      }
 
       case "mrr": {
         const effectivePeriod = getWidgetPeriod(widget.id);
@@ -6609,149 +6494,81 @@ export default function AdminDashboardPage() {
 
       case "platformActivities": {
         const wPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
+        const paMetrics = [
+          { label: "MAU",            value: wPaW.mau.toLocaleString("pt-BR"),              growth: 5,  bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",         text: "text-sky-700 dark:text-sky-300" },
+          { label: "DAU",            value: wPaW.dau.toLocaleString("pt-BR"),              growth: 3,  bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300" },
+          { label: "Agências Ativas",value: String(wPaW.activeAgencies),                   growth: 7,  bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+          { label: "Tempo médio",    value: `${wPaW.avgSessionMinutes} min`,               growth: 4,  bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",       text: "text-teal-700 dark:text-teal-300" },
+        ];
+        const paTrendMax = Math.max(1, ...wPaW.trendData);
+        const paDays = ["S","T","Q","Q","S","S","D"];
         return (
-          <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-info/10 rounded-lg shrink-0">
-                  <Activity className="h-4 w-4 text-info" />
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-info/10 rounded-lg shrink-0"><Activity className="h-4 w-4 text-info" /></div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Atividades recentes na plataforma</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    Atividades da Plataforma
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Engajamento e tempo na plataforma
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Main metrics */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Agências Ativas
-                    </p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">
-                        {wPaW.activeAgencies}
-                      </span>
-                      <span className="flex items-center text-xs text-success font-medium">
-                        <TrendingUp className="h-3 w-3" />
-                        +7%
-                      </span>
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 pb-4">
+                {/* 2x2 compact metric cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {paMetrics.map(m => (
+                    <div key={m.label} className={`p-2.5 rounded-xl border ${m.bg}`}>
+                      <p className="text-xs text-muted-foreground">{m.label}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${m.text}`}>{m.value}</p>
+                      <p className="text-[10px] text-success">+{m.growth}%</p>
                     </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Tempo médio/dia
-                    </p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-2xl font-bold">
-                        {wPaW.avgSessionMinutes} min
-                      </span>
-                      <span className="flex items-center text-xs text-success font-medium">
-                        <TrendingUp className="h-3 w-3" />
-                        +4%
-                      </span>
+                  ))}
+                </div>
+                {/* Sessions + Actions row */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Sessões",         value: wPaW.sessions.toLocaleString("pt-BR") },
+                    { label: "Ações executadas", value: wPaW.actionsExecuted.toLocaleString("pt-BR") },
+                  ].map(s => (
+                    <div key={s.label} className="p-2.5 rounded-xl border border-border/50 bg-muted/20">
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                      <p className="text-lg font-bold mt-0.5">{s.value}</p>
                     </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* Additional metrics */}
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                  <div>
-                    <p className="text-xs text-muted-foreground">MAU</p>
-                    <span className="text-lg font-semibold">{wPaW.mau}</span>
-                    <span className="text-xs text-success">+5%</span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">DAU</p>
-                    <span className="text-lg font-semibold">{wPaW.dau}</span>
-                    <span className="text-xs text-success">+3%</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Sessões</p>
-                    <span className="text-lg font-semibold">
-                      {wPaW.sessions.toLocaleString("pt-BR")}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Ações executadas
-                    </p>
-                    <span className="text-lg font-semibold">
-                      {wPaW.actionsExecuted.toLocaleString("pt-BR")}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Activity trend chart */}
-                <div className="pt-2">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Atividade (últimos 7 dias)
-                  </p>
-                  <div className="flex items-end gap-1 h-16">
-                    {wPaW.trendData.map((value, idx) => (
-                      <div
-                        key={idx}
-                        className="flex-1 bg-info rounded-t"
-                        style={{
-                          height: `${(value / Math.max(1, Math.max(...wPaW.trendData))) * 100}%`,
-                        }}
-                        title={`Dia ${idx + 1}: ${value} ações`}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {widget.size === "large" && (
-                  <div className="pt-4 border-t space-y-3">
-                    <h4 className="text-sm font-semibold">
-                      Tipos de Atividade
-                    </h4>
-                    {[
-                      { label: "Tarefas", value: 4200, color: "bg-info" },
-                      { label: "Projetos", value: 3100, color: "bg-chart-4" },
-                      { label: "Mensagens", value: 4500, color: "bg-success" },
-                      { label: "Uploads", value: 2400, color: "bg-warning" },
-                    ].map((item) => (
-                      <div key={item.label} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {item.label}
-                          </span>
-                          <span className="font-medium">
-                            {item.value.toLocaleString()}
-                          </span>
+                {/* Trend chart */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Atividade — últimos 7 dias</p>
+                  <div className="flex items-end gap-1 h-14">
+                    {wPaW.trendData.map((v, i) => {
+                      const isLast = i === wPaW.trendData.length - 1;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div className={cn("w-full rounded-t", isLast ? "bg-info" : "bg-info/40 hover:bg-info/70")} style={{ height: `${(v / paTrendMax) * 100}%` }} title={`Dia ${i+1}: ${v}`} />
+                          <span className="text-[9px] text-muted-foreground">{paDays[i] ?? i+1}</span>
                         </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className={`h-2 ${item.color}`}
-                            style={{ width: `${(item.value / 4500) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                )}
-
-                {/* Actions */}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         );
       }
 
