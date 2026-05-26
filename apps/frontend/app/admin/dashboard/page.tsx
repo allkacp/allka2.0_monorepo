@@ -1017,9 +1017,20 @@ export default function AdminDashboardPage() {
   const getWidgetPeriod = (widgetId: string) => {
     const override = widgetPeriods.find((wp) => wp.widgetId === widgetId);
     if (override && override.mode === "custom" && override.customPeriod) {
+      // Backward-compat: derive periodKey from label if not stored (old localStorage data)
+      const labelToKey: Record<string, string> = {
+        "Hoje": "today",
+        "Últimos 7 dias": "7days",
+        "Últimos 30 dias": "30days",
+        "Este mês": "thisMonth",
+        "Mês passado": "lastMonth",
+        "Últimos 90 dias": "90days",
+        "Último ano": "365days",
+      };
+      const periodKey = override.customPeriod.periodKey ?? labelToKey[override.customPeriod.label];
       return {
         from: new Date(override.customPeriod.from),
-        periodKey: override.customPeriod.periodKey,
+        periodKey,
         to: new Date(override.customPeriod.to),
         label: override.customPeriod.label,
       };
@@ -3385,20 +3396,20 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
                 {/* Controls row */}
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                  <Button
-                    variant={isEditingMetrics ? "default" : "outline"}
-                    size="sm"
+                <div className="flex items-center gap-2 mt-2">
+                  <button
                     onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                    title={isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
                     className={cn(
-                      "text-xs ml-auto transition-all duration-300 h-7",
-                      isEditingMetrics && "shadow-lg shadow-primary/30",
+                      "flex items-center justify-center h-7 w-7 rounded-md border shrink-0 transition-all duration-200",
+                      isEditingMetrics
+                        ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30"
+                        : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50",
                     )}
                   >
-                    <Edit2 className="h-3 w-3 mr-1" />
-                    {isEditingMetrics ? "Concluir" : "Editar Widgets"}
-                  </Button>
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -3442,7 +3453,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     // Compute widget-specific metrics based on per-widget period override
                     const wp = effectivePeriod as { periodKey?: string };
