@@ -3340,6 +3340,7 @@ export default function AdminDashboardPage() {
       alerts:               { icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
       performers:           { icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
       quickActions:         { icon: <Zap className="h-6 w-6" />,           subtitle: "Ações rápidas" },
+      partnerProgram:       { icon: <Award className="h-6 w-6" />,          subtitle: "Convites e partners por nível" },
     };
     const cfg = cfgMap[detailsWidgetId] ?? { icon: <Settings className="h-6 w-6" />, subtitle: "Detalhes do widget" };
 
@@ -4501,6 +4502,68 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           );
+
+        case "partnerProgram": {
+          const mpP = mData.partnerProgram;
+          const totalPartners = mpP.diamond + mpP.platinum + mpP.gold + mpP.silver + mpP.bronze;
+          return (
+            <div className="space-y-4">
+              {/* KPI invite stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-4 rounded-xl border border-border/40 bg-muted/30 text-center">
+                  <p className="text-2xl font-bold">{mpP.invitesSent}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Convites Enviados</p>
+                </div>
+                <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
+                  <p className="text-2xl font-bold text-warning">{mpP.pending}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Pendentes</p>
+                </div>
+                <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
+                  <p className="text-2xl font-bold text-success">{mpP.accepted}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Aceitos</p>
+                </div>
+              </div>
+              {/* Partner levels 2-per-row */}
+              <div>
+                <p className="text-sm font-semibold mb-2.5">Partners Ativos por Nível</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { level: "Diamond",  count: mpP.diamond,  bar: "bg-sky-500",    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",              text: "text-sky-600 dark:text-sky-400" },
+                    { level: "Platinum", count: mpP.platinum, bar: "bg-violet-500", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-600 dark:text-violet-400" },
+                    { level: "Gold",     count: mpP.gold,     bar: "bg-yellow-500", bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",  text: "text-yellow-600 dark:text-yellow-400" },
+                    { level: "Silver",   count: mpP.silver,   bar: "bg-slate-400",  bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",      text: "text-slate-600 dark:text-slate-400" },
+                    { level: "Bronze",   count: mpP.bronze,   bar: "bg-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",  text: "text-orange-600 dark:text-orange-400" },
+                  ]).map((item) => {
+                    const pct = totalPartners > 0 ? Math.round(item.count / totalPartners * 100) : 0;
+                    return (
+                      <div key={item.level} className={`p-3 rounded-xl border ${item.bg} space-y-2`}>
+                        <div className="flex items-center justify-between">
+                          <p className={`text-sm font-bold ${item.text}`}>{item.level}</p>
+                          <span className={`text-[10px] font-medium ${item.text}`}>{pct}%</span>
+                        </div>
+                        <p className={`text-2xl font-bold ${item.text}`}>{item.count}</p>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* MRR card */}
+              <div className="p-4 rounded-xl border border-success/20 bg-success/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-success" />
+                  <div>
+                    <p className="text-sm font-semibold">MRR gerado por Partners</p>
+                    <p className="text-xs text-muted-foreground">{totalPartners} partners ativos</p>
+                  </div>
+                </div>
+                <p className="text-xl font-bold text-success">R$ {mpP.mrrGenerated.toLocaleString("pt-BR")}</p>
+              </div>
+            </div>
+          );
+        }
 
         case "adminProfiles":
           return (
@@ -7347,127 +7410,64 @@ export default function AdminDashboardPage() {
 
       case "partnerProgram":
         return (
-          <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
+          <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+            <CardHeader className="pb-3 relative">
               <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-amber-500/10 rounded-lg shrink-0">
-                  <Award className="h-4 w-4 text-amber-500" />
-                </div>
+                <div className="p-2 bg-amber-500/10 rounded-lg shrink-0"><Award className="h-4 w-4 text-amber-500" /></div>
                 <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    Programa Partner
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Convites e partners ativos por nível
-                  </p>
+                  <CardTitle className="text-base font-semibold leading-tight">Programa Partner</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Convites e partners ativos por nível</p>
                 </div>
+                <Badge variant="outline" className="text-xs shrink-0 text-success border-success/30">{ppW.accepted} ativos</Badge>
               </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
+              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
             </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              {/* Invite stats row */}
+            <CardContent className="px-4 pb-4 space-y-3">
+              {/* Invite stats 3-col */}
               <div className="grid grid-cols-3 gap-2">
-                {[
-                  {
-                    label: "Convites Enviados",
-                    value: ppW.invitesSent,
-                    color: "text-foreground",
-                  },
-                  {
-                    label: "Pendentes",
-                    value: ppW.pending,
-                    color: "text-warning",
-                  },
-                  {
-                    label: "Aceitos",
-                    value: ppW.accepted,
-                    color: "text-success",
-                  },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="flex flex-col items-center p-2 rounded-lg bg-muted/50 text-center"
-                  >
-                    <span className={`text-xl font-bold ${stat.color}`}>
-                      {stat.value}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                      {stat.label}
-                    </span>
+                {([
+                  { label: "Enviados",  value: ppW.invitesSent, bg: "bg-muted/40 border-border/40",    text: "text-foreground" },
+                  { label: "Pendentes", value: ppW.pending,     bg: "bg-warning/5 border-warning/20", text: "text-warning" },
+                  { label: "Aceitos",   value: ppW.accepted,    bg: "bg-success/5 border-success/20", text: "text-success" },
+                ] as const).map((s) => (
+                  <div key={s.label} className={`flex flex-col items-center p-2.5 rounded-xl border ${s.bg} text-center`}>
+                    <span className={`text-xl font-bold ${s.text}`}>{s.value}</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{s.label}</span>
                   </div>
                 ))}
               </div>
-              {/* Active partners by level */}
+              {/* Levels 2-per-row compact */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                  Partners Ativos por Nível
-                </p>
-                <div className="space-y-1.5">
-                  {[
-                    {
-                      level: "Diamond",
-                      count: ppW.diamond,
-                      total: Math.max(ppW.diamond, 1),
-                      color: "bg-sky-500",
-                    },
-                    {
-                      level: "Platinum",
-                      count: ppW.platinum,
-                      total: Math.max(ppW.platinum, 1),
-                      color: "bg-violet-500",
-                    },
-                    {
-                      level: "Gold",
-                      count: ppW.gold,
-                      total: Math.max(ppW.gold, 1),
-                      color: "bg-yellow-500",
-                    },
-                    {
-                      level: "Silver",
-                      count: ppW.silver,
-                      total: Math.max(ppW.silver, 1),
-                      color: "bg-slate-400",
-                    },
-                    {
-                      level: "Bronze",
-                      count: ppW.bronze,
-                      total: Math.max(ppW.bronze, 1),
-                      color: "bg-orange-500",
-                    },
-                  ].map((item) => (
-                    <div key={item.level} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">
-                        {item.level}
-                      </span>
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${item.color}`}
-                          style={{
-                            width:
-                              item.total > 0
-                                ? `${(item.count / item.total) * 100}%`
-                                : "0%",
-                          }}
-                        />
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Partners por Nível</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { level: "Diamond",  count: ppW.diamond,  bar: "bg-sky-500",    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",              text: "text-sky-600 dark:text-sky-400" },
+                    { level: "Platinum", count: ppW.platinum, bar: "bg-violet-500", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-600 dark:text-violet-400" },
+                    { level: "Gold",     count: ppW.gold,     bar: "bg-yellow-500", bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",  text: "text-yellow-600 dark:text-yellow-400" },
+                    { level: "Silver",   count: ppW.silver,   bar: "bg-slate-400",  bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",      text: "text-slate-600 dark:text-slate-400" },
+                    { level: "Bronze",   count: ppW.bronze,   bar: "bg-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",  text: "text-orange-600 dark:text-orange-400" },
+                  ]).map((item) => {
+                    const total = ppW.diamond + ppW.platinum + ppW.gold + ppW.silver + ppW.bronze;
+                    const pct = total > 0 ? Math.round(item.count / total * 100) : 0;
+                    return (
+                      <div key={item.level} className={`flex items-center gap-2.5 p-2.5 rounded-xl border ${item.bg}`}>
+                        <div className={`h-7 w-7 rounded-full ${item.bar} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{item.count}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-semibold ${item.text}`}>{item.level}</p>
+                          <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
+                            <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-medium shrink-0 ${item.text}`}>{pct}%</span>
                       </div>
-                      <span className="text-xs font-medium w-3 shrink-0 text-right">
-                        {item.count}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-              {/* MRR from partners */}
-              <div className="pt-2 border-t flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  MRR gerado por Partners
-                </p>
-                <span className="text-sm font-bold text-success">
-                  R$ {ppW.mrrGenerated.toLocaleString("pt-BR")}
-                </span>
+              {/* MRR footer */}
+              <div className="pt-2.5 border-t flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">MRR gerado por Partners</p>
+                <span className="text-sm font-bold text-success">R$ {ppW.mrrGenerated.toLocaleString("pt-BR")}</span>
               </div>
             </CardContent>
           </Card>
