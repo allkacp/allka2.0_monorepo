@@ -5502,7 +5502,7 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* LTV Geral */
+              {/* LTV Geral */}
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-3xl font-bold">
