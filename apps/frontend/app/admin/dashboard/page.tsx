@@ -7478,11 +7478,11 @@ export default function AdminDashboardPage() {
         {/* Dashboard Header */}
         <div
           className={cn(
-            "flex items-center justify-between gap-3",
+            "flex flex-wrap items-center gap-3",
             isHeaderCompact ? "py-2" : "pt-0 pb-0",
           )}
         >
-          <div className="overflow-hidden">
+          <div className="overflow-hidden order-1 shrink-0">
             <h1
               className={cn(
                 "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
@@ -7502,7 +7502,7 @@ export default function AdminDashboardPage() {
               Visão geral da plataforma em tempo real
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className={cn("flex items-center gap-2 shrink-0 ml-auto", isHeaderCompact ? "order-3" : "order-2")}>
           {/* Dashboard selector dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -7706,10 +7706,9 @@ export default function AdminDashboardPage() {
             Editar
           </Button>
         </div>
-      </div>
 
         {/* Period Controls Bar */}
-        <div className={cn("flex flex-wrap items-center gap-2", isHeaderCompact ? "pb-2" : "pb-3")}>
+        <div className={cn("flex items-center gap-2", isHeaderCompact ? "order-2" : "order-3 basis-full pb-3")}>
         {/* Period selector */}
         <div className="flex items-center gap-0.5 bg-muted/60 rounded-xl p-1 border border-border/40">
           <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
@@ -7887,6 +7886,7 @@ export default function AdminDashboardPage() {
           <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
           {globalPeriod.label}
         </span>
+        </div>
         </div>
         {/* end sticky header */}
       </div>
