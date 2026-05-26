@@ -4235,31 +4235,48 @@ export default function AdminDashboardPage() {
             key={widget.id}
             data-widget-id={widget.type}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-destructive/10">
-                    <DollarSign className="h-5 w-5 text-destructive" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Receita</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Total e por tipo de plano
-                    </p>
-                  </div>
+            <CardHeader className="pb-3 relative">
+              <div className="flex items-center gap-3 pr-20">
+                <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                  <DollarSign className="h-5 w-5 text-destructive" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <WidgetExportButton
-                    widgetId={widget.type}
-                    widgetTitle="Receita"
-                  />
-                  <Badge
-                    variant="outline"
-                    className="text-destructive border-destructive/30"
-                  >
-                    {globalPeriod.label}
-                  </Badge>
+                <div className="min-w-0">
+                  <CardTitle className="text-lg">Receita</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Total e por tipo de{" "}
+                    <span className="text-destructive/80 font-medium">plano</span>
+                  </p>
                 </div>
+              </div>
+              <Badge
+                variant="outline"
+                className="mt-2 self-start text-xs text-destructive border-destructive/30"
+              >
+                {globalPeriod.label}
+              </Badge>
+              {/* ── Action buttons — floating top-right ── */}
+              <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-hidden">
+                {manualAffectedWidgets.has(widget.type) && (
+                  <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1">
+                    <Database className="h-3 w-3" />
+                    Manual
+                  </span>
+                )}
+                <button
+                  onClick={() => openWidgetShareDialog(widget.type, "Receita")}
+                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
+                  title="Compartilhar widget"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+                <div className="w-px h-4 bg-border/60 shrink-0" />
+                <button
+                  onClick={() => exportWidgetToPng(widget.type, "Receita")}
+                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
+                  title="Exportar como PNG"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
