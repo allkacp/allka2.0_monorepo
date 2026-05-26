@@ -1963,7 +1963,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const main = document.querySelector("main");
     if (!main) return;
-    const handleScroll = () => setIsHeaderCompact(main.scrollTop > 72);
+    const handleScroll = () => setIsHeaderCompact(main.scrollTop > 48);
     main.addEventListener("scroll", handleScroll, { passive: true });
     return () => main.removeEventListener("scroll", handleScroll);
   }, []);
@@ -7469,7 +7469,7 @@ export default function AdminDashboardPage() {
       {/* Sticky Dashboard Header */}
       <div
         className={cn(
-          "sticky top-0 z-20 -mx-14 px-14 transition-all duration-300",
+          "sticky top-[-3rem] z-20 -mx-14 px-14 transition-all duration-300",
           isHeaderCompact
             ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
             : "bg-transparent",
