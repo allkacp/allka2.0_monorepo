@@ -52,7 +52,6 @@ import {
   X,
   MessageSquare,
   ChevronDown,
-  ChevronUp,
   ArrowRight,
   Trophy,
   Save,
@@ -1560,14 +1559,6 @@ export default function AdminDashboardPage() {
   // ── Historical modal states ──────────────────────────────────────────────────
   const [showExportDropdown, setShowExportDropdown] = useState<string | null>(null);
   const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
-  const [collapsedWidgets, setCollapsedWidgets] = useState<Record<string, boolean>>({});
-  const toggleWidgetCollapse = (widgetId: string) => {
-    setCollapsedWidgets((prev) => {
-      const next = { ...prev, [widgetId]: !prev[widgetId] };
-      try { localStorage.setItem("dashboard-widget-collapsed", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
@@ -1820,15 +1811,6 @@ export default function AdminDashboardPage() {
         ); // Ensure id exists
       } catch (e) {
         console.error("Failed to parse saved widget config:", e);
-      }
-    }
-
-    const savedCollapsed = localStorage.getItem("dashboard-widget-collapsed");
-    if (savedCollapsed) {
-      try {
-        setCollapsedWidgets(JSON.parse(savedCollapsed));
-      } catch (e) {
-        console.error("Failed to parse saved collapsed widgets:", e);
       }
     }
 
@@ -3883,7 +3865,6 @@ export default function AdminDashboardPage() {
 
     switch (widget.type) {
       case "metrics": {
-        const isCollapsed = !!collapsedWidgets[widget.id];
         const visibleCount = metricCards.filter((m) => m.visible).length;
         return (
           <div
@@ -3921,23 +3902,10 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Métricas principais da plataforma
                     </p>
-                    {isCollapsed && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {visibleCount} {visibleCount === 1 ? "indicador" : "indicadores"}{" · "}{effectivePeriod.label}
-                      </p>
-                    )}
                   </div>
-                  <button
-                    onClick={() => toggleWidgetCollapse(widget.id)}
-                    title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
-                    className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
-                  >
-                    {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                  </button>
                 </div>
                 {/* Controls row */}
-                {!isCollapsed && (
-                  <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2">
                     <button
                       onClick={() => setIsEditingMetrics(!isEditingMetrics)}
                       title={isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
@@ -3952,13 +3920,11 @@ export default function AdminDashboardPage() {
                     </button>
                     <WidgetPeriodSelector widgetId={widget.id} />
                   </div>
-                )}
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
                 />
               </CardHeader>
-              {!isCollapsed && (
               <CardContent>
                 {isEditingMetrics && metricCards.some((m) => !m.visible) && (
                   <div className="mb-4 p-3 bg-muted/50 rounded-lg border-2 border-dashed">
@@ -6665,7 +6631,6 @@ export default function AdminDashboardPage() {
 
       case "platformActivities": {
         const wPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
-        const isCollapsed = !!collapsedWidgets[widget.id];
         return (
           <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -6680,34 +6645,19 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Engajamento e tempo na plataforma
                   </p>
-                  {isCollapsed && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {wPaW.mau.toLocaleString("pt-BR")} MAU{" · "}{wPaW.activeAgencies} agências ativas
-                    </p>
-                  )}
                 </div>
-                <button
-                  onClick={() => toggleWidgetCollapse(widget.id)}
-                  title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
-                  className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
-                >
-                  {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </button>
               </div>
-              {!isCollapsed && (
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-              )}
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
               />
             </CardHeader>
-            {!isCollapsed && (
             <CardContent>
               <div className="space-y-4">
-                {/* Main metrics */}
+                {/* Main metrics */}}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">
@@ -6823,7 +6773,6 @@ export default function AdminDashboardPage() {
                 {/* Actions */}
               </div>
             </CardContent>
-            )}
           </Card>
         );
       }
@@ -7373,7 +7322,6 @@ export default function AdminDashboardPage() {
 
       case "accountsReceivable": {
         const wArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
-        const isCollapsed = !!collapsedWidgets[widget.id];
         return (
           <div
             key={widget.id}
@@ -7409,33 +7357,18 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Contas a receber por categoria
                     </p>
-                    {isCollapsed && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        R$ {wArW.total.toLocaleString("pt-BR")},00{" · "}+{wArW.growth}%
-                      </p>
-                    )}
                   </div>
-                  <button
-                    onClick={() => toggleWidgetCollapse(widget.id)}
-                    title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
-                    className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
-                  >
-                    {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                  </button>
                 </div>
-                {!isCollapsed && (
-                  <div className="mt-2">
-                    <WidgetPeriodSelector widgetId={widget.id} />
-                  </div>
-                )}
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
                 />
               </CardHeader>
-              {!isCollapsed && (
               <CardContent className="space-y-4">
-                {/* Total a Receber */}
+                {/* Total a Receber */}}
                 <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-muted-foreground">
@@ -7533,7 +7466,6 @@ export default function AdminDashboardPage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>
-              )}
             </Card>
           </div>
         );
