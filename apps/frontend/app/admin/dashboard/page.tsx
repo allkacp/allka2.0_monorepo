@@ -4376,6 +4376,132 @@ export default function AdminDashboardPage() {
           );
         }
 
+        case "userDistribution":
+          return (
+            <div className="space-y-4">
+              {/* Summary totals */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl border border-chart-2/20 bg-chart-2/5 text-center">
+                  <Users className="h-6 w-6 text-chart-2 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-chart-2">{mData.activeUsers.total.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Total registrado</p>
+                </div>
+                <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
+                  <TrendingUp className="h-6 w-6 text-success mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-success">+{mData.activeUsers.empresasGrowth}%</p>
+                  <p className="text-xs text-muted-foreground">Crescimento médio</p>
+                </div>
+              </div>
+              {/* Per-type breakdown */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {([
+                  { type: "Empresas", count: mData.activeUsers.empresas, growth: `+${mData.activeUsers.empresasGrowth}%`, percentage: Math.round(mData.activeUsers.empresas / mData.activeUsers.total * 100), bg: "bg-info/5 border-info/20", text: "text-info", bar: "bg-info", icon: Building2 },
+                  { type: "Agências", count: mData.activeUsers.agencias, growth: `+${mData.activeUsers.agenciasGrowth}%`, percentage: Math.round(mData.activeUsers.agencias / mData.activeUsers.total * 100), bg: "bg-success/5 border-success/20", text: "text-success", bar: "bg-success", icon: Briefcase },
+                  { type: "Nômades",  count: mData.activeUsers.nomades,  growth: `+${mData.activeUsers.nomadesGrowth}%`,  percentage: Math.round(mData.activeUsers.nomades / mData.activeUsers.total * 100),  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", bar: "bg-chart-4", icon: UserCheck },
+                  { type: "Admins",   count: mData.activeUsers.admins,   growth: `+${mData.activeUsers.adminsGrowth}%`,   percentage: Math.round(mData.activeUsers.admins / mData.activeUsers.total * 100),   bg: "bg-warning/5 border-warning/20", text: "text-warning", bar: "bg-warning", icon: Shield },
+                ]).map((ut) => {
+                  const Icon = ut.icon;
+                  return (
+                    <div key={ut.type} className={`p-3 rounded-xl border ${ut.bg} space-y-2`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Icon className={`h-4 w-4 ${ut.text}`} />
+                          <p className={`text-xs font-semibold ${ut.text}`}>{ut.type}</p>
+                        </div>
+                        <span className="text-[10px] font-medium text-success">{ut.growth}</span>
+                      </div>
+                      <p className={`text-2xl font-bold ${ut.text}`}>{ut.count.toLocaleString()}</p>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">{ut.percentage}% do total</p>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${ut.bar}`} style={{ width: `${ut.percentage}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+
+        case "activeUsers":
+          return (
+            <div className="space-y-4">
+              {/* KPI row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
+                  <UserCheck className="h-6 w-6 text-success mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-success">{mData.activeUsers.total.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Total ativo hoje</p>
+                </div>
+                <div className="p-4 rounded-xl border border-info/20 bg-info/5 text-center">
+                  <TrendingUp className="h-6 w-6 text-info mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-info">{mData.activeUsers.empresas + mData.activeUsers.agencias}</p>
+                  <p className="text-xs text-muted-foreground">Empresas + Agências</p>
+                </div>
+              </div>
+              {/* Per-type 2-per-row */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {([
+                  { type: "Empresas", count: mData.activeUsers.empresas, growth: `+${mData.activeUsers.empresasGrowth}%`, bg: "bg-info/5 border-info/20", text: "text-info", icon: Building2 },
+                  { type: "Agências", count: mData.activeUsers.agencias, growth: `+${mData.activeUsers.agenciasGrowth}%`, bg: "bg-success/5 border-success/20", text: "text-success", icon: Briefcase },
+                  { type: "Nômades",  count: mData.activeUsers.nomades,  growth: `+${mData.activeUsers.nomadesGrowth}%`,  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", icon: UserCheck },
+                  { type: "Admins",   count: mData.activeUsers.admins,   growth: `+${mData.activeUsers.adminsGrowth}%`,   bg: "bg-warning/5 border-warning/20", text: "text-warning", icon: Shield },
+                ]).map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.type} className={`p-3 rounded-xl border ${item.bg} space-y-1`}>
+                      <div className="flex items-center justify-between">
+                        <Icon className={`h-4 w-4 ${item.text}`} />
+                        <span className="text-[10px] font-medium text-success">{item.growth}</span>
+                      </div>
+                      <p className={`text-2xl font-bold ${item.text}`}>{item.count.toLocaleString()}</p>
+                      <p className={`text-xs font-medium ${item.text}`}>{item.type}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+
+        case "systemAlerts":
+          return (
+            <div className="space-y-4">
+              {/* Type summary */}
+              <div className="grid grid-cols-3 gap-2.5">
+                {([
+                  { label: "Sucesso", type: "success", color: "text-success", border: "border-success/20", bg: "bg-success/5" },
+                  { label: "Info",    type: "info",    color: "text-info",    border: "border-info/20",    bg: "bg-info/5" },
+                  { label: "Aviso",   type: "warning", color: "text-warning", border: "border-warning/20", bg: "bg-warning/5" },
+                ] as const).map((s) => (
+                  <div key={s.type} className={`p-3 rounded-xl border ${s.border} ${s.bg} text-center`}>
+                    <div className="shrink-0 flex justify-center mb-1">{getAlertIcon(s.type)}</div>
+                    <p className={`text-xl font-bold ${s.color}`}>{systemAlertsData.filter(a => a.type === s.type).length}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Full log */}
+              <div className="space-y-2">
+                {systemAlertsData.map((alert, i) => (
+                  <div key={i} className={cn("flex items-center gap-3 p-3 rounded-xl border",
+                    alert.type === "success" && "bg-success/5 border-success/20",
+                    alert.type === "warning" && "bg-warning/5 border-warning/20",
+                    alert.type === "info"    && "bg-info/5 border-info/20",
+                  )}>
+                    <div className="shrink-0">{getAlertIcon(alert.type)}</div>
+                    <p className="text-sm flex-1">{alert.message}</p>
+                    <Badge variant="outline" className={cn("text-xs shrink-0",
+                      alert.type === "success" && "bg-success/10 text-success-foreground border-success/30",
+                      alert.type === "warning" && "bg-warning/10 text-warning-foreground border-warning/30",
+                      alert.type === "info"    && "bg-info/10 text-info-foreground border-info/30",
+                    )}>{alert.time}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
         case "performers":
           return (
             <div className="space-y-3">
@@ -4805,85 +4931,49 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0">
-                    <Users className="h-4 w-4 text-chart-2" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0"><Users className="h-4 w-4 text-chart-2" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Distribuição por tipo de conta
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Distribuição por tipo de conta</p>
                   </div>
+                  <Badge variant="outline" className="text-xs shrink-0">{auW.total.toLocaleString("pt-BR")}</Badge>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
-                  {usersByType.map((userType, index) => (
-                    <div
-                      key={index}
-                      className="group p-5 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
-                    >
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { type: "Empresas", count: auW.empresas, growth: `+${auW.empresasGrowth}%`, percentage: Math.round(auW.empresas / auW.total * 100), bg: "bg-info/5 border-info/20", text: "text-info", bar: "bg-info" },
+                    { type: "Agências", count: auW.agencias, growth: `+${auW.agenciasGrowth}%`, percentage: Math.round(auW.agencias / auW.total * 100), bg: "bg-success/5 border-success/20", text: "text-success", bar: "bg-success" },
+                    { type: "Nômades",  count: auW.nomades,  growth: `+${auW.nomadesGrowth}%`,  percentage: Math.round(auW.nomades / auW.total * 100),  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", bar: "bg-chart-4" },
+                    { type: "Admins",   count: auW.admins,   growth: `+${auW.adminsGrowth}%`,   percentage: Math.round(auW.admins / auW.total * 100),   bg: "bg-warning/5 border-warning/20", text: "text-warning", bar: "bg-warning" },
+                  ]).map((ut) => (
+                    <div key={ut.type} className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}>
                       <div className="flex items-center justify-between">
-                        <Badge
-                          className={cn(
-                            "text-xs font-semibold bg-gradient-to-r text-white shadow-sm",
-                            userType.color,
-                          )}
-                        >
-                          {userType.type}
-                        </Badge>
-                        <Badge
-                          className={cn(
-                            "text-xs font-semibold",
-                            userType.growth.startsWith("+")
-                              ? "bg-success-muted/80 text-success-foreground border-success/50"
-                              : "bg-destructive/10 text-destructive border-destructive/50",
-                          )}
-                        >
-                          {userType.growth}
-                        </Badge>
+                        <p className={`text-xs font-semibold ${ut.text}`}>{ut.type}</p>
+                        <span className="text-[10px] font-medium text-success">{ut.growth}</span>
                       </div>
-                      <p className="text-3xl font-bold text-foreground">
-                        {userType.count.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {userType.percentage}% do total
-                      </p>
-                      <div className="w-full bg-muted rounded-full h-2 overflow-hidden mt-2">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            userType.color,
-                          )}
-                          style={{ width: `${userType.percentage}%` }}
-                        />
+                      <p className={`text-xl font-bold ${ut.text}`}>{ut.count.toLocaleString()}</p>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">{ut.percentage}% do total</p>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${ut.bar}`} style={{ width: `${ut.percentage}%` }} />
+                        </div>
                       </div>
                     </div>
                   ))}
+                </div>
+                <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Total registrado</p>
+                  <p className="text-sm font-bold">{auW.total.toLocaleString("pt-BR")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -4901,75 +4991,47 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                  </div>
+                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0"><AlertTriangle className="h-4 w-4 text-destructive" /></div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas e notificações do sistema
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Alertas e notificações do sistema</p>
                   </div>
+                  <Badge variant="outline" className="text-xs shrink-0">{systemAlertsData.length} itens</Badge>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="px-4 pb-4 space-y-2">
                 {systemAlertsData.map((alert, index) => (
                   <div
                     key={index}
                     className={cn(
-                      "flex items-start space-x-3 p-3 rounded-xl border-2 shadow-sm hover:shadow-md transition-all duration-200",
-                      alert.type === "success" &&
-                        "bg-success-muted border-success/20 dark:bg-success/5 dark:border-success/30",
-                      alert.type === "warning" &&
-                        "bg-warning-muted border-warning/20 dark:bg-warning/5 dark:border-warning/30",
-                      alert.type === "info" &&
-                        "bg-info-muted border-info/20 dark:bg-info/5 dark:border-info/30",
+                      "flex items-center gap-2.5 p-2.5 rounded-xl border transition-all hover:shadow-sm",
+                      alert.type === "success" && "bg-success/5 border-success/20",
+                      alert.type === "warning" && "bg-warning/5 border-warning/20",
+                      alert.type === "info"    && "bg-info/5 border-info/20",
                     )}
                   >
-                    <div className="mt-0.5">{getAlertIcon(alert.type)}</div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium leading-none">
-                          {alert.message}
-                        </p>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs backdrop-blur-sm ${
-                            alert.type === "success"
-                              ? "bg-success-muted border-success/50 text-success-foreground"
-                              : alert.type === "warning"
-                                ? "bg-warning-muted border-warning/50 text-warning-foreground"
-                                : "bg-info-muted border-info/50 text-info-foreground"
-                          }`}
-                        >
-                          {alert.time}
-                        </Badge>
-                      </div>
-                    </div>
+                    <div className="shrink-0">{getAlertIcon(alert.type)}</div>
+                    <p className="text-xs flex-1 line-clamp-1">{alert.message}</p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] shrink-0 h-4 px-1.5",
+                        alert.type === "success" && "bg-success/10 text-success-foreground border-success/30",
+                        alert.type === "warning" && "bg-warning/10 text-warning-foreground border-warning/30",
+                        alert.type === "info"    && "bg-info/10 text-info-foreground border-info/30",
+                      )}
+                    >
+                      {alert.time}
+                    </Badge>
                   </div>
                 ))}
               </CardContent>
@@ -7348,75 +7410,42 @@ export default function AdminDashboardPage() {
 
       case "activeUsers":
         return (
-          <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
+          <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+            <CardHeader className="pb-3 relative">
               <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-success/10 rounded-lg shrink-0">
-                  <UserCheck className="h-4 w-4 text-success" />
-                </div>
+                <div className="p-2 bg-success/10 rounded-lg shrink-0"><UserCheck className="h-4 w-4 text-success" /></div>
                 <div className="min-w-0 flex-1">
                   <CardTitle className="text-base font-semibold leading-tight">Usuários Ativos</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Ativos por tipo de conta no período
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Ativos por tipo de conta no período</p>
                 </div>
+                <Badge variant="outline" className="text-xs shrink-0">{auW.total.toLocaleString()}</Badge>
               </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
+              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
             </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {[
-                {
-                  type: "Empresas",
-                  count: auW.empresas,
-                  growth: `+${auW.empresasGrowth}%`,
-                  color: "text-info",
-                },
-                {
-                  type: "Agências",
-                  count: auW.agencias,
-                  growth: `+${auW.agenciasGrowth}%`,
-                  color: "text-success",
-                },
-                {
-                  type: "Nômades",
-                  count: auW.nomades,
-                  growth: `+${auW.nomadesGrowth}%`,
-                  color: "text-chart-4",
-                },
-                {
-                  type: "Admins",
-                  count: auW.admins,
-                  growth: `+${auW.adminsGrowth}%`,
-                  color: "text-warning",
-                },
-              ].map((item) => (
-                <div
-                  key={item.type}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                >
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {item.type}
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-lg font-bold ${item.color}`}>
-                      {item.count.toLocaleString()}
-                    </span>
-                    <span className="text-xs font-medium text-success">
-                      {item.growth}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              <div className="pt-2 border-t flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Total ativo hoje
-                </p>
-                <p className="text-sm font-bold">
-                  {auW.total.toLocaleString("pt-BR")}
-                </p>
+            <CardContent className="px-4 pb-4">
+              <div className="grid grid-cols-2 gap-2.5">
+                {([
+                  { type: "Empresas", count: auW.empresas, growth: `+${auW.empresasGrowth}%`, bg: "bg-info/5 border-info/20",    text: "text-info",    icon: Building2 },
+                  { type: "Agências", count: auW.agencias, growth: `+${auW.agenciasGrowth}%`, bg: "bg-success/5 border-success/20", text: "text-success", icon: Briefcase },
+                  { type: "Nômades",  count: auW.nomades,  growth: `+${auW.nomadesGrowth}%`,  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", icon: UserCheck },
+                  { type: "Admins",   count: auW.admins,   growth: `+${auW.adminsGrowth}%`,   bg: "bg-warning/5 border-warning/20", text: "text-warning", icon: Shield },
+                ]).map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.type} className={`p-2.5 rounded-xl border ${item.bg} space-y-1`}>
+                      <div className="flex items-center justify-between">
+                        <Icon className={`h-4 w-4 ${item.text}`} />
+                        <span className="text-[10px] font-medium text-success">{item.growth}</span>
+                      </div>
+                      <p className={`text-xl font-bold ${item.text}`}>{item.count.toLocaleString()}</p>
+                      <p className={`text-xs font-medium ${item.text}`}>{item.type}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Total ativo hoje</p>
+                <p className="text-sm font-bold">{auW.total.toLocaleString("pt-BR")}</p>
               </div>
             </CardContent>
           </Card>
