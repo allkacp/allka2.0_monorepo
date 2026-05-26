@@ -3803,11 +3803,53 @@ export default function AdminDashboardPage() {
                 <h2 className="text-base font-bold leading-tight truncate">{title}</h2>
                 <p className="text-xs text-white/70 mt-0.5 truncate">{cfg.subtitle}</p>
               </div>
-              {/* Period badge */}
-              <span className="inline-flex items-center text-[11px] bg-white/20 text-white rounded-full px-3 py-1 gap-1.5 font-medium shrink-0 whitespace-nowrap">
-                <svg className="h-3 w-3 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                {modalPeriod.label}
-              </span>
+              {/* Period selector dropdown — white-themed for the gradient header */}
+              {widgetInstance && (() => {
+                const wp = widgetPeriods.find((p) => p.widgetId === widgetInstance.id);
+                const isCustom = wp?.mode === "custom";
+                const periodOptions = [
+                  { key: "global",    label: "Período global" },
+                  { key: "today",     label: "Hoje" },
+                  { key: "7days",     label: "Últimos 7 dias" },
+                  { key: "30days",    label: "Últimos 30 dias" },
+                  { key: "thisMonth", label: "Este mês" },
+                  { key: "lastMonth", label: "Mês passado" },
+                  { key: "90days",    label: "Últimos 90 dias" },
+                  { key: "365days",   label: "Último ano" },
+                ];
+                const activeLabel = isCustom ? wp!.customPeriod!.label : "Período global";
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-white/20 hover:bg-white/30 text-white rounded-full px-3 py-1.5 whitespace-nowrap transition-colors shrink-0">
+                        <Calendar className="h-3 w-3 opacity-80" />
+                        {activeLabel}
+                        <ChevronDown className="h-3 w-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52 z-[9999]">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Período do widget</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {periodOptions.map((opt) => {
+                        const isSelected =
+                          opt.key === "global"
+                            ? !isCustom
+                            : isCustom && wp!.customPeriod!.label === opt.label;
+                        return (
+                          <DropdownMenuItem
+                            key={opt.key}
+                            onClick={() => setWidgetCustomPeriod(widgetInstance.id, opt.key === "global" ? "global" : opt.key)}
+                            className="text-xs"
+                          >
+                            <Check className={cn("mr-2 h-3 w-3", isSelected ? "opacity-100" : "opacity-0")} />
+                            {opt.label}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
               {/* Divider */}
               <div className="h-6 w-px bg-white/20 shrink-0" />
               {/* Action icon buttons */}
