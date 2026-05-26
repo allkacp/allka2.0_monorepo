@@ -65,6 +65,7 @@ import {
   Link2,
   History,
   Database,
+  FileText,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -1143,6 +1144,47 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const exportWidgetToPdf = async (widgetId: string, widgetTitle: string) => {
+    const widgetElement = document.querySelector(
+      `[data-widget-id="${widgetId}"]`,
+    ) as HTMLElement;
+    if (!widgetElement) {
+      toast({ title: "Erro ao exportar", description: "Widget não encontrado", variant: "destructive" });
+      return;
+    }
+    try {
+      const exportButtons = widgetElement.querySelectorAll("[data-export-button],[data-share-button]");
+      exportButtons.forEach((btn) => { (btn as HTMLElement).style.display = "none"; });
+
+      const dataUrl = await toPng(widgetElement, { quality: 1, pixelRatio: 2, backgroundColor: "#f1f5f9", cacheBust: true });
+
+      exportButtons.forEach((btn) => { (btn as HTMLElement).style.display = ""; });
+
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((res) => { img.onload = res; });
+
+      const ratio = img.height / img.width;
+      const pdfW = 210; // A4 mm
+      const pdfH = Math.min(pdfW * ratio, 297);
+      const pdf = new jsPDF({ orientation: pdfH > pdfW ? "portrait" : "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW - 16;
+      const imgH = imgW * ratio;
+      pdf.addImage(dataUrl, "PNG", 8, 8, imgW, Math.min(imgH, pageH - 16));
+
+      const dateStr = format(new Date(), "yyyy-MM-dd-HHmm");
+      const sanitizedTitle = widgetTitle.replace(/[^a-zA-Z0-9]/g, "_");
+      pdf.save(`widget_${sanitizedTitle}_${dateStr}.pdf`);
+
+      toast({ title: "Widget exportado", description: `O widget "${widgetTitle}" foi exportado como PDF` });
+    } catch (error) {
+      console.error("Error exporting widget to PDF:", error);
+      toast({ title: "Erro ao exportar", description: "Não foi possível exportar como PDF", variant: "destructive" });
+    }
+  };
+
   // Reusable export button component for widget headers
   const WidgetExportButton = ({
     widgetId,
@@ -1473,6 +1515,7 @@ export default function AdminDashboardPage() {
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Historical modal states ──────────────────────────────────────────────────
+  const [showExportDropdown, setShowExportDropdown] = useState<string | null>(null);
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
@@ -4255,28 +4298,54 @@ export default function AdminDashboardPage() {
                 {globalPeriod.label}
               </Badge>
               {/* ── Action buttons — floating top-right ── */}
-              <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-hidden">
+              <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
                 {manualAffectedWidgets.has(widget.type) && (
-                  <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1">
+                  <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1 rounded-l-lg">
                     <Database className="h-3 w-3" />
                     Manual
                   </span>
                 )}
                 <button
                   onClick={() => openWidgetShareDialog(widget.type, "Receita")}
-                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
+                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors rounded-l-lg"
                   title="Compartilhar widget"
                 >
                   <Share2 className="h-3.5 w-3.5" />
                 </button>
                 <div className="w-px h-4 bg-border/60 shrink-0" />
-                <button
-                  onClick={() => exportWidgetToPng(widget.type, "Receita")}
-                  className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
-                  title="Exportar como PNG"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </button>
+                {/* Export dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExportDropdown(showExportDropdown === widget.type ? null : widget.type)}
+                    className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors rounded-r-lg"
+                    title="Exportar widget"
+                    data-export-button
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                  {showExportDropdown === widget.type && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowExportDropdown(null)} />
+                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[110px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
+                        <button
+                          onClick={() => { exportWidgetToPng(widget.type, "Receita"); setShowExportDropdown(null); }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                        >
+                          <ImageDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          Exportar PNG
+                        </button>
+                        <div className="h-px bg-border/50" />
+                        <button
+                          onClick={() => { exportWidgetToPdf(widget.type, "Receita"); setShowExportDropdown(null); }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                        >
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          Exportar PDF
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -8016,19 +8085,30 @@ export default function AdminDashboardPage() {
 
       {/* ── Public Share Dialog ───────────────────────────────────────────── */}
       <Dialog open={showPublicShareDialog} onOpenChange={setShowPublicShareDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-4 w-4 text-primary" />
-              Compartilhar via Link
-            </DialogTitle>
-            <DialogDescription>
-              {shareTarget
-                ? `${shareTarget.type === "widget" ? "Widget" : "Dashboard"}: ${shareTarget.title}`
-                : "Configure as opções e gere um link público"}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+          {/* Brand gradient header strip */}
+          <div
+            className="px-6 pt-5 pb-4"
+            style={{ background: "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)" }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 shrink-0">
+                <Share2 className="h-4.5 w-4.5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-white leading-tight">
+                  Compartilhar via Link
+                </h2>
+                <p className="text-xs text-white/70 mt-0.5">
+                  {shareTarget
+                    ? `${shareTarget.type === "widget" ? "Widget" : "Dashboard"}: ${shareTarget.title}`
+                    : "Configure as opções e gere um link público"}
+                </p>
+              </div>
+            </div>
+          </div>
 
+          <div className="px-6 pt-4 pb-6 space-y-4">
           <Tabs value={shareActiveTab} onValueChange={setShareActiveTab} className="w-full">
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="permission">Permissão</TabsTrigger>
@@ -8048,16 +8128,16 @@ export default function AdminDashboardPage() {
                   className={cn(
                     "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
                     sharePermission === "view"
-                      ? "border-primary bg-primary/5"
+                      ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
                       : "border-border hover:bg-muted/50",
                   )}
                 >
                   <div className={cn(
                     "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                    sharePermission === "view" ? "border-primary" : "border-muted-foreground",
+                    sharePermission === "view" ? "border-violet-500" : "border-muted-foreground",
                   )}>
                     {sharePermission === "view" && (
-                      <div className="h-2 w-2 rounded-full bg-primary" />
+                      <div className="h-2 w-2 rounded-full bg-violet-500" />
                     )}
                   </div>
                   <div>
@@ -8071,16 +8151,16 @@ export default function AdminDashboardPage() {
                   className={cn(
                     "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
                     sharePermission === "comment"
-                      ? "border-primary bg-primary/5"
+                      ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
                       : "border-border hover:bg-muted/50",
                   )}
                 >
                   <div className={cn(
                     "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                    sharePermission === "comment" ? "border-primary" : "border-muted-foreground",
+                    sharePermission === "comment" ? "border-violet-500" : "border-muted-foreground",
                   )}>
                     {sharePermission === "comment" && (
-                      <div className="h-2 w-2 rounded-full bg-primary" />
+                      <div className="h-2 w-2 rounded-full bg-violet-500" />
                     )}
                   </div>
                   <div>
@@ -8169,7 +8249,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-2 pt-1">
             <div className="flex gap-2">
               <Button
-                className="flex-1"
+                className="flex-1 btn-brand"
                 onClick={handleGenerateShareLink}
                 disabled={sharePinEnabled && sharePin.length !== 4}
               >
@@ -8188,7 +8268,7 @@ export default function AdminDashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="shrink-0 gap-1.5"
+                  className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
                   onClick={handleCopyShareLink}
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -8198,11 +8278,12 @@ export default function AdminDashboardPage() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPublicShareDialog(false)}>
+          <div className="flex justify-end pt-1">
+            <Button variant="ghost" size="sm" onClick={() => setShowPublicShareDialog(false)}>
               Fechar
             </Button>
-          </DialogFooter>
+          </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* ──────────────────────────────────────────────────────────────────── */}
