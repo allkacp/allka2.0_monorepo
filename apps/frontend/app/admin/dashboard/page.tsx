@@ -52,6 +52,7 @@ import {
   X,
   MessageSquare,
   ChevronDown,
+  ChevronUp,
   ArrowRight,
   Trophy,
   Save,
@@ -1559,6 +1560,14 @@ export default function AdminDashboardPage() {
   // ── Historical modal states ──────────────────────────────────────────────────
   const [showExportDropdown, setShowExportDropdown] = useState<string | null>(null);
   const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
+  const [collapsedWidgets, setCollapsedWidgets] = useState<Record<string, boolean>>({});
+  const toggleWidgetCollapse = (widgetId: string) => {
+    setCollapsedWidgets((prev) => {
+      const next = { ...prev, [widgetId]: !prev[widgetId] };
+      try { localStorage.setItem("dashboard-widget-collapsed", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
@@ -1811,6 +1820,15 @@ export default function AdminDashboardPage() {
         ); // Ensure id exists
       } catch (e) {
         console.error("Failed to parse saved widget config:", e);
+      }
+    }
+
+    const savedCollapsed = localStorage.getItem("dashboard-widget-collapsed");
+    if (savedCollapsed) {
+      try {
+        setCollapsedWidgets(JSON.parse(savedCollapsed));
+      } catch (e) {
+        console.error("Failed to parse saved collapsed widgets:", e);
       }
     }
 
@@ -3324,30 +3342,129 @@ export default function AdminDashboardPage() {
     if (!detailsWidgetId) return null;
     const title = getWidgetTitle(detailsWidgetId);
 
-    const cfgMap: Record<string, { gradient: string; icon: React.ReactNode; subtitle: string }> = {
-      metrics:              { gradient: "from-violet-600 via-purple-600 to-indigo-700",  icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Métricas principais da plataforma" },
-      revenue:              { gradient: "from-emerald-600 via-green-600 to-teal-700",    icon: <DollarSign className="h-6 w-6" />,    subtitle: "Receita total e breakdown" },
-      platformActivities:   { gradient: "from-sky-600 via-blue-600 to-indigo-700",       icon: <Activity className="h-6 w-6" />,      subtitle: "Engajamento e atividades" },
-      accountsReceivable:   { gradient: "from-emerald-600 via-teal-600 to-green-700",    icon: <DollarSign className="h-6 w-6" />,    subtitle: "Contas a receber por categoria" },
-      mrr:                  { gradient: "from-blue-600 via-indigo-600 to-purple-700",    icon: <TrendingUp className="h-6 w-6" />,    subtitle: "Receita recorrente mensal" },
-      churn:                { gradient: "from-rose-600 via-red-600 to-pink-700",         icon: <TrendingDown className="h-6 w-6" />,  subtitle: "Análise de cancelamentos" },
-      creditPlans:          { gradient: "from-violet-600 via-purple-600 to-blue-700",    icon: <CreditCard className="h-6 w-6" />,    subtitle: "Planos de crédito ativos" },
-      activeProjectsWidget: { gradient: "from-orange-500 via-amber-500 to-yellow-600",   icon: <Briefcase className="h-6 w-6" />,     subtitle: "Projetos ativos por tipo" },
-      averageTicket:        { gradient: "from-amber-600 via-orange-500 to-yellow-500",   icon: <Calculator className="h-6 w-6" />,    subtitle: "Ticket médio por cliente" },
-      ltv:                  { gradient: "from-teal-600 via-cyan-600 to-sky-700",         icon: <Star className="h-6 w-6" />,          subtitle: "Valor vitalício do cliente" },
-      cmv:                  { gradient: "from-slate-600 via-zinc-600 to-gray-700",       icon: <Calculator className="h-6 w-6" />,    subtitle: "Custo de mercadoria vendida" },
-      nomads:               { gradient: "from-cyan-600 via-blue-500 to-indigo-600",      icon: <Users className="h-6 w-6" />,         subtitle: "Visão geral dos nômades" },
-      nomadsRanking:        { gradient: "from-amber-600 via-orange-500 to-red-500",      icon: <Trophy className="h-6 w-6" />,        subtitle: "Ranking de performance" },
-      tasks:                { gradient: "from-green-600 via-emerald-600 to-teal-600",    icon: <CheckSquare className="h-6 w-6" />,   subtitle: "Tarefas e execução" },
-      activity:             { gradient: "from-sky-500 via-blue-500 to-indigo-600",       icon: <Activity className="h-6 w-6" />,      subtitle: "Atividades recentes" },
-      alerts:               { gradient: "from-rose-600 via-pink-600 to-red-700",         icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
-      performers:           { gradient: "from-amber-500 via-orange-500 to-red-500",      icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
-      quickActions:         { gradient: "from-violet-600 via-purple-500 to-indigo-600",  icon: <Zap className="h-6 w-6" />,           subtitle: "Ações rápidas" },
+    // Resolve effective period for this widget (uses per-widget override if any)
+    const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
+    const modalPeriod = widgetInstance
+      ? getWidgetPeriod(widgetInstance.id)
+      : {
+          from: globalPeriod.from || new Date(0),
+          to: globalPeriod.to || new Date(),
+          label: globalPeriod.label,
+          periodKey: undefined as string | undefined,
+        };
+    const modalPeriodKey = (modalPeriod as any).periodKey as string | undefined;
+    const mData = generateDashboardData(modalPeriod.from, modalPeriod.to);
+    const mPaW = mData.platformActivities;
+    const mArW = mData.accountsReceivable;
+
+    const cfgMap: Record<string, { icon: React.ReactNode; subtitle: string }> = {
+      metrics:              { icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Métricas principais da plataforma" },
+      revenue:              { icon: <DollarSign className="h-6 w-6" />,    subtitle: "Receita total e breakdown" },
+      platformActivities:   { icon: <Activity className="h-6 w-6" />,      subtitle: "Engajamento e atividades" },
+      accountsReceivable:   { icon: <DollarSign className="h-6 w-6" />,    subtitle: "Contas a receber por categoria" },
+      mrr:                  { icon: <TrendingUp className="h-6 w-6" />,    subtitle: "Receita recorrente mensal" },
+      churn:                { icon: <TrendingDown className="h-6 w-6" />,  subtitle: "Análise de cancelamentos" },
+      creditPlans:          { icon: <CreditCard className="h-6 w-6" />,    subtitle: "Planos de crédito ativos" },
+      activeProjectsWidget: { icon: <Briefcase className="h-6 w-6" />,     subtitle: "Projetos ativos por tipo" },
+      averageTicket:        { icon: <Calculator className="h-6 w-6" />,    subtitle: "Ticket médio por cliente" },
+      ltv:                  { icon: <Star className="h-6 w-6" />,          subtitle: "Valor vitalício do cliente" },
+      cmv:                  { icon: <Calculator className="h-6 w-6" />,    subtitle: "Custo de mercadoria vendida" },
+      nomads:               { icon: <Users className="h-6 w-6" />,         subtitle: "Visão geral dos nômades" },
+      nomadsRanking:        { icon: <Trophy className="h-6 w-6" />,        subtitle: "Ranking de performance" },
+      tasks:                { icon: <CheckSquare className="h-6 w-6" />,   subtitle: "Tarefas e execução" },
+      activity:             { icon: <Activity className="h-6 w-6" />,      subtitle: "Atividades recentes" },
+      alerts:               { icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
+      performers:           { icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
+      quickActions:         { icon: <Zap className="h-6 w-6" />,           subtitle: "Ações rápidas" },
     };
-    const cfg = cfgMap[detailsWidgetId] ?? { gradient: "from-violet-600 via-purple-600 to-indigo-700", icon: <Settings className="h-6 w-6" />, subtitle: "Detalhes do widget" };
+    const cfg = cfgMap[detailsWidgetId] ?? { icon: <Settings className="h-6 w-6" />, subtitle: "Detalhes do widget" };
 
     const renderContent = () => {
       switch (detailsWidgetId) {
+        case "metrics": {
+          const mp = getMetricsForPeriod(undefined, modalPeriodKey);
+          const items: Array<{ key: string; label: string; value: string | number; change?: number; trend?: "up" | "down"; suffix?: string }> = [
+            { key: "totalUsers",     label: "Total de Usuários", value: mp.totalUsers.value,     change: mp.totalUsers.change,     trend: mp.totalUsers.trend },
+            { key: "activeUsers",    label: "Usuários Ativos",   value: mp.activeUsers.value,    change: mp.activeUsers.change,    trend: mp.activeUsers.trend },
+            { key: "companies",      label: "Empresas",          value: mp.companies.value,      change: mp.companies.change,      trend: mp.companies.trend },
+            { key: "activeProjects", label: "Projetos Ativos",   value: mp.activeProjects.value, change: mp.activeProjects.change, trend: mp.activeProjects.trend },
+            { key: "revenue",        label: "Receita",           value: `R$ ${Number(mp.revenue.value).toLocaleString("pt-BR")}`, change: mp.revenue.change, trend: mp.revenue.trend },
+            { key: "avgRating",      label: "Avaliação Média",   value: Number(mp.avgRating.value).toFixed(1), change: mp.avgRating.change, trend: mp.avgRating.trend, suffix: " / 5.0" },
+          ];
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {items.map((it) => (
+                  <div key={it.key} className="p-3 rounded-lg border border-border/50 bg-muted/20">
+                    <p className="text-xs text-muted-foreground">{it.label}</p>
+                    <p className="text-xl font-bold mt-0.5">
+                      {typeof it.value === "number" ? it.value.toLocaleString("pt-BR") : it.value}
+                      {it.suffix && <span className="text-xs font-normal text-muted-foreground">{it.suffix}</span>}
+                    </p>
+                    {it.change != null && (
+                      <div className="flex items-center justify-between mt-1">
+                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${it.trend === "up" ? "text-success" : "text-destructive"}`}>
+                          {it.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {it.trend === "up" ? "+" : "-"}{Math.abs(it.change)}{it.key === "avgRating" ? " pts" : "%"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">vs. anterior</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {mp.revenue.breakdown && (
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-3">Composição da Receita</p>
+                  {[
+                    { label: "Planos de Crédito", value: mp.revenue.breakdown.creditPlan, color: "bg-blue-500" },
+                    { label: "Recorrente",        value: mp.revenue.breakdown.recurring,  color: "bg-purple-500" },
+                    { label: "Avulso",            value: mp.revenue.breakdown.oneTime,    color: "bg-amber-500" },
+                  ].map((item) => {
+                    const total = (mp.revenue.breakdown!.creditPlan || 0) + (mp.revenue.breakdown!.recurring || 0) + (mp.revenue.breakdown!.oneTime || 0);
+                    const pct = total > 0 ? (item.value / total) * 100 : 0;
+                    return (
+                      <div key={item.label} className="mb-2 last:mb-0">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <span className="font-medium">R$ {item.value.toLocaleString("pt-BR")}</span>
+                        </div>
+                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                          <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {mp.avgRating.breakdown && (
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-3">Avaliação por Segmento</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {[
+                      { label: "Nômades",       value: mp.avgRating.breakdown.nomades },
+                      { label: "Agências",      value: mp.avgRating.breakdown.agencies },
+                      { label: "Lead Premium",  value: mp.avgRating.breakdown.leadPremium },
+                      { label: "Suporte",       value: mp.avgRating.breakdown.support },
+                      { label: "Projetos",      value: mp.avgRating.breakdown.projects },
+                    ].map((s) => (
+                      <div key={s.label} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground truncate">{s.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-1.5 w-16 bg-secondary rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-amber-500 rounded-full" style={{ width: `${(s.value / 5) * 100}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold w-7 text-right">{s.value.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
         case "revenue":
           return (
             <div className="space-y-4">
@@ -3385,54 +3502,368 @@ export default function AdminDashboardPage() {
             </div>
           );
 
-        case "platformActivities":
+        case "platformActivities": {
+          const engagementRate = mPaW.mau > 0 ? Math.round((mPaW.dau / mPaW.mau) * 100) : 0;
+          const actionsPerSession = mPaW.sessions > 0 ? (mPaW.actionsExecuted / mPaW.sessions).toFixed(1) : "0";
+          const activityTypes = [
+            { label: "Mensagens", pct: 35, color: "bg-info" },
+            { label: "Tarefas",   pct: 27, color: "bg-success" },
+            { label: "Projetos",  pct: 19, color: "bg-chart-4" },
+            { label: "Uploads",   pct: 12, color: "bg-warning" },
+            { label: "Outros",    pct: 7,  color: "bg-muted-foreground" },
+          ];
+          const maxTrend = Math.max(1, ...mPaW.trendData);
           return (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "Agências Ativas", value: paW.activeAgencies, change: "+7%" },
-                  { label: "Tempo médio/dia", value: `${paW.avgSessionMinutes} min`, change: "+4%" },
-                  { label: "MAU", value: paW.mau.toLocaleString("pt-BR"), change: "+5%" },
-                  { label: "DAU", value: paW.dau.toLocaleString("pt-BR"), change: "+3%" },
-                  { label: "Sessões", value: paW.sessions.toLocaleString("pt-BR"), change: "" },
-                  { label: "Ações executadas", value: paW.actionsExecuted.toLocaleString("pt-BR"), change: "" },
-                ].map(item => (
-                  <div key={item.label} className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className="text-lg font-bold text-sky-700 dark:text-sky-300">{item.value}</p>
-                    {item.change && <p className="text-xs text-success">{item.change}</p>}
+                  { label: "MAU",       value: mPaW.mau.toLocaleString("pt-BR") },
+                  { label: "DAU",       value: mPaW.dau.toLocaleString("pt-BR") },
+                  { label: "Agências",  value: mPaW.activeAgencies },
+                  { label: "Sessões",   value: mPaW.sessions.toLocaleString("pt-BR") },
+                  { label: "Ações",     value: mPaW.actionsExecuted.toLocaleString("pt-BR") },
+                  { label: "Tempo méd.", value: `${mPaW.avgSessionMinutes} min` },
+                ].map((k) => (
+                  <div key={k.label} className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
+                    <p className="text-[11px] text-muted-foreground">{k.label}</p>
+                    <p className="text-base font-bold text-sky-700 dark:text-sky-300 mt-0.5">{k.value}</p>
                   </div>
                 ))}
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg border border-border/50 bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Taxa de Engajamento</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-lg font-bold">{engagementRate}%</span>
+                    <span className="text-[10px] text-muted-foreground">DAU / MAU</span>
+                  </div>
+                  <div className="h-1.5 bg-secondary rounded-full overflow-hidden mt-1.5">
+                    <div className="h-1.5 bg-info rounded-full" style={{ width: `${engagementRate}%` }} />
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border border-border/50 bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Ações por Sessão</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-lg font-bold">{actionsPerSession}</span>
+                    <span className="text-[10px] text-muted-foreground">ações/sessão</span>
+                  </div>
+                  <div className="h-1.5 bg-secondary rounded-full overflow-hidden mt-1.5">
+                    <div className="h-1.5 bg-success rounded-full" style={{ width: `${Math.min(100, parseFloat(actionsPerSession) * 10)}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                <p className="text-sm font-semibold">Tipos de Atividade</p>
+                {activityTypes.map((t) => (
+                  <div key={t.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">{t.label}</span>
+                      <span className="font-medium">{t.pct}%</span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-2 ${t.color} rounded-full`} style={{ width: `${t.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
                 <p className="text-sm font-semibold mb-3">Tendência — Últimos 7 dias</p>
-                <div className="flex items-end gap-1 h-20">
-                  {paW.trendData.map((value, idx) => (
-                    <div key={idx} className="flex-1 bg-sky-400 rounded-t transition-all" style={{ height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%` }} title={`Dia ${idx + 1}: ${value}`} />
+                <div className="flex items-end gap-1.5 h-28">
+                  {mPaW.trendData.map((value, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full bg-sky-400 dark:bg-sky-500 rounded-t transition-all" style={{ height: `${(value / maxTrend) * 100}%` }} title={`Dia ${idx + 1}: ${value}`} />
+                      <span className="text-[9px] text-muted-foreground">{idx + 1}</span>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
           );
+        }
 
-        case "accountsReceivable":
+        case "accountsReceivable": {
+          const outstanding = mArW.creditPlans + mArW.postPaid + mArW.others;
+          const collectionTotal = outstanding + mArW.received;
+          const collectionRate = collectionTotal > 0 ? Math.round((mArW.received / collectionTotal) * 100) : 0;
+          const categories = [
+            { label: "Planos de Crédito", value: mArW.creditPlans, color: "bg-blue-500",    chip: "text-blue-700 dark:text-blue-300",     bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" },
+            { label: "Pós-pagos",         value: mArW.postPaid,    color: "bg-purple-500",  chip: "text-purple-700 dark:text-purple-300", bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800" },
+            { label: "Outros",            value: mArW.others,      color: "bg-amber-500",   chip: "text-amber-700 dark:text-amber-300",   bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+            { label: "Recebido",          value: mArW.received,    color: "bg-green-500",   chip: "text-green-700 dark:text-green-300",   bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" },
+          ];
+          const aging = [
+            { label: "0-30 dias",  pct: 55, color: "bg-emerald-500" },
+            { label: "31-60 dias", pct: 25, color: "bg-amber-500" },
+            { label: "61-90 dias", pct: 12, color: "bg-orange-500" },
+            { label: "90+ dias",   pct: 8,  color: "bg-rose-500" },
+          ];
           return (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                <p className="text-sm text-muted-foreground">Total a Receber</p>
-                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">R$ {arW.total.toLocaleString("pt-BR")},00</p>
-                <p className="text-xs text-success mt-1">+{arW.growth}% vs. período anterior</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total a Receber</p>
+                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">R$ {mArW.total.toLocaleString("pt-BR")},00</p>
+                  </div>
+                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 shrink-0">+{mArW.growth}%</Badge>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="p-4 rounded-xl border border-border/50 bg-muted/20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">Taxa de Cobrança</span>
+                  <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{collectionRate}%</span>
+                </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-2.5 bg-emerald-500 rounded-full" style={{ width: `${collectionRate}%` }} />
+                </div>
+                <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
+                  <span>Recebido: R$ {mArW.received.toLocaleString("pt-BR")}</span>
+                  <span>Pendente: R$ {outstanding.toLocaleString("pt-BR")}</span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold mb-2">Composição</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {categories.map((c) => {
+                    const pct = collectionTotal > 0 ? Math.round((c.value / collectionTotal) * 100) : 0;
+                    return (
+                      <div key={c.label} className={`p-3 rounded-lg border ${c.bg}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-xs font-medium ${c.chip}`}>{c.label}</span>
+                          <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                        </div>
+                        <p className={`text-sm font-bold ${c.chip}`}>R$ {c.value.toLocaleString("pt-BR")}</p>
+                        <div className="h-1.5 bg-secondary/60 rounded-full overflow-hidden mt-1.5">
+                          <div className={`h-1.5 ${c.color} rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                <p className="text-sm font-semibold">Aging (em aberto)</p>
+                {aging.map((a) => (
+                  <div key={a.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">{a.label}</span>
+                      <span className="font-medium">{a.pct}% · R$ {Math.round((outstanding * a.pct) / 100).toLocaleString("pt-BR")}</span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-2 ${a.color} rounded-full`} style={{ width: `${a.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        case "mrr":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-muted-foreground">MRR Total</p>
+                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">R$ {mrrW.total.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-success mt-1">+{mrrW.growth}%</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "Planos de Crédito", value: arW.creditPlans, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
-                  { label: "Pós-pagos", value: arW.postPaid, bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
-                  { label: "Outros Contratos", value: arW.others, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
-                  { label: "Recebido no período", value: arW.received, bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800", text: "text-green-700 dark:text-green-300" },
+                  { label: "Novo MRR", value: mrrW.newMrr, bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800", text: "text-success" },
+                  { label: "Expansão", value: mrrW.expansion, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-600 dark:text-blue-400" },
+                  { label: "Contração", value: mrrW.contraction, bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800", text: "text-destructive" },
                 ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-lg border ${item.bg}`}>
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
                     <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-base font-bold ${item.text}`}>R$ {item.value.toLocaleString("pt-BR")},00</p>
+                    <p className={`text-base font-bold ${item.text}`}>R$ {item.value.toLocaleString("pt-BR")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "churn":
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 text-center">
+                  <p className="text-xs text-muted-foreground">Taxa de Churn</p>
+                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300">{churnW.rate}%</p>
+                </div>
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-center">
+                  <p className="text-xs text-muted-foreground">Clientes Perdidos</p>
+                  <p className="text-3xl font-bold text-red-700 dark:text-red-300">{churnW.lost}</p>
+                </div>
+              </div>
+            </div>
+          );
+
+        case "creditPlans":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
+                <p className="text-sm text-muted-foreground">Total em Planos</p>
+                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">R$ {cpW.total.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-success mt-1">+{cpW.growth}%</p>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Básico", data: cpW.basic, color: "bg-violet-500" },
+                  { label: "Parceiro", data: cpW.partner, color: "bg-blue-500" },
+                  { label: "Premium", data: cpW.premium, color: "bg-amber-500" },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${item.color}`} />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">R$ {item.data.revenue.toLocaleString("pt-BR")}</p>
+                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos · +{item.data.growth}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "activeProjectsWidget":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-muted-foreground">Total de Projetos Ativos</p>
+                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{apW.total}</p>
+                <p className="text-xs text-success mt-1">+{apW.growth}%</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Agências", value: apW.agencies, change: apW.agenciesGrowth, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Lead Premium", value: apW.leadPremium, change: apW.leadPremiumGrowth, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+                  { label: "Nômades", value: apW.nomades, change: apW.nomadesGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-xl font-bold ${item.text}`}>{item.value}</p>
+                    <p className="text-xs text-success">+{item.change}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+        case "averageTicket":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">R$ {atW.average?.toLocaleString("pt-BR") ?? "—"}</p>
+                {atW.growth != null && <p className="text-xs text-success mt-1">+{atW.growth}%</p>}
+              </div>
+            </div>
+          );
+
+        case "ltv":
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
+                <p className="text-sm text-muted-foreground">LTV Médio</p>
+                <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">R$ {ltvW.average?.toLocaleString("pt-BR") ?? "—"}</p>
+                {ltvW.growth != null && <p className="text-xs text-success mt-1">+{ltvW.growth}%</p>}
+              </div>
+            </div>
+          );
+
+        default:
+          return (
+            <div className="text-center py-8 space-y-2">
+              <div className="p-3 bg-muted/30 rounded-full w-fit mx-auto">
+                <Settings className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">Detalhes detalhados em breve para este widget.</p>
+            </div>
+          );
+      }
+    };
+
+    return (
+      <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
+        <DialogContent className="max-w-xl p-0 overflow-hidden">
+          {/* Brand-gradient header (follows sidebar theme) */}
+          <div className="app-brand-header p-5 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+                  {cfg.icon}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold leading-tight truncate">{title}</h2>
+                  <p className="text-xs text-white/80 mt-0.5">{cfg.subtitle}</p>
+                </div>
+              </div>
+              <span className="text-[11px] bg-white/20 text-white rounded-full px-2.5 py-1 shrink-0 whitespace-nowrap">
+                {modalPeriod.label}
+              </span>
+            </div>
+          </div>
+          {/* Content */}
+          <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+            {renderContent()}
+          </div>
+          {/* Footer */}
+          <div className="px-5 pb-5 pt-2 border-t border-border/40 flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5 bg-transparent" onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}>
+              <Share2 className="h-3.5 w-3.5" />
+              Compartilhar
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5 bg-transparent" onClick={() => exportWidgetToPng(detailsWidgetId!, title)}>
+              <Download className="h-3.5 w-3.5" />
+              Exportar PNG
+            </Button>
+            <Button variant="outline" size="sm" className="bg-transparent" onClick={() => setDetailsWidgetId(null)}>
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Total", value: `R$ ${rv.total.toLocaleString("pt-BR")}`, change: `+${rv.growth}%`, bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
+                  { label: "Planos de Crédito", value: `R$ ${rv.creditPlan.toLocaleString("pt-BR")}`, change: `+${rv.creditPlanGrowth}%`, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Recorrente", value: `R$ ${rv.recurring.toLocaleString("pt-BR")}`, change: `+${rv.recurringGrowth}%`, bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`text-base font-bold ${item.text}`}>{item.value}</p>
+                    <p className="text-xs text-success">{item.change}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                <p className="text-sm font-semibold mb-3">Distribuição da Receita</p>
+                {[
+                  { label: "Planos de Crédito", value: rv.creditPlan, color: "bg-blue-500" },
+                  { label: "Recorrente", value: rv.recurring, color: "bg-purple-500" },
+                  { label: "Avulso", value: rv.oneTime, color: "bg-amber-500" },
+                ].map(item => (
+                  <div key={item.label} className="mb-2">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-medium">R$ {item.value.toLocaleString("pt-BR")}</span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.value / rv.total) * 100}%` }} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -3643,7 +4074,9 @@ export default function AdminDashboardPage() {
     );
 
     switch (widget.type) {
-      case "metrics":
+      case "metrics": {
+        const isCollapsed = !!collapsedWidgets[widget.id];
+        const visibleCount = metricCards.filter((m) => m.visible).length;
         return (
           <div
             key={widget.id}
@@ -3680,29 +4113,44 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Métricas principais da plataforma
                     </p>
+                    {isCollapsed && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {visibleCount} {visibleCount === 1 ? "indicador" : "indicadores"} · {effectivePeriod.label}
+                      </p>
+                    )}
                   </div>
+                  <button
+                    onClick={() => toggleWidgetCollapse(widget.id)}
+                    title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
+                    className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
+                  >
+                    {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
                 {/* Controls row */}
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    onClick={() => setIsEditingMetrics(!isEditingMetrics)}
-                    title={isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
-                    className={cn(
-                      "flex items-center justify-center h-7 w-7 rounded-md border shrink-0 transition-all duration-200",
-                      isEditingMetrics
-                        ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30"
-                        : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                    )}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </button>
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
+                {!isCollapsed && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                      title={isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
+                      className={cn(
+                        "flex items-center justify-center h-7 w-7 rounded-md border shrink-0 transition-all duration-200",
+                        isEditingMetrics
+                          ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30"
+                          : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                      )}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <WidgetPeriodSelector widgetId={widget.id} />
+                  </div>
+                )}
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
                 />
               </CardHeader>
+              {!isCollapsed && (
               <CardContent>
                 {isEditingMetrics && metricCards.some((m) => !m.visible) && (
                   <div className="mb-4 p-3 bg-muted/50 rounded-lg border-2 border-dashed">
@@ -3760,9 +4208,11 @@ export default function AdminDashboardPage() {
                   })()}
                 </div>
               </CardContent>
+              )}
             </Card>
           </div>
         );
+      }
 
       case "userDistribution":
         return (
@@ -6405,7 +6855,9 @@ export default function AdminDashboardPage() {
           </Card>
         );
 
-      case "platformActivities":
+      case "platformActivities": {
+        const wPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
+        const isCollapsed = !!collapsedWidgets[widget.id];
         return (
           <Card key={widget.id} className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -6420,16 +6872,31 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Engajamento e tempo na plataforma
                   </p>
+                  {isCollapsed && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {wPaW.mau.toLocaleString("pt-BR")} MAU · {wPaW.activeAgencies} agências ativas
+                    </p>
+                  )}
                 </div>
+                <button
+                  onClick={() => toggleWidgetCollapse(widget.id)}
+                  title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
+                  className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
+                >
+                  {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                </button>
               </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
+              {!isCollapsed && (
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+              )}
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
               />
             </CardHeader>
+            {!isCollapsed && (
             <CardContent>
               <div className="space-y-4">
                 {/* Main metrics */}
@@ -6440,7 +6907,7 @@ export default function AdminDashboardPage() {
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-2xl font-bold">
-                        {paW.activeAgencies}
+                        {wPaW.activeAgencies}
                       </span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
@@ -6454,7 +6921,7 @@ export default function AdminDashboardPage() {
                     </p>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-2xl font-bold">
-                        {paW.avgSessionMinutes} min
+                        {wPaW.avgSessionMinutes} min
                       </span>
                       <span className="flex items-center text-xs text-success font-medium">
                         <TrendingUp className="h-3 w-3" />
@@ -6468,12 +6935,12 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                   <div>
                     <p className="text-xs text-muted-foreground">MAU</p>
-                    <span className="text-lg font-semibold">{paW.mau}</span>
+                    <span className="text-lg font-semibold">{wPaW.mau}</span>
                     <span className="text-xs text-success">+5%</span>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">DAU</p>
-                    <span className="text-lg font-semibold">{paW.dau}</span>
+                    <span className="text-lg font-semibold">{wPaW.dau}</span>
                     <span className="text-xs text-success">+3%</span>
                   </div>
                 </div>
@@ -6482,7 +6949,7 @@ export default function AdminDashboardPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Sessões</p>
                     <span className="text-lg font-semibold">
-                      {paW.sessions.toLocaleString("pt-BR")}
+                      {wPaW.sessions.toLocaleString("pt-BR")}
                     </span>
                   </div>
                   <div>
@@ -6490,7 +6957,7 @@ export default function AdminDashboardPage() {
                       Ações executadas
                     </p>
                     <span className="text-lg font-semibold">
-                      {paW.actionsExecuted.toLocaleString("pt-BR")}
+                      {wPaW.actionsExecuted.toLocaleString("pt-BR")}
                     </span>
                   </div>
                 </div>
@@ -6501,12 +6968,12 @@ export default function AdminDashboardPage() {
                     Atividade (últimos 7 dias)
                   </p>
                   <div className="flex items-end gap-1 h-16">
-                    {paW.trendData.map((value, idx) => (
+                    {wPaW.trendData.map((value, idx) => (
                       <div
                         key={idx}
                         className="flex-1 bg-info rounded-t"
                         style={{
-                          height: `${(value / Math.max(1, Math.max(...paW.trendData))) * 100}%`,
+                          height: `${(value / Math.max(1, Math.max(...wPaW.trendData))) * 100}%`,
                         }}
                         title={`Dia ${idx + 1}: ${value} ações`}
                       />
@@ -6548,8 +7015,10 @@ export default function AdminDashboardPage() {
                 {/* Actions */}
               </div>
             </CardContent>
+            )}
           </Card>
         );
+      }
 
       case "nomads":
         return (
@@ -7094,7 +7563,9 @@ export default function AdminDashboardPage() {
           </div>
         );
 
-      case "accountsReceivable":
+      case "accountsReceivable": {
+        const wArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
+        const isCollapsed = !!collapsedWidgets[widget.id];
         return (
           <div
             key={widget.id}
@@ -7130,16 +7601,31 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Contas a receber por categoria
                     </p>
+                    {isCollapsed && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        R$ {wArW.total.toLocaleString("pt-BR")},00 · +{wArW.growth}%
+                      </p>
+                    )}
                   </div>
+                  <button
+                    onClick={() => toggleWidgetCollapse(widget.id)}
+                    title={isCollapsed ? "Expandir widget" : "Reduzir widget"}
+                    className="flex items-center justify-center h-7 w-7 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
+                  >
+                    {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
+                {!isCollapsed && (
+                  <div className="mt-2">
+                    <WidgetPeriodSelector widgetId={widget.id} />
+                  </div>
+                )}
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
                 />
               </CardHeader>
+              {!isCollapsed && (
               <CardContent className="space-y-4">
                 {/* Total a Receber */}
                 <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800">
@@ -7148,11 +7634,11 @@ export default function AdminDashboardPage() {
                       Total a Receber
                     </span>
                     <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-                      +{arW.growth}%
+                      +{wArW.growth}%
                     </Badge>
                   </div>
                   <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                    R$ {arW.total.toLocaleString("pt-BR")},00
+                    R$ {wArW.total.toLocaleString("pt-BR")},00
                   </div>
                 </div>
 
@@ -7171,7 +7657,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                      R$ {arW.creditPlans.toLocaleString("pt-BR")},00
+                      R$ {wArW.creditPlans.toLocaleString("pt-BR")},00
                     </span>
                   </div>
 
@@ -7184,7 +7670,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                      R$ {arW.postPaid.toLocaleString("pt-BR")},00
+                      R$ {wArW.postPaid.toLocaleString("pt-BR")},00
                     </span>
                   </div>
 
@@ -7197,7 +7683,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                      R$ {arW.others.toLocaleString("pt-BR")},00
+                      R$ {wArW.others.toLocaleString("pt-BR")},00
                     </span>
                   </div>
 
@@ -7210,7 +7696,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="text-sm font-bold text-green-700 dark:text-green-300">
-                      R$ {arW.received.toLocaleString("pt-BR")},00
+                      R$ {wArW.received.toLocaleString("pt-BR")},00
                     </span>
                   </div>
                 </div>
@@ -7227,10 +7713,10 @@ export default function AdminDashboardPage() {
                       "Contas a Receber — Composição",
                       "bar",
                       [
-                        { date: "Planos de Crédito", value: arW.creditPlans },
-                        { date: "Pós-pagos", value: arW.postPaid },
-                        { date: "Outros", value: arW.others },
-                        { date: "Recebido", value: arW.received },
+                        { date: "Planos de Crédito", value: wArW.creditPlans },
+                        { date: "Pós-pagos", value: wArW.postPaid },
+                        { date: "Outros", value: wArW.others },
+                        { date: "Recebido", value: wArW.received },
                       ],
                     )
                   }
@@ -7239,9 +7725,11 @@ export default function AdminDashboardPage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>
+              )}
             </Card>
           </div>
         );
+      }
 
       case "tasks":
         return (
