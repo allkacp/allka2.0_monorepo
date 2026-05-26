@@ -3646,20 +3646,74 @@ export default function AdminDashboardPage() {
         case "mrr":
           return (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-muted-foreground">MRR Total</p>
-                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">R$ {mrrW.total.toLocaleString("pt-BR")}</p>
-                <p className="text-xs text-success mt-1">+{mrrW.growth}%</p>
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">MRR Total</p>
+                    <p className="text-3xl font-bold mt-0.5">R$ {mrrW.total.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">ARR: <span className="font-semibold text-foreground">R$ {(mrrW.total * 12 / 1000).toFixed(0)}k</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">+{mrrW.growth}%</p>
+                    <p className="text-xs text-muted-foreground">{mrrW.newContracts} novos contratos</p>
+                    <p className="text-xs font-medium text-destructive">Churn: {mrrW.churnRate}%</p>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              {/* Composition cards */}
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Novo MRR", value: mrrW.newMrr, bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800", text: "text-success" },
-                  { label: "Expansão", value: mrrW.expansion, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800", text: "text-blue-600 dark:text-blue-400" },
-                  { label: "Contração", value: mrrW.contraction, bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800", text: "text-destructive" },
+                  { label: "New MRR",    value: mrrW.newMrr,       sign: "+", bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
+                  { label: "Expansion",  value: mrrW.expansion,    sign: "+", bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",             text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Contraction",value: mrrW.contraction,  sign: "-", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",         text: "text-amber-700 dark:text-amber-300" },
+                  { label: "Churn R$",   value: mrrW.churnRevenue, sign: "-", bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",                 text: "text-red-700 dark:text-red-300" },
                 ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-lg border text-center ${item.bg}`}>
+                  <div key={item.label} className={`p-3 rounded-xl border ${item.bg}`}>
                     <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-base font-bold ${item.text}`}>R$ {item.value.toLocaleString("pt-BR")}</p>
+                    <p className={`text-lg font-bold ${item.text}`}>{item.sign}R$ {item.value.toLocaleString("pt-BR")}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Base & Net */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl border bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Base MRR</p>
+                  <p className="text-lg font-bold">R$ {(mrrW.baseMrr / 1000).toFixed(1)}k</p>
+                </div>
+                <div className={`p-3 rounded-xl border ${mrrW.netChange >= 0 ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"}`}>
+                  <p className="text-xs text-muted-foreground">Net Change</p>
+                  <p className={`text-lg font-bold ${mrrW.netChange >= 0 ? "text-success" : "text-destructive"}`}>{mrrW.netChange >= 0 ? "+" : ""}R$ {mrrW.netChange.toLocaleString("pt-BR")}</p>
+                </div>
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Composição</p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  {[
+                    { pct: (mrrW.newMrr / Math.max(1, mrrW.total)) * 100,      color: "bg-emerald-500" },
+                    { pct: (mrrW.expansion / Math.max(1, mrrW.total)) * 100,   color: "bg-blue-500" },
+                    { pct: (mrrW.baseMrr / Math.max(1, mrrW.total)) * 100,     color: "bg-slate-400" },
+                    { pct: (mrrW.contraction / Math.max(1, mrrW.total)) * 100, color: "bg-amber-400" },
+                    { pct: (mrrW.churnRevenue / Math.max(1, mrrW.total)) * 100,color: "bg-red-500" },
+                  ].map((s, i) => <div key={i} className={`${s.color} transition-all`} style={{ width: `${s.pct}%` }} />)}
+                </div>
+                <div className="flex gap-3 mt-2 flex-wrap">
+                  {[["bg-emerald-500","New"],["bg-blue-500","Expansion"],["bg-slate-400","Base"],["bg-amber-400","Contraction"],["bg-red-500","Churn"]].map(([c,l]) => (
+                    <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                  ))}
+                </div>
+              </div>
+              {/* Trend summary */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "Menor",  value: `R$ ${(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k`, bg: "bg-muted/20" },
+                  { label: "Médio",  value: `R$ ${(mrrW.trendData.reduce((a, b) => a + b, 0) / mrrW.trendData.length / 1000).toFixed(1)}k`, bg: "bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800" },
+                  { label: "Atual",  value: `R$ ${(mrrW.total / 1000).toFixed(1)}k`, bg: "bg-primary/10" },
+                ].map(s => (
+                  <div key={s.label} className={`p-2 rounded-lg ${s.bg} text-center`}>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                    <p className="text-sm font-bold">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -3749,13 +3803,112 @@ export default function AdminDashboardPage() {
         case "ltv":
           return (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
-                <p className="text-sm text-muted-foreground">LTV Médio</p>
-                <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">R$ {ltvW.average?.toLocaleString("pt-BR") ?? "—"}</p>
-                {ltvW.growth != null && <p className="text-xs text-success mt-1">+{ltvW.growth}%</p>}
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-chart-4/10 border border-chart-4/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">LTV Médio</p>
+                    <p className="text-3xl font-bold mt-0.5">R$ {ltvW.value.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">LTV = 24 meses × R$ 420/mês</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">+{ltvW.growth}%</p>
+                    <div className="mt-1 px-2 py-0.5 rounded bg-info/10 text-info text-xs">Confiança 78%</div>
+                  </div>
+                </div>
+              </div>
+              {/* Type breakdown */}
+              {[
+                { label: "Agências",     icon: <Building2 className="h-4 w-4" />, value: ltvW.agencies,    growth: ltvW.agenciesGrowth,    up: true,  detail: "28 meses × R$ 507/mês", bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
+                { label: "Lead Premium", icon: <Star className="h-4 w-4" />,      value: ltvW.leadPremium, growth: ltvW.leadPremiumGrowth,  up: true,  detail: "22 meses × R$ 414/mês", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+                { label: "Nômades",      icon: <Users className="h-4 w-4" />,     value: ltvW.nomades,     growth: ltvW.nomadesGrowth,      up: false, detail: "12 meses × R$ 350/mês", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
+              ].map(t => (
+                <div key={t.label} className={`flex items-center gap-3 p-4 rounded-xl border ${t.bg}`}>
+                  <div className="shrink-0">{t.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">{t.label}</p>
+                    <p className="text-xs text-muted-foreground">{t.detail}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-lg font-bold ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
+                    <p className={`text-xs font-medium ${t.up ? "text-success" : "text-warning"}`}>{t.up ? "+" : ""}{t.growth}%</p>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 p-4 rounded-xl border bg-muted/10 opacity-60">
+                <UserCheck className="h-4 w-4 shrink-0" />
+                <div className="flex-1"><p className="text-sm font-semibold">Free</p><p className="text-xs text-muted-foreground">Excluído do cálculo</p></div>
+                <p className="text-lg font-bold text-muted-foreground">R$ 0</p>
+              </div>
+              {/* Distribution */}
+              <div>
+                <p className="text-sm font-semibold mb-3">Distribuição de LTVs</p>
+                <div className="space-y-2">
+                  {[
+                    { label: "R$ 0–1k",  value: ltvW.hist0to1k,   color: "bg-muted-foreground" },
+                    { label: "R$ 1–5k",  value: ltvW.hist1kto5k,  color: "bg-info" },
+                    { label: "R$ 5–15k", value: ltvW.hist5kto15k, color: "bg-chart-4" },
+                    { label: "R$ 15k+",  value: ltvW.hist15kplus, color: "bg-success" },
+                  ].map(h => (
+                    <div key={h.label} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">{h.label}</span>
+                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full ${h.color} rounded-full`} style={{ width: `${Math.min(100, (h.value / 400) * 100)}%` }} /></div>
+                      <span className="text-xs font-semibold w-8 text-right">{h.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           );
+
+        case "cmv": {
+          const mCmv = mData.cmv;
+          const mCmvCats = [
+            { label: "Nômades",   value: mCmv.nomades.value,   pct: mCmv.nomades.percent,   color: "bg-blue-500",   text: "text-blue-700 dark:text-blue-300",   bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" },
+            { label: "Impostos",  value: mCmv.impostos.value,  pct: mCmv.impostos.percent,  color: "bg-amber-500",  text: "text-amber-700 dark:text-amber-300",  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+            { label: "Comissões", value: mCmv.comissoes.value, pct: mCmv.comissoes.percent, color: "bg-violet-500", text: "text-violet-700 dark:text-violet-300", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" },
+            { label: "Outros",    value: mCmv.outros.value,    pct: mCmv.outros.percent,    color: "bg-slate-400",  text: "text-slate-700 dark:text-slate-300",  bg: "bg-muted/20" },
+          ];
+          return (
+            <div className="space-y-4">
+              {/* Hero */}
+              <div className={`p-4 rounded-xl border ${mCmv.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"}`}>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">CMV</p>
+                    <p className="text-3xl font-bold mt-0.5">{mCmv.cmvPercent.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Custos <span className="font-semibold text-foreground">R$ {(mCmv.totalCosts / 1000).toFixed(1)}k</span> / Receita <span className="font-semibold text-foreground">R$ {(mCmv.revenue / 1000).toFixed(1)}k</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${mCmv.variation.cmvPercent < 0 ? "text-success" : "text-destructive"}`}>{mCmv.variation.cmvPercent < 0 ? "↓" : "↑"} {Math.abs(mCmv.variation.cmvPercent).toFixed(1)}pp</p>
+                    {mCmv.cmvPercent > 30 && <p className="text-xs text-warning font-medium mt-1">⚠ CMV alto</p>}
+                  </div>
+                </div>
+              </div>
+              {/* Category cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {mCmvCats.map(cat => (
+                  <div key={cat.label} className={`p-3 rounded-xl border ${cat.bg}`}>
+                    <p className="text-xs text-muted-foreground">{cat.label}</p>
+                    <p className={`text-lg font-bold ${cat.text}`}>R$ {(cat.value / 1000).toFixed(1)}k</p>
+                    <div className="mt-1.5 h-1.5 bg-background/60 rounded-full overflow-hidden"><div className={`h-full ${cat.color} rounded-full`} style={{ width: `${cat.pct}%` }} /></div>
+                    <p className="text-[10px] text-muted-foreground mt-1">{cat.pct.toFixed(0)}% do total</p>
+                  </div>
+                ))}
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">Composição do CMV</p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  {mCmvCats.map(c => <div key={c.label} className={`${c.color} transition-all`} style={{ width: `${c.pct}%` }} title={`${c.label}: ${c.pct.toFixed(0)}%`} />)}
+                </div>
+                <div className="flex gap-3 mt-2 flex-wrap">
+                  {mCmvCats.map(c => <div key={c.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c.color}`} /><span className="text-[10px] text-muted-foreground">{c.label}</span></div>)}
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         case "tasks": {
           const mt = mData.tasks;
@@ -5850,7 +6003,16 @@ export default function AdminDashboardPage() {
           </div>
         );
 
-      case "mrr":
+      case "mrr": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wMrrW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).mrr;
+        const mrrComposition = [
+          { label: "New",        value: wMrrW.newMrr,      color: "bg-emerald-500", pct: (wMrrW.newMrr / Math.max(1, wMrrW.total)) * 100 },
+          { label: "Expansion",  value: wMrrW.expansion,   color: "bg-blue-500",    pct: (wMrrW.expansion / Math.max(1, wMrrW.total)) * 100 },
+          { label: "Base",       value: wMrrW.baseMrr,     color: "bg-slate-400",   pct: (wMrrW.baseMrr / Math.max(1, wMrrW.total)) * 100 },
+          { label: "Contraction",value: wMrrW.contraction, color: "bg-amber-400",   pct: (wMrrW.contraction / Math.max(1, wMrrW.total)) * 100 },
+          { label: "Churn",      value: wMrrW.churnRevenue,color: "bg-red-500",     pct: (wMrrW.churnRevenue / Math.max(1, wMrrW.total)) * 100 },
+        ];
         return (
           <div
             key={widget.id}
@@ -5870,8 +6032,8 @@ export default function AdminDashboardPage() {
             )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="h-full border-0 shadow-lg">
-              <CardHeader className="pb-4 relative">
+            <Card className="h-full border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
                   {isCustomizeMode && (
                     <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -5880,304 +6042,98 @@ export default function AdminDashboardPage() {
                     <TrendingUp className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Receita recorrente mensal
-                    </p>
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Receita recorrente mensal</p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* MRR Explanation Info */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-muted/60 dark:to-muted/40 border border-blue-200 dark:border-border rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-blue-900 dark:text-foreground">
-                        O que é MRR?
-                      </p>
-                      <p className="text-xs text-blue-800 dark:text-muted-foreground leading-relaxed">
-                        MRR (Monthly Recurring Revenue) é a receita previsível
-                        gerada mensalmente. Inclui New (novos contratos),
-                        Expansion (aumentos), Base (receita existente),
-                        Contraction (reduções) e Churn (cancelamentos).
-                      </p>
+              <CardContent className="px-4 pb-4 space-y-4">
+                {/* Hero value */}
+                <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">MRR Total</p>
+                    <p className="text-3xl font-bold tracking-tight">R$ {wMrrW.total.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">ARR: <span className="font-semibold text-foreground">R$ {(wMrrW.total * 12 / 1000).toFixed(0)}k</span></p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
+                      <ArrowUpRight className="h-4 w-4" />+{wMrrW.growth}%
                     </div>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                    <div className="mt-2 text-xs font-medium text-muted-foreground">Churn Rate: <span className="text-destructive font-bold">{wMrrW.churnRate}%</span></div>
                   </div>
                 </div>
 
-                {/* MRR Total */}
-                <div className="pb-4 border-b">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">
-                      R$ {mrrW.total.toLocaleString("pt-BR")}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm font-medium text-success">
-                      <ArrowUpRight className="w-4 h-4" />+{mrrW.growth}%
+                {/* Composition pills */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "New",         value: wMrrW.newMrr,       sign: "+", bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800" },
+                    { label: "Expansion",   value: wMrrW.expansion,    sign: "+", bg: "bg-blue-500/10",    text: "text-blue-600 dark:text-blue-400",       border: "border-blue-200 dark:border-blue-800" },
+                    { label: "Contraction", value: wMrrW.contraction,  sign: "-", bg: "bg-amber-500/10",   text: "text-amber-600 dark:text-amber-400",     border: "border-amber-200 dark:border-amber-800" },
+                    { label: "Churn R$",    value: wMrrW.churnRevenue, sign: "-", bg: "bg-red-500/10",     text: "text-red-600 dark:text-red-400",         border: "border-red-200 dark:border-red-800" },
+                  ].map(item => (
+                    <div key={item.label} className={`px-3 py-2.5 rounded-lg border ${item.bg} ${item.border}`}>
+                      <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
+                      <p className={`text-base font-bold ${item.text}`}>{item.sign}R$ {item.value.toLocaleString("pt-BR")}</p>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      vs período anterior
-                    </span>
+                  ))}
+                </div>
+
+                {/* Composition bar */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Composição</p>
+                    <p className="text-xs text-muted-foreground">Base: R$ {(wMrrW.baseMrr / 1000).toFixed(1)}k</p>
+                  </div>
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-muted gap-px">
+                    {mrrComposition.map(c => (
+                      <div key={c.label} className={`${c.color} transition-all`} style={{ width: `${c.pct}%` }} title={`${c.label}: R$ ${c.value.toLocaleString("pt-BR")}`} />
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-2 flex-wrap">
+                    {mrrComposition.map(c => (
+                      <div key={c.label} className="flex items-center gap-1">
+                        <div className={`h-1.5 w-1.5 rounded-full ${c.color}`} />
+                        <span className="text-[10px] text-muted-foreground">{c.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* MRR Breakdown */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-                  <div className="space-y-1 bg-green-50 p-2.5 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-success rounded-full" />
-                      <div className="text-xs text-muted-foreground font-medium">
-                        New
-                        <span
-                          className="text-green-700"
-                          title="Novos contratos adquiridos neste período"
-                        >
-                          {" "}
-                          (novos)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold text-success">
-                      +R$ {mrrW.newMrr.toLocaleString("pt-BR")}
-                    </div>
+                {/* Trend bars */}
+                <div className="pt-1 border-t">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold">Tendência</p>
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] dark:bg-green-950/20 dark:text-green-400 dark:border-green-800">
+                      <TrendingUp className="h-2.5 w-2.5 mr-1" />+{wMrrW.trendGrowth}%
+                    </Badge>
                   </div>
-
-                  <div className="space-y-1 bg-blue-50 p-2.5 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-info rounded-full" />
-                      <div className="text-xs text-muted-foreground font-medium">
-                        Expansion
-                        <span
-                          className="text-blue-700"
-                          title="Aumento de valor em contratos existentes"
-                        >
-                          {" "}
-                          (crescimento)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold text-info">
-                      +R$ {mrrW.expansion.toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-warning rounded-full" />
-                      <div className="text-xs text-muted-foreground font-medium">
-                        Contraction
-                        <span
-                          className="text-amber-700"
-                          title="Redução de valor em contratos existentes"
-                        >
-                          {" "}
-                          (redução)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold text-warning">
-                      -R$ {mrrW.contraction.toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 bg-red-50 p-2.5 rounded-lg border border-red-200">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-destructive rounded-full" />
-                      <div className="text-xs text-muted-foreground font-medium">
-                        Churn (R$)
-                        <span
-                          className="text-red-700"
-                          title="Contratos cancelados neste período"
-                        >
-                          {" "}
-                          (cancelado)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold text-destructive">
-                      -R$ {mrrW.churnRevenue.toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Churn Percentage */}
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      Churn Rate
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <div className="text-base font-semibold text-destructive">
-                        {mrrW.churnRate}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        (revenue churn)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Additional Metrics */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">
-                      Contratações recorrentes
-                    </div>
-                    <div className="text-xl font-bold">{mrrW.newContracts}</div>
-                    <div className="text-xs text-muted-foreground">
-                      (novas no período)
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">
-                      ARR estimado
-                    </div>
-                    <div className="text-xl font-bold">
-                      R$ {(mrrW.total * 12).toLocaleString("pt-BR")}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      (MRR × 12)
-                    </div>
-                  </div>
-                </div>
-
-                {/* MRR Composition Visualization */}
-                <div className="pt-2 border-t">
-                  <div className="text-sm font-medium mb-2">
-                    Composição do MRR
-                  </div>
-                  <div className="flex h-3 rounded-full overflow-hidden bg-muted">
-                    <div
-                      className="bg-success transition-all"
-                      style={{ width: "11.5%" }}
-                      title="New: R$ 9.000"
-                    />
-                    <div
-                      className="bg-info transition-all"
-                      style={{ width: "5.3%" }}
-                      title="Expansion: R$ 4.200"
-                    />
-                    <div
-                      className="bg-muted transition-all"
-                      style={{ width: "78.4%" }}
-                      title="Base MRR: R$ 61.520"
-                    />
-                    <div
-                      className="bg-warning transition-all"
-                      style={{ width: "1.9%" }}
-                      title="Contraction: R$ 1.500"
-                    />
-                    <div
-                      className="bg-destructive transition-all"
-                      style={{ width: "4.8%" }}
-                      title="Churn: R$ 3.800"
-                    />
-                  </div>
-                  <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                    <span>Base: R$ {mrrW.baseMrr.toLocaleString("pt-BR")}</span>
-                    <span>
-                      Net Change: {mrrW.netChange >= 0 ? "+" : ""}R${" "}
-                      {mrrW.netChange.toLocaleString("pt-BR")}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Mini Trend Chart */}
-                <div className="pt-2 border-t">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold">
-                          Tendência de MRR
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Últimos 6 meses - Crescimento consistente
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 text-green-700 border-green-200 text-xs"
-                      >
-                        <TrendingUp className="h-3 w-3 mr-1" />+
-                        {mrrW.trendGrowth}%
-                      </Badge>
-                    </div>
-
-                    {/* Enhanced Bar Chart */}
-                    <div className="flex items-end justify-between gap-1.5 h-20 bg-gradient-to-b from-blue-50 to-transparent p-3 rounded-lg border border-blue-100">
-                      {mrrW.trendData.map((data, idx) => {
-                        const maxValue =
-                          mrrW.trendData[mrrW.trendData.length - 1];
-                        const height = (data / Math.max(1, maxValue)) * 100;
-                        const isLast = idx === 5;
-                        return (
+                  <div className="flex items-end gap-1 h-16">
+                    {wMrrW.trendData.map((v, i) => {
+                      const maxV = Math.max(1, ...wMrrW.trendData);
+                      const isLast = i === wMrrW.trendData.length - 1;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
                           <div
-                            key={idx}
-                            className="flex-1 flex flex-col items-center gap-1 group cursor-pointer"
-                          >
-                            <div
-                              className={cn(
-                                "w-full rounded-t transition-all duration-300 group-hover:opacity-100",
-                                isLast
-                                  ? "bg-gradient-to-t from-blue-600 to-blue-400 opacity-100"
-                                  : "bg-gradient-to-t from-blue-400 to-blue-200 opacity-60 group-hover:opacity-80",
-                              )}
-                              style={{ height: `${height}%` }}
-                            />
-                            <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                              {["Jun", "Jul", "Ago", "Set", "Out", "Nov"][idx]}
-                            </span>
-                            <span className="text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6">
-                              R$ {(data / 1000).toFixed(0)}k
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Trend Summary */}
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="bg-green-50 border border-green-200 rounded p-2">
-                        <p className="text-muted-foreground">Menor</p>
-                        <p className="font-semibold">
-                          R$ {(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k
-                        </p>
-                      </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                        <p className="text-muted-foreground">Médio</p>
-                        <p className="font-semibold">
-                          R${" "}
-                          {(
-                            mrrW.trendData.reduce((a, b) => a + b, 0) /
-                            mrrW.trendData.length /
-                            1000
-                          ).toFixed(1)}
-                          k
-                        </p>
-                      </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                        <p className="text-muted-foreground">Atual</p>
-                        <p className="font-semibold text-blue-600">
-                          R$ {(mrrW.total / 1000).toFixed(1)}k
-                        </p>
-                      </div>
-                    </div>
+                            className={cn("w-full rounded-t transition-all", isLast ? "bg-primary" : "bg-primary/30 group-hover:bg-primary/60")}
+                            style={{ height: `${(v / maxV) * 100}%` }}
+                            title={`R$ ${(v / 1000).toFixed(0)}k`}
+                          />
+                          <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J","J","A","S","O","N","D"][i] ?? i+1}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         );
+      }
 
       case "churn":
         return (
@@ -6523,438 +6479,234 @@ export default function AdminDashboardPage() {
           </Card>
         );
 
-      case "ltv":
+      case "ltv": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wLtvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).ltv;
+        const ltvTypes = [
+          { label: "Agências",      icon: <Building2 className="h-4 w-4" />, value: wLtvW.agencies,    growth: wLtvW.agenciesGrowth,    up: true,  detail: "28 meses × R$ 507/mês", bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   border: "border-blue-200 dark:border-blue-800" },
+          { label: "Lead Premium",  icon: <Star className="h-4 w-4" />,      value: wLtvW.leadPremium, growth: wLtvW.leadPremiumGrowth,  up: true,  detail: "22 meses × R$ 414/mês", bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400",border: "border-violet-200 dark:border-violet-800" },
+          { label: "Nômades",       icon: <Users className="h-4 w-4" />,     value: wLtvW.nomades,     growth: wLtvW.nomadesGrowth,      up: false, detail: "12 meses × R$ 350/mês", bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800" },
+        ];
         return (
-          <Card className="overflow-hidden" data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
-                  <TrendingUp className="h-4 w-4 text-chart-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    LTV (Lifetime Value)
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Valor vitalício do cliente
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* LTV Geral */}
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <div className="text-3xl font-bold">
-                    R$ {ltvW.value.toLocaleString("pt-BR")}
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
+                    <TrendingUp className="h-4 w-4 text-chart-4" />
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                    <span>Tempo médio: 24 meses</span>
-                    <span>•</span>
-                    <span>Ticket médio: R$ 420/mês</span>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Valor vitalício do cliente</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-sm">
-                  <ArrowUp className="h-4 w-4 text-success" />
-                  <span className="text-success font-semibold">
-                    +{ltvW.growth}%
-                  </span>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-              </div>
-
-              {/* Confiança */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-info-muted rounded-lg">
-                <Info className="h-4 w-4 text-info" />
-                <span className="text-xs text-info-foreground">
-                  Confiança: 78% (baseado em {Math.floor(2847 * 0.78)} clientes
-                  com histórico completo)
-                </span>
-              </div>
-
-              {/* Fórmula */}
-              <div className="px-3 py-2 bg-muted/50 rounded-lg">
-                <div className="text-xs font-mono text-muted-foreground">
-                  LTV = Tempo médio de vida (meses) × Ticket médio mensal
-                </div>
-              </div>
-
-              {/* Breakdown por tipo */}
-              <div className="space-y-3">
-                <div className="text-sm font-semibold">Por tipo de conta:</div>
-
-                {/* Agências */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Agências</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      28 meses × R$ 507/mês
-                    </div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-4">
+                {/* Hero */}
+                <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-gradient-to-br from-chart-4/10 to-chart-4/5 border border-chart-4/20">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">LTV Médio</p>
+                    <p className="text-3xl font-bold tracking-tight">R$ {wLtvW.value.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">24 meses × R$ 420/mês</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold">
-                      R$ {ltvW.agencies.toLocaleString("pt-BR")}
+                    <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
+                      <ArrowUp className="h-4 w-4" />+{wLtvW.growth}%
                     </div>
-                    <div className="flex items-center gap-1 text-xs justify-end">
-                      <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">
-                        +{ltvW.agenciesGrowth}%
-                      </span>
-                    </div>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                    <div className="mt-2 px-2 py-1 rounded-md bg-info/10 text-info text-xs font-medium">Confiança 78%</div>
                   </div>
                 </div>
 
-                {/* Lead Premium */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Lead Premium</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      22 meses × R$ 414/mês
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold">
-                      R$ {ltvW.leadPremium.toLocaleString("pt-BR")}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs justify-end">
-                      <ArrowUp className="h-3 w-3 text-success" />
-                      <span className="text-success font-semibold">
-                        +{ltvW.leadPremiumGrowth}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nômades */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Nômades</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      12 meses × R$ 350/mês
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold">
-                      R$ {ltvW.nomades.toLocaleString("pt-BR")}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs justify-end">
-                      <ArrowDown className="h-3 w-3 text-warning" />
-                      <span className="text-warning">
-                        {ltvW.nomadesGrowth}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Free */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg opacity-50">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Free</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Excluído do cálculo
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-muted-foreground">
-                      R$ 0
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mini histograma visual */}
-              <div className="space-y-2 pt-2">
-                <div className="text-sm font-semibold">
-                  Distribuição de LTVs:
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground w-24">
-                      R$ 0 - 1k
-                    </div>
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-muted-foreground h-full"
-                        style={{
-                          width: `${Math.min(100, (ltvW.hist0to1k / 400) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs font-medium w-12 text-right">
-                      {ltvW.hist0to1k}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground w-24">
-                      R$ 1k - 5k
-                    </div>
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-info h-full"
-                        style={{
-                          width: `${Math.min(100, (ltvW.hist1kto5k / 400) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs font-medium w-12 text-right">
-                      {ltvW.hist1kto5k}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground w-24">
-                      R$ 5k - 15k
-                    </div>
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-chart-4 h-full"
-                        style={{
-                          width: `${Math.min(100, (ltvW.hist5kto15k / 400) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs font-medium w-12 text-right">
-                      {ltvW.hist5kto15k}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground w-24">
-                      R$ 15k+
-                    </div>
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-success h-full"
-                        style={{
-                          width: `${Math.min(100, (ltvW.hist15kplus / 400) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs font-medium w-12 text-right">
-                      {ltvW.hist15kplus}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case "cmv":
-        const cmvData = {
-          totalCosts: dashboardData.cmv.totalCosts,
-          revenue: dashboardData.cmv.revenue,
-          cmvPercent: dashboardData.cmv.cmvPercent,
-          previousCmvPercent: dashboardData.cmv.prevCmvPercent,
-          breakdown: {
-            nomades: dashboardData.cmv.nomades,
-            impostos: dashboardData.cmv.impostos,
-            comissoes: dashboardData.cmv.comissoes,
-            outros: dashboardData.cmv.outros,
-          },
-          variation: dashboardData.cmv.variation,
-        };
-
-        return (
-          <Card data-widget-id={widget.type}>
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-warning/10 rounded-lg shrink-0">
-                  <Calculator className="h-4 w-4 text-warning" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    CMV (Custo de Mercadoria Vendida)
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Custos vs. receita da plataforma
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <WidgetPeriodSelector widgetId={widget.id} />
-              </div>
-              <WidgetExportButton
-                widgetId={widget.type}
-                widgetTitle={getWidgetTitle(widget.type)}
-              />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Main CMV Display */}
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">
-                    {cmvData.cmvPercent.toFixed(1)}%
-                  </span>
-                  <span
-                    className={cn(
-                      "flex items-center text-sm font-medium",
-                      cmvData.variation.cmvPercent < 0
-                        ? "text-success"
-                        : "text-destructive",
-                    )}
-                  >
-                    {cmvData.variation.cmvPercent < 0 ? (
-                      <TrendingDown className="h-3 w-3 mr-1" />
-                    ) : (
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                    )}
-                    {Math.abs(cmvData.variation.cmvPercent).toFixed(1)}pp
-                  </span>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Custos{" "}
-                  <span className="font-semibold text-foreground">
-                    R$ {(cmvData.totalCosts / 1000).toFixed(1)}k
-                  </span>
-                  <span className="mx-1">/</span>
-                  Receita:{" "}
-                  <span className="font-semibold text-foreground">
-                    R$ {(cmvData.revenue / 1000).toFixed(1)}k
-                  </span>
-                </div>
-              </div>
-
-              {/* Breakdown by Category */}
-              <div className="space-y-3 pt-2 border-t">
-                <div className="text-xs font-medium text-muted-foreground">
-                  Breakdown por Categoria:
-                </div>
+                {/* Type breakdown */}
                 <div className="space-y-2">
-                  {Object.entries(cmvData.breakdown).map(([key, data]) => {
-                    const categoryNames: Record<string, string> = {
-                      nomades: "Nômades",
-                      impostos: "Impostos",
-                      comissoes: "Comissões",
-                      outros: "Outros",
-                    };
-                    const categoryColors: Record<string, string> = {
-                      nomades: "bg-info",
-                      impostos: "bg-warning",
-                      comissoes: "bg-chart-4",
-                      outros: "bg-muted-foreground",
-                    };
-
-                    return (
-                      <div key={key} className="flex items-center gap-2">
-                        <div
-                          className={cn(
-                            "h-2 w-2 rounded-full",
-                            categoryColors[key],
-                          )}
-                        />
-                        <div className="flex-1 flex items-baseline justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {categoryNames[key]}
-                          </span>
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-medium">
-                              R$ {(data.value / 1000).toFixed(1)}k
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              ({data.percent.toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        {/* Mini bar */}
-                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={cn("h-full", categoryColors[key])}
-                            style={{ width: `${data.percent}%` }}
-                          />
+                  {ltvTypes.map(t => (
+                    <div key={t.label} className={`flex items-center gap-3 p-3 rounded-xl border ${t.bg} ${t.border}`}>
+                      <div className={`shrink-0 p-1.5 rounded-md bg-background/60 ${t.text}`}>{t.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">{t.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{t.detail}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-base font-bold ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
+                        <div className={`flex items-center gap-0.5 justify-end text-[10px] font-medium ${t.up ? "text-success" : "text-warning"}`}>
+                          {t.up ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+                          {t.growth}%
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Visual Composition Bar */}
-              <div className="space-y-2 pt-2 border-t">
-                <div className="text-xs font-medium text-muted-foreground">
-                  Composição do CMV:
-                </div>
-                <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
-                  <div
-                    className="bg-info"
-                    style={{
-                      width: `${cmvData.breakdown.nomades.percent}%`,
-                    }}
-                    title="Nômades"
-                  />
-                  <div
-                    className="bg-warning"
-                    style={{
-                      width: `${cmvData.breakdown.impostos.percent}%`,
-                    }}
-                    title="Impostos"
-                  />
-                  <div
-                    className="bg-chart-4"
-                    style={{
-                      width: `${cmvData.breakdown.comissoes.percent}%`,
-                    }}
-                    title="Comissões"
-                  />
-                  <div
-                    className="bg-muted-foreground"
-                    style={{
-                      width: `${cmvData.breakdown.outros.percent}%`,
-                    }}
-                    title="Outros"
-                  />
-                </div>
-              </div>
-
-              {/* Alert if CMV is high */}
-              {cmvData.cmvPercent > 30 && (
-                <div className="flex items-start gap-2 p-2 bg-warning-muted border border-warning/20 rounded-md">
-                  <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
-                  <div className="text-xs text-warning-foreground">
-                    <span className="font-medium">CMV Alto:</span> Custos
-                    diretos acima de 30% podem impactar a margem de lucro.
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-muted/10 opacity-60">
+                    <div className="shrink-0 p-1.5 rounded-md bg-background/60 text-muted-foreground"><UserCheck className="h-4 w-4" /></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold">Free</p>
+                      <p className="text-[10px] text-muted-foreground">Excluído do cálculo</p>
+                    </div>
+                    <p className="text-base font-bold text-muted-foreground">R$ 0</p>
                   </div>
                 </div>
-              )}
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 bg-transparent"
-                >
-                  <FileText className="h-3 w-3 mr-1" />
-                  Ver Detalhes
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 bg-transparent"
-                >
-                  <Download className="h-3 w-3 mr-1" />
-                  Exportar CSV
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Distribution histogram compact */}
+                <div className="pt-1 border-t space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Distribuição de LTVs</p>
+                  {[
+                    { label: "R$ 0–1k",  value: wLtvW.hist0to1k,   color: "bg-muted-foreground", max: 400 },
+                    { label: "R$ 1–5k",  value: wLtvW.hist1kto5k,  color: "bg-info",             max: 400 },
+                    { label: "R$ 5–15k", value: wLtvW.hist5kto15k, color: "bg-chart-4",          max: 400 },
+                    { label: "R$ 15k+",  value: wLtvW.hist15kplus, color: "bg-success",          max: 400 },
+                  ].map(h => (
+                    <div key={h.label} className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground w-16 shrink-0">{h.label}</span>
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full ${h.color} rounded-full`} style={{ width: `${Math.min(100, (h.value / h.max) * 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] font-medium w-8 text-right">{h.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         );
+      }
+      case "cmv": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wCmvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).cmv;
+        const cmvCategories = [
+          { key: "nomades",   label: "Nômades",   value: wCmvW.nomades.value,   pct: wCmvW.nomades.percent,   bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   bar: "bg-blue-500",    border: "border-blue-200 dark:border-blue-800" },
+          { key: "impostos",  label: "Impostos",  value: wCmvW.impostos.value,  pct: wCmvW.impostos.percent,  bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400",  bar: "bg-amber-500",   border: "border-amber-200 dark:border-amber-800" },
+          { key: "comissoes", label: "Comissões", value: wCmvW.comissoes.value, pct: wCmvW.comissoes.percent, bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", bar: "bg-violet-500",  border: "border-violet-200 dark:border-violet-800" },
+          { key: "outros",    label: "Outros",    value: wCmvW.outros.value,    pct: wCmvW.outros.percent,    bg: "bg-slate-500/10",  text: "text-slate-600 dark:text-slate-400",  bar: "bg-slate-400",   border: "border-slate-200 dark:border-slate-700" },
+        ];
+        const cmvDown = wCmvW.variation.cmvPercent < 0;
+        return (
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Calculator className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">{getWidgetTitle(widget.type)}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">Custos vs. receita da plataforma</p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-4">
+                {/* Hero */}
+                <div className={`flex items-end justify-between gap-2 p-4 rounded-xl border ${wCmvW.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-500/10 border-green-200 dark:border-green-800"}`}>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">CMV Total</p>
+                    <p className="text-3xl font-bold tracking-tight">{wCmvW.cmvPercent.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Custos <span className="font-semibold text-foreground">R$ {(wCmvW.totalCosts / 1000).toFixed(1)}k</span> / Receita <span className="font-semibold text-foreground">R$ {(wCmvW.revenue / 1000).toFixed(1)}k</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className={`flex items-center gap-1 text-sm font-semibold justify-end ${cmvDown ? "text-success" : "text-destructive"}`}>
+                      {cmvDown ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
+                      {Math.abs(wCmvW.variation.cmvPercent).toFixed(1)}pp
+                    </div>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                    {wCmvW.cmvPercent > 30 && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-warning font-medium">
+                        <AlertTriangle className="h-3 w-3" />CMV alto
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Category breakdown */}
+                <div className="space-y-2">
+                  {cmvCategories.map(cat => (
+                    <div key={cat.key} className={`flex items-center gap-3 p-2.5 rounded-lg border ${cat.bg} ${cat.border}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold">{cat.label}</span>
+                          <span className={`text-sm font-bold ${cat.text}`}>R$ {(cat.value / 1000).toFixed(1)}k</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-background/60 rounded-full overflow-hidden">
+                            <div className={`h-full ${cat.bar} rounded-full`} style={{ width: `${cat.pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-medium w-10 text-right">{cat.pct.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Composition bar */}
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Composição do CMV</p>
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-muted gap-px">
+                    {cmvCategories.map(cat => (
+                      <div key={cat.key} className={`${cat.bar} transition-all`} style={{ width: `${cat.pct}%` }} title={`${cat.label}: ${cat.pct.toFixed(0)}%`} />
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-1.5 flex-wrap">
+                    {cmvCategories.map(cat => (
+                      <div key={cat.key} className="flex items-center gap-1">
+                        <div className={`h-1.5 w-1.5 rounded-full ${cat.bar}`} />
+                        <span className="text-[10px] text-muted-foreground">{cat.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      }
 
       case "platformActivities": {
         const wPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
