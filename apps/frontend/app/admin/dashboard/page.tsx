@@ -3653,7 +3653,7 @@ export default function AdminDashboardPage() {
                   <div key={a.label}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted-foreground">{a.label}</span>
-                      <span className="font-medium">{a.pct}% · R$ {Math.round((outstanding * a.pct) / 100).toLocaleString("pt-BR")}</span>
+                      <span className="font-medium">{a.pct}%{" · "}R$ {Math.round((outstanding * a.pct) / 100).toLocaleString("pt-BR")}</span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
                       <div className={`h-2 ${a.color} rounded-full`} style={{ width: `${a.pct}%` }} />
@@ -3725,7 +3725,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold">R$ {item.data.revenue.toLocaleString("pt-BR")}</p>
-                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos · +{item.data.growth}%</p>
+                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos{" · "}+{item.data.growth}%</p>
                     </div>
                   </div>
                 ))}
@@ -3930,7 +3930,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold">R$ {item.data.revenue.toLocaleString("pt-BR")}</p>
-                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos · +{item.data.growth}%</p>
+                      <p className="text-xs text-muted-foreground">{item.data.newContracts} contratos{" · "}+{item.data.growth}%</p>
                     </div>
                   </div>
                 ))}
@@ -4115,7 +4115,7 @@ export default function AdminDashboardPage() {
                     </p>
                     {isCollapsed && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {visibleCount} {visibleCount === 1 ? "indicador" : "indicadores"} · {effectivePeriod.label}
+                        {visibleCount} {visibleCount === 1 ? "indicador" : "indicadores"}{" · "}{effectivePeriod.label}
                       </p>
                     )}
                   </div>
@@ -6874,7 +6874,7 @@ export default function AdminDashboardPage() {
                   </p>
                   {isCollapsed && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {wPaW.mau.toLocaleString("pt-BR")} MAU · {wPaW.activeAgencies} agências ativas
+                      {wPaW.mau.toLocaleString("pt-BR")} MAU{" · "}{wPaW.activeAgencies} agências ativas
                     </p>
                   )}
                 </div>
@@ -7603,7 +7603,7 @@ export default function AdminDashboardPage() {
                     </p>
                     {isCollapsed && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        R$ {wArW.total.toLocaleString("pt-BR")},00 · +{wArW.growth}%
+                        R$ {wArW.total.toLocaleString("pt-BR")},00{" · "}+{wArW.growth}%
                       </p>
                     )}
                   </div>
