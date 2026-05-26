@@ -3515,6 +3515,9 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -3608,6 +3611,9 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -3691,6 +3697,9 @@ export default function AdminDashboardPage() {
                       Perfis de acesso e permissões
                     </p>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -3776,6 +3785,9 @@ export default function AdminDashboardPage() {
                       Matriz de acesso por módulo
                     </p>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -3907,6 +3919,9 @@ export default function AdminDashboardPage() {
                       Ferramentas de gerenciamento
                     </p>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -4075,6 +4090,9 @@ export default function AdminDashboardPage() {
                     </Button>
                   </Link>
                 </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -4153,6 +4171,9 @@ export default function AdminDashboardPage() {
                   >
                     {systemAlerts.length} alertas
                   </Badge>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -4238,6 +4259,9 @@ export default function AdminDashboardPage() {
                       <ArrowRightIcon className="h-3 w-3 ml-1" />
                     </Button>
                   </Link>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -4337,6 +4361,9 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -4412,12 +4439,9 @@ export default function AdminDashboardPage() {
                     Total e por tipo de plano
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="text-xs text-destructive border-destructive/30 shrink-0"
-                >
-                  {globalPeriod.label}
-                </Badge>
+              </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
               </div>
               {/* ── Action buttons — floating top-right ── */}
               <div className="absolute top-3 right-3 flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
@@ -4651,9 +4675,9 @@ export default function AdminDashboardPage() {
                       Projetos ativos no período
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
-                    {globalPeriod.label}
-                  </Badge>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -4847,9 +4871,9 @@ export default function AdminDashboardPage() {
                       Receita por plano de crédito
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
-                    {globalPeriod.label}
-                  </Badge>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -5025,9 +5049,9 @@ export default function AdminDashboardPage() {
                       Receita recorrente mensal
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs backdrop-blur-sm shrink-0">
-                    {globalPeriod.label}
-                  </Badge>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -5331,12 +5355,9 @@ export default function AdminDashboardPage() {
                     Perda de clientes e receita
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="text-destructive border-destructive/30 shrink-0"
-                >
-                  {globalPeriod.label}
-                </Badge>
+              </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
               </div>
               <WidgetExportButton
                 widgetId={widget.type}
@@ -5509,6 +5530,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -5677,6 +5701,9 @@ export default function AdminDashboardPage() {
                     Valor vitalício do cliente
                   </p>
                 </div>
+              </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
               </div>
               <WidgetExportButton
                 widgetId={widget.type}
@@ -5922,6 +5949,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -6105,6 +6135,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -6263,6 +6296,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -6418,6 +6454,9 @@ export default function AdminDashboardPage() {
                     Os melhores nômades da plataforma
                   </p>
                 </div>
+              </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
               </div>
               <WidgetExportButton
                 widgetId={widget.type}
