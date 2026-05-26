@@ -3370,7 +3370,7 @@ export default function AdminDashboardPage() {
             { key: "activeUsers",    label: "Usuários Ativos",   value: mp.activeUsers.value,    change: mp.activeUsers.change,    trend: mp.activeUsers.trend },
             { key: "companies",      label: "Empresas",          value: mp.companies.value,      change: mp.companies.change,      trend: mp.companies.trend },
             { key: "activeProjects", label: "Projetos Ativos",   value: mp.activeProjects.value, change: mp.activeProjects.change, trend: mp.activeProjects.trend },
-            { key: "revenue",        label: "Receita",           value: `R$ ${Number(mp.revenue.value).toLocaleString("pt-BR")}`, change: mp.revenue.change, trend: mp.revenue.trend },
+            { key: "revenue",        label: "Receita",           value: mp.revenue.value, change: mp.revenue.change, trend: mp.revenue.trend },
             { key: "avgRating",      label: "Avaliação Média",   value: Number(mp.avgRating.value).toFixed(1), change: mp.avgRating.change, trend: mp.avgRating.trend, suffix: " / 5.0" },
           ];
           return (
@@ -3395,40 +3395,54 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
               </div>
-              {mp.revenue.breakdown && (
-                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                  <p className="text-sm font-semibold mb-3">Composição da Receita</p>
-                  {[
-                    { label: "Planos de Crédito", value: mp.revenue.breakdown.creditPlan, color: "bg-blue-500" },
-                    { label: "Recorrente",        value: mp.revenue.breakdown.recurring,  color: "bg-purple-500" },
-                    { label: "Avulso",            value: mp.revenue.breakdown.oneTime,    color: "bg-amber-500" },
-                  ].map((item) => {
-                    const total = (mp.revenue.breakdown!.creditPlan || 0) + (mp.revenue.breakdown!.recurring || 0) + (mp.revenue.breakdown!.oneTime || 0);
-                    const pct = total > 0 ? (item.value / total) * 100 : 0;
-                    return (
-                      <div key={item.label} className="mb-2 last:mb-0">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">{item.label}</span>
-                          <span className="font-medium">R$ {item.value.toLocaleString("pt-BR")}</span>
+              {mp.revenue.breakdown && (() => {
+                const parseKVal = (s: string | number) => {
+                  if (typeof s === "number") return s;
+                  const cleaned = String(s).replace(/[R$\s]/g, "");
+                  const num = parseFloat(cleaned);
+                  return cleaned.toLowerCase().includes("k") ? num * 1000 : (isNaN(num) ? 0 : num);
+                };
+                const cpNum = parseKVal((mp.revenue.breakdown.creditPlan as any)?.value ?? mp.revenue.breakdown.creditPlan);
+                const rcNum = parseKVal((mp.revenue.breakdown.recurring as any)?.value ?? mp.revenue.breakdown.recurring);
+                const otNum = parseKVal((mp.revenue.breakdown.oneTime as any)?.value ?? mp.revenue.breakdown.oneTime);
+                const total = cpNum + rcNum + otNum;
+                const cpDisp = (mp.revenue.breakdown.creditPlan as any)?.value ?? `R$ ${cpNum.toLocaleString("pt-BR")}`;
+                const rcDisp = (mp.revenue.breakdown.recurring as any)?.value ?? `R$ ${rcNum.toLocaleString("pt-BR")}`;
+                const otDisp = (mp.revenue.breakdown.oneTime as any)?.value ?? `R$ ${otNum.toLocaleString("pt-BR")}`;
+                return (
+                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                    <p className="text-sm font-semibold mb-3">Composição da Receita</p>
+                    {[
+                      { label: "Planos de Crédito", display: cpDisp, numeric: cpNum, color: "bg-blue-500" },
+                      { label: "Recorrente",        display: rcDisp, numeric: rcNum, color: "bg-purple-500" },
+                      { label: "Avulso",            display: otDisp, numeric: otNum, color: "bg-amber-500" },
+                    ].map((item) => {
+                      const pct = total > 0 ? (item.numeric / total) * 100 : 0;
+                      return (
+                        <div key={item.label} className="mb-2 last:mb-0">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-muted-foreground">{item.label}</span>
+                            <span className="font-medium">{item.display}</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
+                          </div>
                         </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               {mp.avgRating.breakdown && (
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
                   <p className="text-sm font-semibold mb-3">Avaliação por Segmento</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {[
-                      { label: "Nômades",       value: Number(mp.avgRating.breakdown.nomades) },
-                      { label: "Agências",      value: Number(mp.avgRating.breakdown.agencies) },
-                      { label: "Lead Premium",  value: Number(mp.avgRating.breakdown.leadPremium) },
-                      { label: "Suporte",       value: Number(mp.avgRating.breakdown.support) },
-                      { label: "Projetos",      value: Number(mp.avgRating.breakdown.projects) },
+                      { label: "Nômades",       value: Number((mp.avgRating.breakdown.nomades as any)?.value ?? mp.avgRating.breakdown.nomades) },
+                      { label: "Agências",      value: Number((mp.avgRating.breakdown.agencies as any)?.value ?? mp.avgRating.breakdown.agencies) },
+                      { label: "Lead Premium",  value: Number((mp.avgRating.breakdown.leadPremium as any)?.value ?? mp.avgRating.breakdown.leadPremium) },
+                      { label: "Suporte",       value: Number((mp.avgRating.breakdown.support as any)?.value ?? mp.avgRating.breakdown.support) },
+                      { label: "Projetos",      value: Number((mp.avgRating.breakdown.projects as any)?.value ?? mp.avgRating.breakdown.projects) },
                     ].map((s) => (
                       <div key={s.label} className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{s.label}</span>
@@ -3775,30 +3789,32 @@ export default function AdminDashboardPage() {
 
     return (
       <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
-        <DialogContent className="max-w-xl p-0 overflow-hidden">
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
           {/* Brand-gradient header (follows sidebar theme) */}
-          <div className="app-brand-header p-5 text-white">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
-                  {cfg.icon}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold leading-tight truncate">{title}</h2>
-                  <p className="text-xs text-white/80 mt-0.5">{cfg.subtitle}</p>
-                </div>
+          <div className="app-brand-header px-5 pt-5 pb-4 text-white">
+            {/* pr-10 leaves space for the Dialog auto-close (X) button */}
+            <div className="flex items-center gap-3 min-w-0 pr-10">
+              <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+                {cfg.icon}
               </div>
-              <span className="text-[11px] bg-white/20 text-white rounded-full px-2.5 py-1 shrink-0 whitespace-nowrap">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold leading-tight truncate">{title}</h2>
+                <p className="text-xs text-white/70 mt-0.5">{cfg.subtitle}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span className="inline-flex items-center text-[11px] bg-white/20 text-white rounded-full px-3 py-1 gap-1.5 font-medium">
+                <svg className="h-3 w-3 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                 {modalPeriod.label}
               </span>
             </div>
           </div>
           {/* Content */}
-          <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="px-6 py-5 space-y-4 max-h-[62vh] overflow-y-auto">
             {renderContent()}
           </div>
           {/* Footer */}
-          <div className="px-5 pb-5 pt-2 border-t border-border/40 flex gap-2">
+          <div className="px-6 pb-5 pt-3 border-t border-border/40 flex gap-2">
             <Button variant="outline" size="sm" className="flex-1 gap-1.5 bg-transparent" onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}>
               <Share2 className="h-3.5 w-3.5" />
               Compartilhar
@@ -3807,7 +3823,7 @@ export default function AdminDashboardPage() {
               <Download className="h-3.5 w-3.5" />
               Exportar PNG
             </Button>
-            <Button variant="outline" size="sm" className="bg-transparent" onClick={() => setDetailsWidgetId(null)}>
+            <Button size="sm" className="bg-transparent border border-border text-foreground hover:bg-muted" variant="ghost" onClick={() => setDetailsWidgetId(null)}>
               Fechar
             </Button>
           </div>
