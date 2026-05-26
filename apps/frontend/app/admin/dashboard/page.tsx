@@ -7479,7 +7479,7 @@ export default function AdminDashboardPage() {
         <div
           className={cn(
             "flex items-center gap-3",
-            isHeaderCompact ? "py-2" : "pt-0 pb-3",
+            isHeaderCompact ? "py-2" : "pt-0 pb-5",
           )}
         >
           <div className="overflow-hidden shrink-0">
@@ -7502,6 +7502,193 @@ export default function AdminDashboardPage() {
               Visão geral da plataforma em tempo real
             </p>
           </div>
+
+          {/* Period Controls */}
+          <div className="flex items-center gap-2 mx-3">
+            <div className="flex items-center gap-0.5 bg-muted/50 dark:bg-muted/30 rounded-xl p-1 border border-border/50 shadow-sm">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
+              {(
+                [
+                  {
+                    type: "last_7_days" as const,
+                    label: "7d",
+                    fullLabel: "Últimos 7 dias",
+                  },
+                  {
+                    type: "last_30_days" as const,
+                    label: "30d",
+                    fullLabel: "Últimos 30 dias",
+                  },
+                ] as const
+              ).map(({ type, label, fullLabel }) => (
+                <button
+                  key={type}
+                  onClick={() => {
+                    const { from, to } = getDateRangeFromPeriod(type);
+                    setGlobalPeriod({ type, from, to, label: fullLabel });
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                    globalPeriod.type === type
+                      ? "bg-background shadow-sm text-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  const today = new Date();
+                  const ninetyDaysAgo = new Date(today);
+                  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                  setGlobalPeriod({
+                    type: "custom",
+                    from: ninetyDaysAgo,
+                    to: today,
+                    label: "Últimos 90 dias",
+                  });
+                }}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                  globalPeriod.label === "Últimos 90 dias"
+                    ? "bg-background shadow-sm text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                90d
+              </button>
+              <Popover
+                open={isPeriodPickerOpen}
+                onOpenChange={setIsPeriodPickerOpen}
+              >
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5",
+                      !["last_7_days", "last_30_days"].includes(
+                        globalPeriod.type,
+                      ) && globalPeriod.label !== "Últimos 90 dias"
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {!["last_7_days", "last_30_days"].includes(
+                      globalPeriod.type,
+                    ) && globalPeriod.label !== "Últimos 90 dias" ? (
+                      <span className="max-w-[130px] truncate">
+                        {globalPeriod.label}
+                      </span>
+                    ) : (
+                      <>
+                        <SlidersHorizontal className="h-3 w-3" />
+                        Personalizar
+                      </>
+                    )}
+                    <ChevronDown className="h-2.5 w-2.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-72 p-0 overflow-hidden"
+                  align="start"
+                >
+                  <div className="px-3 py-2.5 border-b bg-muted/30">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Período de dados
+                    </p>
+                  </div>
+                  <div className="p-1.5">
+                    {periodOptions
+                      .filter((o) => o.type !== "custom")
+                      .map((option) => (
+                        <button
+                          key={option.type}
+                          onClick={() =>
+                            handlePeriodChange(option.type, option.label)
+                          }
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all hover:bg-accent text-left",
+                            globalPeriod.type === option.type &&
+                              globalPeriod.label !== "Últimos 90 dias" &&
+                              "bg-primary/10 text-primary font-medium",
+                          )}
+                        >
+                          {option.label}
+                          {globalPeriod.type === option.type &&
+                            globalPeriod.label !== "Últimos 90 dias" && (
+                              <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                            )}
+                        </button>
+                      ))}
+                  </div>
+                  <div className="border-t p-3 space-y-2.5 bg-muted/20">
+                    <p className="text-xs font-semibold">
+                      Intervalo personalizado
+                    </p>
+                    <div className="flex gap-2">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[10px] text-muted-foreground font-medium">
+                          De
+                        </label>
+                        <input
+                          type="date"
+                          value={
+                            customPeriodFrom
+                              ? format(customPeriodFrom, "yyyy-MM-dd")
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setCustomPeriodFrom(
+                              e.target.value
+                                ? new Date(e.target.value + "T00:00:00")
+                                : undefined,
+                            )
+                          }
+                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[10px] text-muted-foreground font-medium">
+                          Até
+                        </label>
+                        <input
+                          type="date"
+                          value={
+                            customPeriodTo
+                              ? format(customPeriodTo, "yyyy-MM-dd")
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setCustomPeriodTo(
+                              e.target.value
+                                ? new Date(e.target.value + "T00:00:00")
+                                : undefined,
+                            )
+                          }
+                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full h-7 text-xs"
+                      disabled={!customPeriodFrom || !customPeriodTo}
+                      onClick={applyCustomPeriod}
+                    >
+                      Aplicar período
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {/* Period label badge */}
+            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
+              {globalPeriod.label}
+            </span>
+          </div>
+
+          {/* Action Buttons */}
           <div className="flex items-center gap-2 shrink-0 ml-auto">
           {/* Dashboard selector dropdown */}
           <DropdownMenu>
@@ -7705,192 +7892,9 @@ export default function AdminDashboardPage() {
             <Edit2 className="h-3.5 w-3.5" />
             Editar
           </Button>
+          </div>
         </div>
-
-        {/* Period Controls Bar */}
-        <div className="flex items-center gap-2">
-        {/* Period selector */}
-        <div className="flex items-center gap-0.5 bg-muted/60 rounded-xl p-1 border border-border/40">
-          <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
-          {(
-            [
-              {
-                type: "last_7_days" as const,
-                label: "7d",
-                fullLabel: "Últimos 7 dias",
-              },
-              {
-                type: "last_30_days" as const,
-                label: "30d",
-                fullLabel: "Últimos 30 dias",
-              },
-            ] as const
-          ).map(({ type, label, fullLabel }) => (
-            <button
-              key={type}
-              onClick={() => {
-                const { from, to } = getDateRangeFromPeriod(type);
-                setGlobalPeriod({ type, from, to, label: fullLabel });
-              }}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                globalPeriod.type === type
-                  ? "bg-background shadow-sm text-foreground font-semibold"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-          <button
-            onClick={() => {
-              const today = new Date();
-              const ninetyDaysAgo = new Date(today);
-              ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-              setGlobalPeriod({
-                type: "custom",
-                from: ninetyDaysAgo,
-                to: today,
-                label: "Últimos 90 dias",
-              });
-            }}
-            className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-              globalPeriod.label === "Últimos 90 dias"
-                ? "bg-background shadow-sm text-foreground font-semibold"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            90d
-          </button>
-          <Popover
-            open={isPeriodPickerOpen}
-            onOpenChange={setIsPeriodPickerOpen}
-          >
-            <PopoverTrigger asChild>
-              <button
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5",
-                  !["last_7_days", "last_30_days"].includes(
-                    globalPeriod.type,
-                  ) && globalPeriod.label !== "Últimos 90 dias"
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {!["last_7_days", "last_30_days"].includes(globalPeriod.type) &&
-                globalPeriod.label !== "Últimos 90 dias" ? (
-                  <span className="max-w-[130px] truncate">
-                    {globalPeriod.label}
-                  </span>
-                ) : (
-                  <>
-                    <SlidersHorizontal className="h-3 w-3" />
-                    Personalizar
-                  </>
-                )}
-                <ChevronDown className="h-2.5 w-2.5" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-0 overflow-hidden" align="start">
-              <div className="px-3 py-2.5 border-b bg-muted/30">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Período de dados
-                </p>
-              </div>
-              <div className="p-1.5">
-                {periodOptions
-                  .filter((o) => o.type !== "custom")
-                  .map((option) => (
-                    <button
-                      key={option.type}
-                      onClick={() =>
-                        handlePeriodChange(option.type, option.label)
-                      }
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all hover:bg-accent text-left",
-                        globalPeriod.type === option.type &&
-                          globalPeriod.label !== "Últimos 90 dias" &&
-                          "bg-primary/10 text-primary font-medium",
-                      )}
-                    >
-                      {option.label}
-                      {globalPeriod.type === option.type &&
-                        globalPeriod.label !== "Últimos 90 dias" && (
-                          <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                        )}
-                    </button>
-                  ))}
-              </div>
-              <div className="border-t p-3 space-y-2.5 bg-muted/20">
-                <p className="text-xs font-semibold">Intervalo personalizado</p>
-                <div className="flex gap-2">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-[10px] text-muted-foreground font-medium">
-                      De
-                    </label>
-                    <input
-                      type="date"
-                      value={
-                        customPeriodFrom
-                          ? format(customPeriodFrom, "yyyy-MM-dd")
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setCustomPeriodFrom(
-                          e.target.value
-                            ? new Date(e.target.value + "T00:00:00")
-                            : undefined,
-                        )
-                      }
-                      className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-[10px] text-muted-foreground font-medium">
-                      Até
-                    </label>
-                    <input
-                      type="date"
-                      value={
-                        customPeriodTo
-                          ? format(customPeriodTo, "yyyy-MM-dd")
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setCustomPeriodTo(
-                          e.target.value
-                            ? new Date(e.target.value + "T00:00:00")
-                            : undefined,
-                        )
-                      }
-                      className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full h-7 text-xs"
-                  disabled={!customPeriodFrom || !customPeriodTo}
-                  onClick={applyCustomPeriod}
-                >
-                  Aplicar período
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Period label badge */}
-        <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
-          {globalPeriod.label}
-        </span>
-        </div>
-        </div>
-        {/* end sticky header */}
       </div>
-
       {/* Export capture area: metrics + widgets */}
       <div id="dashboard-export-area" className="flex flex-col gap-4">
         {/* Metrics Cards */}
