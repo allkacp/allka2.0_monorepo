@@ -3353,7 +3353,10 @@ export default function AdminDashboardPage() {
       cmv:                  { icon: <Calculator className="h-6 w-6" />,    subtitle: "Custo de mercadoria vendida" },
       nomads:               { icon: <Users className="h-6 w-6" />,         subtitle: "Visão geral dos nômades" },
       nomadsRanking:        { icon: <Trophy className="h-6 w-6" />,        subtitle: "Ranking de performance" },
+      agenciesRanking:      { icon: <Building2 className="h-6 w-6" />,     subtitle: "Ranking das agências da plataforma" },
+      statusOverview:       { icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Status de projetos e tarefas" },
       tasks:                { icon: <CheckSquare className="h-6 w-6" />,   subtitle: "Tarefas e execução" },
+      nomadsIndicators:     { icon: <Users className="h-6 w-6" />,         subtitle: "KPIs de desempenho e qualidade" },
       activity:             { icon: <Activity className="h-6 w-6" />,      subtitle: "Atividades recentes" },
       alerts:               { icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
       performers:           { icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
@@ -3774,6 +3777,281 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           );
+
+        case "tasks": {
+          const mt = mData.tasks;
+          const tTotal = mt.completed + mt.inProgress + mt.contracted + mt.cancelled;
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm text-muted-foreground">Total de Tarefas no Período</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{mt.total.toLocaleString("pt-BR")}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Concluídas",  value: mt.completed,  change: mt.completedGrowth,  bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",  text: "text-green-700 dark:text-green-300" },
+                  { label: "Em Execução", value: mt.inProgress,  change: mt.inProgressGrowth, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",    text: "text-blue-700 dark:text-blue-300" },
+                  { label: "Contratadas", value: mt.contracted,  change: mt.contractedGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",  text: "text-amber-700 dark:text-amber-300" },
+                  { label: "Canceladas",  value: mt.cancelled,   change: mt.cancelledChange,  bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",          text: "text-red-700 dark:text-red-300" },
+                ].map(item => (
+                  <div key={item.label} className={`p-4 rounded-xl border text-center ${item.bg}`}>
+                    <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+                    <p className={`text-2xl font-bold ${item.text}`}>{item.value.toLocaleString("pt-BR")}</p>
+                    <p className={`text-xs font-medium mt-1 ${item.change >= 0 ? "text-success" : "text-destructive"}`}>{item.change >= 0 ? "+" : ""}{item.change}%</p>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 rounded-xl border border-border/50 bg-muted/20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">SLA — Dentro do prazo</span>
+                  <span className="text-base font-bold text-success">{mt.slaCompliance.toFixed(1)}%</span>
+                </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-2.5 bg-success rounded-full" style={{ width: `${mt.slaCompliance}%` }} />
+                </div>
+              </div>
+              {tTotal > 0 && (
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                  <p className="text-sm font-semibold">Distribuição</p>
+                  {[
+                    { label: "Concluídas",  value: mt.completed,  color: "bg-green-500" },
+                    { label: "Em Execução", value: mt.inProgress,  color: "bg-blue-500" },
+                    { label: "Contratadas", value: mt.contracted,  color: "bg-amber-500" },
+                    { label: "Canceladas",  value: mt.cancelled,   color: "bg-red-500" },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">{item.label}</span>
+                        <span className="font-medium">{item.value.toLocaleString("pt-BR")} ({Math.round((item.value / tTotal) * 100)}%)</span>
+                      </div>
+                      <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                        <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.value / tTotal) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        case "nomads": {
+          const mn = mData.nomads;
+          const maxTrend = Math.max(1, ...mn.trendData);
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
+                <p className="text-sm text-muted-foreground">Total de Nômades</p>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">{mn.total}</p>
+                  <span className="text-sm text-success font-semibold">+{mn.growth}%</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="h-2 w-2 rounded-full bg-success" />
+                    <p className="text-xs font-medium text-muted-foreground">Ativos</p>
+                  </div>
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">{mn.active}</p>
+                  <p className="text-xs text-success mt-1">+{mn.activeGrowth}% vs anterior</p>
+                </div>
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+                    <p className="text-xs font-medium text-muted-foreground">Inativos</p>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{mn.inactive}</p>
+                  <p className="text-xs text-destructive mt-1">{mn.inactiveChange}% vs anterior</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Novos no período", value: String(mn.newInPeriod), color: "text-info" },
+                  { label: "Churn",            value: String(mn.churn),       color: "text-destructive" },
+                  { label: "Retenção 30d",     value: `${mn.retention30d}%`,  color: "text-success" },
+                ].map(item => (
+                  <div key={item.label} className="p-3 rounded-lg border border-border/50 bg-muted/20 text-center">
+                    <p className="text-[11px] text-muted-foreground">{item.label}</p>
+                    <p className={`text-xl font-bold mt-0.5 ${item.color}`}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                <p className="text-sm font-semibold mb-3">Evolução de ativos</p>
+                <div className="flex items-end gap-1.5 h-24">
+                  {mn.trendData.map((value, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full rounded-t bg-teal-400 dark:bg-teal-500 transition-all" style={{ height: `${(value / maxTrend) * 100}%` }} title={String(value)} />
+                      <span className="text-[9px] text-muted-foreground">D{idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        case "nomadsIndicators": {
+          const ni = mData.nomadsIndicators;
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
+                <p className="text-sm text-muted-foreground">Tempo Médio por Tarefa</p>
+                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">{ni.avgTimePerTask.toFixed(1)} dias</p>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { label: "Taxa de Entrega",  display: `${ni.deliveryRate.toFixed(1)}%`,   pct: ni.deliveryRate,          color: "bg-green-500",  chip: "text-green-700 dark:text-green-300",    bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" },
+                  { label: "Avaliação Média",  display: `${ni.avgRating.toFixed(1)} / 5.0`, pct: (ni.avgRating / 5) * 100, color: "bg-amber-500",  chip: "text-amber-700 dark:text-amber-300",    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+                  { label: "Certificados",     display: `${ni.certified}%`,                 pct: ni.certified,             color: "bg-violet-500", chip: "text-violet-700 dark:text-violet-300",  bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" },
+                  { label: "Retenção 90 dias", display: `${ni.retention90d}%`,              pct: ni.retention90d,          color: "bg-teal-500",   chip: "text-teal-700 dark:text-teal-300",      bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800" },
+                ].map(kpi => (
+                  <div key={kpi.label} className={`p-4 rounded-xl border ${kpi.bg}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-muted-foreground">{kpi.label}</span>
+                      <span className={`text-base font-bold ${kpi.chip}`}>{kpi.display}</span>
+                    </div>
+                    <div className="h-2 bg-secondary/60 rounded-full overflow-hidden">
+                      <div className={`h-2 ${kpi.color} rounded-full`} style={{ width: `${kpi.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        case "nomadsRanking": {
+          const perfList = mData.performers;
+          const medals = ["text-yellow-500", "text-slate-400", "text-amber-600"];
+          return (
+            <div className="space-y-3">
+              {perfList.length === 0 ? (
+                <div className="text-center py-8 space-y-2">
+                  <Trophy className="h-8 w-8 text-warning mx-auto opacity-40" />
+                  <p className="text-sm text-muted-foreground">Nenhum nômade no ranking ainda.</p>
+                </div>
+              ) : (
+                perfList.map((performer: { id: string; name: string; rating: number; projects: number; badge: string }, index: number) => (
+                  <div key={performer.id} className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
+                    <div className="relative shrink-0">
+                      <div className="h-11 w-11 rounded-full bg-gradient-to-br from-warning to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                        {index + 1}
+                      </div>
+                      <Award className={`absolute -bottom-1 -right-1 h-4 w-4 ${medals[index] ?? "text-chart-4"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{performer.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-0.5 text-xs"><Star className="h-3 w-3 text-warning fill-warning" />{performer.rating}</span>
+                        <span className="text-xs text-muted-foreground">• {performer.projects} proj.</span>
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${performer.badge === "gold" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : performer.badge === "silver" ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                          {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        }
+
+        case "agenciesRanking": {
+          const agList = mData.agenciesRanking;
+          const agMedals = ["text-yellow-500", "text-slate-400", "text-amber-600"];
+          return (
+            <div className="space-y-3">
+              {agList.map((agency: { id: string; name: string; rating: number; projects: number; contribution: string }, index: number) => (
+                <div key={agency.id} className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
+                  <div className="relative shrink-0">
+                    <div className="h-11 w-11 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                      {index + 1}
+                    </div>
+                    {index < 3 && <Award className={`absolute -bottom-1 -right-1 h-4 w-4 ${agMedals[index]}`} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{agency.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="flex items-center gap-0.5 text-xs"><Star className="h-3 w-3 text-warning fill-warning" />{agency.rating}</span>
+                      <span className="text-xs text-muted-foreground">• {agency.projects} proj.</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-bold text-cyan-600 dark:text-cyan-400">{agency.contribution}</p>
+                    <p className="text-[10px] text-muted-foreground">faturamento</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        case "statusOverview": {
+          const so = mData.statusOverview;
+          const sections = [
+            {
+              title: "Projetos", icon: Briefcase,
+              items: [
+                { label: "Em andamento", value: so.projects.ongoing,   color: "bg-blue-500",    chip: "text-blue-600" },
+                { label: "Aprovados",    value: so.projects.approved,  color: "bg-green-500",   chip: "text-green-600" },
+                { label: "Concluídos",   value: so.projects.completed, color: "bg-emerald-500", chip: "text-emerald-600" },
+                { label: "Cancelados",   value: so.projects.cancelled, color: "bg-red-500",     chip: "text-red-600" },
+                { label: "Em atraso",    value: so.projects.delayed,   color: "bg-amber-500",   chip: "text-amber-600" },
+              ],
+            },
+            {
+              title: "Tarefas", icon: CheckSquare,
+              items: [
+                { label: "Contratadas", value: so.tasks.contracted, color: "bg-purple-500", chip: "text-purple-600" },
+                { label: "Em execução", value: so.tasks.inProgress, color: "bg-blue-500",   chip: "text-blue-600" },
+                { label: "Concluídas",  value: so.tasks.completed,  color: "bg-green-500",  chip: "text-green-600" },
+                { label: "Arquivadas",  value: so.tasks.archived,   color: "bg-slate-400",  chip: "text-slate-500" },
+              ],
+            },
+            {
+              title: "Leads", icon: Users,
+              items: [
+                { label: "Novos",             value: so.leads.new,       color: "bg-cyan-500",  chip: "text-cyan-600" },
+                { label: "Em contato",        value: so.leads.contacted, color: "bg-blue-500",  chip: "text-blue-600" },
+                { label: "Proposta enviada",  value: so.leads.proposal,  color: "bg-violet-500",chip: "text-violet-600" },
+                { label: "Fechado",           value: so.leads.won,       color: "bg-green-500", chip: "text-green-600" },
+                { label: "Perdido",           value: so.leads.lost,      color: "bg-red-500",   chip: "text-red-600" },
+              ],
+            },
+          ];
+          return (
+            <div className="space-y-5">
+              {sections.map(section => {
+                const total = section.items.reduce((s, i) => s + i.value, 0);
+                return (
+                  <div key={section.title} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <section.icon className="h-4 w-4 text-muted-foreground" />
+                      {section.title}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {section.items.map(item => (
+                        <div key={item.label} className="p-3 rounded-lg border border-border/30 bg-background/60 text-center">
+                          <p className={`text-xl font-bold ${item.chip}`}>{item.value.toLocaleString("pt-BR")}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {total > 0 && (
+                      <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+                        {section.items.filter(i => i.value > 0).map(item => (
+                          <div key={item.label} className={`${item.color} h-2`} style={{ width: `${(item.value / total) * 100}%` }} title={`${item.label}: ${item.value}`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
 
         default:
           return (
@@ -6847,7 +7125,8 @@ export default function AdminDashboardPage() {
         );
       }
 
-      case "nomads":
+      case "nomads": {
+        const wNmW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomads;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -6879,10 +7158,10 @@ export default function AdminDashboardPage() {
                 </p>
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-4xl font-bold text-chart-2">
-                    {nmW.total}
+                    {wNmW.total}
                   </span>
                   <span className="flex items-center gap-1 text-base text-success font-semibold">
-                    <TrendingUp className="h-4 w-4" />+{nmW.growth}%
+                    <TrendingUp className="h-4 w-4" />+{wNmW.growth}%
                   </span>
                 </div>
               </div>
@@ -6899,10 +7178,10 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-success-foreground">
-                      {nmW.active}
+                      {wNmW.active}
                     </span>
                     <span className="flex items-center text-sm text-success font-semibold">
-                      <TrendingUp className="h-3 w-3" />+{nmW.activeGrowth}%
+                      <TrendingUp className="h-3 w-3" />+{wNmW.activeGrowth}%
                     </span>
                   </div>
                   <p className="text-xs text-success mt-1">
@@ -6920,11 +7199,11 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-foreground">
-                      {nmW.inactive}
+                      {wNmW.inactive}
                     </span>
                     <span className="flex items-center text-sm text-destructive font-semibold">
                       <TrendingDown className="h-3 w-3" />
-                      {nmW.inactiveChange}%
+                      {wNmW.inactiveChange}%
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -6941,7 +7220,7 @@ export default function AdminDashboardPage() {
                       Novos no período
                     </p>
                     <p className="text-xl font-bold text-info">
-                      {nmW.newInPeriod}
+                      {wNmW.newInPeriod}
                     </p>
                   </div>
                   <div>
@@ -6949,7 +7228,7 @@ export default function AdminDashboardPage() {
                       Churn
                     </p>
                     <p className="text-xl font-bold text-destructive">
-                      {nmW.churn}
+                      {wNmW.churn}
                     </p>
                   </div>
                   <div>
@@ -6957,7 +7236,7 @@ export default function AdminDashboardPage() {
                       Retenção 30d
                     </p>
                     <p className="text-xl font-bold text-success">
-                      {nmW.retention30d}%
+                      {wNmW.retention30d}%
                     </p>
                   </div>
                 </div>
@@ -6969,9 +7248,9 @@ export default function AdminDashboardPage() {
                   Evolução de nômades ativos
                 </p>
                 <div className="flex items-end justify-between gap-1 h-16">
-                  {nmW.trendData.map((value, idx) => {
+                  {wNmW.trendData.map((value, idx) => {
                     const percentage =
-                      (value / Math.max(1, Math.max(...nmW.trendData))) * 100;
+                      (value / Math.max(1, Math.max(...wNmW.trendData))) * 100;
                     return (
                       <div
                         key={idx}
@@ -7003,8 +7282,10 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         );
+      }
 
-      case "nomadsRanking":
+      case "nomadsRanking": {
+        const wPerfW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).performers;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -7031,7 +7312,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                {topPerformers.map((performer, index) => (
+                {wPerfW.map((performer, index) => (
                   <div
                     key={performer.id}
                     className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
@@ -7080,8 +7361,10 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         );
+      }
 
-      case "agenciesRanking":
+      case "agenciesRanking": {
+        const wAgRankW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).agenciesRanking;
         return (
           <div
             key={widget.id}
@@ -7119,6 +7402,9 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -7126,7 +7412,7 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                  {agRankW.map((agency, index) => (
+                  {wAgRankW.map((agency, index) => (
                     <div
                       key={agency.id}
                       className="group flex items-center gap-3 p-3 rounded-xl border-0 bg-gradient-to-br from-background to-background/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 min-w-0"
@@ -7169,8 +7455,10 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
         );
+      }
 
-      case "statusOverview":
+      case "statusOverview": {
+        const wSoW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).statusOverview;
         return (
           <div
             key={widget.id}
@@ -7225,31 +7513,31 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Em andamento",
-                        count: soW.projects.ongoing,
+                        count: wSoW.projects.ongoing,
                         status: "ongoing",
                         color: "blue",
                       },
                       {
                         label: "Aprovados",
-                        count: soW.projects.approved,
+                        count: wSoW.projects.approved,
                         status: "approved",
                         color: "green",
                       },
                       {
                         label: "Concluídos",
-                        count: soW.projects.completed,
+                        count: wSoW.projects.completed,
                         status: "completed",
                         color: "emerald",
                       },
                       {
                         label: "Cancelados",
-                        count: soW.projects.cancelled,
+                        count: wSoW.projects.cancelled,
                         status: "cancelled",
                         color: "red",
                       },
                       {
                         label: "Em atraso",
-                        count: soW.projects.delayed,
+                        count: wSoW.projects.delayed,
                         status: "delayed",
                         color: "amber",
                       },
@@ -7284,25 +7572,25 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Contratadas",
-                        count: soW.tasks.contracted,
+                        count: wSoW.tasks.contracted,
                         status: "contracted",
                         color: "purple",
                       },
                       {
                         label: "Em execução",
-                        count: soW.tasks.inProgress,
+                        count: wSoW.tasks.inProgress,
                         status: "inprogress",
                         color: "blue",
                       },
                       {
                         label: "Concluídas",
-                        count: soW.tasks.completed,
+                        count: wSoW.tasks.completed,
                         status: "completed",
                         color: "green",
                       },
                       {
                         label: "Arquivadas",
-                        count: soW.tasks.archived,
+                        count: wSoW.tasks.archived,
                         status: "archived",
                         color: "gray",
                       },
@@ -7337,31 +7625,31 @@ export default function AdminDashboardPage() {
                     {[
                       {
                         label: "Novos",
-                        count: soW.leads.new,
+                        count: wSoW.leads.new,
                         status: "new",
                         color: "cyan",
                       },
                       {
                         label: "Em contato",
-                        count: soW.leads.contacted,
+                        count: wSoW.leads.contacted,
                         status: "contacted",
                         color: "blue",
                       },
                       {
                         label: "Proposta enviada",
-                        count: soW.leads.proposal,
+                        count: wSoW.leads.proposal,
                         status: "proposal",
                         color: "purple",
                       },
                       {
                         label: "Fechado",
-                        count: soW.leads.won,
+                        count: wSoW.leads.won,
                         status: "won",
                         color: "green",
                       },
                       {
                         label: "Perdido",
-                        count: soW.leads.lost,
+                        count: wSoW.leads.lost,
                         status: "lost",
                         color: "red",
                       },
@@ -7389,6 +7677,7 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
         );
+      }
 
       case "accountsReceivable": {
         const wArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
@@ -7541,7 +7830,8 @@ export default function AdminDashboardPage() {
         );
       }
 
-      case "tasks":
+      case "tasks": {
+        const wTasksW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).tasks;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -7556,6 +7846,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -7563,30 +7856,10 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
-                {
-                  label: "Concluídas",
-                  value: tasksW.completed,
-                  change: tasksW.completedGrowth,
-                  color: "text-success",
-                },
-                {
-                  label: "Em Execução",
-                  value: tasksW.inProgress,
-                  change: tasksW.inProgressGrowth,
-                  color: "text-info",
-                },
-                {
-                  label: "Contratadas",
-                  value: tasksW.contracted,
-                  change: tasksW.contractedGrowth,
-                  color: "text-warning",
-                },
-                {
-                  label: "Canceladas",
-                  value: tasksW.cancelled,
-                  change: tasksW.cancelledChange,
-                  color: "text-destructive",
-                },
+                { label: "Concluídas",  value: wTasksW.completed,  change: wTasksW.completedGrowth,  color: "text-success" },
+                { label: "Em Execução", value: wTasksW.inProgress,  change: wTasksW.inProgressGrowth, color: "text-info" },
+                { label: "Contratadas", value: wTasksW.contracted,  change: wTasksW.contractedGrowth, color: "text-warning" },
+                { label: "Canceladas",  value: wTasksW.cancelled,   change: wTasksW.cancelledChange,  color: "text-destructive" },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -7597,7 +7870,7 @@ export default function AdminDashboardPage() {
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-lg font-bold ${item.color}`}>
-                      {item.value.toLocaleString()}
+                      {item.value.toLocaleString("pt-BR")}
                     </span>
                     <span
                       className={`text-xs font-medium ${item.change >= 0 ? "text-success" : "text-destructive"}`}
@@ -7609,20 +7882,25 @@ export default function AdminDashboardPage() {
                 </div>
               ))}
               <div className="pt-2 border-t">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs text-muted-foreground">
                     SLA — dentro do prazo
                   </p>
                   <span className="text-sm font-bold text-success">
-                    {tasksW.slaCompliance.toFixed(1).replace(".", ",")}%
+                    {wTasksW.slaCompliance.toFixed(1).replace(".", ",")}%
                   </span>
+                </div>
+                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-2 bg-success rounded-full" style={{ width: `${wTasksW.slaCompliance}%` }} />
                 </div>
               </div>
             </CardContent>
           </Card>
         );
+      }
 
-      case "nomadsIndicators":
+      case "nomadsIndicators": {
+        const wNiW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomadsIndicators;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -7639,6 +7917,9 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-2">
+                <WidgetPeriodSelector widgetId={widget.id} />
+              </div>
               <WidgetExportButton
                 widgetId={widget.type}
                 widgetTitle={getWidgetTitle(widget.type)}
@@ -7646,36 +7927,11 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
-                {
-                  label: "Taxa de Entrega",
-                  value: `${niW.deliveryRate.toFixed(1).replace(".", ",")}%`,
-                  icon: CheckSquare,
-                  color: "text-success",
-                },
-                {
-                  label: "Avaliação Média",
-                  value: `${niW.avgRating.toFixed(1).replace(".", ",")} ★`,
-                  icon: Star,
-                  color: "text-warning",
-                },
-                {
-                  label: "Tempo Médio / Tarefa",
-                  value: `${niW.avgTimePerTask.toFixed(1).replace(".", ",")} dias`,
-                  icon: Clock,
-                  color: "text-info",
-                },
-                {
-                  label: "Nômades Certificados",
-                  value: `${niW.certified}%`,
-                  icon: Award,
-                  color: "text-chart-4",
-                },
-                {
-                  label: "Retenção 90 dias",
-                  value: `${niW.retention90d}%`,
-                  icon: TrendingUp,
-                  color: "text-success",
-                },
+                { label: "Taxa de Entrega",      value: `${wNiW.deliveryRate.toFixed(1).replace(".", ",")}%`,       icon: CheckSquare, color: "text-success" },
+                { label: "Avaliação Média",      value: `${wNiW.avgRating.toFixed(1).replace(".", ",")} ★`,         icon: Star,        color: "text-warning" },
+                { label: "Tempo Médio / Tarefa", value: `${wNiW.avgTimePerTask.toFixed(1).replace(".", ",")} dias`,  icon: Clock,       color: "text-info" },
+                { label: "Nômades Certificados", value: `${wNiW.certified}%`,                                       icon: Award,       color: "text-chart-4" },
+                { label: "Retenção 90 dias",     value: `${wNiW.retention90d}%`,                                    icon: TrendingUp,  color: "text-success" },
               ].map((kpi) => (
                 <div
                   key={kpi.label}
@@ -7697,6 +7953,7 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         );
+      }
 
       case "activeUsers":
         return (
