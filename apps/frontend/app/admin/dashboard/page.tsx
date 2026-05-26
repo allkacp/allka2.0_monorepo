@@ -1192,34 +1192,54 @@ export default function AdminDashboardPage() {
     widgetId: string;
     widgetTitle: string;
   }) => (
-    <>
+    <div className="flex items-center rounded-lg border border-border/60 bg-background shadow-sm overflow-visible">
       {manualAffectedWidgets.has(widgetId) && (
-        <Badge className="text-[10px] h-5 px-1.5 shrink-0 gap-0.5 bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
-          <Database className="h-2.5 w-2.5" />
+        <span className="px-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-r border-border/60 h-7 flex items-center gap-1 rounded-l-lg">
+          <Database className="h-3 w-3" />
           Manual
-        </Badge>
+        </span>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
+      <button
         onClick={() => openWidgetShareDialog(widgetId, widgetTitle)}
-        className="h-7 w-7 p-0 hover:bg-primary/10"
+        className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-l-lg"
         title="Compartilhar widget"
-        data-share-button
       >
         <Share2 className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => exportWidgetToPng(widgetId, widgetTitle)}
-        className="h-7 w-7 p-0 hover:bg-primary/10"
-        title="Exportar widget como PNG"
-        data-export-button
-      >
-        <Download className="h-3.5 w-3.5" />
-      </Button>
-    </>
+      </button>
+      <div className="w-px h-4 bg-border/60 shrink-0" />
+      <div className="relative">
+        <button
+          onClick={() => setShowExportDropdown(showExportDropdown === widgetId ? null : widgetId)}
+          className="flex items-center justify-center h-7 w-8 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
+          title="Exportar widget"
+          data-export-button
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+        {showExportDropdown === widgetId && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowExportDropdown(null)} />
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
+              <button
+                onClick={() => { exportWidgetToPng(widgetId, widgetTitle); setShowExportDropdown(null); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+              >
+                <ImageDown className="h-3.5 w-3.5 text-muted-foreground" />
+                Exportar PNG
+              </button>
+              <div className="h-px bg-border/50" />
+              <button
+                onClick={() => { exportWidgetToPdf(widgetId, widgetTitle); setShowExportDropdown(null); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+              >
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                Exportar PDF
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
