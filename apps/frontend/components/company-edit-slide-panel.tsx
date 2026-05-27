@@ -317,16 +317,63 @@ export function CompanyEditSlidePanel({
     if (company && open) {
       setEditedCompany(company);
       setCurrentPlan(company.partner_level || "basic");
+      // Seed mock users
+      setCompanyUsers([
+        { id: 1, name: "Ana Paula Silva",    email: "ana@empresa.com",     role: "Admin", status: "active",   last_login: "2026-05-27", isMaster: true,  phone: "+55 11 99888-1111", department: "Diretoria",      tasksCompleted: 312, hoursLogged: 1240, joinedAt: "2024-01-15", lastIp: "192.168.1.10" },
+        { id: 2, name: "Roberta Lima",       email: "roberta@empresa.com", role: "Admin", status: "active",   last_login: "2026-05-27", isMaster: false, phone: "+55 11 99888-2222", department: "Operações",      tasksCompleted: 218, hoursLogged: 892,  joinedAt: "2024-03-22", lastIp: "192.168.1.11" },
+        { id: 3, name: "João Carlos Silva",  email: "joao@empresa.com",    role: "User",  status: "active",   last_login: "2026-05-26", isMaster: false, phone: "+55 11 99888-3333", department: "Marketing",      tasksCompleted: 145, hoursLogged: 612,  joinedAt: "2024-06-10", lastIp: "192.168.1.12" },
+        { id: 4, name: "Fernanda Costa",     email: "fernanda@empresa.com",role: "User",  status: "inactive", last_login: "2026-05-20", isMaster: false, phone: "+55 11 99888-4444", department: "Financeiro",     tasksCompleted: 89,  hoursLogged: 380,  joinedAt: "2024-09-01", lastIp: "192.168.1.13" },
+        { id: 5, name: "Carlos Mendes",      email: "carlos@empresa.com",  role: "User",  status: "active",   last_login: "2026-05-27", isMaster: false, phone: "+55 11 99888-5555", department: "Atendimento",    tasksCompleted: 67,  hoursLogged: 245,  joinedAt: "2025-02-14", lastIp: "192.168.1.14" },
+      ]);
     }
   }, [company, open]);
 
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
 
-  const [terms] = useState<any[]>([]);
+  // Mock data for terms, projects, logs
+  const terms = [
+    { id: 1, term: "Termos de Uso da Plataforma",       version: "3.2", accepted: true,  date: "2026-04-15", acceptedBy: "Ana Paula Silva", category: "Geral",     critical: false },
+    { id: 2, term: "Política de Privacidade (LGPD)",    version: "2.1", accepted: true,  date: "2026-04-15", acceptedBy: "Ana Paula Silva", category: "Privacidade", critical: true  },
+    { id: 3, term: "Contrato de Prestação de Serviços", version: "1.5", accepted: true,  date: "2026-04-15", acceptedBy: "Ana Paula Silva", category: "Contrato",  critical: true  },
+    { id: 4, term: "Política de Cookies",               version: "1.0", accepted: true,  date: "2026-04-15", acceptedBy: "Ana Paula Silva", category: "Privacidade", critical: false },
+    { id: 5, term: "Termo de Uso de IA",                version: "1.0", accepted: false, date: null,         acceptedBy: null,              category: "IA",        critical: true  },
+    { id: 6, term: "Acordo de Confidencialidade (NDA)", version: "2.0", accepted: false, date: null,         acceptedBy: null,              category: "Contrato",  critical: true  },
+  ];
 
-  const [projects] = useState<any[]>([]);
+  const projects = [
+    { id: 1, name: "Campanha Black Friday 2026",     status: "active",    progress: 78, nomads: 4, deadline: "2026-11-25", budget: 24500, spent: 18900, startDate: "2026-04-10", priority: "high",   tasks: 32, completedTasks: 25 },
+    { id: 2, name: "Rebranding Site Institucional",  status: "active",    progress: 45, nomads: 3, deadline: "2026-07-15", budget: 18000, spent: 8100,  startDate: "2026-05-01", priority: "medium", tasks: 28, completedTasks: 12 },
+    { id: 3, name: "App Mobile v2.0",                status: "active",    progress: 62, nomads: 6, deadline: "2026-09-30", budget: 45000, spent: 27900, startDate: "2026-03-15", priority: "high",   tasks: 54, completedTasks: 33 },
+    { id: 4, name: "SEO Q2 — Estratégia de Conteúdo", status: "completed", progress: 100,nomads: 2, deadline: "2026-04-30", budget: 12000, spent: 11200, startDate: "2026-02-01", priority: "low",    tasks: 18, completedTasks: 18 },
+    { id: 5, name: "Migração de Servidor AWS",       status: "paused",    progress: 30, nomads: 2, deadline: "2026-08-20", budget: 8000,  spent: 2400,  startDate: "2026-04-20", priority: "low",    tasks: 14, completedTasks: 4  },
+  ];
 
-  const [logs] = useState<any[]>([]);
+  const logs = (() => {
+    const now = Date.now();
+    const items = [
+      { user: "Ana Paula Silva",  action: "Login realizado",                category: "auth",     status: "success" },
+      { user: "Roberta Lima",     action: "Editou tarefa #4521",            category: "project",  status: "success" },
+      { user: "Ana Paula Silva",  action: "Aprovou pagamento de R$ 1.240",  category: "settings", status: "success" },
+      { user: "João Carlos Silva",action: "Criou novo projeto",             category: "project",  status: "success" },
+      { user: "Sistema",          action: "Backup automático concluído",    category: "settings", status: "success" },
+      { user: "Carlos Mendes",    action: "Tentativa de login falha",       category: "auth",     status: "error"   },
+      { user: "Ana Paula Silva",  action: "Adicionou novo usuário",         category: "user",     status: "success" },
+      { user: "Fernanda Costa",   action: "Alterou senha",                  category: "auth",     status: "warning" },
+      { user: "Roberta Lima",     action: "Excluiu arquivo do projeto #18", category: "project",  status: "warning" },
+      { user: "Ana Paula Silva",  action: "Atualizou perfil da empresa",    category: "settings", status: "success" },
+    ];
+    return items.map((it, i) => {
+      const d = new Date(now - (i + 1) * 47 * 60 * 1000);
+      return {
+        id: i + 1,
+        ...it,
+        timestamp: `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+        ip: `192.168.${Math.floor(i / 5) + 1}.${(i * 7 + 10) % 255}`,
+        device: i % 3 === 0 ? "Mobile" : "Desktop",
+        origin: i % 4 === 0 ? "API" : "Web",
+      };
+    });
+  })();
 
   const [showTransferMasterModal, setShowTransferMasterModal] = useState(false);
   const [selectedUserForMaster, setSelectedUserForMaster] = useState<
@@ -632,9 +679,9 @@ export function CompanyEditSlidePanel({
 
           <div className="flex-1 overflow-hidden bg-slate-200">
             <ScrollArea className="h-full">
-              <TabsContent value="company-data" className="p-6 space-y-6 mt-0">
-                {/* STATUS HEADER - Prominently displayed at the top */}
-                <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl shadow-sm">
+              <TabsContent value="company-data" className="mt-0">
+                {/* ── Top status + stats strip ── */}
+                <div className="flex items-center gap-4 px-6 py-3 bg-white border-b border-slate-200 flex-wrap">
                   <CompanyStatusSelector
                     value={editedCompany?.status || "active"}
                     onChange={(status) => {
@@ -642,333 +689,341 @@ export function CompanyEditSlidePanel({
                         handleStatusChange(status);
                       }
                     }}
-                    showLabel={true}
+                    showLabel={false}
                   />
+                  {/* Quick stats */}
+                  <div className="flex items-center gap-5 ml-auto flex-wrap">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Users className="h-3.5 w-3.5 text-blue-400" />
+                      <span className="font-semibold text-slate-700">{company.users_count ?? 0}</span> usuários
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <TrendingUp className="h-3.5 w-3.5 text-violet-400" />
+                      <span className="font-semibold text-slate-700">{company.projects_count ?? 0}</span> projetos
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      Cadastro: <span className="font-semibold text-slate-700 ml-1">{company.created_at ? new Date(company.created_at).toLocaleDateString("pt-BR") : "—"}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <Card className="p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Building2 className="h-4 w-4 text-blue-600" />
-                    <h3 className="text-sm font-semibold">
-                      Informações da Empresa
-                    </h3>
+                {/* ── Main form ── */}
+                <div className="p-5 space-y-5">
+
+                  {/* Section: Identificação */}
+                  <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                      <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Identificação</span>
+                    </div>
+                    <div className="p-4 grid grid-cols-3 gap-3">
+                      {/* Nome */}
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Building2 className="h-3 w-3" /> Nome da Empresa
+                        </label>
+                        <Input
+                          value={editedCompany.name}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, name: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="Nome da empresa"
+                        />
+                      </div>
+                      {/* Tipo */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tipo</label>
+                        <Select
+                          value={editedCompany.type}
+                          onValueChange={(v) => setEditedCompany({ ...editedCompany, type: v as CompanyType })}
+                        >
+                          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="company">Company</SelectItem>
+                            <SelectItem value="agency">Agency</SelectItem>
+                            <SelectItem value="nomad">Nomad</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Email */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> E-mail
+                        </label>
+                        <Input
+                          type="email"
+                          value={editedCompany.email}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, email: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="email@empresa.com"
+                        />
+                      </div>
+                      {/* Telefone */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> Telefone
+                        </label>
+                        <Input
+                          type="tel"
+                          value={editedCompany.phone}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, phone: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="+55 (11) 98765-4321"
+                        />
+                      </div>
+                      {/* Website */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Globe className="h-3 w-3" /> Website
+                        </label>
+                        <Input
+                          value={editedCompany.website || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, website: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="https://empresa.com"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="name"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <Building2 className="h-3 w-3" />
-                        Nome da Empresa
-                      </Label>
-                      <Input
-                        id="name"
-                        value={editedCompany.name}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            name: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="Nome da empresa"
-                      />
+                  {/* Section: Documentos */}
+                  <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                      <FileText className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Documentos & Conta</span>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="type" className="text-xs font-medium">
-                        Tipo de Empresa
-                      </Label>
-                      <Select
-                        value={editedCompany.type}
-                        onValueChange={(value) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            type: value as CompanyType,
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="company">Company</SelectItem>
-                          <SelectItem value="agency">Agency</SelectItem>
-                          <SelectItem value="nomad">Nomad</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="email"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <Mail className="h-3 w-3" />
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={editedCompany.email}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            email: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="email@empresa.com"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="phone"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <Phone className="h-3 w-3" />
-                        Telefone
-                      </Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={editedCompany.phone}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            phone: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="+55 (11) 98765-4321"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="document"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <FileText className="h-3 w-3" />
-                        Documento (CNPJ)
-                      </Label>
-                      <Input
-                        id="document"
-                        value={editedCompany.document}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            document: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="00.000.000/0000-00"
-                      />
-                    </div>
-
-                    {/* Mapa interativo para seleção de endereço */}
-                    <div className="space-y-2 col-span-1 md:col-span-2">
-                      <Label className="text-sm font-semibold mb-3 block flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4" />
-                        Localização (Selecione no Mapa)
-                      </Label>
-                      <AddressMapPicker
-                        address={{
-                          street: editedCompany.street || "",
-                          number: editedCompany.number || "",
-                          district: editedCompany.district || "",
-                          city: editedCompany.city || "",
-                          state: editedCompany.state || "",
-                          zipcode: editedCompany.cep || "",
-                          lat: editedCompany.lat || 0,
-                          lng: editedCompany.lng || 0,
-                        }}
-                        onAddressChange={(address) => {
-                          setEditedCompany((prev) => ({
-                            ...prev,
-                            street: address.street || "",
-                            number: address.number || "",
-                            district: address.district || "",
-                            city: address.city || "",
-                            state: address.state || "",
-                            cep: address.zipcode || "",
-                            lat: address.lat,
-                            lng: address.lng,
-                          }));
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="location"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <MapPin className="h-3 w-3" />
-                        Localização
-                      </Label>
-                      <Input
-                        id="location"
-                        value={editedCompany.location}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            location: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="São Paulo, Brasil"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="account-type"
-                        className="text-xs font-medium"
-                      >
-                        Tipo de Conta
-                      </Label>
-                      <Select
-                        value={editedCompany.account_type || "independent"}
-                        onValueChange={(value) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            account_type: value as "independent" | "premium",
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="independent">
-                            Independente
-                          </SelectItem>
-                          <SelectItem value="premium">Premium</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {/* Added fields from updates */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="cnpj"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <FileText className="h-3 w-3" />
-                        CNPJ
-                      </Label>
-                      <Input
-                        id="cnpj"
-                        value={editedCompany.cnpj || ""}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            cnpj: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="00.000.000/0000-00"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="website"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <Globe className="h-3 w-3" />
-                        Website
-                      </Label>
-                      <Input
-                        id="website"
-                        value={editedCompany.website || ""}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            website: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="https://www.empresa.com"
-                      />
-                    </div>
-                    <div className="space-y-2 col-span-1 md:col-span-2">
-                      <Label
-                        htmlFor="address"
-                        className="text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <MapPin className="h-3 w-3" />
-                        Endereço Completo
-                      </Label>
-                      <Input
-                        id="address"
-                        value={editedCompany.address || ""}
-                        onChange={(e) =>
-                          setEditedCompany({
-                            ...editedCompany,
-                            address: e.target.value,
-                          })
-                        }
-                        className="h-9 text-sm"
-                        placeholder="Rua Exemplo, 123, Bairro, Cidade, Estado, CEP"
-                      />
+                    <div className="p-4 grid grid-cols-3 gap-3">
+                      {/* CNPJ */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <FileText className="h-3 w-3" /> CNPJ
+                        </label>
+                        <Input
+                          value={editedCompany.document || editedCompany.cnpj || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, document: e.target.value, cnpj: e.target.value })}
+                          className="h-8 text-sm font-mono"
+                          placeholder="00.000.000/0000-00"
+                        />
+                      </div>
+                      {/* Tipo de conta */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Shield className="h-3 w-3" /> Tipo de Conta
+                        </label>
+                        <Select
+                          value={editedCompany.account_type || "independent"}
+                          onValueChange={(v) => setEditedCompany({ ...editedCompany, account_type: v as "independent" | "premium" })}
+                        >
+                          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="independent">Independente</SelectItem>
+                            <SelectItem value="premium">Premium</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Plano */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                          <Crown className="h-3 w-3" /> Plano
+                        </label>
+                        <Select
+                          value={currentPlan}
+                          onValueChange={setCurrentPlan}
+                        >
+                          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="basic">Basic</SelectItem>
+                            <SelectItem value="pro">Pro</SelectItem>
+                            <SelectItem value="enterprise">Enterprise</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
-                </Card>
 
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleClickCancel}
-                    className="h-9 px-6"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleClickSave}
-                    className="h-9 px-6"
-                  >
-                    <Save className="h-3.5 w-3.5 mr-2" />
-                    Salvar Alterações
-                  </Button>
+                  {/* Section: Localização */}
+                  <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                      <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Localização</span>
+                    </div>
+                    <div className="p-4 grid grid-cols-3 gap-3">
+                      {/* Rua */}
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Rua / Logradouro</label>
+                        <Input
+                          value={editedCompany.street || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, street: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="Rua Exemplo"
+                        />
+                      </div>
+                      {/* Número */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Número</label>
+                        <Input
+                          value={editedCompany.number || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, number: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="123"
+                        />
+                      </div>
+                      {/* Bairro */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Bairro</label>
+                        <Input
+                          value={editedCompany.district || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, district: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="Bairro"
+                        />
+                      </div>
+                      {/* Cidade */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Cidade</label>
+                        <Input
+                          value={editedCompany.city || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, city: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="São Paulo"
+                        />
+                      </div>
+                      {/* Estado / CEP */}
+                      <div className="grid grid-cols-2 gap-2 col-span-1">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado</label>
+                          <Input
+                            value={editedCompany.state || ""}
+                            onChange={(e) => setEditedCompany({ ...editedCompany, state: e.target.value })}
+                            className="h-8 text-sm"
+                            placeholder="SP"
+                            maxLength={2}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
+                          <Input
+                            value={editedCompany.cep || ""}
+                            onChange={(e) => setEditedCompany({ ...editedCompany, cep: e.target.value })}
+                            className="h-8 text-sm font-mono"
+                            placeholder="00000-000"
+                          />
+                        </div>
+                      </div>
+                      {/* Map picker full width */}
+                      <div className="col-span-3">
+                        <AddressMapPicker
+                          address={{
+                            street: editedCompany.street || "",
+                            number: editedCompany.number || "",
+                            district: editedCompany.district || "",
+                            city: editedCompany.city || "",
+                            state: editedCompany.state || "",
+                            zipcode: editedCompany.cep || "",
+                            lat: editedCompany.lat || 0,
+                            lng: editedCompany.lng || 0,
+                          }}
+                          onAddressChange={(address) => {
+                            setEditedCompany((prev) => ({
+                              ...prev,
+                              street: address.street || "",
+                              number: address.number || "",
+                              district: address.district || "",
+                              city: address.city || "",
+                              state: address.state || "",
+                              cep: address.zipcode || "",
+                              lat: address.lat,
+                              lng: address.lng,
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer actions */}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button type="button" variant="outline" onClick={handleClickCancel} className="h-8 px-5 text-xs">
+                      Cancelar
+                    </Button>
+                    <Button type="button" onClick={handleClickSave} className="h-8 px-5 text-xs">
+                      <Save className="h-3 w-3 mr-1.5" />
+                      Salvar Alterações
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
 
-              <TabsContent value="users" className="p-6 space-y-4 mt-0">
-                <div className="flex flex-col sm:flex-row gap-3">
+              <TabsContent value="users" className="mt-0 p-5 space-y-4">
+
+                {/* ── KPI strip ── */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-xl p-4 bg-linear-to-br from-blue-500 to-blue-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Total de Usuários</p>
+                        <p className="text-2xl font-bold mt-1">{companyUsers.length}</p>
+                      </div>
+                      <Users className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">vinculados à empresa</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Ativos</p>
+                        <p className="text-2xl font-bold mt-1">{companyUsers.filter(u => u.status === "active").length}</p>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">{companyUsers.filter(u => u.status === "inactive").length} inativos</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-violet-500 to-purple-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Admins</p>
+                        <p className="text-2xl font-bold mt-1">{companyUsers.filter(u => u.role === "Admin").length}</p>
+                      </div>
+                      <Shield className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">com permissão total</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Engajamento</p>
+                        <p className="text-2xl font-bold mt-1">{companyUsers.reduce((s, u) => s + (u.hoursLogged || 0), 0).toLocaleString("pt-BR")}h</p>
+                      </div>
+                      <Activity className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">horas acumuladas</p>
+                  </div>
+                </div>
+
+                {/* ── Filter bar ── */}
+                <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200/80 p-3">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input
-                      placeholder="Buscar usuários..."
+                      placeholder="Buscar por nome ou e-mail..."
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
-                      className="pl-9 h-9 text-sm"
+                      className="pl-9 h-8 text-xs"
                     />
                   </div>
-                  <Select
-                    value={userRoleFilter}
-                    onValueChange={setUserRoleFilter}
-                  >
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm">
-                      <Filter className="h-3.5 w-3.5 mr-2" />
-                      <SelectValue placeholder="Filtrar por função" />
+                  <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
+                    <SelectTrigger className="w-40 h-8 text-xs">
+                      <Filter className="h-3 w-3 mr-1.5" />
+                      <SelectValue placeholder="Função" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="user">Usuário</SelectItem>
+                      <SelectItem value="admin">Admins</SelectItem>
+                      <SelectItem value="user">Usuários</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button
-                    onClick={() => setShowAddUserModal(true)}
-                    className="h-9 px-4"
-                  >
-                    <UserPlus className="h-3.5 w-3.5 mr-2" />
-                    Adicionar Usuário
+                  <Button onClick={() => setShowAddUserModal(true)} size="sm" className="h-8 px-3 text-xs bg-slate-900 hover:bg-slate-800">
+                    <UserPlus className="h-3 w-3 mr-1.5" /> Adicionar Usuário
                   </Button>
                 </div>
 
@@ -1183,306 +1238,397 @@ export function CompanyEditSlidePanel({
                   </div>
                 )}
 
-                <div className="grid gap-3">
-                  {filteredUsers.map((user) => (
-                    <Card
-                      key={user.id}
-                      className="p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <Avatar className="h-10 w-10 ring-2 ring-muted">
-                            <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white font-semibold text-xs">
-                              {user.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{user.name}</p>
+                <div className="grid gap-2">
+                  {filteredUsers.map((user) => {
+                    const initials = user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+                    const isOnline = user.status === "active";
+                    return (
+                      <div key={user.id} className="bg-white rounded-xl border border-slate-200/80 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          {/* Avatar */}
+                          <div className="relative shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-linear-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                              {initials}
+                            </div>
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${isOnline ? "bg-emerald-500" : "bg-slate-300"}`} />
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <p className="text-sm font-bold text-slate-800">{user.name}</p>
                               {user.isMaster && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                >
-                                  <Crown className="h-3 w-3 mr-1" />
-                                  Master
+                                <Badge variant="secondary" className="text-[10px] bg-linear-to-r from-amber-400 to-orange-500 text-white border-0 flex items-center gap-0.5 shadow-sm">
+                                  <Crown className="h-2.5 w-2.5" /> Master
                                 </Badge>
                               )}
-                              <Badge
-                                variant="secondary"
-                                className={`text-xs ${
-                                  user.role === "Admin"
-                                    ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                                }`}
-                              >
-                                {user.role}
+                              <Badge variant="secondary" className={`text-[10px] border-0 ${user.role === "Admin" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+                                {user.role === "Admin" ? <><Shield className="h-2.5 w-2.5 mr-0.5 inline" /> Admin</> : "Usuário"}
                               </Badge>
-                              {user.status === "active" && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                                >
-                                  Online
-                                </Badge>
+                              <Badge variant="secondary" className={`text-[10px] border-0 flex items-center gap-0.5 ${isOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                <span className={`h-1 w-1 rounded-full ${isOnline ? "bg-emerald-500" : "bg-slate-400"}`} /> {isOnline ? "Online" : "Inativo"}
+                              </Badge>
+                              {user.department && (
+                                <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 border-0">{user.department}</Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {user.email}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Último acesso:{" "}
-                              {new Date(user.last_login).toLocaleDateString(
-                                "pt-BR",
-                              )}
-                            </p>
+                            <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+                              <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" /> {user.email}</span>
+                              {user.phone && <span className="flex items-center gap-1"><Phone className="h-2.5 w-2.5" /> {user.phone}</span>}
+                              <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" /> Último acesso: {new Date(user.last_login).toLocaleDateString("pt-BR")}</span>
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="hidden lg:flex items-center gap-4 px-3 border-l border-slate-100 shrink-0">
+                            <div className="text-center">
+                              <p className="text-xs font-bold text-slate-700">{user.tasksCompleted ?? 0}</p>
+                              <p className="text-[9px] text-slate-400 uppercase tracking-wider">Tarefas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs font-bold text-slate-700">{user.hoursLogged ?? 0}h</p>
+                              <p className="text-[9px] text-slate-400 uppercase tracking-wider">Horas</p>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {user.isMaster && (
+                              <Button variant="outline" size="sm" onClick={() => setShowTransferMasterModal(true)} className="h-7 px-2.5 text-xs border-amber-200 text-amber-700 hover:bg-amber-50">
+                                <Crown className="h-3 w-3 mr-1" /> Transferir
+                              </Button>
+                            )}
+                            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs">
+                              <Edit className="h-3 w-3 mr-1" /> Editar
+                            </Button>
+                            {!user.isMaster && (
+                              <Button variant="outline" size="icon" onClick={() => handleDeleteUser(user.id)} className="h-7 w-7 text-red-600 border-red-200 hover:bg-red-50">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {user.isMaster && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowTransferMasterModal(true)}
-                              className="h-8 px-3 bg-transparent"
-                            >
-                              <Crown className="h-3 w-3 mr-1.5" />
-                              Transferir
-                            </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-3 bg-transparent"
-                          >
-                            <Edit className="h-3 w-3 mr-1.5" />
-                            Editar
-                          </Button>
-                          {!user.isMaster && (
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
                       </div>
-                    </Card>
-                  ))}
+                    )
+                  })}
                 </div>
 
-                <Card className="p-4 bg-muted/30">
-                  <h4 className="text-sm font-semibold mb-3">
-                    Convites Rápidos
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setInviteType("Partner");
-                        setShowInviteModal(true);
-                      }}
-                      className="h-9 justify-start"
-                    >
-                      <Shield className="h-3.5 w-3.5 mr-2" />
-                      Convidar Partner
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setInviteType("Nômade Líder");
-                        setShowInviteModal(true);
-                      }}
-                      className="h-9 justify-start"
-                    >
-                      <Crown className="h-3.5 w-3.5 mr-2" />
-                      Convidar Nômade Líder
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setInviteType("Membro");
-                        setShowInviteModal(true);
-                      }}
-                      className="h-9 justify-start"
-                    >
-                      <UserPlus className="h-3.5 w-3.5 mr-2" />
-                      Convidar Membro
-                    </Button>
+                {/* ── Quick invites ── */}
+                <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                    <UserPlus className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Convites Rápidos</span>
                   </div>
-                </Card>
+                  <div className="p-3 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => { setInviteType("Partner"); setShowInviteModal(true); }}
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all group"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                        <Shield className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="text-left flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-700">Convidar Partner</p>
+                        <p className="text-[10px] text-slate-400">Parceiro estratégico</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => { setInviteType("Nômade Líder"); setShowInviteModal(true); }}
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 transition-all group"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                        <Crown className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="text-left flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-700">Convidar Nômade Líder</p>
+                        <p className="text-[10px] text-slate-400">Líder de equipe</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => { setInviteType("Membro"); setShowInviteModal(true); }}
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                        <UserPlus className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="text-left flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-700">Convidar Membro</p>
+                        <p className="text-[10px] text-slate-400">Colaborador padrão</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </TabsContent>
 
-              <TabsContent value="plan" className="p-6 space-y-6 mt-0">
-                <Card className="p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <CreditCard className="h-4 w-4 text-blue-600" />
-                    <h3 className="text-sm font-semibold">Plano Atual</h3>
+              <TabsContent value="plan" className="mt-0 p-5 space-y-4">
+
+                {/* ── Plan summary KPI strip ── */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-xl p-4 bg-linear-to-br from-blue-500 to-blue-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Plano Atual</p>
+                        <p className="text-2xl font-bold mt-1">{currentPlan === "basic" ? "Basic" : currentPlan === "premium" ? "Premium" : "Enterprise"}</p>
+                      </div>
+                      <CreditCard className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">Renovação automática ativa</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Valor mensal</p>
+                        <p className="text-2xl font-bold mt-1">R$ {currentPlan === "basic" ? "99" : currentPlan === "premium" ? "299" : "799"}</p>
+                      </div>
+                      <TrendingUp className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">Próxima cobrança: 15/06/2026</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-violet-500 to-purple-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Usuários</p>
+                        <p className="text-2xl font-bold mt-1">{companyUsers.length} <span className="text-sm font-normal text-white/70">/ {currentPlan === "basic" ? "5" : currentPlan === "premium" ? "20" : "∞"}</span></p>
+                      </div>
+                      <Users className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">Limite do plano</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Cliente desde</p>
+                        <p className="text-2xl font-bold mt-1">14 <span className="text-sm font-normal text-white/70">meses</span></p>
+                      </div>
+                      <Calendar className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">LTV: R$ {(currentPlan === "basic" ? 99 : currentPlan === "premium" ? 299 : 799) * 14}</p>
+                  </div>
+                </div>
+
+                {/* ── Plan selection ── */}
+                <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Selecionar Plano</span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 border-0">Faturamento mensal</Badge>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 grid grid-cols-3 gap-3">
                     {/* Basic Plan */}
-                    <Card
-                      className={`p-4 cursor-pointer transition-all ${
-                        currentPlan === "basic"
-                          ? "ring-2 ring-blue-600 shadow-lg"
-                          : "hover:shadow-md"
-                      }`}
-                      onClick={() => handlePlanChange("basic")}
-                    >
-                      <div className="text-center space-y-3">
-                        <div className="flex items-center justify-center h-12 w-12 mx-auto rounded-full bg-blue-100 dark:bg-blue-900/30">
-                          <Shield className="h-6 w-6 text-blue-600" />
+                    {(() => {
+                      const isActive = currentPlan === "basic"
+                      return (
+                        <div
+                          onClick={() => handlePlanChange("basic")}
+                          className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${isActive ? "border-blue-500 bg-blue-50/40 shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                        >
+                          {isActive && (
+                            <div className="absolute -top-2 left-4 px-2 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">Atual</div>
+                          )}
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-9 h-9 rounded-lg bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                              <Shield className="h-4 w-4 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">Basic</h4>
+                              <p className="text-[10px] text-slate-500">Para começar</p>
+                            </div>
+                          </div>
+                          <div className="mb-3 pb-3 border-b border-slate-100">
+                            <p className="text-2xl font-bold text-slate-800">R$ 99<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                          </div>
+                          <ul className="space-y-1.5 text-[11px] text-slate-600">
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Até 5 usuários</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> 3 projetos ativos</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> 10 GB armazenamento</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Suporte por e-mail</li>
+                          </ul>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-base">Basic</h4>
-                          <p className="text-2xl font-bold text-blue-600 mt-2">
-                            R$ 99
-                          </p>
-                          <p className="text-xs text-muted-foreground">/mês</p>
-                        </div>
-                        <ul className="text-xs text-left space-y-1.5 pt-2">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Até 5 usuários
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />3
-                            projetos ativos
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Suporte básico
-                          </li>
-                        </ul>
-                        {currentPlan === "basic" && (
-                          <Badge className="w-full justify-center bg-blue-600 hover:bg-blue-600">
-                            Plano Ativo
-                          </Badge>
-                        )}
-                      </div>
-                    </Card>
+                      )
+                    })()}
 
                     {/* Premium Plan */}
-                    <Card
-                      className={`p-4 cursor-pointer transition-all ${
-                        currentPlan === "premium"
-                          ? "ring-2 ring-purple-600 shadow-lg"
-                          : "hover:shadow-md"
-                      }`}
-                      onClick={() => handlePlanChange("premium")}
-                    >
-                      <div className="text-center space-y-3">
-                        <div className="flex items-center justify-center h-12 w-12 mx-auto rounded-full bg-purple-100 dark:bg-purple-900/30">
-                          <Crown className="h-6 w-6 text-purple-600" />
+                    {(() => {
+                      const isActive = currentPlan === "premium"
+                      return (
+                        <div
+                          onClick={() => handlePlanChange("premium")}
+                          className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${isActive ? "border-purple-500 bg-purple-50/40 shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                        >
+                          <div className="absolute -top-2 right-4 px-2 py-0.5 rounded-full bg-linear-to-r from-purple-500 to-pink-500 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">Mais popular</div>
+                          {isActive && (
+                            <div className="absolute -top-2 left-4 px-2 py-0.5 rounded-full bg-purple-600 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">Atual</div>
+                          )}
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-9 h-9 rounded-lg bg-linear-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-sm">
+                              <Crown className="h-4 w-4 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">Premium</h4>
+                              <p className="text-[10px] text-slate-500">Para crescer</p>
+                            </div>
+                          </div>
+                          <div className="mb-3 pb-3 border-b border-slate-100">
+                            <p className="text-2xl font-bold text-slate-800">R$ 299<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                          </div>
+                          <ul className="space-y-1.5 text-[11px] text-slate-600">
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Até 20 usuários</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Projetos ilimitados</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> 100 GB armazenamento</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Suporte prioritário 24/7</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Relatórios avançados</li>
+                          </ul>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-base">Premium</h4>
-                          <p className="text-2xl font-bold text-purple-600 mt-2">
-                            R$ 299
-                          </p>
-                          <p className="text-xs text-muted-foreground">/mês</p>
-                        </div>
-                        <ul className="text-xs text-left space-y-1.5 pt-2">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Até 20 usuários
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Projetos ilimitados
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Suporte prioritário
-                          </li>
-                        </ul>
-                        {currentPlan === "premium" && (
-                          <Badge className="w-full justify-center bg-purple-600 hover:bg-purple-600">
-                            Plano Ativo
-                          </Badge>
-                        )}
-                      </div>
-                    </Card>
+                      )
+                    })()}
 
                     {/* Enterprise Plan */}
-                    <Card
-                      className={`p-4 cursor-pointer transition-all ${
-                        currentPlan === "enterprise"
-                          ? "ring-2 ring-amber-600 shadow-lg"
-                          : "hover:shadow-md"
-                      }`}
-                      onClick={() => handlePlanChange("enterprise")}
-                    >
-                      <div className="text-center space-y-3">
-                        <div className="flex items-center justify-center h-12 w-12 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/30">
-                          <Building2 className="h-6 w-6 text-amber-600" />
+                    {(() => {
+                      const isActive = currentPlan === "enterprise"
+                      return (
+                        <div
+                          onClick={() => handlePlanChange("enterprise")}
+                          className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${isActive ? "border-amber-500 bg-amber-50/40 shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                        >
+                          {isActive && (
+                            <div className="absolute -top-2 left-4 px-2 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">Atual</div>
+                          )}
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-9 h-9 rounded-lg bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm">
+                              <Building2 className="h-4 w-4 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">Enterprise</h4>
+                              <p className="text-[10px] text-slate-500">Para escalar</p>
+                            </div>
+                          </div>
+                          <div className="mb-3 pb-3 border-b border-slate-100">
+                            <p className="text-2xl font-bold text-slate-800">R$ 799<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                          </div>
+                          <ul className="space-y-1.5 text-[11px] text-slate-600">
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Usuários ilimitados</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Projetos ilimitados</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Armazenamento ilimitado</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Gerente dedicado</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> SLA garantido 99.9%</li>
+                            <li className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> Integrações personalizadas</li>
+                          </ul>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-base">Enterprise</h4>
-                          <p className="text-2xl font-bold text-amber-600 mt-2">
-                            R$ 799
-                          </p>
-                          <p className="text-xs text-muted-foreground">/mês</p>
-                        </div>
-                        <ul className="text-xs text-left space-y-1.5 pt-2">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Usuários ilimitados
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Projetos ilimitados
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Suporte dedicado
-                          </li>
-                        </ul>
-                        {currentPlan === "enterprise" && (
-                          <Badge className="w-full justify-center bg-amber-600 hover:bg-amber-600">
-                            Plano Ativo
-                          </Badge>
-                        )}
-                      </div>
-                    </Card>
+                      )
+                    })()}
                   </div>
-                </Card>
+                </div>
+
+                {/* ── Billing history ── */}
+                <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                    <FileText className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Histórico de Faturas</span>
+                  </div>
+                  <div>
+                    {[
+                      { id: "INV-2026-005", date: "15/05/2026", amount: 299, status: "paid",    method: "Cartão •••• 4242" },
+                      { id: "INV-2026-004", date: "15/04/2026", amount: 299, status: "paid",    method: "Cartão •••• 4242" },
+                      { id: "INV-2026-003", date: "15/03/2026", amount: 299, status: "paid",    method: "PIX" },
+                      { id: "INV-2026-002", date: "15/02/2026", amount: 99,  status: "paid",    method: "Cartão •••• 4242" },
+                      { id: "INV-2026-001", date: "15/01/2026", amount: 99,  status: "paid",    method: "Cartão •••• 4242" },
+                    ].map((inv, idx) => (
+                      <div key={inv.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${idx > 0 ? "border-t border-slate-100" : ""}`}>
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-700">{inv.id}</p>
+                          <p className="text-[10px] text-slate-400">{inv.date} • {inv.method}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-slate-700">R$ {inv.amount.toLocaleString("pt-BR")}</p>
+                          <Badge variant="secondary" className="text-[9px] bg-emerald-100 text-emerald-700 border-0">Paga</Badge>
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-700">
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 {currentPlan !== company.partner_level && (
-                  <Card className="p-4 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+                  <div className="rounded-xl p-4 border-2 border-blue-200 bg-blue-50/60">
                     <div className="flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                        <AlertCircle className="h-4 w-4 text-blue-600" />
+                      </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                          Alteração de plano pendente
-                        </p>
-                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                          Você selecionou o plano{" "}
-                          <strong>{currentPlan.toUpperCase()}</strong>. Clique
-                          em "Salvar Alterações" para confirmar a mudança.
+                        <p className="text-sm font-bold text-blue-900">Alteração de plano pendente</p>
+                        <p className="text-xs text-blue-700 mt-0.5">
+                          Você selecionou o plano <strong>{currentPlan.toUpperCase()}</strong>. Clique em "Salvar Alterações" para confirmar a mudança.
                         </p>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 )}
               </TabsContent>
 
-              <TabsContent value="terms" className="p-6 space-y-4 mt-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold">Termos Aceitos</h3>
+              <TabsContent value="terms" className="mt-0 p-5 space-y-4">
+
+                {/* ── KPI strip ── */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-xl p-4 bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Aceitos</p>
+                        <p className="text-2xl font-bold mt-1">{terms.filter(t => t.accepted).length}</p>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">de {terms.length} termos</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Pendentes</p>
+                        <p className="text-2xl font-bold mt-1">{terms.filter(t => !t.accepted).length}</p>
+                      </div>
+                      <Clock className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">aguardando assinatura</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Críticos</p>
+                        <p className="text-2xl font-bold mt-1">{terms.filter(t => t.critical && !t.accepted).length}</p>
+                      </div>
+                      <AlertCircle className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">requerem ação imediata</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-blue-500 to-blue-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Conformidade</p>
+                        <p className="text-2xl font-bold mt-1">{Math.round((terms.filter(t => t.accepted).length / terms.length) * 100)}%</p>
+                      </div>
+                      <Shield className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">índice de aceite</p>
+                  </div>
+                </div>
+
+                {/* ── Filter bar ── */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-slate-500" />
+                    <h3 className="text-sm font-bold text-slate-700">Termos & Documentos</h3>
+                    <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 border-0">{filteredTerms.length}</Badge>
+                  </div>
                   <Select value={termFilter} onValueChange={setTermFilter}>
-                    <SelectTrigger className="w-[180px] h-9 text-sm">
-                      <Filter className="h-3.5 w-3.5 mr-2" />
+                    <SelectTrigger className="w-44 h-8 text-xs">
+                      <Filter className="h-3 w-3 mr-1.5" />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1493,72 +1639,116 @@ export function CompanyEditSlidePanel({
                   </Select>
                 </div>
 
-                <div className="grid gap-3">
-                  {filteredTerms.map((term) => (
-                    <Card key={term.id} className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div
-                            className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                              term.accepted
-                                ? "bg-green-100 dark:bg-green-900/30"
-                                : "bg-yellow-100 dark:bg-yellow-900/30"
-                            }`}
-                          >
-                            {term.accepted ? (
-                              <CheckCircle className="h-5 w-5 text-green-600" />
-                            ) : (
-                              <Clock className="h-5 w-5 text-yellow-600" />
-                            )}
+                {/* ── Term cards ── */}
+                <div className="grid gap-2">
+                  {filteredTerms.map((term) => {
+                    const catColor = term.category === "Privacidade" ? "bg-violet-100 text-violet-700"
+                      : term.category === "Contrato"  ? "bg-blue-100 text-blue-700"
+                      : term.category === "IA"        ? "bg-pink-100 text-pink-700"
+                      : "bg-slate-100 text-slate-700";
+                    return (
+                      <div key={term.id} className={`bg-white rounded-xl border overflow-hidden transition-all hover:shadow-sm ${term.critical && !term.accepted ? "border-red-200 bg-red-50/30" : "border-slate-200/80"}`}>
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${term.accepted ? "bg-linear-to-br from-emerald-400 to-emerald-600" : term.critical ? "bg-linear-to-br from-red-400 to-red-600" : "bg-linear-to-br from-amber-400 to-amber-600"}`}>
+                            {term.accepted ? <CheckCircle className="h-5 w-5 text-white" /> : <Clock className="h-5 w-5 text-white" />}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-medium">
-                                {term.term}
-                              </h4>
-                              <Badge variant="secondary" className="text-xs">
-                                v{term.version}
-                              </Badge>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <h4 className="text-sm font-bold text-slate-800">{term.term}</h4>
+                              <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 border-0 font-mono">v{term.version}</Badge>
+                              <Badge variant="secondary" className={`text-[10px] border-0 ${catColor}`}>{term.category}</Badge>
+                              {term.critical && (
+                                <Badge variant="secondary" className="text-[10px] bg-red-100 text-red-700 border-0 flex items-center gap-0.5"><AlertCircle className="h-2.5 w-2.5" /> Crítico</Badge>
+                              )}
                             </div>
-                            {term.accepted ? (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Aceito em{" "}
-                                {new Date(term.date!).toLocaleDateString(
-                                  "pt-BR",
-                                )}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                                Aguardando aceitação
-                              </p>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                              {term.accepted ? (
+                                <>
+                                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(term.date!).toLocaleDateString("pt-BR")}</span>
+                                  <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {term.acceptedBy}</span>
+                                  <span className="flex items-center gap-1 text-emerald-600 font-medium"><CheckCircle className="h-3 w-3" /> Assinatura digital válida</span>
+                                </>
+                              ) : (
+                                <span className="flex items-center gap-1 text-amber-600 font-medium"><Clock className="h-3 w-3" /> Aguardando assinatura</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {!term.accepted && (
+                              <Button size="sm" className="h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-700">
+                                <CheckCircle className="h-3 w-3 mr-1" /> Solicitar Aceite
+                              </Button>
                             )}
+                            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs">
+                              <ExternalLink className="h-3 w-3 mr-1" /> Ver
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-700">
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3 bg-transparent"
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1.5" />
-                          Ver Detalhes
-                        </Button>
                       </div>
-                    </Card>
-                  ))}
+                    )
+                  })}
                 </div>
               </TabsContent>
 
-              <TabsContent value="projects" className="p-6 space-y-4 mt-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold">
-                    Projetos Vinculados
-                  </h3>
-                  <Select
-                    value={projectFilter}
-                    onValueChange={setProjectFilter}
-                  >
-                    <SelectTrigger className="w-[180px] h-9 text-sm">
-                      <Filter className="h-3.5 w-3.5 mr-2" />
+              <TabsContent value="projects" className="mt-0 p-5 space-y-4">
+
+                {/* ── KPI strip ── */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-xl p-4 bg-linear-to-br from-blue-500 to-blue-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Projetos Ativos</p>
+                        <p className="text-2xl font-bold mt-1">{projects.filter(p => p.status === "active").length}</p>
+                      </div>
+                      <TrendingUp className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">{projects.length} no total</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Orçamento Total</p>
+                        <p className="text-2xl font-bold mt-1">R$ {(projects.reduce((s, p) => s + p.budget, 0) / 1000).toFixed(1)}k</p>
+                      </div>
+                      <CreditCard className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">R$ {(projects.reduce((s, p) => s + p.spent, 0) / 1000).toFixed(1)}k investidos</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-violet-500 to-purple-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Tarefas</p>
+                        <p className="text-2xl font-bold mt-1">{projects.reduce((s, p) => s + p.completedTasks, 0)}<span className="text-sm font-normal text-white/70">/{projects.reduce((s, p) => s + p.tasks, 0)}</span></p>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">{Math.round((projects.reduce((s, p) => s + p.completedTasks, 0) / projects.reduce((s, p) => s + p.tasks, 0)) * 100)}% concluídas</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Nômades</p>
+                        <p className="text-2xl font-bold mt-1">{projects.reduce((s, p) => s + p.nomads, 0)}</p>
+                      </div>
+                      <Users className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">alocados em projetos</p>
+                  </div>
+                </div>
+
+                {/* ── Filter bar ── */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-slate-500" />
+                    <h3 className="text-sm font-bold text-slate-700">Projetos Vinculados</h3>
+                    <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 border-0">{filteredProjects.length}</Badge>
+                  </div>
+                  <Select value={projectFilter} onValueChange={setProjectFilter}>
+                    <SelectTrigger className="w-44 h-8 text-xs">
+                      <Filter className="h-3 w-3 mr-1.5" />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1570,172 +1760,194 @@ export function CompanyEditSlidePanel({
                   </Select>
                 </div>
 
-                <div className="grid gap-3">
-                  {filteredProjects.map((project) => (
-                    <Card
-                      key={project.id}
-                      className="p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-medium">
-                                {project.name}
-                              </h4>
-                              <Badge
-                                variant="secondary"
-                                className={`text-xs ${
-                                  project.status === "active"
-                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                                    : project.status === "completed"
-                                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                                      : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
-                                }`}
-                              >
-                                {project.status === "active"
-                                  ? "Ativo"
-                                  : project.status === "completed"
-                                    ? "Concluído"
-                                    : "Pausado"}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                {project.nomads} nômades
+                {/* ── Project cards ── */}
+                <div className="grid gap-2">
+                  {filteredProjects.map((project) => {
+                    const statusCfg = project.status === "active"
+                      ? { label: "Ativo",     bar: "bg-emerald-500", bg: "bg-emerald-100 text-emerald-700", icon: TrendingUp }
+                      : project.status === "completed"
+                      ? { label: "Concluído", bar: "bg-blue-500",    bg: "bg-blue-100 text-blue-700",       icon: CheckCircle }
+                      : { label: "Pausado",   bar: "bg-amber-500",   bg: "bg-amber-100 text-amber-700",     icon: Pause };
+                    const prioCfg = project.priority === "high"
+                      ? { label: "Alta",   cls: "bg-red-100 text-red-700" }
+                      : project.priority === "medium"
+                      ? { label: "Média",  cls: "bg-amber-100 text-amber-700" }
+                      : { label: "Baixa",  cls: "bg-slate-100 text-slate-600" };
+                    const budgetPct = (project.spent / project.budget) * 100;
+                    const StatusIcon = statusCfg.icon;
+                    return (
+                      <div key={project.id} className="bg-white rounded-xl border border-slate-200/80 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="p-4">
+                          {/* Header */}
+                          <div className="flex items-start justify-between mb-3 gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h4 className="text-sm font-bold text-slate-800">{project.name}</h4>
+                                <Badge variant="secondary" className={`text-[10px] border-0 flex items-center gap-0.5 ${statusCfg.bg}`}>
+                                  <StatusIcon className="h-2.5 w-2.5" /> {statusCfg.label}
+                                </Badge>
+                                <Badge variant="secondary" className={`text-[10px] border-0 ${prioCfg.cls}`}>Prioridade {prioCfg.label}</Badge>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(project.deadline).toLocaleDateString(
-                                  "pt-BR",
-                                )}
+                              <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+                                <span className="flex items-center gap-1"><Users className="h-3 w-3 text-blue-400" /> {project.nomads} nômades</span>
+                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-violet-400" /> Início {new Date(project.startDate).toLocaleDateString("pt-BR")}</span>
+                                <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-amber-400" /> Prazo {new Date(project.deadline).toLocaleDateString("pt-BR")}</span>
+                                <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-400" /> {project.completedTasks}/{project.tasks} tarefas</span>
                               </div>
                             </div>
+                            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs shrink-0">
+                              <ExternalLink className="h-3 w-3 mr-1" /> Abrir
+                            </Button>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-3 bg-transparent"
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1.5" />
-                            Ver Projeto
-                          </Button>
-                        </div>
 
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              Progresso
-                            </span>
-                            <span className="font-medium">
-                              {project.progress}%
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all rounded-full ${
-                                project.status === "completed"
-                                  ? "bg-blue-600"
-                                  : project.status === "active"
-                                    ? "bg-green-600"
-                                    : "bg-yellow-600"
-                              }`}
-                              style={{ width: `${project.progress}%` }}
-                            />
+                          {/* Progress bars */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-slate-500 font-medium">Progresso</span>
+                                <span className="font-bold text-slate-700">{project.progress}%</span>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full ${statusCfg.bar} rounded-full transition-all`} style={{ width: `${project.progress}%` }} />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-slate-500 font-medium">Orçamento usado</span>
+                                <span className="font-bold text-slate-700">R$ {project.spent.toLocaleString("pt-BR")} <span className="text-slate-400 font-normal">/ R$ {project.budget.toLocaleString("pt-BR")}</span></span>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${budgetPct > 90 ? "bg-red-500" : budgetPct > 75 ? "bg-amber-500" : "bg-blue-500"}`} style={{ width: `${budgetPct}%` }} />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </Card>
-                  ))}
+                    )
+                  })}
                 </div>
               </TabsContent>
 
-              <TabsContent value="logs" className="p-6 space-y-4 mt-0">
-                <div className="flex flex-col sm:flex-row gap-3">
+              <TabsContent value="logs" className="mt-0 p-5 space-y-4">
+
+                {/* ── KPI strip ── */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-xl p-4 bg-linear-to-br from-indigo-500 to-blue-700 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Total de Eventos</p>
+                        <p className="text-2xl font-bold mt-1">{logs.length}</p>
+                      </div>
+                      <Activity className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">últimas 24h</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Sucesso</p>
+                        <p className="text-2xl font-bold mt-1">{logs.filter(l => l.status === "success").length}</p>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">{Math.round((logs.filter(l => l.status === "success").length / logs.length) * 100)}% do total</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Alertas</p>
+                        <p className="text-2xl font-bold mt-1">{logs.filter(l => l.status === "warning").length}</p>
+                      </div>
+                      <AlertCircle className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">requerem atenção</p>
+                  </div>
+                  <div className="rounded-xl p-4 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-md">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Erros</p>
+                        <p className="text-2xl font-bold mt-1">{logs.filter(l => l.status === "error").length}</p>
+                      </div>
+                      <X className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-[10px] text-white/60 mt-2">eventos críticos</p>
+                  </div>
+                </div>
+
+                {/* ── Filter bar ── */}
+                <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200/80 p-3">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input
-                      placeholder="Buscar nos logs..."
+                      placeholder="Buscar usuário ou ação..."
                       value={logSearch}
                       onChange={(e) => setLogSearch(e.target.value)}
-                      className="pl-9 h-9 text-sm"
+                      className="pl-9 h-8 text-xs"
                     />
                   </div>
-                  <Select
-                    value={logActionFilter}
-                    onValueChange={setLogActionFilter}
-                  >
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm">
-                      <Filter className="h-3.5 w-3.5 mr-2" />
-                      <SelectValue placeholder="Tipo de ação" />
+                  <Select value={logActionFilter} onValueChange={setLogActionFilter}>
+                    <SelectTrigger className="w-44 h-8 text-xs">
+                      <Filter className="h-3 w-3 mr-1.5" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="all">Todas categorias</SelectItem>
                       <SelectItem value="auth">Autenticação</SelectItem>
                       <SelectItem value="project">Projetos</SelectItem>
                       <SelectItem value="user">Usuários</SelectItem>
                       <SelectItem value="settings">Configurações</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Button variant="outline" size="sm" className="h-8 px-3 text-xs">
+                    <Download className="h-3 w-3 mr-1.5" /> Exportar
+                  </Button>
                 </div>
 
-                <Card className="p-4">
-                  <div className="space-y-4">
-                    {filteredLogs.map((log, index) => (
-                      <div key={log.id}>
-                        <div className="flex gap-3">
-                          <div className="flex flex-col items-center">
-                            <div
-                              className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
-                                log.category === "auth"
-                                  ? "bg-blue-100 dark:bg-blue-900/30"
-                                  : log.category === "project"
-                                    ? "bg-green-100 dark:bg-green-900/30"
-                                    : log.category === "user"
-                                      ? "bg-purple-100 dark:bg-purple-900/30"
-                                      : "bg-orange-100 dark:bg-orange-900/30"
-                              }`}
-                            >
-                              <Activity className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            {index < filteredLogs.length - 1 && (
-                              <div className="w-px h-8 bg-border mt-1" />
-                            )}
+                {/* ── Activity timeline ── */}
+                <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                  {filteredLogs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                      <Activity className="h-10 w-10 opacity-40 mb-2" />
+                      <p className="text-sm font-medium text-slate-500">Nenhum log encontrado</p>
+                    </div>
+                  ) : filteredLogs.map((log, idx) => {
+                    const catCfg = log.category === "auth"
+                      ? { color: "from-blue-500 to-blue-700",    bg: "bg-blue-100 text-blue-700",   label: "Auth" }
+                      : log.category === "project"
+                      ? { color: "from-emerald-500 to-teal-600", bg: "bg-emerald-100 text-emerald-700", label: "Projeto" }
+                      : log.category === "user"
+                      ? { color: "from-violet-500 to-purple-700",bg: "bg-violet-100 text-violet-700",label: "Usuário" }
+                      : { color: "from-amber-500 to-orange-600", bg: "bg-amber-100 text-amber-700", label: "Sistema" };
+                    const statusCfg = log.status === "success"
+                      ? { dot: "bg-emerald-500", bg: "bg-emerald-100 text-emerald-700", label: "Sucesso" }
+                      : log.status === "warning"
+                      ? { dot: "bg-amber-400",   bg: "bg-amber-100 text-amber-700",     label: "Alerta" }
+                      : { dot: "bg-red-500",     bg: "bg-red-100 text-red-700",         label: "Erro" };
+                    return (
+                      <div key={log.id} className={`flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors ${idx > 0 ? "border-t border-slate-100" : ""}`}>
+                        <div className={`w-9 h-9 rounded-xl bg-linear-to-br ${catCfg.color} flex items-center justify-center shrink-0 shadow-sm`}>
+                          <Activity className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <p className="text-xs font-bold text-slate-800">{log.action}</p>
+                            <Badge variant="secondary" className={`text-[9px] border-0 ${catCfg.bg}`}>{catCfg.label}</Badge>
+                            <Badge variant="secondary" className={`text-[9px] border-0 flex items-center gap-0.5 ${statusCfg.bg}`}>
+                              <span className={`h-1 w-1 rounded-full ${statusCfg.dot}`} />
+                              {statusCfg.label}
+                            </Badge>
                           </div>
-                          <div className="flex-1 pb-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">
-                                  {log.action}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Por{" "}
-                                  <span className="font-medium">
-                                    {log.user}
-                                  </span>
-                                </p>
-                              </div>
-                              <Badge variant="secondary" className="text-xs">
-                                {log.category}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {log.timestamp}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Globe className="h-3 w-3" />
-                                {log.ip}
-                              </div>
-                            </div>
+                          <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+                            <span className="flex items-center gap-1"><Users className="h-2.5 w-2.5" /> <span className="font-medium text-slate-600">{log.user}</span></span>
+                            <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" /> {log.timestamp}</span>
+                            <span className="flex items-center gap-1"><Globe className="h-2.5 w-2.5" /> {log.ip}</span>
+                            <span className="hidden lg:inline-flex items-center gap-1"><MapPin className="h-2.5 w-2.5" /> {log.device} • {log.origin}</span>
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </Card>
+                    )
+                  })}
+                </div>
               </TabsContent>
             </ScrollArea>
           </div>

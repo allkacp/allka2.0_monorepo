@@ -277,6 +277,25 @@ export default function EmpresasPage() {
     deleteCompany: apiDeleteCompany,
   } = useCompanies();
   const pageRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+
+  const isSyncingScroll = useRef(false);
+  const handleTopBarScroll = useCallback(() => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (tableScrollRef.current && topScrollRef.current)
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => { isSyncingScroll.current = false; });
+  }, []);
+  const handleTableScroll = useCallback(() => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (topScrollRef.current && tableScrollRef.current)
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => { isSyncingScroll.current = false; });
+  }, []);
+
   const appliedTheme = previewTheme || sidebarSettings;
   const themeBg = appliedTheme.backgroundColor;
   const getHeaderStyle = (): React.CSSProperties => {
@@ -1423,8 +1442,20 @@ export default function EmpresasPage() {
           </div>
         </div>
 
+        {/* Top scrollbar mirror */}
+        <div
+          ref={topScrollRef}
+          onScroll={handleTopBarScroll}
+          className="overflow-x-scroll allka-table-scroll"
+          style={{ height: 10 }}
+        >
+          <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+        </div>
+
         {/* Table */}
         <div
+          ref={tableScrollRef}
+          onScroll={handleTableScroll}
           className="overflow-auto allka-table-scroll"
           style={{ maxHeight: "calc(100vh - 19rem)" }}
         >
