@@ -43,6 +43,9 @@ import {
   Crosshair,
   ChevronsUpDown,
   Search,
+  Briefcase,
+  DollarSign,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +140,24 @@ interface Company {
   admin_notes?: string;
   internal_notes?: string;
   social_links: SocialLink[];
+  // Commercial contact person
+  commercial_contact_name?: string;
+  commercial_contact_role?: string;
+  commercial_contact_email?: string;
+  commercial_contact_phone?: string;
+  commercial_contact_whatsapp?: string;
+  commercial_contact_preferred_channel?: string;
+  commercial_contact_notes?: string;
+  // Financial contact person
+  financial_contact_name?: string;
+  financial_contact_role?: string;
+  financial_contact_email?: string;
+  financial_contact_phone?: string;
+  financial_contact_whatsapp?: string;
+  financial_contact_preferred_channel?: string;
+  financial_contact_notes?: string;
+  financial_contact_user_id?: string;
+  use_master_as_financial_fallback?: boolean;
 }
 
 interface CompanyViewSlidePanelProps {
@@ -732,6 +753,23 @@ export function CompanyViewSlidePanel({
       bank_account_type: "bank_account_type",
       admin_notes: "admin_notes",
       internal_notes: "internal_notes",
+      // Commercial contact
+      commercial_contact_name: "commercial_contact_name",
+      commercial_contact_role: "commercial_contact_role",
+      commercial_contact_email: "commercial_contact_email",
+      commercial_contact_phone: "commercial_contact_phone",
+      commercial_contact_whatsapp: "commercial_contact_whatsapp",
+      commercial_contact_preferred_channel: "commercial_contact_preferred_channel",
+      commercial_contact_notes: "commercial_contact_notes",
+      // Financial contact
+      financial_contact_name: "financial_contact_name",
+      financial_contact_role: "financial_contact_role",
+      financial_contact_email: "financial_contact_email",
+      financial_contact_phone: "financial_contact_phone",
+      financial_contact_whatsapp: "financial_contact_whatsapp",
+      financial_contact_preferred_channel: "financial_contact_preferred_channel",
+      financial_contact_notes: "financial_contact_notes",
+      financial_contact_user_id: "financial_contact_user_id",
     };
     return (company as any)?.[fieldMap[key]] || "";
   };
@@ -928,6 +966,23 @@ export function CompanyViewSlidePanel({
         admin_notes: getDadosDisplayValue("admin_notes") || undefined,
         internal_notes: getDadosDisplayValue("internal_notes") || undefined,
         status: getDadosDisplayValue("status") || company.status,
+        // Commercial contact
+        commercial_contact_name: getDadosDisplayValue("commercial_contact_name") || undefined,
+        commercial_contact_role: getDadosDisplayValue("commercial_contact_role") || undefined,
+        commercial_contact_email: getDadosDisplayValue("commercial_contact_email") || undefined,
+        commercial_contact_phone: getDadosDisplayValue("commercial_contact_phone") || undefined,
+        commercial_contact_whatsapp: getDadosDisplayValue("commercial_contact_whatsapp") || undefined,
+        commercial_contact_preferred_channel: getDadosDisplayValue("commercial_contact_preferred_channel") || undefined,
+        commercial_contact_notes: getDadosDisplayValue("commercial_contact_notes") || undefined,
+        // Financial contact
+        financial_contact_name: getDadosDisplayValue("financial_contact_name") || undefined,
+        financial_contact_role: getDadosDisplayValue("financial_contact_role") || undefined,
+        financial_contact_email: getDadosDisplayValue("financial_contact_email") || undefined,
+        financial_contact_phone: getDadosDisplayValue("financial_contact_phone") || undefined,
+        financial_contact_whatsapp: getDadosDisplayValue("financial_contact_whatsapp") || undefined,
+        financial_contact_preferred_channel: getDadosDisplayValue("financial_contact_preferred_channel") || undefined,
+        financial_contact_notes: getDadosDisplayValue("financial_contact_notes") || undefined,
+        financial_contact_user_id: getDadosDisplayValue("financial_contact_user_id") || undefined,
       };
 
       // Persist to API
@@ -955,6 +1010,23 @@ export function CompanyViewSlidePanel({
             .filter(Boolean)
             .join(", ") || undefined,
         description: dataPayload.admin_notes || undefined,
+        // Commercial contact
+        commercial_contact_name: dataPayload.commercial_contact_name,
+        commercial_contact_role: dataPayload.commercial_contact_role,
+        commercial_contact_email: dataPayload.commercial_contact_email,
+        commercial_contact_phone: dataPayload.commercial_contact_phone,
+        commercial_contact_whatsapp: dataPayload.commercial_contact_whatsapp,
+        commercial_contact_preferred_channel: dataPayload.commercial_contact_preferred_channel,
+        commercial_contact_notes: dataPayload.commercial_contact_notes,
+        // Financial contact
+        financial_contact_name: dataPayload.financial_contact_name,
+        financial_contact_role: dataPayload.financial_contact_role,
+        financial_contact_email: dataPayload.financial_contact_email,
+        financial_contact_phone: dataPayload.financial_contact_phone,
+        financial_contact_whatsapp: dataPayload.financial_contact_whatsapp,
+        financial_contact_preferred_channel: dataPayload.financial_contact_preferred_channel,
+        financial_contact_notes: dataPayload.financial_contact_notes,
+        financial_contact_user_id: dataPayload.financial_contact_user_id,
       });
 
       const updatedCompany: Company = {
@@ -984,6 +1056,21 @@ export function CompanyViewSlidePanel({
         admin_notes: dataPayload.admin_notes,
         internal_notes: dataPayload.internal_notes,
         status: dataPayload.status as CompanyStatus,
+        commercial_contact_name: dataPayload.commercial_contact_name,
+        commercial_contact_role: dataPayload.commercial_contact_role,
+        commercial_contact_email: dataPayload.commercial_contact_email,
+        commercial_contact_phone: dataPayload.commercial_contact_phone,
+        commercial_contact_whatsapp: dataPayload.commercial_contact_whatsapp,
+        commercial_contact_preferred_channel: dataPayload.commercial_contact_preferred_channel,
+        commercial_contact_notes: dataPayload.commercial_contact_notes,
+        financial_contact_name: dataPayload.financial_contact_name,
+        financial_contact_role: dataPayload.financial_contact_role,
+        financial_contact_email: dataPayload.financial_contact_email,
+        financial_contact_phone: dataPayload.financial_contact_phone,
+        financial_contact_whatsapp: dataPayload.financial_contact_whatsapp,
+        financial_contact_preferred_channel: dataPayload.financial_contact_preferred_channel,
+        financial_contact_notes: dataPayload.financial_contact_notes,
+        financial_contact_user_id: dataPayload.financial_contact_user_id,
       };
 
       onCompanyUpdate?.(updatedCompany);
@@ -2125,145 +2212,473 @@ export function CompanyViewSlidePanel({
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                          {/* Email Principal */}
-                          <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                              Email Principal
-                            </p>
-                            {isDadosEditMode ? (
-                              <Input
-                                type="email"
-                                value={getDadosDisplayValue("email") as string}
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "email",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 text-sm"
-                                placeholder="email@example.com"
-                              />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getDadosDisplayValue("email") || ""}
+                        <div className="flex flex-col gap-4">
+
+                          {/* ─ Contatos Gerais da Empresa ─ */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                            {/* Email Principal */}
+                            <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                Email Principal
                               </p>
-                            )}
+                              {isDadosEditMode ? (
+                                <Input
+                                  type="email"
+                                  value={getDadosDisplayValue("email") as string}
+                                  onChange={(e) =>
+                                    handleDadosFieldChange("email", e.target.value)
+                                  }
+                                  className="border-slate-300 h-8 text-sm"
+                                  placeholder="email@example.com"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {getDadosDisplayValue("email") || ""}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Telefone Principal */}
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                Telefone Principal
+                              </p>
+                              {isDadosEditMode ? (
+                                <Input
+                                  type="tel"
+                                  value={(getDadosDisplayValue("phone") as string) || ""}
+                                  onChange={(e) =>
+                                    handleDadosFieldChange("phone", e.target.value)
+                                  }
+                                  className="border-slate-300 h-8 text-sm"
+                                  placeholder="(00) 0000-0000"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {getDadosDisplayValue("phone") || ""}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Telefone Secundário */}
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                Telefone Secundário
+                              </p>
+                              {isDadosEditMode ? (
+                                <Input
+                                  type="tel"
+                                  value={(getDadosDisplayValue("phone_secondary") as string) || ""}
+                                  onChange={(e) =>
+                                    handleDadosFieldChange("phone_secondary", e.target.value)
+                                  }
+                                  className="border-slate-300 h-8 text-sm"
+                                  placeholder="(00) 0000-0000"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {getDadosDisplayValue("phone_secondary") || ""}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* WhatsApp */}
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                WhatsApp
+                              </p>
+                              {isDadosEditMode ? (
+                                <Input
+                                  type="tel"
+                                  value={(getDadosDisplayValue("whatsapp") as string) || ""}
+                                  onChange={(e) =>
+                                    handleDadosFieldChange("whatsapp", e.target.value)
+                                  }
+                                  className="border-slate-300 h-8 text-sm"
+                                  placeholder="(00) 00000-0000"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {getDadosDisplayValue("whatsapp") || ""}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Site */}
+                            <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                Site
+                              </p>
+                              {isDadosEditMode ? (
+                                <Input
+                                  type="url"
+                                  value={(getDadosDisplayValue("website") as string) || ""}
+                                  onChange={(e) =>
+                                    handleDadosFieldChange("website", e.target.value)
+                                  }
+                                  className="border-slate-300 h-8 text-sm"
+                                  placeholder="https://exemplo.com.br"
+                                />
+                              ) : (
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {getDadosDisplayValue("website") || ""}
+                                </p>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Telefone Principal */}
-                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                              Telefone Principal
-                            </p>
-                            {isDadosEditMode ? (
-                              <Input
-                                type="tel"
-                                value={
-                                  (getDadosDisplayValue("phone") as string) ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "phone",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 text-sm"
-                                placeholder="(00) 0000-0000"
-                              />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getDadosDisplayValue("phone") || ""}
-                              </p>
-                            )}
+                          {/* ─ Contato Comercial ─ */}
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+                            <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border-b border-blue-100">
+                              <Briefcase className="h-4 w-4 text-blue-600" />
+                              <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">
+                                Contato Comercial
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 p-3">
+                              {/* Nome */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Nome
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    value={(getDadosDisplayValue("commercial_contact_name") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_name", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="Nome do responsável comercial"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_name") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Cargo */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Cargo
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    value={(getDadosDisplayValue("commercial_contact_role") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_role", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="Ex: Diretor Comercial"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_role") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Email */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Email
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    type="email"
+                                    value={(getDadosDisplayValue("commercial_contact_email") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_email", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="comercial@empresa.com"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_email") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Telefone */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Telefone
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    type="tel"
+                                    value={(getDadosDisplayValue("commercial_contact_phone") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_phone", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="(00) 0000-0000"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_phone") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* WhatsApp */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  WhatsApp
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    type="tel"
+                                    value={(getDadosDisplayValue("commercial_contact_whatsapp") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_whatsapp", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="(00) 00000-0000"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_whatsapp") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Canal Preferencial */}
+                              <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Canal Preferencial
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    value={(getDadosDisplayValue("commercial_contact_preferred_channel") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_preferred_channel", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="email / telefone / whatsapp"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_preferred_channel") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Observações */}
+                              <div className="md:col-span-2 bg-white/80 rounded-lg px-2.5 py-2 border border-blue-100/60">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                  Observações
+                                </p>
+                                {isDadosEditMode ? (
+                                  <Input
+                                    value={(getDadosDisplayValue("commercial_contact_notes") as string) || ""}
+                                    onChange={(e) => handleDadosFieldChange("commercial_contact_notes", e.target.value)}
+                                    className="border-slate-300 h-8 text-sm"
+                                    placeholder="Notas adicionais sobre o contato comercial"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {getDadosDisplayValue("commercial_contact_notes") || (
+                                      <span className="text-slate-400 font-normal italic text-xs">Nenhuma observação</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Telefone Secundário */}
-                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                              Telefone Secundário
-                            </p>
-                            {isDadosEditMode ? (
-                              <Input
-                                type="tel"
-                                value={
-                                  (getDadosDisplayValue(
-                                    "phone_secondary",
-                                  ) as string) || ""
-                                }
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "phone_secondary",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 text-sm"
-                                placeholder="(00) 0000-0000"
-                              />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getDadosDisplayValue("phone_secondary") || ""}
-                              </p>
-                            )}
-                          </div>
+                          {/* ─ Contato Financeiro ─ */}
+                          {(() => {
+                            const hasFinancialContact = !!(
+                              (company as any).financial_contact_email ||
+                              (company as any).financial_contact_name
+                            );
+                            const masterUser = companyUsers.find(
+                              (u) => u.role === "company_admin" || u.role === "admin",
+                            );
+                            return (
+                              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border-b border-emerald-100">
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="h-4 w-4 text-emerald-600" />
+                                    <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+                                      Contato Financeiro
+                                    </span>
+                                  </div>
+                                  {!isDadosEditMode && (
+                                    hasFinancialContact ? (
+                                      <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] px-2 py-0.5">
+                                        Contato cadastrado
+                                      </Badge>
+                                    ) : masterUser ? (
+                                      <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                        <UserIcon className="h-2.5 w-2.5" />
+                                        Usando Master: {masterUser.name}
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="bg-red-100 text-red-600 border border-red-200 text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                        <AlertTriangle className="h-2.5 w-2.5" />
+                                        Sem responsável financeiro
+                                      </Badge>
+                                    )
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 p-3">
+                                  {/* Nome */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Nome
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        value={(getDadosDisplayValue("financial_contact_name") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_name", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="Nome do responsável financeiro"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_name") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
 
-                          {/* WhatsApp */}
-                          <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                              WhatsApp
-                            </p>
-                            {isDadosEditMode ? (
-                              <Input
-                                type="tel"
-                                value={
-                                  (getDadosDisplayValue(
-                                    "whatsapp",
-                                  ) as string) || ""
-                                }
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "whatsapp",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 text-sm"
-                                placeholder="(00) 00000-0000"
-                              />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getDadosDisplayValue("whatsapp") || ""}
-                              </p>
-                            )}
-                          </div>
+                                  {/* Cargo */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Cargo
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        value={(getDadosDisplayValue("financial_contact_role") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_role", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="Ex: Gerente Financeiro"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_role") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
 
-                          {/* Site */}
-                          <div className="md:col-span-2 bg-slate-100/70 rounded-lg px-2.5 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                              Site
-                            </p>
-                            {isDadosEditMode ? (
-                              <Input
-                                type="url"
-                                value={
-                                  (getDadosDisplayValue("website") as string) ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "website",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 text-sm"
-                                placeholder="https://exemplo.com.br"
-                              />
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getDadosDisplayValue("website") || ""}
-                              </p>
-                            )}
-                          </div>
+                                  {/* Email */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Email
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        type="email"
+                                        value={(getDadosDisplayValue("financial_contact_email") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_email", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="financeiro@empresa.com"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_email") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Telefone */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Telefone
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        type="tel"
+                                        value={(getDadosDisplayValue("financial_contact_phone") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_phone", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="(00) 0000-0000"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_phone") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* WhatsApp */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      WhatsApp
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        type="tel"
+                                        value={(getDadosDisplayValue("financial_contact_whatsapp") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_whatsapp", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="(00) 00000-0000"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_whatsapp") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Canal Preferencial */}
+                                  <div className="bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Canal Preferencial
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        value={(getDadosDisplayValue("financial_contact_preferred_channel") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_preferred_channel", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="email / telefone / whatsapp"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_preferred_channel") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Observações */}
+                                  <div className="md:col-span-2 bg-white/80 rounded-lg px-2.5 py-2 border border-emerald-100/60">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                      Observações
+                                    </p>
+                                    {isDadosEditMode ? (
+                                      <Input
+                                        value={(getDadosDisplayValue("financial_contact_notes") as string) || ""}
+                                        onChange={(e) => handleDadosFieldChange("financial_contact_notes", e.target.value)}
+                                        className="border-slate-300 h-8 text-sm"
+                                        placeholder="Notas adicionais sobre o contato financeiro"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {getDadosDisplayValue("financial_contact_notes") || (
+                                          <span className="text-slate-400 font-normal italic text-xs">Nenhuma observação</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                         </div>
                       </AccordionContent>
                     </AccordionItem>

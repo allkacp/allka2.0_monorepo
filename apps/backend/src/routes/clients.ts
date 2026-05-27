@@ -17,6 +17,24 @@ const createSchema = z.object({
   description: z.string().optional(),
   logo: z.string().optional(),
   website: z.string().optional(),
+  // Commercial contact
+  commercial_contact_name: z.string().optional(),
+  commercial_contact_role: z.string().optional(),
+  commercial_contact_email: z.string().email().optional().or(z.literal("")),
+  commercial_contact_phone: z.string().optional(),
+  commercial_contact_whatsapp: z.string().optional(),
+  commercial_contact_preferred_channel: z.string().optional(),
+  commercial_contact_notes: z.string().optional(),
+  // Financial contact
+  financial_contact_name: z.string().optional(),
+  financial_contact_role: z.string().optional(),
+  financial_contact_email: z.string().email().optional().or(z.literal("")),
+  financial_contact_phone: z.string().optional(),
+  financial_contact_whatsapp: z.string().optional(),
+  financial_contact_preferred_channel: z.string().optional(),
+  financial_contact_notes: z.string().optional(),
+  financial_contact_user_id: z.string().optional(),
+  use_master_as_financial_fallback: z.boolean().optional(),
 });
 
 const updateSchema = createSchema.partial();

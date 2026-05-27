@@ -17,7 +17,7 @@ model User {
   password_hash    String
   name             String
   role             String    @default("company_user")
-  // company_user | company_admin | agency_user | agency_admin | nomad | admin | partner
+  // company_user | company_admin | company_financial | agency_user | agency_admin | nomad | admin | partner
   account_type     String    @default("empresas")
   // empresas | agencias | nomades | admin | parceiro
   is_active        Boolean   @default(true)
@@ -73,6 +73,24 @@ model Company {
   description String?  @db.LongText
   logo        String?  @db.LongText
   website     String?
+  // ── Commercial contact ──────────────────────────────────────────
+  commercial_contact_name             String?  @db.VarChar(255)
+  commercial_contact_role             String?  @db.VarChar(100)
+  commercial_contact_email            String?  @db.VarChar(255)
+  commercial_contact_phone            String?  @db.VarChar(30)
+  commercial_contact_whatsapp         String?  @db.VarChar(30)
+  commercial_contact_preferred_channel String? @db.VarChar(50)
+  commercial_contact_notes            String?  @db.LongText
+  // ── Financial contact ───────────────────────────────────────────
+  financial_contact_name              String?  @db.VarChar(255)
+  financial_contact_role              String?  @db.VarChar(100)
+  financial_contact_email             String?  @db.VarChar(255)
+  financial_contact_phone             String?  @db.VarChar(30)
+  financial_contact_whatsapp          String?  @db.VarChar(30)
+  financial_contact_preferred_channel String?  @db.VarChar(50)
+  financial_contact_notes             String?  @db.LongText
+  financial_contact_user_id           String?  // FK to User (optional link to financial user)
+  use_master_as_financial_fallback    Boolean  @default(true)
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 

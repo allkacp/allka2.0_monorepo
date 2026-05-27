@@ -171,6 +171,24 @@ type Company = {
       resolved: boolean;
     }[];
   };
+  // Commercial contact
+  commercial_contact_name?: string;
+  commercial_contact_role?: string;
+  commercial_contact_email?: string;
+  commercial_contact_phone?: string;
+  commercial_contact_whatsapp?: string;
+  commercial_contact_preferred_channel?: string;
+  commercial_contact_notes?: string;
+  // Financial contact
+  financial_contact_name?: string;
+  financial_contact_role?: string;
+  financial_contact_email?: string;
+  financial_contact_phone?: string;
+  financial_contact_whatsapp?: string;
+  financial_contact_preferred_channel?: string;
+  financial_contact_notes?: string;
+  financial_contact_user_id?: string;
+  use_master_as_financial_fallback?: boolean;
 };
 
 // Companies loaded from API via useCompanies hook
@@ -603,6 +621,24 @@ export default function EmpresasPage() {
         c.plan ||
         c.partner_level ||
         DEMO_PLANS[idx % DEMO_PLANS.length],
+      // Commercial contact
+      commercial_contact_name: c.commercial_contact_name || undefined,
+      commercial_contact_role: c.commercial_contact_role || undefined,
+      commercial_contact_email: c.commercial_contact_email || undefined,
+      commercial_contact_phone: c.commercial_contact_phone || undefined,
+      commercial_contact_whatsapp: c.commercial_contact_whatsapp || undefined,
+      commercial_contact_preferred_channel: c.commercial_contact_preferred_channel || undefined,
+      commercial_contact_notes: c.commercial_contact_notes || undefined,
+      // Financial contact
+      financial_contact_name: c.financial_contact_name || undefined,
+      financial_contact_role: c.financial_contact_role || undefined,
+      financial_contact_email: c.financial_contact_email || undefined,
+      financial_contact_phone: c.financial_contact_phone || undefined,
+      financial_contact_whatsapp: c.financial_contact_whatsapp || undefined,
+      financial_contact_preferred_channel: c.financial_contact_preferred_channel || undefined,
+      financial_contact_notes: c.financial_contact_notes || undefined,
+      financial_contact_user_id: c.financial_contact_user_id || undefined,
+      use_master_as_financial_fallback: c.use_master_as_financial_fallback ?? true,
     })) as Company[];
     setCompanies(mapped);
   }, [apiCompanies]);
