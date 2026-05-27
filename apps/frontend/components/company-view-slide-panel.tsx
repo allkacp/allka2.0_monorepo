@@ -1296,7 +1296,7 @@ export function CompanyViewSlidePanel({
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-500">
                         <span className="text-white font-bold text-2xl">
-                          {company.name.charAt(0).toUpperCase()}
+                          {(company.name || "?").charAt(0).toUpperCase()}
                         </span>
                       </div>
                     )}
@@ -4199,7 +4199,7 @@ export function CompanyViewSlidePanel({
                                   const url = URL.createObjectURL(blob);
                                   const a = document.createElement("a");
                                   a.href = url;
-                                  a.download = `notas-fiscais-${company.name.replace(/\s+/g, "-")}.csv`;
+                                  a.download = `notas-fiscais-${(company.name || "empresa").replace(/\s+/g, "-")}.csv`;
                                   a.click();
                                   URL.revokeObjectURL(url);
                                 }}
@@ -4461,7 +4461,7 @@ export function CompanyViewSlidePanel({
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement("a");
                                 a.href = url;
-                                a.download = `carteira-${company.name.replace(/\s+/g, "-")}.csv`;
+                                a.download = `carteira-${(company.name || "empresa").replace(/\s+/g, "-")}.csv`;
                                 a.click();
                                 URL.revokeObjectURL(url);
                               }}
