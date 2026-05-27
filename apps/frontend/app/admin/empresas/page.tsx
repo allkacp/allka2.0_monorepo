@@ -277,26 +277,7 @@ export default function EmpresasPage() {
   const navigate = useNavigate();
   const { empresaId: urlEmpresaId } = useParams<{ empresaId?: string }>();
 
-  // Deep-link: open company view from URL param
-  useEffect(() => {
-    if (!urlEmpresaId) return;
-    if (companiesLoading) return; // wait until list is loaded
-    const numId = parseInt(urlEmpresaId, 10);
-    // First try: find in already-mapped companies list by sequential id
-    const found = companies.find((c) => c.id === numId);
-    if (found) {
-      setSelectedCompany(found);
-      setViewPanelOpen(true);
-      return;
-    }
-    // Fallback: try matching by real API CUID (e.g. if URL contains a CUID directly)
-    const foundByApiId = companies.find((c: any) => c._apiId === urlEmpresaId);
-    if (foundByApiId) {
-      setSelectedCompany(foundByApiId);
-      setViewPanelOpen(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlEmpresaId, companies, companiesLoading]);
+
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
@@ -431,6 +412,28 @@ export default function EmpresasPage() {
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+
+  // Deep-link: open company view from URL param
+  useEffect(() => {
+    if (!urlEmpresaId) return;
+    if (companiesLoading) return; // wait until list is loaded
+    const numId = parseInt(urlEmpresaId, 10);
+    // First try: find in already-mapped companies list by sequential id
+    const found = companies.find((c) => c.id === numId);
+    if (found) {
+      setSelectedCompany(found);
+      setViewPanelOpen(true);
+      return;
+    }
+    // Fallback: try matching by real API CUID (e.g. if URL contains a CUID directly)
+    const foundByApiId = companies.find((c: any) => c._apiId === urlEmpresaId);
+    if (foundByApiId) {
+      setSelectedCompany(foundByApiId);
+      setViewPanelOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlEmpresaId, companies, companiesLoading]);
+
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
