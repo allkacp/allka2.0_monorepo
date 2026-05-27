@@ -280,18 +280,23 @@ export default function EmpresasPage() {
   // Deep-link: open company view from URL param
   useEffect(() => {
     if (!urlEmpresaId) return;
-    apiClient
-      .getCompany(urlEmpresaId)
-      .then((company: any) => {
-        setSelectedCompany(company);
-        setViewPanelOpen(true);
-      })
-      .catch(() => {
-        setSelectedCompany({ id: urlEmpresaId } as any);
-        setViewPanelOpen(true);
-      });
+    if (companiesLoading) return; // wait until list is loaded
+    const numId = parseInt(urlEmpresaId, 10);
+    // First try: find in already-mapped companies list by sequential id
+    const found = companies.find((c) => c.id === numId);
+    if (found) {
+      setSelectedCompany(found);
+      setViewPanelOpen(true);
+      return;
+    }
+    // Fallback: try matching by real API CUID (e.g. if URL contains a CUID directly)
+    const foundByApiId = companies.find((c: any) => c._apiId === urlEmpresaId);
+    if (foundByApiId) {
+      setSelectedCompany(foundByApiId);
+      setViewPanelOpen(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlEmpresaId]);
+  }, [urlEmpresaId, companies, companiesLoading]);
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
@@ -546,9 +551,10 @@ export default function EmpresasPage() {
       segment: c.segment || "",
       description: c.description || "",
       website: c.website || "",
+      avatar: c.logo || c.avatar || null,
       plan: "starter",
-      users_count: 0,
-      projects_count: 0,
+      users_count: c.users_count ?? c._count?.users ?? 0,
+      projects_count: c.projects_count ?? c._count?.projects ?? 0,
       created_at: c.created_at || new Date().toISOString(),
       logo_gradient: "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900",
       lgpd: c.lgpd ?? (idx < 3 ? DEMO_DPO[idx] : undefined),
