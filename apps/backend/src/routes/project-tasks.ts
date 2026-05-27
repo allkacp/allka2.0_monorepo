@@ -6,6 +6,7 @@ import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
+import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
 
 const router = Router();
 
@@ -179,47 +180,49 @@ router.get(
         where.status = { notIn: ["CONCLUIDA", "CANCELADA"] };
       }
 
-      const tasks = await prisma.projectTask.findMany({
-        where,
-        include: {
-          project: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              type: true,
-              consultant: true,
-              client: {
-                select: { id: true, name: true, logo: true, cnpj: true },
+      const tasks = await withZeroDateRecovery(() =>
+        prisma.projectTask.findMany({
+          where,
+          include: {
+            project: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                type: true,
+                consultant: true,
+                client: {
+                  select: { id: true, name: true, logo: true, cnpj: true },
+                },
+              },
+            },
+            project_product: {
+              select: {
+                id: true,
+                product_name_snapshot: true,
+                product_code_snapshot: true,
+                product_category_snapshot: true,
+                status: true,
+              },
+            },
+            catalog_task: {
+              select: { id: true, code: true, name: true, category: true },
+            },
+            _count: {
+              select: {
+                stages: true,
+                briefing_answers: true,
+                attachments: true,
               },
             },
           },
-          project_product: {
-            select: {
-              id: true,
-              product_name_snapshot: true,
-              product_code_snapshot: true,
-              product_category_snapshot: true,
-              status: true,
-            },
-          },
-          catalog_task: {
-            select: { id: true, code: true, name: true, category: true },
-          },
-          _count: {
-            select: {
-              stages: true,
-              briefing_answers: true,
-              attachments: true,
-            },
-          },
-        },
-        orderBy: [
-          { project_id: "asc" },
-          { sort_order: "asc" },
-          { created_at: "asc" },
-        ],
-      });
+          orderBy: [
+            { project_id: "asc" },
+            { sort_order: "asc" },
+            { created_at: "asc" },
+          ],
+        }),
+      );
 
       // ── Post-process: resolve responsavel_agencia and nomade_responsavel names
       const agenciaIds = [
