@@ -140,7 +140,7 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
 router.get("/:id/payment-methods", verifyToken, async (req, res, next) => {
   try {
     const methods = await prisma.companyPaymentMethod.findMany({
-      where: { company_id: req.params.id, is_active: true },
+      where: { company_id: req.params.id as string, is_active: true },
       orderBy: [{ is_default: "desc" }, { created_at: "asc" }],
     });
     // Mask holder_name for client cards (only agency-owned cards show full name)
@@ -175,7 +175,7 @@ router.post(
       // If setting as default, unset all others first
       if (is_default) {
         await prisma.companyPaymentMethod.updateMany({
-          where: { company_id: req.params.id, is_active: true },
+          where: { company_id: req.params.id as string, is_active: true },
           data: { is_default: false },
         });
       }
@@ -200,11 +200,11 @@ router.patch(
   async (req, res, next) => {
     try {
       await prisma.companyPaymentMethod.updateMany({
-        where: { company_id: req.params.id, is_active: true },
+        where: { company_id: req.params.id as string, is_active: true },
         data: { is_default: false },
       });
       const method = await prisma.companyPaymentMethod.update({
-        where: { id: req.params.pmId },
+        where: { id: req.params.pmId as string },
         data: { is_default: true },
       });
       res.json(method);
@@ -221,7 +221,7 @@ router.delete(
   async (req, res, next) => {
     try {
       await prisma.companyPaymentMethod.update({
-        where: { id: req.params.pmId },
+        where: { id: req.params.pmId as string },
         data: { is_active: false },
       });
       res.status(204).send();
