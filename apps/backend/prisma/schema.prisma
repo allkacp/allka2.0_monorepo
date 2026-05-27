@@ -94,11 +94,31 @@ model Company {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  projects Project[]
-  invoices Invoice[]
-  users    User[]
+  projects        Project[]
+  invoices        Invoice[]
+  users           User[]
+  payment_methods CompanyPaymentMethod[]
 
   @@map("companies")
+}
+
+model CompanyPaymentMethod {
+  id           String   @id @default(cuid())
+  company_id   String
+  company      Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  brand        String   @db.VarChar(20)
+  last_four    String   @db.VarChar(4)
+  expiry       String   @db.VarChar(7)
+  holder_name  String   @db.VarChar(255)
+  is_default   Boolean  @default(false)
+  // is_client_card: true = cartão do cliente externo. Agência vê só last_four, holder_name mascarado
+  is_client_card Boolean @default(false)
+  label        String?  @db.VarChar(100)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("company_payment_methods")
 }
 
 // ─── Agencies ────────────────────────────────────────────────────────────────

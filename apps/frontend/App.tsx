@@ -1,5 +1,11 @@
 import React, { Suspense, useState, useEffect } from "react";
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
   TermAcceptanceGate,
@@ -416,13 +422,17 @@ export default function App() {
   useEffect(() => {
     const handler = () => {
       const path = window.location.pathname;
-      const loginPath =
-        path.startsWith("/nomades") ? "/nomades/login" :
-        path.startsWith("/agencia") ? "/agencia/login" :
-        path.startsWith("/parceiro") ? "/parceiro/login" :
-        path.startsWith("/lider") ? "/lider/login" :
-        path.startsWith("/company") || path.startsWith("/empresa") ? "/company/login" :
-        "/login";
+      const loginPath = path.startsWith("/nomades")
+        ? "/nomades/login"
+        : path.startsWith("/agencia")
+          ? "/agencia/login"
+          : path.startsWith("/parceiro")
+            ? "/parceiro/login"
+            : path.startsWith("/lider")
+              ? "/lider/login"
+              : path.startsWith("/company") || path.startsWith("/empresa")
+                ? "/company/login"
+                : "/login";
       if (!path.includes("/login")) navigate(loginPath, { replace: true });
     };
     window.addEventListener("allka:unauthorized", handler);

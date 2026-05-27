@@ -194,9 +194,13 @@ function KpiCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground mb-1 truncate">{label}</p>
+            <p className="text-xs text-muted-foreground mb-1 truncate">
+              {label}
+            </p>
             <p className="text-2xl font-bold tracking-tight">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            {sub && (
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+            )}
           </div>
           {Icon && (
             <div className={cn("p-2 rounded-lg shrink-0", colorMap[color])}>
@@ -205,13 +209,17 @@ function KpiCard({
           )}
         </div>
         {trend !== undefined && (
-          <div className={cn("flex items-center gap-1 mt-2 text-xs font-medium",
-            trend >= 0 ? "text-emerald-600" : "text-red-500"
-          )}>
-            {trend >= 0
-              ? <ArrowUpRight className="h-3 w-3" />
-              : <ArrowDownRight className="h-3 w-3" />
-            }
+          <div
+            className={cn(
+              "flex items-center gap-1 mt-2 text-xs font-medium",
+              trend >= 0 ? "text-emerald-600" : "text-red-500",
+            )}
+          >
+            {trend >= 0 ? (
+              <ArrowUpRight className="h-3 w-3" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" />
+            )}
             {Math.abs(trend)}% vs período anterior
           </div>
         )}
@@ -220,25 +228,61 @@ function KpiCard({
   );
 }
 
-function MiniBar({ value, max, color = "bg-primary" }: { value: number; max: number; color?: string }) {
+function MiniBar({
+  value,
+  max,
+  color = "bg-primary",
+}: {
+  value: number;
+  max: number;
+  color?: string;
+}) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-      <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+      <div
+        className={cn("h-full rounded-full transition-all", color)}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
 
 // ─── Single widget renderers (read-only) ─────────────────────────────────────
 
-function WidgetRevenue({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetRevenue({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.revenue;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Receita Total" value={`R$ ${d.total.toLocaleString("pt-BR")}`} icon={DollarSign} trend={d.growth} color="success" />
-      <KpiCard label="Receita Recorrente" value={`R$ ${d.recurring.toLocaleString("pt-BR")}`} icon={TrendingUp} color="primary" />
-      <KpiCard label="Receita Avulsa" value={`R$ ${d.oneTime.toLocaleString("pt-BR")}`} icon={CreditCard} color="info" />
-      <KpiCard label="Projeção" value={`R$ ${d.projected.toLocaleString("pt-BR")}`} icon={Target} color="purple" />
+      <KpiCard
+        label="Receita Total"
+        value={`R$ ${d.total.toLocaleString("pt-BR")}`}
+        icon={DollarSign}
+        trend={d.growth}
+        color="success"
+      />
+      <KpiCard
+        label="Receita Recorrente"
+        value={`R$ ${d.recurring.toLocaleString("pt-BR")}`}
+        icon={TrendingUp}
+        color="primary"
+      />
+      <KpiCard
+        label="Receita Avulsa"
+        value={`R$ ${d.oneTime.toLocaleString("pt-BR")}`}
+        icon={CreditCard}
+        color="info"
+      />
+      <KpiCard
+        label="Projeção"
+        value={`R$ ${d.projected.toLocaleString("pt-BR")}`}
+        icon={Target}
+        color="purple"
+      />
     </div>
   );
 }
@@ -248,8 +292,19 @@ function WidgetMrr({ data }: { data: ReturnType<typeof generateShareData> }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <KpiCard label="MRR Atual" value={`R$ ${d.value.toLocaleString("pt-BR")}`} icon={TrendingUp} trend={d.growth} color="primary" />
-        <KpiCard label="Crescimento Mensal" value={`+${d.growth}%`} icon={BarChart2} color="success" />
+        <KpiCard
+          label="MRR Atual"
+          value={`R$ ${d.value.toLocaleString("pt-BR")}`}
+          icon={TrendingUp}
+          trend={d.growth}
+          color="primary"
+        />
+        <KpiCard
+          label="Crescimento Mensal"
+          value={`+${d.growth}%`}
+          icon={BarChart2}
+          color="success"
+        />
       </div>
       <div>
         <p className="text-xs text-muted-foreground mb-2">Tendência 6 meses</p>
@@ -258,13 +313,17 @@ function WidgetMrr({ data }: { data: ReturnType<typeof generateShareData> }) {
             <div key={i} className="flex-1 flex flex-col justify-end">
               <div
                 className="bg-primary/70 rounded-sm"
-                style={{ height: `${Math.round((v / Math.max(...d.trendData)) * 100)}%` }}
+                style={{
+                  height: `${Math.round((v / Math.max(...d.trendData)) * 100)}%`,
+                }}
               />
             </div>
           ))}
         </div>
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-          {d.trendData.map((_, i) => <span key={i}>M{i + 1}</span>)}
+          {d.trendData.map((_, i) => (
+            <span key={i}>M{i + 1}</span>
+          ))}
         </div>
       </div>
     </div>
@@ -275,21 +334,61 @@ function WidgetChurn({ data }: { data: ReturnType<typeof generateShareData> }) {
   const d = data.churn;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Taxa de Churn" value={`${d.rate}%`} icon={TrendingDown} color="destructive" />
-      <KpiCard label="Contas Inativas" value={String(d.inactiveAccounts)} icon={Users} color="warning" />
-      <KpiCard label="Proj. Cancelados" value={String(d.cancelledProjects)} icon={XCircle} color="destructive" />
-      <KpiCard label="Rev. Churn" value={`R$ ${d.revenueChurn.toLocaleString("pt-BR")}`} icon={DollarSign} color="warning" />
+      <KpiCard
+        label="Taxa de Churn"
+        value={`${d.rate}%`}
+        icon={TrendingDown}
+        color="destructive"
+      />
+      <KpiCard
+        label="Contas Inativas"
+        value={String(d.inactiveAccounts)}
+        icon={Users}
+        color="warning"
+      />
+      <KpiCard
+        label="Proj. Cancelados"
+        value={String(d.cancelledProjects)}
+        icon={XCircle}
+        color="destructive"
+      />
+      <KpiCard
+        label="Rev. Churn"
+        value={`R$ ${d.revenueChurn.toLocaleString("pt-BR")}`}
+        icon={DollarSign}
+        color="warning"
+      />
     </div>
   );
 }
 
-function WidgetAverageTicket({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetAverageTicket({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.averageTicket;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <KpiCard label="Ticket Médio Geral" value={`R$ ${d.general.toLocaleString("pt-BR")}`} icon={DollarSign} trend={d.growth} color="success" />
-      <KpiCard label="Ticket por Projeto" value={`R$ ${d.perProject.toLocaleString("pt-BR")}`} icon={Briefcase} color="primary" />
-      <KpiCard label="Crescimento" value={`+${d.growth}%`} icon={TrendingUp} color="info" />
+      <KpiCard
+        label="Ticket Médio Geral"
+        value={`R$ ${d.general.toLocaleString("pt-BR")}`}
+        icon={DollarSign}
+        trend={d.growth}
+        color="success"
+      />
+      <KpiCard
+        label="Ticket por Projeto"
+        value={`R$ ${d.perProject.toLocaleString("pt-BR")}`}
+        icon={Briefcase}
+        color="primary"
+      />
+      <KpiCard
+        label="Crescimento"
+        value={`+${d.growth}%`}
+        icon={TrendingUp}
+        color="info"
+      />
     </div>
   );
 }
@@ -298,9 +397,16 @@ function WidgetLtv({ data }: { data: ReturnType<typeof generateShareData> }) {
   const d = data.ltv;
   return (
     <div className="space-y-4">
-      <KpiCard label="LTV Médio" value={`R$ ${d.value.toLocaleString("pt-BR")}`} icon={Target} color="primary" />
+      <KpiCard
+        label="LTV Médio"
+        value={`R$ ${d.value.toLocaleString("pt-BR")}`}
+        icon={Target}
+        color="primary"
+      />
       <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">Distribuição por Valor</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          Distribuição por Valor
+        </p>
         {[
           { label: "R$ 0–1k", value: d.hist0to1k, color: "bg-blue-400" },
           { label: "R$ 1k–5k", value: d.hist1kto5k, color: "bg-blue-500" },
@@ -320,14 +426,39 @@ function WidgetLtv({ data }: { data: ReturnType<typeof generateShareData> }) {
   );
 }
 
-function WidgetActiveProjects({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetActiveProjects({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.activeProjects;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Total" value={String(d.total)} icon={Briefcase} trend={d.growth} color="primary" />
-      <KpiCard label="Em Andamento" value={String(d.inProgress)} icon={Activity} color="info" />
-      <KpiCard label="Entregues" value={String(d.delivered)} icon={CheckCircle2} color="success" />
-      <KpiCard label="Pendentes" value={String(d.pending)} icon={Clock} color="warning" />
+      <KpiCard
+        label="Total"
+        value={String(d.total)}
+        icon={Briefcase}
+        trend={d.growth}
+        color="primary"
+      />
+      <KpiCard
+        label="Em Andamento"
+        value={String(d.inProgress)}
+        icon={Activity}
+        color="info"
+      />
+      <KpiCard
+        label="Entregues"
+        value={String(d.delivered)}
+        icon={CheckCircle2}
+        color="success"
+      />
+      <KpiCard
+        label="Pendentes"
+        value={String(d.pending)}
+        icon={Clock}
+        color="warning"
+      />
     </div>
   );
 }
@@ -337,10 +468,30 @@ function WidgetTasks({ data }: { data: ReturnType<typeof generateShareData> }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label="Total" value={String(d.total)} icon={Layers} color="primary" />
-        <KpiCard label="Concluídas" value={String(d.done)} icon={CheckCircle2} color="success" />
-        <KpiCard label="Em Andamento" value={String(d.inProgress)} icon={Activity} color="info" />
-        <KpiCard label="Pendentes" value={String(d.pending)} icon={Clock} color="warning" />
+        <KpiCard
+          label="Total"
+          value={String(d.total)}
+          icon={Layers}
+          color="primary"
+        />
+        <KpiCard
+          label="Concluídas"
+          value={String(d.done)}
+          icon={CheckCircle2}
+          color="success"
+        />
+        <KpiCard
+          label="Em Andamento"
+          value={String(d.inProgress)}
+          icon={Activity}
+          color="info"
+        />
+        <KpiCard
+          label="Pendentes"
+          value={String(d.pending)}
+          icon={Clock}
+          color="warning"
+        />
       </div>
       <div>
         <div className="flex justify-between text-xs mb-1">
@@ -353,24 +504,45 @@ function WidgetTasks({ data }: { data: ReturnType<typeof generateShareData> }) {
   );
 }
 
-function WidgetAccountsReceivable({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetAccountsReceivable({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.accountsReceivable;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <KpiCard label="Total a Receber" value={`R$ ${d.total.toLocaleString("pt-BR")}`} icon={DollarSign} trend={d.growth} color="success" />
-        <KpiCard label="Recebido" value={`R$ ${d.received.toLocaleString("pt-BR")}`} icon={CheckCircle2} color="primary" />
+        <KpiCard
+          label="Total a Receber"
+          value={`R$ ${d.total.toLocaleString("pt-BR")}`}
+          icon={DollarSign}
+          trend={d.growth}
+          color="success"
+        />
+        <KpiCard
+          label="Recebido"
+          value={`R$ ${d.received.toLocaleString("pt-BR")}`}
+          icon={CheckCircle2}
+          color="primary"
+        />
       </div>
       <div className="space-y-2">
         {[
-          { label: "Planos de Crédito", value: d.creditPlans, color: "bg-blue-500" },
+          {
+            label: "Planos de Crédito",
+            value: d.creditPlans,
+            color: "bg-blue-500",
+          },
           { label: "Pós-pagos", value: d.postPaid, color: "bg-emerald-500" },
           { label: "Outros", value: d.others, color: "bg-amber-500" },
         ].map((row) => (
           <div key={row.label} className="space-y-1">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">{row.label}</span>
-              <span className="font-medium">R$ {row.value.toLocaleString("pt-BR")}</span>
+              <span className="font-medium">
+                R$ {row.value.toLocaleString("pt-BR")}
+              </span>
             </div>
             <MiniBar value={row.value} max={d.total} color={row.color} />
           </div>
@@ -380,31 +552,84 @@ function WidgetAccountsReceivable({ data }: { data: ReturnType<typeof generateSh
   );
 }
 
-function WidgetNomads({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetNomads({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.nomads;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Total" value={String(d.total)} icon={Users} color="primary" />
-      <KpiCard label="Ativos" value={String(d.active)} icon={Activity} trend={d.growth} color="success" />
-      <KpiCard label="Novos este mês" value={String(d.newThisMonth)} icon={TrendingUp} color="info" />
-      <KpiCard label="Avaliação Média" value={String(d.avgRating)} icon={Target} color="purple" />
+      <KpiCard
+        label="Total"
+        value={String(d.total)}
+        icon={Users}
+        color="primary"
+      />
+      <KpiCard
+        label="Ativos"
+        value={String(d.active)}
+        icon={Activity}
+        trend={d.growth}
+        color="success"
+      />
+      <KpiCard
+        label="Novos este mês"
+        value={String(d.newThisMonth)}
+        icon={TrendingUp}
+        color="info"
+      />
+      <KpiCard
+        label="Avaliação Média"
+        value={String(d.avgRating)}
+        icon={Target}
+        color="purple"
+      />
     </div>
   );
 }
 
-function WidgetPartnerProgram({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetPartnerProgram({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.partnerProgram;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Partners Ativos" value={String(d.activePartners)} icon={ShieldCheck} color="primary" />
-      <KpiCard label="Indicações" value={String(d.totalReferrals)} icon={Users} color="info" />
-      <KpiCard label="Conv. Rate" value={`${d.conversionRate}%`} icon={TrendingUp} color="success" />
-      <KpiCard label="Receita Partner" value={`R$ ${d.partnerRevenue.toLocaleString("pt-BR")}`} icon={DollarSign} color="purple" />
+      <KpiCard
+        label="Partners Ativos"
+        value={String(d.activePartners)}
+        icon={ShieldCheck}
+        color="primary"
+      />
+      <KpiCard
+        label="Indicações"
+        value={String(d.totalReferrals)}
+        icon={Users}
+        color="info"
+      />
+      <KpiCard
+        label="Conv. Rate"
+        value={`${d.conversionRate}%`}
+        icon={TrendingUp}
+        color="success"
+      />
+      <KpiCard
+        label="Receita Partner"
+        value={`R$ ${d.partnerRevenue.toLocaleString("pt-BR")}`}
+        icon={DollarSign}
+        color="purple"
+      />
     </div>
   );
 }
 
-function WidgetStatusOverview({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetStatusOverview({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.statusOverview;
   const rows = [
     { label: "Ativas", value: d.active, color: "bg-emerald-500" },
@@ -414,7 +639,12 @@ function WidgetStatusOverview({ data }: { data: ReturnType<typeof generateShareD
   ];
   return (
     <div className="space-y-3">
-      <KpiCard label="Total de Contas" value={String(d.total)} icon={Users} color="primary" />
+      <KpiCard
+        label="Total de Contas"
+        value={String(d.total)}
+        icon={Users}
+        color="primary"
+      />
       <div className="space-y-2">
         {rows.map((row) => (
           <div key={row.label} className="space-y-1">
@@ -430,32 +660,84 @@ function WidgetStatusOverview({ data }: { data: ReturnType<typeof generateShareD
   );
 }
 
-function WidgetCreditPlans({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetCreditPlans({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.creditPlans;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Ativos" value={String(d.active)} icon={CreditCard} color="primary" />
-      <KpiCard label="Valor Total" value={`R$ ${d.totalValue.toLocaleString("pt-BR")}`} icon={DollarSign} color="success" />
-      <KpiCard label="Valor Médio" value={`R$ ${d.avgValue.toLocaleString("pt-BR")}`} icon={BarChart2} color="info" />
-      <KpiCard label="Em Atraso" value={String(d.overdue)} icon={AlertTriangle} color="warning" />
+      <KpiCard
+        label="Ativos"
+        value={String(d.active)}
+        icon={CreditCard}
+        color="primary"
+      />
+      <KpiCard
+        label="Valor Total"
+        value={`R$ ${d.totalValue.toLocaleString("pt-BR")}`}
+        icon={DollarSign}
+        color="success"
+      />
+      <KpiCard
+        label="Valor Médio"
+        value={`R$ ${d.avgValue.toLocaleString("pt-BR")}`}
+        icon={BarChart2}
+        color="info"
+      />
+      <KpiCard
+        label="Em Atraso"
+        value={String(d.overdue)}
+        icon={AlertTriangle}
+        color="warning"
+      />
     </div>
   );
 }
 
-function WidgetPlatformActivities({ data }: { data: ReturnType<typeof generateShareData> }) {
+function WidgetPlatformActivities({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   const d = data.platformActivities;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <KpiCard label="Logins" value={d.logins.toLocaleString("pt-BR")} icon={Users} color="primary" />
-      <KpiCard label="Projetos Criados" value={String(d.projectsCreated)} icon={Briefcase} color="info" />
-      <KpiCard label="Tarefas Concluídas" value={String(d.tasksCompleted)} icon={CheckCircle2} color="success" />
-      <KpiCard label="Mensagens" value={d.messagesExchanged.toLocaleString("pt-BR")} icon={MessageSquare} color="purple" />
+      <KpiCard
+        label="Logins"
+        value={d.logins.toLocaleString("pt-BR")}
+        icon={Users}
+        color="primary"
+      />
+      <KpiCard
+        label="Projetos Criados"
+        value={String(d.projectsCreated)}
+        icon={Briefcase}
+        color="info"
+      />
+      <KpiCard
+        label="Tarefas Concluídas"
+        value={String(d.tasksCompleted)}
+        icon={CheckCircle2}
+        color="success"
+      />
+      <KpiCard
+        label="Mensagens"
+        value={d.messagesExchanged.toLocaleString("pt-BR")}
+        icon={MessageSquare}
+        color="purple"
+      />
     </div>
   );
 }
 
 // Full dashboard summary (when type === "dashboard")
-function FullDashboardView({ data }: { data: ReturnType<typeof generateShareData> }) {
+function FullDashboardView({
+  data,
+}: {
+  data: ReturnType<typeof generateShareData>;
+}) {
   return (
     <div className="space-y-8">
       <Section title="Financeiro">
@@ -525,7 +807,13 @@ function FullDashboardView({ data }: { data: ReturnType<typeof generateShareData
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 pb-1 border-b">
@@ -577,7 +865,8 @@ function SingleWidgetView({
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Widget <strong>{widgetId}</strong> não tem visualização disponível neste link compartilhado.
+            Widget <strong>{widgetId}</strong> não tem visualização disponível
+            neste link compartilhado.
           </AlertDescription>
         </Alert>
       );
@@ -629,7 +918,10 @@ function ExpiredScreen({ issuedAt }: { issuedAt?: string }) {
             </p>
             {issuedAt && (
               <p className="text-xs text-muted-foreground mt-2">
-                Gerado em: {format(new Date(issuedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                Gerado em:{" "}
+                {format(new Date(issuedAt), "dd/MM/yyyy 'às' HH:mm", {
+                  locale: ptBR,
+                })}
               </p>
             )}
           </div>
@@ -698,7 +990,9 @@ function PinScreen({
               )}
             />
             {error && (
-              <p className="text-xs text-destructive text-center">PIN incorreto. Tente novamente.</p>
+              <p className="text-xs text-destructive text-center">
+                PIN incorreto. Tente novamente.
+              </p>
             )}
           </div>
           <Button
@@ -823,8 +1117,11 @@ export default function DashboardSharePage() {
                   : widgetTitle}
               </p>
               <p className="text-[11px] text-muted-foreground hidden sm:block">
-                {config.target.type === "widget" ? "Widget compartilhado" : "Dashboard compartilhado"}
-                {issuedAt && ` · ${format(issuedAt, "dd/MM/yyyy", { locale: ptBR })}`}
+                {config.target.type === "widget"
+                  ? "Widget compartilhado"
+                  : "Dashboard compartilhado"}
+                {issuedAt &&
+                  ` · ${format(issuedAt, "dd/MM/yyyy", { locale: ptBR })}`}
               </p>
             </div>
           </div>
@@ -842,7 +1139,10 @@ export default function DashboardSharePage() {
               </Badge>
             )}
             {expiresAt && (
-              <Badge variant="outline" className="gap-1 text-xs text-amber-600 border-amber-300">
+              <Badge
+                variant="outline"
+                className="gap-1 text-xs text-amber-600 border-amber-300"
+              >
                 <Clock className="h-3 w-3" />
                 Expira {format(expiresAt, "dd/MM", { locale: ptBR })}
               </Badge>
@@ -928,8 +1228,15 @@ export default function DashboardSharePage() {
       {/* Footer */}
       <footer className="border-t py-4">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Powered by <strong className="text-foreground">Allka</strong></span>
-          <span>Link público · {config.permission === "view" ? "Somente visualização" : "Visualização + Comentários"}</span>
+          <span>
+            Powered by <strong className="text-foreground">Allka</strong>
+          </span>
+          <span>
+            Link público ·{" "}
+            {config.permission === "view"
+              ? "Somente visualização"
+              : "Visualização + Comentários"}
+          </span>
         </div>
       </footer>
     </div>

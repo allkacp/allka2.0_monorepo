@@ -71,7 +71,7 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
     }
   }, [googleMapsReady])
 
-  // Initialize map
+  // Initialize map — runs once after googleMapsReady and mapRef is in the DOM
   useEffect(() => {
     if (!googleMapsReady || typeof (window as any).google === "undefined" || !mapRef.current || mapLoaded) return
 
@@ -79,7 +79,7 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
     const initialLng = selectedPosition?.lng || -46.6333
 
     const map = new (window as any).google.maps.Map(mapRef.current, {
-      zoom: 15,
+      zoom: selectedPosition ? 16 : 12,
       center: { lat: initialLat, lng: initialLng },
       mapTypeControl: false,
       fullscreenControl: false,
@@ -88,21 +88,32 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
 
     mapInstanceRef.current = map
 
-    // Add marker
+    // Add draggable marker
     const marker = new (window as any).google.maps.Marker({
       position: { lat: initialLat, lng: initialLng },
       map,
       draggable: true,
+      visible: !!selectedPosition,
     })
 
     markerRef.current = marker
 
-    // Handle marker drag
-    marker.addListener("dragend", async () => {
-      const position = marker.getPosition()
-      const lat = position.lat()
-      const lng = position.lng()
+    // Drag end — reverse geocode new position
+    marker.addListener("dragend", () => {
+      const pos = marker.getPosition()
+      const lat = pos.lat()
+      const lng = pos.lng()
+      setSelectedPosition({ lat, lng })
+      geocodeLatLng(lat, lng)
+    })
 
+    // Click on map — move marker and reverse geocode
+    map.addListener("click", (e: any) => {
+      const lat = e.latLng.lat()
+      const lng = e.latLng.lng()
+      marker.setPosition({ lat, lng })
+      marker.setVisible(true)
+      map.panTo({ lat, lng })
       setSelectedPosition({ lat, lng })
       geocodeLatLng(lat, lng)
     })
@@ -111,18 +122,11 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
 
     return () => {
       mapInstanceRef.current = null
+      markerRef.current = null
     }
-  }, [mapLoaded])
+  }, [googleMapsReady, mapLoaded])
 
-  // Update marker position when selectedPosition changes
-  useEffect(() => {
-    if (markerRef.current && selectedPosition) {
-      markerRef.current.setPosition(selectedPosition)
-      mapInstanceRef.current?.setCenter(selectedPosition)
-    }
-  }, [selectedPosition])
-
-  const handlePlaceSelect = async () => {
+  const handlePlaceSelect = () => {
     if (!autocompleteRef.current) return
 
     const place = autocompleteRef.current.getPlace()
@@ -134,8 +138,19 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
 
     const lat = place.geometry.location.lat()
     const lng = place.geometry.location.lng()
+    const pos = { lat, lng }
 
-    setSelectedPosition({ lat, lng })
+    // Move map and marker immediately — don't wait for state re-render
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.panTo(pos)
+      mapInstanceRef.current.setZoom(17)
+    }
+    if (markerRef.current) {
+      markerRef.current.setPosition(pos)
+      markerRef.current.setVisible(true)
+    }
+
+    setSelectedPosition(pos)
     setSearchInput(place.formatted_address || "")
 
     // Parse address components
@@ -260,30 +275,31 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
           </div>
         )}
 
-        {/* Map + coords */}
+        {/* Coords badge — only when position selected */}
         {googleMapsReady && selectedPosition && (
-          <>
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100">
-              <MapPin className="h-4 w-4 text-violet-500 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-violet-900">Localização selecionada</p>
-                <p className="text-xs text-violet-600 font-mono">
-                  {selectedPosition.lat.toFixed(6)}, {selectedPosition.lng.toFixed(6)}
-                </p>
-              </div>
-            </div>
-
-            <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-              <div
-                ref={mapRef}
-                className="w-full rounded-xl bg-slate-100"
-                style={{ minHeight: "220px" }}
-              />
-              <p className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm text-xs text-slate-600 px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap">
-                Arraste o marcador para ajustar
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100">
+            <MapPin className="h-4 w-4 text-violet-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-violet-900">Localização selecionada</p>
+              <p className="text-xs text-violet-600 font-mono">
+                {selectedPosition.lat.toFixed(6)}, {selectedPosition.lng.toFixed(6)}
               </p>
             </div>
-          </>
+          </div>
+        )}
+
+        {/* Map — always mounted when Google Maps ready */}
+        {googleMapsReady && (
+          <div className={`relative rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-opacity duration-300 ${mapLoaded ? "opacity-100" : "opacity-0 h-0"}`}>
+            <div
+              ref={mapRef}
+              className="w-full rounded-xl bg-slate-100"
+              style={{ minHeight: "260px" }}
+            />
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm text-xs text-slate-600 px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap">
+              {selectedPosition ? "Arraste o marcador ou clique para ajustar" : "Clique no mapa para selecionar"}
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -169,6 +169,23 @@ class ApiClient {
     return this.del(`/clients/${id}`);
   }
 
+  // ─── Company Payment Methods ───────────────────────────────────────────────
+  async getPaymentMethods(companyId: string | number) {
+    return this.get(`/clients/${companyId}/payment-methods`);
+  }
+
+  async addPaymentMethod(companyId: string | number, data: Record<string, any>) {
+    return this.post(`/clients/${companyId}/payment-methods`, data);
+  }
+
+  async setDefaultPaymentMethod(companyId: string | number, pmId: string) {
+    return this.patch(`/clients/${companyId}/payment-methods/${pmId}/default`, {});
+  }
+
+  async deletePaymentMethod(companyId: string | number, pmId: string) {
+    return this.del(`/clients/${companyId}/payment-methods/${pmId}`);
+  }
+
   // Alias — some components use "client" terminology
   async getClients(filters?: Record<string, any>) {
     return this.getCompanies(filters);

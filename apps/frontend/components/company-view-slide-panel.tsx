@@ -90,6 +90,7 @@ import { TermsManagementTab } from "@/components/terms-management-tab";
 import { ProjectsManagementTab } from "@/components/projects-management-tab";
 import { CompanyTasksTab } from "@/components/company-tasks-tab";
 import { CompanyLogsTab } from "@/components/company-logs-tab";
+import { ExportExtratoModal } from "@/components/export-extrato-modal";
 import { CompanyStatusSelector } from "@/components/company-status-selector";
 import {
   CompanySocialLinksManager,
@@ -314,18 +315,18 @@ export function CompanyViewSlidePanel({
     "admin",
     "credito",
     "account",
-    "pagamento",
-    "carteira",
-    "nf",
+    "plano-pagamento",
   ];
   const [planoOpenAccordions, setPlanoOpenAccordions] = useState<string[]>([
     "admin",
     "credito",
     "account",
-    "pagamento",
-    "carteira",
-    "nf",
+    "plano-pagamento",
   ]);
+  const CARTEIRA_ALL_ACCORDIONS = ["carteira-saldo", "pagamento", "nf"];
+  const [carteiraOpenAccordions, setCarteiraOpenAccordions] = useState<
+    string[]
+  >(["carteira-saldo", "pagamento", "nf"]);
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>(
     {},
   );
@@ -409,12 +410,35 @@ export function CompanyViewSlidePanel({
   >("all");
   const [nfHistoryDateFrom, setNfHistoryDateFrom] = useState("");
   const [nfHistoryDateTo, setNfHistoryDateTo] = useState("");
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     if (company) {
       setAvatar(company.avatar || null);
     }
   }, [company]);
+
+  // Load payment methods from API when Carteira tab is opened
+  useEffect(() => {
+    if (activeTab !== "carteira" || !company?.id) return;
+    const companyId = (company as any)._apiId || company.id;
+    apiClient
+      .getPaymentMethods(companyId)
+      .then((data: any[]) => {
+        setCreditCards(
+          data.map((c: any) => ({
+            id: c.id,
+            brand: c.brand,
+            lastFour: c.last_four,
+            expiry: c.expiry,
+            holderName: c.holder_name,
+          })),
+        );
+      })
+      .catch(() => {
+        // Silently fail — keep current state
+      });
+  }, [activeTab, company?.id]);
 
   if (!company) return null;
 
@@ -520,27 +544,63 @@ export function CompanyViewSlidePanel({
         if (/^(606282|3841)/.test(num)) return "Hipercard";
         return "Outro";
       };
-      const newCard = {
-        id: Math.random().toString(),
-        brand: detectBrand(newCardData.number),
-        lastFour,
-        expiry: newCardData.expiry,
-        holderName: newCardData.holderName,
-      };
-      setCreditCards([...creditCards, newCard]);
+      const brand = detectBrand(newCardData.number);
+      const companyId = (company as any)._apiId || company.id;
+      apiClient
+        .addPaymentMethod(companyId, {
+          brand,
+          last_four: lastFour,
+          expiry: newCardData.expiry,
+          holder_name: newCardData.holderName,
+        })
+        .then((saved: any) => {
+          setCreditCards([
+            ...creditCards,
+            {
+              id: saved.id,
+              brand: saved.brand,
+              lastFour: saved.last_four,
+              expiry: saved.expiry,
+              holderName: saved.holder_name,
+            },
+          ]);
+        })
+        .catch(() => {
+          // Fallback: add optimistically with temp id
+          setCreditCards([
+            ...creditCards,
+            {
+              id: Math.random().toString(),
+              brand,
+              lastFour,
+              expiry: newCardData.expiry,
+              holderName: newCardData.holderName,
+            },
+          ]);
+        });
       setNewCardData({ number: "", expiry: "", cvv: "", holderName: "" });
       setShowAddCardModal(false);
     }
   };
 
   const handleRemoveCard = (cardId: string) => {
-    setCreditCards(creditCards.filter((card) => card.id !== cardId));
+    const companyId = (company as any)._apiId || company.id;
+    apiClient
+      .deletePaymentMethod(companyId, cardId)
+      .catch(() => {})
+      .finally(() => {
+        setCreditCards(creditCards.filter((card) => card.id !== cardId));
+      });
   };
 
   const handleSetDefaultCard = (cardId: string) => {
-    if (creditCards.length > 0) {
-      setDefaultPaymentMethod(`card-${cardId}`);
-    }
+    const companyId = (company as any)._apiId || company.id;
+    apiClient
+      .setDefaultPaymentMethod(companyId, cardId)
+      .catch(() => {})
+      .finally(() => {
+        setDefaultPaymentMethod(`card-${cardId}`);
+      });
   };
 
   // Company Wallet handlers
@@ -759,7 +819,8 @@ export function CompanyViewSlidePanel({
       commercial_contact_email: "commercial_contact_email",
       commercial_contact_phone: "commercial_contact_phone",
       commercial_contact_whatsapp: "commercial_contact_whatsapp",
-      commercial_contact_preferred_channel: "commercial_contact_preferred_channel",
+      commercial_contact_preferred_channel:
+        "commercial_contact_preferred_channel",
       commercial_contact_notes: "commercial_contact_notes",
       // Financial contact
       financial_contact_name: "financial_contact_name",
@@ -767,7 +828,8 @@ export function CompanyViewSlidePanel({
       financial_contact_email: "financial_contact_email",
       financial_contact_phone: "financial_contact_phone",
       financial_contact_whatsapp: "financial_contact_whatsapp",
-      financial_contact_preferred_channel: "financial_contact_preferred_channel",
+      financial_contact_preferred_channel:
+        "financial_contact_preferred_channel",
       financial_contact_notes: "financial_contact_notes",
       financial_contact_user_id: "financial_contact_user_id",
     };
@@ -967,22 +1029,39 @@ export function CompanyViewSlidePanel({
         internal_notes: getDadosDisplayValue("internal_notes") || undefined,
         status: getDadosDisplayValue("status") || company.status,
         // Commercial contact
-        commercial_contact_name: getDadosDisplayValue("commercial_contact_name") || undefined,
-        commercial_contact_role: getDadosDisplayValue("commercial_contact_role") || undefined,
-        commercial_contact_email: getDadosDisplayValue("commercial_contact_email") || undefined,
-        commercial_contact_phone: getDadosDisplayValue("commercial_contact_phone") || undefined,
-        commercial_contact_whatsapp: getDadosDisplayValue("commercial_contact_whatsapp") || undefined,
-        commercial_contact_preferred_channel: getDadosDisplayValue("commercial_contact_preferred_channel") || undefined,
-        commercial_contact_notes: getDadosDisplayValue("commercial_contact_notes") || undefined,
+        commercial_contact_name:
+          getDadosDisplayValue("commercial_contact_name") || undefined,
+        commercial_contact_role:
+          getDadosDisplayValue("commercial_contact_role") || undefined,
+        commercial_contact_email:
+          getDadosDisplayValue("commercial_contact_email") || undefined,
+        commercial_contact_phone:
+          getDadosDisplayValue("commercial_contact_phone") || undefined,
+        commercial_contact_whatsapp:
+          getDadosDisplayValue("commercial_contact_whatsapp") || undefined,
+        commercial_contact_preferred_channel:
+          getDadosDisplayValue("commercial_contact_preferred_channel") ||
+          undefined,
+        commercial_contact_notes:
+          getDadosDisplayValue("commercial_contact_notes") || undefined,
         // Financial contact
-        financial_contact_name: getDadosDisplayValue("financial_contact_name") || undefined,
-        financial_contact_role: getDadosDisplayValue("financial_contact_role") || undefined,
-        financial_contact_email: getDadosDisplayValue("financial_contact_email") || undefined,
-        financial_contact_phone: getDadosDisplayValue("financial_contact_phone") || undefined,
-        financial_contact_whatsapp: getDadosDisplayValue("financial_contact_whatsapp") || undefined,
-        financial_contact_preferred_channel: getDadosDisplayValue("financial_contact_preferred_channel") || undefined,
-        financial_contact_notes: getDadosDisplayValue("financial_contact_notes") || undefined,
-        financial_contact_user_id: getDadosDisplayValue("financial_contact_user_id") || undefined,
+        financial_contact_name:
+          getDadosDisplayValue("financial_contact_name") || undefined,
+        financial_contact_role:
+          getDadosDisplayValue("financial_contact_role") || undefined,
+        financial_contact_email:
+          getDadosDisplayValue("financial_contact_email") || undefined,
+        financial_contact_phone:
+          getDadosDisplayValue("financial_contact_phone") || undefined,
+        financial_contact_whatsapp:
+          getDadosDisplayValue("financial_contact_whatsapp") || undefined,
+        financial_contact_preferred_channel:
+          getDadosDisplayValue("financial_contact_preferred_channel") ||
+          undefined,
+        financial_contact_notes:
+          getDadosDisplayValue("financial_contact_notes") || undefined,
+        financial_contact_user_id:
+          getDadosDisplayValue("financial_contact_user_id") || undefined,
       };
 
       // Persist to API
@@ -1016,7 +1095,8 @@ export function CompanyViewSlidePanel({
         commercial_contact_email: dataPayload.commercial_contact_email,
         commercial_contact_phone: dataPayload.commercial_contact_phone,
         commercial_contact_whatsapp: dataPayload.commercial_contact_whatsapp,
-        commercial_contact_preferred_channel: dataPayload.commercial_contact_preferred_channel,
+        commercial_contact_preferred_channel:
+          dataPayload.commercial_contact_preferred_channel,
         commercial_contact_notes: dataPayload.commercial_contact_notes,
         // Financial contact
         financial_contact_name: dataPayload.financial_contact_name,
@@ -1024,7 +1104,8 @@ export function CompanyViewSlidePanel({
         financial_contact_email: dataPayload.financial_contact_email,
         financial_contact_phone: dataPayload.financial_contact_phone,
         financial_contact_whatsapp: dataPayload.financial_contact_whatsapp,
-        financial_contact_preferred_channel: dataPayload.financial_contact_preferred_channel,
+        financial_contact_preferred_channel:
+          dataPayload.financial_contact_preferred_channel,
         financial_contact_notes: dataPayload.financial_contact_notes,
         financial_contact_user_id: dataPayload.financial_contact_user_id,
       });
@@ -1061,14 +1142,16 @@ export function CompanyViewSlidePanel({
         commercial_contact_email: dataPayload.commercial_contact_email,
         commercial_contact_phone: dataPayload.commercial_contact_phone,
         commercial_contact_whatsapp: dataPayload.commercial_contact_whatsapp,
-        commercial_contact_preferred_channel: dataPayload.commercial_contact_preferred_channel,
+        commercial_contact_preferred_channel:
+          dataPayload.commercial_contact_preferred_channel,
         commercial_contact_notes: dataPayload.commercial_contact_notes,
         financial_contact_name: dataPayload.financial_contact_name,
         financial_contact_role: dataPayload.financial_contact_role,
         financial_contact_email: dataPayload.financial_contact_email,
         financial_contact_phone: dataPayload.financial_contact_phone,
         financial_contact_whatsapp: dataPayload.financial_contact_whatsapp,
-        financial_contact_preferred_channel: dataPayload.financial_contact_preferred_channel,
+        financial_contact_preferred_channel:
+          dataPayload.financial_contact_preferred_channel,
         financial_contact_notes: dataPayload.financial_contact_notes,
         financial_contact_user_id: dataPayload.financial_contact_user_id,
       };
@@ -1586,7 +1669,7 @@ export function CompanyViewSlidePanel({
                 className="flex-1 flex flex-col min-h-0"
               >
                 <div className="flex-shrink-0 bg-slate-200 dark:bg-background px-[50px] pt-2 pb-2 border-b border-slate-300 dark:border-slate-700 overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-10 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-11 gap-1 bg-transparent p-0 h-auto">
                     <TabsTrigger
                       value="visao-geral"
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
@@ -1616,6 +1699,12 @@ export function CompanyViewSlidePanel({
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                     >
                       Plano
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="carteira"
+                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
+                    >
+                      Carteira
                     </TabsTrigger>
                     <TabsTrigger
                       value="termos"
@@ -2213,7 +2302,6 @@ export function CompanyViewSlidePanel({
                       </AccordionTrigger>
                       <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
                         <div className="flex flex-col gap-4">
-
                           {/* ─ Contatos Gerais da Empresa ─ */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                             {/* Email Principal */}
@@ -2224,9 +2312,14 @@ export function CompanyViewSlidePanel({
                               {isDadosEditMode ? (
                                 <Input
                                   type="email"
-                                  value={getDadosDisplayValue("email") as string}
+                                  value={
+                                    getDadosDisplayValue("email") as string
+                                  }
                                   onChange={(e) =>
-                                    handleDadosFieldChange("email", e.target.value)
+                                    handleDadosFieldChange(
+                                      "email",
+                                      e.target.value,
+                                    )
                                   }
                                   className="border-slate-300 h-8 text-sm"
                                   placeholder="email@example.com"
@@ -2246,9 +2339,15 @@ export function CompanyViewSlidePanel({
                               {isDadosEditMode ? (
                                 <Input
                                   type="tel"
-                                  value={(getDadosDisplayValue("phone") as string) || ""}
+                                  value={
+                                    (getDadosDisplayValue("phone") as string) ||
+                                    ""
+                                  }
                                   onChange={(e) =>
-                                    handleDadosFieldChange("phone", e.target.value)
+                                    handleDadosFieldChange(
+                                      "phone",
+                                      e.target.value,
+                                    )
                                   }
                                   className="border-slate-300 h-8 text-sm"
                                   placeholder="(00) 0000-0000"
@@ -2268,16 +2367,24 @@ export function CompanyViewSlidePanel({
                               {isDadosEditMode ? (
                                 <Input
                                   type="tel"
-                                  value={(getDadosDisplayValue("phone_secondary") as string) || ""}
+                                  value={
+                                    (getDadosDisplayValue(
+                                      "phone_secondary",
+                                    ) as string) || ""
+                                  }
                                   onChange={(e) =>
-                                    handleDadosFieldChange("phone_secondary", e.target.value)
+                                    handleDadosFieldChange(
+                                      "phone_secondary",
+                                      e.target.value,
+                                    )
                                   }
                                   className="border-slate-300 h-8 text-sm"
                                   placeholder="(00) 0000-0000"
                                 />
                               ) : (
                                 <p className="text-sm font-semibold text-slate-800">
-                                  {getDadosDisplayValue("phone_secondary") || ""}
+                                  {getDadosDisplayValue("phone_secondary") ||
+                                    ""}
                                 </p>
                               )}
                             </div>
@@ -2290,9 +2397,16 @@ export function CompanyViewSlidePanel({
                               {isDadosEditMode ? (
                                 <Input
                                   type="tel"
-                                  value={(getDadosDisplayValue("whatsapp") as string) || ""}
+                                  value={
+                                    (getDadosDisplayValue(
+                                      "whatsapp",
+                                    ) as string) || ""
+                                  }
                                   onChange={(e) =>
-                                    handleDadosFieldChange("whatsapp", e.target.value)
+                                    handleDadosFieldChange(
+                                      "whatsapp",
+                                      e.target.value,
+                                    )
                                   }
                                   className="border-slate-300 h-8 text-sm"
                                   placeholder="(00) 00000-0000"
@@ -2312,9 +2426,16 @@ export function CompanyViewSlidePanel({
                               {isDadosEditMode ? (
                                 <Input
                                   type="url"
-                                  value={(getDadosDisplayValue("website") as string) || ""}
+                                  value={
+                                    (getDadosDisplayValue(
+                                      "website",
+                                    ) as string) || ""
+                                  }
                                   onChange={(e) =>
-                                    handleDadosFieldChange("website", e.target.value)
+                                    handleDadosFieldChange(
+                                      "website",
+                                      e.target.value,
+                                    )
                                   }
                                   className="border-slate-300 h-8 text-sm"
                                   placeholder="https://exemplo.com.br"
@@ -2343,15 +2464,28 @@ export function CompanyViewSlidePanel({
                                 </p>
                                 {isDadosEditMode ? (
                                   <Input
-                                    value={(getDadosDisplayValue("commercial_contact_name") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_name", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_name",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_name",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="Nome do responsável comercial"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_name") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_name",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2364,15 +2498,28 @@ export function CompanyViewSlidePanel({
                                 </p>
                                 {isDadosEditMode ? (
                                   <Input
-                                    value={(getDadosDisplayValue("commercial_contact_role") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_role", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_role",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_role",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="Ex: Diretor Comercial"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_role") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_role",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2386,15 +2533,28 @@ export function CompanyViewSlidePanel({
                                 {isDadosEditMode ? (
                                   <Input
                                     type="email"
-                                    value={(getDadosDisplayValue("commercial_contact_email") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_email", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_email",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_email",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="comercial@empresa.com"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_email") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_email",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2408,15 +2568,28 @@ export function CompanyViewSlidePanel({
                                 {isDadosEditMode ? (
                                   <Input
                                     type="tel"
-                                    value={(getDadosDisplayValue("commercial_contact_phone") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_phone", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_phone",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_phone",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="(00) 0000-0000"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_phone") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_phone",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2430,15 +2603,28 @@ export function CompanyViewSlidePanel({
                                 {isDadosEditMode ? (
                                   <Input
                                     type="tel"
-                                    value={(getDadosDisplayValue("commercial_contact_whatsapp") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_whatsapp", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_whatsapp",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_whatsapp",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="(00) 00000-0000"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_whatsapp") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_whatsapp",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2451,15 +2637,28 @@ export function CompanyViewSlidePanel({
                                 </p>
                                 {isDadosEditMode ? (
                                   <Input
-                                    value={(getDadosDisplayValue("commercial_contact_preferred_channel") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_preferred_channel", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_preferred_channel",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_preferred_channel",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="email / telefone / whatsapp"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_preferred_channel") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_preferred_channel",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Não informado
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2472,15 +2671,28 @@ export function CompanyViewSlidePanel({
                                 </p>
                                 {isDadosEditMode ? (
                                   <Input
-                                    value={(getDadosDisplayValue("commercial_contact_notes") as string) || ""}
-                                    onChange={(e) => handleDadosFieldChange("commercial_contact_notes", e.target.value)}
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "commercial_contact_notes",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleDadosFieldChange(
+                                        "commercial_contact_notes",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="border-slate-300 h-8 text-sm"
                                     placeholder="Notas adicionais sobre o contato comercial"
                                   />
                                 ) : (
                                   <p className="text-sm font-semibold text-slate-800">
-                                    {getDadosDisplayValue("commercial_contact_notes") || (
-                                      <span className="text-slate-400 font-normal italic text-xs">Nenhuma observação</span>
+                                    {getDadosDisplayValue(
+                                      "commercial_contact_notes",
+                                    ) || (
+                                      <span className="text-slate-400 font-normal italic text-xs">
+                                        Nenhuma observação
+                                      </span>
                                     )}
                                   </p>
                                 )}
@@ -2495,7 +2707,9 @@ export function CompanyViewSlidePanel({
                               (company as any).financial_contact_name
                             );
                             const masterUser = companyUsers.find(
-                              (u) => u.role === "company_admin" || u.role === "admin",
+                              (u) =>
+                                u.role === "company_admin" ||
+                                u.role === "admin",
                             );
                             return (
                               <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 overflow-hidden">
@@ -2506,8 +2720,8 @@ export function CompanyViewSlidePanel({
                                       Contato Financeiro
                                     </span>
                                   </div>
-                                  {!isDadosEditMode && (
-                                    hasFinancialContact ? (
+                                  {!isDadosEditMode &&
+                                    (hasFinancialContact ? (
                                       <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] px-2 py-0.5">
                                         Contato cadastrado
                                       </Badge>
@@ -2521,8 +2735,7 @@ export function CompanyViewSlidePanel({
                                         <AlertTriangle className="h-2.5 w-2.5" />
                                         Sem responsável financeiro
                                       </Badge>
-                                    )
-                                  )}
+                                    ))}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 p-3">
                                   {/* Nome */}
@@ -2532,15 +2745,28 @@ export function CompanyViewSlidePanel({
                                     </p>
                                     {isDadosEditMode ? (
                                       <Input
-                                        value={(getDadosDisplayValue("financial_contact_name") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_name", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_name",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_name",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="Nome do responsável financeiro"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_name") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_name",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2553,15 +2779,28 @@ export function CompanyViewSlidePanel({
                                     </p>
                                     {isDadosEditMode ? (
                                       <Input
-                                        value={(getDadosDisplayValue("financial_contact_role") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_role", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_role",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_role",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="Ex: Gerente Financeiro"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_role") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_role",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2575,15 +2814,28 @@ export function CompanyViewSlidePanel({
                                     {isDadosEditMode ? (
                                       <Input
                                         type="email"
-                                        value={(getDadosDisplayValue("financial_contact_email") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_email", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_email",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_email",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="financeiro@empresa.com"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_email") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_email",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2597,15 +2849,28 @@ export function CompanyViewSlidePanel({
                                     {isDadosEditMode ? (
                                       <Input
                                         type="tel"
-                                        value={(getDadosDisplayValue("financial_contact_phone") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_phone", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_phone",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_phone",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="(00) 0000-0000"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_phone") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_phone",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2619,15 +2884,28 @@ export function CompanyViewSlidePanel({
                                     {isDadosEditMode ? (
                                       <Input
                                         type="tel"
-                                        value={(getDadosDisplayValue("financial_contact_whatsapp") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_whatsapp", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_whatsapp",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_whatsapp",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="(00) 00000-0000"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_whatsapp") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_whatsapp",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2640,15 +2918,28 @@ export function CompanyViewSlidePanel({
                                     </p>
                                     {isDadosEditMode ? (
                                       <Input
-                                        value={(getDadosDisplayValue("financial_contact_preferred_channel") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_preferred_channel", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_preferred_channel",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_preferred_channel",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="email / telefone / whatsapp"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_preferred_channel") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Não informado</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_preferred_channel",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Não informado
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2661,15 +2952,28 @@ export function CompanyViewSlidePanel({
                                     </p>
                                     {isDadosEditMode ? (
                                       <Input
-                                        value={(getDadosDisplayValue("financial_contact_notes") as string) || ""}
-                                        onChange={(e) => handleDadosFieldChange("financial_contact_notes", e.target.value)}
+                                        value={
+                                          (getDadosDisplayValue(
+                                            "financial_contact_notes",
+                                          ) as string) || ""
+                                        }
+                                        onChange={(e) =>
+                                          handleDadosFieldChange(
+                                            "financial_contact_notes",
+                                            e.target.value,
+                                          )
+                                        }
                                         className="border-slate-300 h-8 text-sm"
                                         placeholder="Notas adicionais sobre o contato financeiro"
                                       />
                                     ) : (
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {getDadosDisplayValue("financial_contact_notes") || (
-                                          <span className="text-slate-400 font-normal italic text-xs">Nenhuma observação</span>
+                                        {getDadosDisplayValue(
+                                          "financial_contact_notes",
+                                        ) || (
+                                          <span className="text-slate-400 font-normal italic text-xs">
+                                            Nenhuma observação
+                                          </span>
                                         )}
                                       </p>
                                     )}
@@ -2678,7 +2982,6 @@ export function CompanyViewSlidePanel({
                               </div>
                             );
                           })()}
-
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -4017,1533 +4320,58 @@ export function CompanyViewSlidePanel({
                         </AccordionContent>
                       </AccordionItem>
 
-                      {/* ACCORDION 3: MÉTODOS DE PAGAMENTO */}
+                      {/* ACCORDION 4: PAGAMENTO DO PLANO */}
                       <AccordionItem
-                        value="pagamento"
+                        value="plano-pagamento"
                         className="border border-slate-200 rounded-lg overflow-hidden"
                       >
                         <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
                           <div className="flex items-center gap-2">
-                            <Wallet className="h-3.5 w-3.5 text-emerald-500" />
+                            <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
                             <span className="font-semibold text-slate-800 text-[11px]">
-                              Métodos de Pagamento
+                              Pagamento do Plano
                             </span>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-3">
-                          {/* Payment Methods List */}
+                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-2">
+                          <p className="text-[11px] text-slate-500 mb-2">
+                            Método utilizado para cobrança da assinatura mensal do plano.
+                          </p>
                           <div className="space-y-1.5">
                             {[
-                              {
-                                id: "pix",
-                                label: "Pix",
-                                desc: "Transferência instantânea",
-                                iconBg: "bg-purple-100",
-                                iconColor: "text-purple-600",
-                                Icon: Wallet,
-                              },
-                              {
-                                id: "boleto",
-                                label: "Boleto",
-                                desc: "Até 3 dias úteis",
-                                iconBg: "bg-orange-100",
-                                iconColor: "text-orange-600",
-                                Icon: Download,
-                              },
-                              {
-                                id: "allkoins",
-                                label: "Allkoins",
-                                desc: "Saldo em créditos",
-                                iconBg: "bg-yellow-100",
-                                iconColor: "text-yellow-600",
-                                Icon: Gift,
-                              },
-                            ].map(
-                              ({
-                                id,
-                                label,
-                                desc,
-                                iconBg,
-                                iconColor,
-                                Icon,
-                              }) => {
-                                const isDefault = defaultPaymentMethod === id;
-                                return (
-                                  <div
-                                    key={id}
-                                    onClick={() => handleSetDefaultMethod(id)}
-                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
-                                      isDefault
-                                        ? "border-blue-400 bg-blue-50 shadow-sm"
-                                        : "border-slate-200 bg-white hover:border-slate-300"
-                                    }`}
-                                  >
-                                    <div
-                                      className={`h-7 w-7 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}
-                                    >
-                                      <Icon
-                                        className={`h-3.5 w-3.5 ${iconColor}`}
-                                      />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p
-                                        className={`text-[11px] font-semibold ${isDefault ? "text-blue-700" : "text-slate-700"}`}
-                                      >
-                                        {label}
-                                      </p>
-                                      <p className="text-[10px] text-slate-400">
-                                        {desc}
-                                      </p>
-                                    </div>
-                                    {isDefault && (
-                                      <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-                                        Padrão
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              },
-                            )}
-                          </div>
-
-                          {/* Credit Cards Section */}
-                          <div className="pt-2 border-t border-slate-200">
-                            <div className="flex items-center justify-between mb-2">
-                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                                Cartões
-                              </label>
-                              <button
-                                onClick={() => setShowAddCardModal(true)}
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full transition-colors"
-                              >
-                                <Plus className="h-2.5 w-2.5" />
-                                Novo Cartão
-                              </button>
-                            </div>
-                            {(() => {
-                              // Card brand colors and logos
-                              const CARD_BRANDS: Record<
-                                string,
-                                { bg: string; logo: React.ReactNode }
-                              > = {
-                                Visa: {
-                                  bg: "linear-gradient(135deg, #1a1f71 0%, #2a3fa0 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 48 16"
-                                      className="h-5 w-auto"
-                                      fill="white"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontStyle="italic"
-                                        fontSize="16"
-                                      >
-                                        VISA
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Mastercard: {
-                                  bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
-                                  logo: (
-                                    <div className="flex items-center gap-0">
-                                      <div className="w-5 h-5 rounded-full bg-red-500 opacity-90" />
-                                      <div className="w-5 h-5 rounded-full bg-yellow-400 opacity-90 -ml-2" />
-                                    </div>
-                                  ),
-                                },
-                                Elo: {
-                                  bg: "linear-gradient(135deg, #000000 0%, #1a1a1a 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 40 16"
-                                      className="h-4 w-auto"
-                                      fill="none"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="15"
-                                        fill="#FFD600"
-                                      >
-                                        e
-                                      </text>
-                                      <text
-                                        x="10"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="15"
-                                        fill="#EF4123"
-                                      >
-                                        l
-                                      </text>
-                                      <text
-                                        x="16"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="15"
-                                        fill="#00A4E0"
-                                      >
-                                        o
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Amex: {
-                                  bg: "linear-gradient(135deg, #006fcf 0%, #004080 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 48 16"
-                                      className="h-4 w-auto"
-                                      fill="white"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="11"
-                                      >
-                                        AMEX
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Hipercard: {
-                                  bg: "linear-gradient(135deg, #822124 0%, #5a1517 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 48 16"
-                                      className="h-4 w-auto"
-                                      fill="white"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="9"
-                                      >
-                                        HIPERCARD
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Diners: {
-                                  bg: "linear-gradient(135deg, #004080 0%, #002850 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 48 16"
-                                      className="h-4 w-auto"
-                                      fill="white"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="10"
-                                      >
-                                        DINERS
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Discover: {
-                                  bg: "linear-gradient(135deg, #f47216 0%, #d45e0a 100%)",
-                                  logo: (
-                                    <svg
-                                      viewBox="0 0 52 16"
-                                      className="h-4 w-auto"
-                                      fill="white"
-                                    >
-                                      <text
-                                        x="0"
-                                        y="13"
-                                        fontFamily="Arial"
-                                        fontWeight="bold"
-                                        fontSize="10"
-                                      >
-                                        DISCOVER
-                                      </text>
-                                    </svg>
-                                  ),
-                                },
-                                Outro: {
-                                  bg: "linear-gradient(135deg, #475569 0%, #334155 100%)",
-                                  logo: (
-                                    <CreditCard className="h-5 w-5 text-white" />
-                                  ),
-                                },
-                              };
-
-                              const isExpired = (expiry: string) => {
-                                const [m, y] = expiry.split("/").map(Number);
-                                const expDate = new Date(2000 + y, m);
-                                return expDate < new Date();
-                              };
-
-                              return creditCards.length === 0 ? (
-                                <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                                  <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                                  <p className="text-sm text-slate-600">
-                                    Nenhum cartão cadastrado
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-3 gap-3">
-                                  {creditCards.map((card) => {
-                                    const brandInfo =
-                                      CARD_BRANDS[card.brand] ||
-                                      CARD_BRANDS.Outro;
-                                    const isDefault =
-                                      defaultPaymentMethod ===
-                                      `card-${card.id}`;
-                                    const expired = isExpired(card.expiry);
-                                    return (
-                                      <div
-                                        key={card.id}
-                                        className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 group ${isDefault ? "ring-2 ring-blue-400" : ""} ${expired ? "opacity-75" : ""}`}
-                                        style={{ background: brandInfo.bg }}
-                                      >
-                                        {/* Decorative circles */}
-                                        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                                          <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/5 rounded-full" />
-                                          <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-white/5 rounded-full" />
-                                        </div>
-
-                                        <div className="relative p-4 text-white">
-                                          {/* Top row: Brand logo + badges */}
-                                          <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                              {brandInfo.logo}
-                                              <span className="text-[10px] font-semibold opacity-60 uppercase">
-                                                {card.brand}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                              {isDefault && (
-                                                <span className="bg-white text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                                  Padrão
-                                                </span>
-                                              )}
-                                              {expired && (
-                                                <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
-                                                  Expirado
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-
-                                          {/* Card number */}
-                                          <div className="mb-3">
-                                            <div className="text-sm font-mono tracking-[0.2em] opacity-90">
-                                              •••• •••• •••• {card.lastFour}
-                                            </div>
-                                          </div>
-
-                                          {/* Bottom: Holder + Expiry */}
-                                          <div className="flex justify-between items-end">
-                                            <div>
-                                              <div className="text-[9px] uppercase opacity-50 tracking-wide">
-                                                Titular
-                                              </div>
-                                              <div className="text-[11px] font-semibold truncate max-w-[120px]">
-                                                {card.holderName}
-                                              </div>
-                                            </div>
-                                            <div className="text-right">
-                                              <div className="text-[9px] uppercase opacity-50 tracking-wide">
-                                                Validade
-                                              </div>
-                                              <div
-                                                className={`text-[11px] font-semibold ${expired ? "text-red-300" : ""}`}
-                                              >
-                                                {card.expiry}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        {/* Hover overlay with actions */}
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
-                                          {!isDefault && !expired && (
-                                            <Button
-                                              onClick={() =>
-                                                handleSetDefaultCard(card.id)
-                                              }
-                                              size="sm"
-                                              className="bg-white text-slate-800 hover:bg-blue-50 text-[10px] font-semibold h-7 px-3 shadow-sm"
-                                            >
-                                              Definir Padrão
-                                            </Button>
-                                          )}
-                                          <Button
-                                            onClick={() =>
-                                              handleRemoveCard(card.id)
-                                            }
-                                            size="sm"
-                                            variant="outline"
-                                            className="bg-white/90 text-slate-800 hover:bg-red-50 h-7 w-7 p-0 shadow-sm"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-
-                      {/* ACCORDION 4: CARTEIRA DA EMPRESA */}
-                      <AccordionItem
-                        value="carteira"
-                        className="border border-slate-200 rounded-lg overflow-hidden"
-                      >
-                        <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
-                          <div className="flex items-center gap-2">
-                            <Wallet className="h-3.5 w-3.5 text-cyan-500" />
-                            <span className="font-semibold text-slate-800 text-[11px]">
-                              Carteira da Empresa
-                            </span>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-2.5">
-                          <div className="flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl px-4 py-3 text-white shadow-sm">
-                            <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                              <Wallet className="h-4 w-4 text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                                Saldo Disponível
-                              </p>
-                              <p className="text-xl font-bold leading-tight">
-                                R${" "}
-                                {companyWalletBalance.toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <button
-                                onClick={() => handleCompanyWalletAction("add")}
-                                className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
-                              >
-                                <Plus className="h-2.5 w-2.5" />
-                                Adicionar
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleCompanyWalletAction("remove")
-                                }
-                                className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
-                              >
-                                <ArrowDown className="h-2.5 w-2.5" />
-                                Reduzir
-                              </button>
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                                Movimentações
-                              </label>
-                              <button
-                                onClick={() => setShowWalletHistoryPanel(true)}
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 px-2 py-0.5 rounded-full transition-colors"
-                              >
-                                <Eye className="h-2.5 w-2.5" />
-                                Ver todas
-                              </button>
-                            </div>
-                            <div className="space-y-1 bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
-                              {companyWalletStatements
-                                .slice(0, 4)
-                                .map((stmt) => (
-                                  <div
-                                    key={stmt.id}
-                                    className="flex justify-between items-center px-3 py-2"
-                                  >
-                                    <div>
-                                      <div className="text-[11px] font-semibold text-slate-800">
-                                        {stmt.reason}
-                                      </div>
-                                      <div className="text-[10px] text-slate-400">
-                                        {new Date(stmt.date).toLocaleString(
-                                          "pt-BR",
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div
-                                        className={`text-[11px] font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}
-                                      >
-                                        {stmt.type === "credit" ? "+" : "−"} R${" "}
-                                        {stmt.amount.toLocaleString("pt-BR", {
-                                          minimumFractionDigits: 2,
-                                        })}
-                                      </div>
-                                      <div className="text-[10px] text-slate-400">
-                                        R${" "}
-                                        {stmt.balanceAfter.toLocaleString(
-                                          "pt-BR",
-                                          { minimumFractionDigits: 2 },
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              {companyWalletStatements.length === 0 && (
-                                <div className="text-center py-5 text-slate-400 text-xs">
-                                  Nenhuma movimentação
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-
-                      {/* ACCORDION 5: NOTAS FISCAIS E COMPROVANTES */}
-                      <AccordionItem
-                        value="nf"
-                        className="border border-slate-200 rounded-lg overflow-hidden"
-                      >
-                        <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5 text-indigo-500" />
-                            <span className="font-semibold text-slate-800 text-[11px]">
-                              Notas Fiscais e Comprovantes
-                            </span>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] text-slate-400">
-                              {paymentHistory.length} documento
-                              {paymentHistory.length !== 1 ? "s" : ""}
-                            </span>
-                            <button
-                              onClick={() => setShowNFHistoryPanel(true)}
-                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full transition-colors"
-                            >
-                              <Eye className="h-2.5 w-2.5" />
-                              Ver todas
-                            </button>
-                          </div>
-                          <div className="space-y-1.5">
-                            {paymentHistory.slice(0, 4).map((payment) => {
-                              const methodLabel = {
-                                pix: "Pix",
-                                boleto: "Boleto",
-                                cartao: "Cartão",
-                                allkoins: "Allkoins",
-                              }[payment.method];
-
-                              const methodColor = {
-                                pix: "bg-purple-50 dark:bg-purple-950/20 border-purple-200",
-                                boleto:
-                                  "bg-orange-50 dark:bg-orange-950/20 border-orange-200",
-                                cartao:
-                                  "bg-blue-50 dark:bg-blue-950/20 border-blue-200",
-                                allkoins:
-                                  "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200",
-                              }[payment.method];
-
-                              const statusColor = {
-                                Pago: "bg-green-100 text-green-800",
-                                Pendente: "bg-yellow-100 text-yellow-800",
-                                Cancelado: "bg-red-100 text-red-800",
-                              }[payment.status];
-
+                              { id: "pix", label: "Pix", desc: "Transferência instantânea", iconBg: "bg-purple-100", iconColor: "text-purple-600", Icon: Wallet },
+                              { id: "boleto", label: "Boleto", desc: "Até 3 dias úteis", iconBg: "bg-orange-100", iconColor: "text-orange-600", Icon: Download },
+                              { id: "cartao", label: "Cartão de Crédito", desc: "Débito automático", iconBg: "bg-blue-100", iconColor: "text-blue-600", Icon: CreditCard },
+                              { id: "allkoins", label: "Allkoins", desc: "Saldo em créditos", iconBg: "bg-yellow-100", iconColor: "text-yellow-600", Icon: Gift },
+                            ].map(({ id, label, desc, iconBg, iconColor, Icon }) => {
+                              const isSelected = defaultPaymentMethod === id;
                               return (
                                 <div
-                                  key={payment.id}
-                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${methodColor}`}
+                                  key={id}
+                                  onClick={() => handleSetDefaultMethod(id)}
+                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all ${isSelected ? "border-blue-400 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
                                 >
-                                  <div
-                                    className={`h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                      payment.type === "nf"
-                                        ? "bg-indigo-100"
-                                        : "bg-green-100"
-                                    }`}
-                                  >
-                                    {payment.type === "nf" ? (
-                                      <FileText className="h-3.5 w-3.5 text-indigo-600" />
-                                    ) : (
-                                      <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                                    )}
+                                  <div className={`h-7 w-7 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+                                    <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-semibold text-slate-800 leading-tight">
-                                      {payment.type === "nf"
-                                        ? "NF"
-                                        : "Comprovante"}{" "}
-                                      · {methodLabel}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400">
-                                      {new Date(
-                                        payment.date,
-                                      ).toLocaleDateString("pt-BR")}{" "}
-                                      · R${" "}
-                                      {payment.amount.toLocaleString("pt-BR")}
-                                    </p>
+                                    <p className={`text-[11px] font-semibold ${isSelected ? "text-blue-700" : "text-slate-700"}`}>{label}</p>
+                                    <p className="text-[10px] text-slate-400">{desc}</p>
                                   </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    <span
-                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusColor}`}
-                                    >
-                                      {payment.status}
-                                    </span>
-                                    {payment.type === "nf" && (
-                                      <>
-                                        <button
-                                          className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                                          title="Visualizar"
-                                        >
-                                          <Eye className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                                          title="Baixar"
-                                        >
-                                          <Download className="h-3 w-3" />
-                                        </button>
-                                      </>
-                                    )}
-                                    {payment.type === "comprovante" && (
-                                      <button
-                                        className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                                        title="Comprovante"
-                                      >
-                                        <CheckCircle className="h-3 w-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                  {payment.type === "comprovante" && (
-                                    <p className="text-[10px] text-slate-400 mt-1 pl-9 italic">
-                                      Pagamentos com Allkoins não geram nota
-                                      fiscal.
-                                    </p>
+                                  {isSelected && (
+                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Ativo</span>
                                   )}
                                 </div>
                               );
                             })}
                           </div>
+                          <p className="text-[10px] text-slate-400 pt-1">
+                            Para gerenciar cartões e ver o extrato completo, acesse a aba <strong>Carteira</strong>.
+                          </p>
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>
 
-                    {/* NF History Panel */}
-                    <Sheet
-                      open={showNFHistoryPanel}
-                      onOpenChange={setShowNFHistoryPanel}
-                    >
-                      <SheetContent
-                        side="right"
-                        className="w-full sm:max-w-lg p-0 flex flex-col"
-                        onInteractOutside={(e) => e.preventDefault()}
-                      >
-                        {/* Header */}
-                        <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
-                          <div className="flex items-center gap-2 mb-1">
-                            <FileText className="h-5 w-5" />
-                            <h2 className="text-base font-bold">
-                              Notas Fiscais e Comprovantes
-                            </h2>
-                          </div>
-                          <p className="text-xs opacity-75">
-                            {paymentHistory.length} documento
-                            {paymentHistory.length !== 1 ? "s" : ""} ·{" "}
-                            {company.name}
-                          </p>
-                          <button
-                            onClick={() => setShowNFHistoryPanel(false)}
-                            className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
-                          >
-                            <X className="size-6 text-white drop-shadow-md" />
-                          </button>
-                        </div>
-
-                        {/* Filters */}
-                        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder="Buscar por tipo ou método..."
-                              value={nfHistorySearch}
-                              onChange={(e) =>
-                                setNfHistorySearch(e.target.value)
-                              }
-                              className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50"
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
-                              {(["all", "nf", "comprovante"] as const).map(
-                                (t) => (
-                                  <button
-                                    key={t}
-                                    onClick={() => setNfHistoryType(t)}
-                                    className={`flex-1 py-1.5 font-semibold transition-colors ${nfHistoryType === t ? "bg-indigo-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
-                                  >
-                                    {t === "all"
-                                      ? "Todos"
-                                      : t === "nf"
-                                        ? "NF"
-                                        : "Comprovantes"}
-                                  </button>
-                                ),
-                              )}
-                            </div>
-                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
-                              {(
-                                [
-                                  "all",
-                                  "Pago",
-                                  "Pendente",
-                                  "Cancelado",
-                                ] as const
-                              ).map((s) => (
-                                <button
-                                  key={s}
-                                  onClick={() => setNfHistoryStatus(s)}
-                                  className={`px-2.5 py-1.5 font-semibold transition-colors ${nfHistoryStatus === s ? "bg-indigo-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
-                                >
-                                  {s === "all" ? "Status" : s}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">
-                                De
-                              </label>
-                              <input
-                                type="date"
-                                value={nfHistoryDateFrom}
-                                onChange={(e) =>
-                                  setNfHistoryDateFrom(e.target.value)
-                                }
-                                className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">
-                                Até
-                              </label>
-                              <input
-                                type="date"
-                                value={nfHistoryDateTo}
-                                onChange={(e) =>
-                                  setNfHistoryDateTo(e.target.value)
-                                }
-                                className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50"
-                              />
-                            </div>
-                            <div className="flex items-end gap-1">
-                              <button
-                                onClick={() => {
-                                  const rows = paymentHistory.map((p) => {
-                                    const label =
-                                      {
-                                        pix: "Pix",
-                                        boleto: "Boleto",
-                                        cartao: "Cartão",
-                                        allkoins: "Allkoins",
-                                      }[p.method] ?? p.method;
-                                    return `${new Date(p.date).toLocaleDateString("pt-BR")};${p.type === "nf" ? "NF" : "Comprovante"};${label};R$ ${p.amount.toLocaleString("pt-BR")};${p.status}`;
-                                  });
-                                  const csv = [
-                                    "Data;Tipo;Método;Valor;Status",
-                                    ...rows,
-                                  ].join("\n");
-                                  const blob = new Blob([csv], {
-                                    type: "text/csv;charset=utf-8;",
-                                  });
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement("a");
-                                  a.href = url;
-                                  a.download = `notas-fiscais-${(company.name || "empresa").replace(/\s+/g, "-")}.csv`;
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                }}
-                                className="flex items-center gap-1 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                                Exportar
-                              </button>
-                              {(nfHistorySearch ||
-                                nfHistoryType !== "all" ||
-                                nfHistoryStatus !== "all" ||
-                                nfHistoryDateFrom ||
-                                nfHistoryDateTo) && (
-                                <button
-                                  onClick={() => {
-                                    setNfHistorySearch("");
-                                    setNfHistoryType("all");
-                                    setNfHistoryStatus("all");
-                                    setNfHistoryDateFrom("");
-                                    setNfHistoryDateTo("");
-                                  }}
-                                  className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
-                                >
-                                  Limpar
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* List */}
-                        <div className="flex-1 overflow-y-auto">
-                          {(() => {
-                            const methodLabel = {
-                              pix: "Pix",
-                              boleto: "Boleto",
-                              cartao: "Cartão",
-                              allkoins: "Allkoins",
-                            };
-                            const filtered = paymentHistory.filter((p) => {
-                              const matchSearch =
-                                nfHistorySearch === "" ||
-                                methodLabel[
-                                  p.method as keyof typeof methodLabel
-                                ]
-                                  ?.toLowerCase()
-                                  .includes(nfHistorySearch.toLowerCase()) ||
-                                (p.type === "nf"
-                                  ? "nf"
-                                  : "comprovante"
-                                ).includes(nfHistorySearch.toLowerCase());
-                              const matchType =
-                                nfHistoryType === "all" ||
-                                p.type === nfHistoryType;
-                              const matchStatus =
-                                nfHistoryStatus === "all" ||
-                                p.status === nfHistoryStatus;
-                              const pDate = new Date(p.date);
-                              const matchFrom =
-                                nfHistoryDateFrom === "" ||
-                                pDate >= new Date(nfHistoryDateFrom);
-                              const matchTo =
-                                nfHistoryDateTo === "" ||
-                                pDate <=
-                                  new Date(nfHistoryDateTo + "T23:59:59");
-                              return (
-                                matchSearch &&
-                                matchType &&
-                                matchStatus &&
-                                matchFrom &&
-                                matchTo
-                              );
-                            });
-                            if (filtered.length === 0)
-                              return (
-                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
-                                  <FileText className="h-8 w-8 opacity-30" />
-                                  <p className="text-sm">
-                                    Nenhum documento encontrado
-                                  </p>
-                                </div>
-                              );
-                            return (
-                              <div className="divide-y divide-slate-100">
-                                {filtered.map((payment) => {
-                                  const ml =
-                                    methodLabel[
-                                      payment.method as keyof typeof methodLabel
-                                    ] ?? payment.method;
-                                  const methodColor =
-                                    {
-                                      pix: "bg-purple-50 border-purple-200",
-                                      boleto: "bg-orange-50 border-orange-200",
-                                      cartao: "bg-blue-50 border-blue-200",
-                                      allkoins:
-                                        "bg-yellow-50 border-yellow-200",
-                                    }[payment.method] ??
-                                    "bg-slate-50 border-slate-200";
-                                  const statusColor =
-                                    {
-                                      Pago: "bg-green-100 text-green-800",
-                                      Pendente: "bg-yellow-100 text-yellow-800",
-                                      Cancelado: "bg-red-100 text-red-800",
-                                    }[payment.status] ??
-                                    "bg-slate-100 text-slate-700";
-                                  return (
-                                    <div
-                                      key={payment.id}
-                                      className={`flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors`}
-                                    >
-                                      <div
-                                        className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${payment.type === "nf" ? "bg-indigo-100" : "bg-green-100"}`}
-                                      >
-                                        {payment.type === "nf" ? (
-                                          <FileText className="h-3.5 w-3.5 text-indigo-600" />
-                                        ) : (
-                                          <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                                        )}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-semibold text-slate-800">
-                                          {payment.type === "nf"
-                                            ? "Nota Fiscal"
-                                            : "Comprovante"}{" "}
-                                          · {ml}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                          {new Date(
-                                            payment.date,
-                                          ).toLocaleDateString("pt-BR")}{" "}
-                                          · R${" "}
-                                          {payment.amount.toLocaleString(
-                                            "pt-BR",
-                                          )}
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <span
-                                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor}`}
-                                        >
-                                          {payment.status}
-                                        </span>
-                                        {payment.type === "nf" && (
-                                          <>
-                                            <button
-                                              className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
-                                              title="Visualizar"
-                                            >
-                                              <Eye className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                              className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
-                                              title="Baixar"
-                                            >
-                                              <Download className="h-3.5 w-3.5" />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
-                          {paymentHistory.length} documento
-                          {paymentHistory.length !== 1 ? "s" : ""} no total ·{" "}
-                          {company.name}
-                        </div>
-                      </SheetContent>
-                    </Sheet>
-
-                    {/* Wallet History Panel */}
-                    <Sheet
-                      open={showWalletHistoryPanel}
-                      onOpenChange={setShowWalletHistoryPanel}
-                    >
-                      <SheetContent
-                        side="right"
-                        className="w-full sm:max-w-lg p-0 flex flex-col"
-                        onInteractOutside={(e) => e.preventDefault()}
-                      >
-                        {/* Header */}
-                        <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Wallet className="h-5 w-5" />
-                            <h2 className="text-base font-bold">
-                              Movimentações da Carteira
-                            </h2>
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-xs opacity-75">
-                              Saldo atual:
-                            </span>
-                            <span className="text-xl font-bold">
-                              R${" "}
-                              {companyWalletBalance.toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setShowWalletHistoryPanel(false)}
-                            className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
-                          >
-                            <X className="size-6 text-white drop-shadow-md" />
-                          </button>
-                        </div>
-
-                        {/* Filters */}
-                        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder="Buscar por descrição..."
-                              value={walletHistorySearch}
-                              onChange={(e) =>
-                                setWalletHistorySearch(e.target.value)
-                              }
-                              className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50"
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
-                              {(["all", "credit", "debit"] as const).map(
-                                (t) => (
-                                  <button
-                                    key={t}
-                                    onClick={() => setWalletHistoryType(t)}
-                                    className={`flex-1 py-1.5 font-semibold transition-colors ${walletHistoryType === t ? "bg-cyan-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
-                                  >
-                                    {t === "all"
-                                      ? "Todos"
-                                      : t === "credit"
-                                        ? "Entradas"
-                                        : "Saídas"}
-                                  </button>
-                                ),
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                const rows = companyWalletStatements.map(
-                                  (s) =>
-                                    `${new Date(s.date).toLocaleString("pt-BR")};${s.reason};${s.type === "credit" ? "Entrada" : "Saída"};R$ ${s.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })};R$ ${s.balanceAfter.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-                                );
-                                const csv = [
-                                  "Data;Descrição;Tipo;Valor;Saldo Após",
-                                  ...rows,
-                                ].join("\n");
-                                const blob = new Blob([csv], {
-                                  type: "text/csv;charset=utf-8;",
-                                });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `carteira-${(company.name || "empresa").replace(/\s+/g, "-")}.csv`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              }}
-                              className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              Exportar
-                            </button>
-                          </div>
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">
-                                De
-                              </label>
-                              <input
-                                type="date"
-                                value={walletHistoryDateFrom}
-                                onChange={(e) =>
-                                  setWalletHistoryDateFrom(e.target.value)
-                                }
-                                className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">
-                                Até
-                              </label>
-                              <input
-                                type="date"
-                                value={walletHistoryDateTo}
-                                onChange={(e) =>
-                                  setWalletHistoryDateTo(e.target.value)
-                                }
-                                className="w-full h-8 text-xs border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50"
-                              />
-                            </div>
-                            {(walletHistoryDateFrom ||
-                              walletHistoryDateTo ||
-                              walletHistorySearch ||
-                              walletHistoryType !== "all") && (
-                              <button
-                                onClick={() => {
-                                  setWalletHistorySearch("");
-                                  setWalletHistoryType("all");
-                                  setWalletHistoryDateFrom("");
-                                  setWalletHistoryDateTo("");
-                                }}
-                                className="self-end h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
-                              >
-                                Limpar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* List */}
-                        <div className="flex-1 overflow-y-auto">
-                          {(() => {
-                            const filtered = companyWalletStatements.filter(
-                              (s) => {
-                                const matchSearch =
-                                  walletHistorySearch === "" ||
-                                  s.reason
-                                    .toLowerCase()
-                                    .includes(
-                                      walletHistorySearch.toLowerCase(),
-                                    );
-                                const matchType =
-                                  walletHistoryType === "all" ||
-                                  s.type === walletHistoryType;
-                                const sDate = new Date(s.date);
-                                const matchFrom =
-                                  walletHistoryDateFrom === "" ||
-                                  sDate >= new Date(walletHistoryDateFrom);
-                                const matchTo =
-                                  walletHistoryDateTo === "" ||
-                                  sDate <=
-                                    new Date(walletHistoryDateTo + "T23:59:59");
-                                return (
-                                  matchSearch &&
-                                  matchType &&
-                                  matchFrom &&
-                                  matchTo
-                                );
-                              },
-                            );
-                            if (filtered.length === 0)
-                              return (
-                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
-                                  <Wallet className="h-8 w-8 opacity-30" />
-                                  <p className="text-sm">
-                                    Nenhuma movimentação encontrada
-                                  </p>
-                                </div>
-                              );
-                            return (
-                              <div className="divide-y divide-slate-100">
-                                {filtered.map((stmt) => (
-                                  <div
-                                    key={stmt.id}
-                                    className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div
-                                        className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${stmt.type === "credit" ? "bg-emerald-100" : "bg-red-100"}`}
-                                      >
-                                        {stmt.type === "credit" ? (
-                                          <ArrowDown className="h-3.5 w-3.5 text-emerald-600" />
-                                        ) : (
-                                          <ArrowUp className="h-3.5 w-3.5 text-red-500" />
-                                        )}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-semibold text-slate-800 truncate">
-                                          {stmt.reason}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                          {new Date(stmt.date).toLocaleString(
-                                            "pt-BR",
-                                          )}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0 ml-3">
-                                      <p
-                                        className={`text-xs font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}
-                                      >
-                                        {stmt.type === "credit" ? "+" : "−"} R${" "}
-                                        {stmt.amount.toLocaleString("pt-BR", {
-                                          minimumFractionDigits: 2,
-                                        })}
-                                      </p>
-                                      <p className="text-[10px] text-slate-400">
-                                        R${" "}
-                                        {stmt.balanceAfter.toLocaleString(
-                                          "pt-BR",
-                                          { minimumFractionDigits: 2 },
-                                        )}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Footer count */}
-                        <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
-                          {companyWalletStatements.length} movimentaç
-                          {companyWalletStatements.length === 1 ? "ão" : "ões"}{" "}
-                          no total · desde{" "}
-                          {new Date(
-                            companyWalletStatements[
-                              companyWalletStatements.length - 1
-                            ]?.date ?? Date.now(),
-                          ).toLocaleDateString("pt-BR")}
-                        </div>
-                      </SheetContent>
-                    </Sheet>
-
-                    {/* Company Wallet Modal */}
-                    {showCompanyWalletModal && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              {companyWalletType === "add"
-                                ? "Adicionar Saldo"
-                                : "Reduzir Saldo"}
-                            </h3>
-                            <div className="space-y-4 mb-4">
-                              <div>
-                                <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase">
-                                  Valor (R$)
-                                </label>
-                                <Input
-                                  type="number"
-                                  placeholder="0.00"
-                                  value={companyWalletAmount}
-                                  onChange={(e) =>
-                                    setCompanyWalletAmount(e.target.value)
-                                  }
-                                  className="border-slate-300"
-                                  step="0.01"
-                                  min="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase">
-                                  Motivo (obrigatório)
-                                </label>
-                                <Input
-                                  placeholder="Descreva o motivo da operação"
-                                  value={companyWalletReason}
-                                  onChange={(e) =>
-                                    setCompanyWalletReason(e.target.value)
-                                  }
-                                  className="border-slate-300"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setShowCompanyWalletModal(false)}
-                                className="flex-1"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleCompanyWalletSubmit}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                Próximo
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    {/* Company Wallet Confirmation Modal */}
-                    {showWalletConfirmDialog && showCompanyWalletModal && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              Confirmar Movimentação
-                            </h3>
-                            <div className="bg-slate-50 p-4 rounded-lg space-y-2 text-sm mb-4">
-                              <div className="flex justify-between">
-                                <span className="text-slate-600">Tipo:</span>
-                                <span className="font-semibold">
-                                  {companyWalletType === "add"
-                                    ? "Crédito"
-                                    : "Débito"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-600">Valor:</span>
-                                <span
-                                  className={`font-semibold ${companyWalletType === "add" ? "text-emerald-600" : "text-red-600"}`}
-                                >
-                                  {companyWalletType === "add" ? "+" : "-"} R${" "}
-                                  {parseFloat(
-                                    companyWalletAmount,
-                                  ).toLocaleString("pt-BR", {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-600">Motivo:</span>
-                                <span className="font-semibold">
-                                  {companyWalletReason}
-                                </span>
-                              </div>
-                              <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between">
-                                <span className="font-semibold">
-                                  Saldo após:
-                                </span>
-                                <span className="text-blue-600 font-bold">
-                                  R${" "}
-                                  {(companyWalletType === "add"
-                                    ? companyWalletBalance +
-                                      parseFloat(companyWalletAmount)
-                                    : companyWalletBalance -
-                                      parseFloat(companyWalletAmount)
-                                  ).toLocaleString("pt-BR", {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() =>
-                                  setShowWalletConfirmDialog(false)
-                                }
-                                className="flex-1"
-                              >
-                                Voltar
-                              </Button>
-                              <Button
-                                onClick={handleCompanyWalletConfirm}
-                                disabled={isApplyingCompanyWallet}
-                                className="flex-1 btn-brand"
-                              >
-                                {isApplyingCompanyWallet ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Processando...
-                                  </>
-                                ) : (
-                                  "Confirmar"
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    {/* Admin Action Modals */}
-                    {adminActionModal === "edit-plan" && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              Editar Plano de Crédito
-                            </h3>
-                            <div className="space-y-3 mb-4">
-                              <div>
-                                <label className="text-xs font-semibold mb-1 block">
-                                  Novo Plano
-                                </label>
-                                <select
-                                  value={adminFormData.creditPlan}
-                                  onChange={(e) =>
-                                    setAdminFormData({
-                                      ...adminFormData,
-                                      creditPlan: e.target.value,
-                                    })
-                                  }
-                                  className="w-full px-3 py-2 border rounded text-sm"
-                                >
-                                  <option value="lite">
-                                    Lite R$ 300/mês (ativa conta agency)
-                                  </option>
-                                  <option value="start">
-                                    Start R$ 500/mês (5% desconto)
-                                  </option>
-                                  <option value="standard">
-                                    Standard R$ 1.000/mês (10% desconto)
-                                  </option>
-                                  <option value="growth">
-                                    Growth R$ 1.500/mês (15% desconto)
-                                  </option>
-                                  <option value="scale">
-                                    Scale R$ 3.000/mês (20% desconto)
-                                  </option>
-                                  <option value="squad">
-                                    Squad R$ 5.000/mês (agências 20% + pós pago)
-                                  </option>
-                                  <option value="enterprise">
-                                    Enterprise R$ 5.000/mês (empresas pós pago)
-                                  </option>
-                                </select>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setAdminActionModal(null)}
-                                className="flex-1"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={() => setShowAdminConfirmDialog(true)}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                Confirmar
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    {adminActionModal === "change-account" && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              Alterar Tipo de Conta
-                            </h3>
-                            <div className="space-y-2 mb-4">
-                              {[
-                                "Company Dependente",
-                                "Company Independente",
-                                "Agency",
-                                "Partner",
-                              ].map((type) => (
-                                <label
-                                  key={type}
-                                  className="flex items-center gap-3 p-2 border rounded cursor-pointer hover:bg-gray-50"
-                                >
-                                  <input
-                                    type="radio"
-                                    name="account-type"
-                                    checked={adminFormData.accountType === type}
-                                    onChange={() =>
-                                      setAdminFormData({
-                                        ...adminFormData,
-                                        accountType: type,
-                                      })
-                                    }
-                                    className="cursor-pointer"
-                                  />
-                                  <span className="text-sm font-medium">
-                                    {type}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setAdminActionModal(null)}
-                                className="flex-1"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleConfirmAdminAction}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                Confirmar
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    {adminActionModal === "force-charge" && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              Forçar Cobrança
-                            </h3>
-                            <p className="text-sm text-muted-foreground mb-4">
-                              Tem certeza que deseja forçar a cobrança agora?
-                              Esta ação irreversível.
-                            </p>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setAdminActionModal(null)}
-                                className="flex-1"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleConfirmAdminAction}
-                                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                              >
-                                Confirmar Cobrança
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    {adminActionModal === "generate-boleto" && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
-                          <div className="p-6">
-                            <h3 className="text-lg font-bold mb-4">
-                              Gerar Boleto
-                            </h3>
-                            <div className="space-y-3 mb-4">
-                              <div>
-                                <label className="text-xs font-semibold mb-1 block">
-                                  Data de Vencimento
-                                </label>
-                                <Input
-                                  type="date"
-                                  value={adminFormData.dueDate}
-                                  onChange={(e) =>
-                                    setAdminFormData({
-                                      ...adminFormData,
-                                      dueDate: e.target.value,
-                                    })
-                                  }
-                                  className="text-sm"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setAdminActionModal(null)}
-                                className="flex-1"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleGenerateBoleto}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                Gerar Boleto
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
 
                     {/* Admin Confirm Dialog */}
                     {(() => {
@@ -5573,108 +4401,580 @@ export function CompanyViewSlidePanel({
                       );
                     })()}
 
+                  </div>
+                </TabsContent>
+
+                {/* Carteira Tab */}
+                <TabsContent
+                  value="carteira"
+                  className="flex-1 overflow-y-auto bg-slate-200 dark:bg-background"
+                >
+                  <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-slate-900">Carteira da Empresa</h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowExportModal(true); }}
+                          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Exportar Extrato
+                        </button>
+                        <button
+                          onClick={() => {
+                            const allOpen = CARTEIRA_ALL_ACCORDIONS.every((a) => carteiraOpenAccordions.includes(a));
+                            setCarteiraOpenAccordions(allOpen ? [] : CARTEIRA_ALL_ACCORDIONS);
+                          }}
+                          className="flex items-center gap-2 group"
+                        >
+                          <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
+                            {CARTEIRA_ALL_ACCORDIONS.every((a) => carteiraOpenAccordions.includes(a)) ? "Fechar" : "Expandir"}
+                          </span>
+                          <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${CARTEIRA_ALL_ACCORDIONS.every((a) => carteiraOpenAccordions.includes(a)) ? "bg-blue-600" : "bg-slate-300"}`}>
+                            <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${CARTEIRA_ALL_ACCORDIONS.every((a) => carteiraOpenAccordions.includes(a)) ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-cyan-500 to-teal-600 border border-cyan-300/70 shadow-md">
+                        <div className="px-4 pt-3 pb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">Saldo Disponível</p>
+                            <div className="bg-white/20 rounded-md p-1"><Wallet className="h-3 w-3 text-white" /></div>
+                          </div>
+                          <p className="text-2xl font-bold text-white leading-none">
+                            R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                          <p className="text-[10px] text-white/60 mt-1">Carteira da empresa</p>
+                        </div>
+                      </div>
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 to-violet-600 border border-indigo-300/70 shadow-md">
+                        <div className="px-4 pt-3 pb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">Transações</p>
+                            <div className="bg-white/20 rounded-md p-1"><TrendingUp className="h-3 w-3 text-white" /></div>
+                          </div>
+                          <p className="text-2xl font-bold text-white leading-none">{companyWalletStatements.length}</p>
+                          <p className="text-[10px] text-white/60 mt-1">Movimentações registradas</p>
+                        </div>
+                      </div>
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-300/70 shadow-md">
+                        <div className="px-4 pt-3 pb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">Documentos</p>
+                            <div className="bg-white/20 rounded-md p-1"><FileText className="h-3 w-3 text-white" /></div>
+                          </div>
+                          <p className="text-2xl font-bold text-white leading-none">{paymentHistory.length}</p>
+                          <p className="text-[10px] text-white/60 mt-1">NFs e comprovantes</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Accordion
+                      type="multiple"
+                      value={carteiraOpenAccordions}
+                      onValueChange={setCarteiraOpenAccordions}
+                      className="space-y-3"
+                    >
+                      {/* SALDO E MOVIMENTAÇÕES */}
+                      <AccordionItem value="carteira-saldo" className="border border-slate-200 rounded-lg overflow-hidden">
+                        <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Wallet className="h-3.5 w-3.5 text-cyan-500" />
+                            <span className="font-semibold text-slate-800 text-[11px]">Saldo e Movimentações</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-2.5">
+                          {/* Balance card */}
+                          <div className="flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl px-4 py-3 text-white shadow-sm">
+                            <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                              <Wallet className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Saldo Disponível</p>
+                              <p className="text-xl font-bold leading-tight">
+                                R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => handleCompanyWalletAction("add")}
+                                className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                              >
+                                <Plus className="h-2.5 w-2.5" /> Adicionar
+                              </button>
+                              <button
+                                onClick={() => handleCompanyWalletAction("remove")}
+                                className="inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                              >
+                                <ArrowDown className="h-2.5 w-2.5" /> Reduzir
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Transactions */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Movimentações recentes</label>
+                              <button
+                                onClick={() => setShowWalletHistoryPanel(true)}
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 px-2 py-0.5 rounded-full transition-colors"
+                              >
+                                <Eye className="h-2.5 w-2.5" /> Ver todas
+                              </button>
+                            </div>
+                            <div className="space-y-1 bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                              {companyWalletStatements.slice(0, 5).map((stmt) => (
+                                <div key={stmt.id} className="flex justify-between items-center px-3 py-2">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-slate-800">{stmt.reason}</div>
+                                    <div className="text-[10px] text-slate-400">{new Date(stmt.date).toLocaleString("pt-BR")}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className={`text-[11px] font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
+                                      {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      R$ {stmt.balanceAfter.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {companyWalletStatements.length === 0 && (
+                                <div className="text-center py-8 text-slate-400 text-xs">Nenhuma movimentação registrada</div>
+                              )}
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* MÉTODOS DE PAGAMENTO */}
+                      <AccordionItem value="pagamento" className="border border-slate-200 rounded-lg overflow-hidden">
+                        <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
+                            <span className="font-semibold text-slate-800 text-[11px]">Métodos de Pagamento</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50 space-y-3">
+                          {/* Methods */}
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Formas de pagamento disponíveis</p>
+                            {[
+                              { id: "pix", label: "Pix", desc: "Transferência instantânea", iconBg: "bg-purple-100", iconColor: "text-purple-600", Icon: Wallet },
+                              { id: "boleto", label: "Boleto", desc: "Até 3 dias úteis", iconBg: "bg-orange-100", iconColor: "text-orange-600", Icon: Download },
+                              { id: "allkoins", label: "Allkoins", desc: "Saldo em créditos", iconBg: "bg-yellow-100", iconColor: "text-yellow-600", Icon: Gift },
+                            ].map(({ id, label, desc, iconBg, iconColor, Icon }) => {
+                              const isDefault = defaultPaymentMethod === id;
+                              return (
+                                <div
+                                  key={id}
+                                  onClick={() => handleSetDefaultMethod(id)}
+                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all ${isDefault ? "border-blue-400 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                                >
+                                  <div className={`h-7 w-7 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+                                    <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-[11px] font-semibold ${isDefault ? "text-blue-700" : "text-slate-700"}`}>{label}</p>
+                                    <p className="text-[10px] text-slate-400">{desc}</p>
+                                  </div>
+                                  {isDefault && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Padrão</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Credit Cards */}
+                          <div className="pt-2 border-t border-slate-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Cartões Cadastrados</label>
+                              <button
+                                onClick={() => setShowAddCardModal(true)}
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full transition-colors"
+                              >
+                                <Plus className="h-2.5 w-2.5" /> Novo Cartão
+                              </button>
+                            </div>
+                            {(() => {
+                              const CARD_BRANDS: Record<string, { bg: string; logo: React.ReactNode }> = {
+                                Visa: {
+                                  bg: "linear-gradient(135deg, #1a1f71 0%, #2a3fa0 100%)",
+                                  logo: (<svg viewBox="0 0 48 16" className="h-5 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontStyle="italic" fontSize="16">VISA</text></svg>),
+                                },
+                                Mastercard: {
+                                  bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+                                  logo: (<div className="flex items-center"><div className="w-5 h-5 rounded-full bg-red-500 opacity-90" /><div className="w-5 h-5 rounded-full bg-yellow-400 opacity-90 -ml-2" /></div>),
+                                },
+                                Elo: {
+                                  bg: "linear-gradient(135deg, #000000 0%, #1a1a1a 100%)",
+                                  logo: (<svg viewBox="0 0 40 16" className="h-4 w-auto" fill="none"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#FFD600">e</text><text x="10" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#EF4123">l</text><text x="16" y="13" fontFamily="Arial" fontWeight="bold" fontSize="15" fill="#00A4E0">o</text></svg>),
+                                },
+                                Amex: {
+                                  bg: "linear-gradient(135deg, #006fcf 0%, #004080 100%)",
+                                  logo: (<svg viewBox="0 0 48 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="11">AMEX</text></svg>),
+                                },
+                                Hipercard: {
+                                  bg: "linear-gradient(135deg, #822124 0%, #5a1517 100%)",
+                                  logo: (<svg viewBox="0 0 48 16" className="h-4 w-auto" fill="white"><text x="0" y="13" fontFamily="Arial" fontWeight="bold" fontSize="9">HIPERCARD</text></svg>),
+                                },
+                                Outro: {
+                                  bg: "linear-gradient(135deg, #475569 0%, #334155 100%)",
+                                  logo: (<CreditCard className="h-5 w-5 text-white" />),
+                                },
+                              };
+                              const isExpired = (expiry: string) => {
+                                const [m, y] = expiry.split("/").map(Number);
+                                return new Date(2000 + y, m) < new Date();
+                              };
+                              return creditCards.length === 0 ? (
+                                <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                                  <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                                  <p className="text-sm text-slate-600 font-medium">Nenhum cartão cadastrado</p>
+                                  <p className="text-xs text-slate-400 mt-1">Adicione um cartão para facilitar pagamentos</p>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                  {creditCards.map((card) => {
+                                    const brandInfo = CARD_BRANDS[card.brand] || CARD_BRANDS.Outro;
+                                    const isDefault = defaultPaymentMethod === `card-${card.id}`;
+                                    const expired = isExpired(card.expiry);
+                                    return (
+                                      <div
+                                        key={card.id}
+                                        className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 group ${isDefault ? "ring-2 ring-blue-400" : ""} ${expired ? "opacity-75" : ""}`}
+                                        style={{ background: brandInfo.bg }}
+                                      >
+                                        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                          <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/5 rounded-full" />
+                                          <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-white/5 rounded-full" />
+                                        </div>
+                                        <div className="relative p-4 text-white">
+                                          <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                              {brandInfo.logo}
+                                              <span className="text-[10px] font-semibold opacity-60 uppercase">{card.brand}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              {isDefault && <span className="bg-white text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">Padrão</span>}
+                                              {expired && <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Expirado</span>}
+                                            </div>
+                                          </div>
+                                          <div className="mb-3">
+                                            <div className="text-sm font-mono tracking-[0.2em] opacity-90">•••• •••• •••• {card.lastFour}</div>
+                                          </div>
+                                          <div className="flex justify-between items-end">
+                                            <div>
+                                              <div className="text-[9px] uppercase opacity-50 tracking-wide">Titular</div>
+                                              <div className="text-[11px] font-semibold truncate max-w-[110px]">{card.holderName}</div>
+                                            </div>
+                                            <div className="text-right">
+                                              <div className="text-[9px] uppercase opacity-50 tracking-wide">Validade</div>
+                                              <div className={`text-[11px] font-semibold ${expired ? "text-red-300" : ""}`}>{card.expiry}</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+                                          {!isDefault && !expired && (
+                                            <Button onClick={() => handleSetDefaultCard(card.id)} size="sm" className="bg-white text-slate-800 hover:bg-blue-50 text-[10px] font-semibold h-7 px-3 shadow-sm">
+                                              Definir Padrão
+                                            </Button>
+                                          )}
+                                          <Button onClick={() => handleRemoveCard(card.id)} size="sm" variant="outline" className="bg-white/90 text-slate-800 hover:bg-red-50 h-7 w-7 p-0 shadow-sm">
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* NOTAS FISCAIS E COMPROVANTES */}
+                      <AccordionItem value="nf" className="border border-slate-200 rounded-lg overflow-hidden">
+                        <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 text-xs">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-3.5 w-3.5 text-indigo-500" />
+                            <span className="font-semibold text-slate-800 text-[11px]">Notas Fiscais e Comprovantes</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 py-2.5 border-t border-slate-100 bg-slate-50/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] text-slate-400">{paymentHistory.length} documento{paymentHistory.length !== 1 ? "s" : ""}</span>
+                            <button
+                              onClick={() => setShowNFHistoryPanel(true)}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full transition-colors"
+                            >
+                              <Eye className="h-2.5 w-2.5" /> Ver todas
+                            </button>
+                          </div>
+                          <div className="space-y-1.5">
+                            {paymentHistory.slice(0, 5).map((payment) => {
+                              const methodLabel: Record<string, string> = { pix: "Pix", boleto: "Boleto", cartao: "Cartão", allkoins: "Allkoins" };
+                              const methodColor: Record<string, string> = {
+                                pix: "bg-purple-50 border-purple-200",
+                                boleto: "bg-orange-50 border-orange-200",
+                                cartao: "bg-blue-50 border-blue-200",
+                                allkoins: "bg-yellow-50 border-yellow-200",
+                              };
+                              const statusColor: Record<string, string> = {
+                                Pago: "bg-green-100 text-green-800",
+                                Pendente: "bg-yellow-100 text-yellow-800",
+                                Cancelado: "bg-red-100 text-red-800",
+                              };
+                              return (
+                                <div key={payment.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${methodColor[payment.method] || "bg-slate-50 border-slate-200"}`}>
+                                  <div className={`h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 ${payment.type === "nf" ? "bg-indigo-100" : "bg-green-100"}`}>
+                                    {payment.type === "nf" ? <FileText className="h-3.5 w-3.5 text-indigo-600" /> : <CheckCircle className="h-3.5 w-3.5 text-green-600" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-semibold text-slate-800 leading-tight">
+                                      {payment.type === "nf" ? "NF" : "Comprovante"} · {methodLabel[payment.method] || payment.method}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {new Date(payment.date).toLocaleDateString("pt-BR")} · R$ {payment.amount.toLocaleString("pt-BR")}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusColor[payment.status] || "bg-slate-100 text-slate-700"}`}>{payment.status}</span>
+                                    {payment.type === "nf" && (
+                                      <>
+                                        <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Visualizar"><Eye className="h-3 w-3" /></button>
+                                        <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Baixar"><Download className="h-3 w-3" /></button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {paymentHistory.length === 0 && (
+                              <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                                <FileText className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                                <p className="text-sm text-slate-600 font-medium">Nenhum documento encontrado</p>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+
+                    {/* Wallet History Side Panel */}
+                    <Sheet open={showWalletHistoryPanel} onOpenChange={setShowWalletHistoryPanel}>
+                      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col" onInteractOutside={(e) => e.preventDefault()}>
+                        <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Wallet className="h-5 w-5" />
+                            <h2 className="text-base font-bold">Movimentações da Carteira</h2>
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs opacity-75">Saldo atual:</span>
+                            <span className="text-xl font-bold">R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <button onClick={() => setShowWalletHistoryPanel(false)} className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 p-1.5">
+                            <X className="size-6 text-white drop-shadow-md" />
+                          </button>
+                        </div>
+                        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <input type="text" placeholder="Buscar por descrição..." value={walletHistorySearch} onChange={(e) => setWalletHistorySearch(e.target.value)} className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-400 bg-slate-50" />
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
+                              {(["all", "credit", "debit"] as const).map((t) => (
+                                <button key={t} onClick={() => setWalletHistoryType(t)} className={`flex-1 py-1.5 font-semibold transition-colors ${walletHistoryType === t ? "bg-cyan-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                                  {t === "all" ? "Todos" : t === "credit" ? "Entradas" : "Saídas"}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setShowExportModal(true); }}
+                              className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
+                            >
+                              <Download className="h-3.5 w-3.5" /> Exportar
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">De</label>
+                              <input type="date" value={walletHistoryDateFrom} onChange={(e) => setWalletHistoryDateFrom(e.target.value)} className="w-full h-8 px-2 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-cyan-400" />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wide mb-1 block">Até</label>
+                              <input type="date" value={walletHistoryDateTo} onChange={(e) => setWalletHistoryDateTo(e.target.value)} className="w-full h-8 px-2 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-cyan-400" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                          {(() => {
+                            const filtered = companyWalletStatements.filter((s) => {
+                              if (walletHistoryType !== "all" && s.type !== walletHistoryType) return false;
+                              if (walletHistorySearch && !s.reason.toLowerCase().includes(walletHistorySearch.toLowerCase())) return false;
+                              if (walletHistoryDateFrom && new Date(s.date) < new Date(walletHistoryDateFrom)) return false;
+                              if (walletHistoryDateTo && new Date(s.date) > new Date(walletHistoryDateTo + "T23:59:59")) return false;
+                              return true;
+                            });
+                            if (filtered.length === 0)
+                              return (
+                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
+                                  <Wallet className="h-8 w-8 opacity-30" />
+                                  <p className="text-sm">Nenhuma movimentação encontrada</p>
+                                </div>
+                              );
+                            return (
+                              <div className="divide-y divide-slate-100">
+                                {filtered.map((stmt) => (
+                                  <div key={stmt.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+                                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${stmt.type === "credit" ? "bg-emerald-100" : "bg-red-100"}`}>
+                                      {stmt.type === "credit" ? <Plus className="h-3.5 w-3.5 text-emerald-600" /> : <ArrowDown className="h-3.5 w-3.5 text-red-500" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-slate-800">{stmt.reason}</p>
+                                      <p className="text-[10px] text-slate-400">{new Date(stmt.date).toLocaleString("pt-BR")}</p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <div className={`text-xs font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
+                                        {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400">Saldo: R$ {stmt.balanceAfter.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
+                          {companyWalletStatements.length} movimentação{companyWalletStatements.length !== 1 ? "ções" : ""} no total · {company.name}
+                        </div>
+                      </SheetContent>
+                    </Sheet>
+
+                    {/* NF History Side Panel */}
+                    <Sheet open={showNFHistoryPanel} onOpenChange={setShowNFHistoryPanel}>
+                      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col" onInteractOutside={(e) => e.preventDefault()}>
+                        <div className="app-brand-header relative flex-shrink-0 px-6 min-h-[100px] flex flex-col justify-center text-white">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText className="h-5 w-5" />
+                            <h2 className="text-base font-bold">Notas Fiscais e Comprovantes</h2>
+                          </div>
+                          <p className="text-xs opacity-75">{company.name}</p>
+                          <button onClick={() => setShowNFHistoryPanel(false)} className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 p-1.5">
+                            <X className="size-6 text-white drop-shadow-md" />
+                          </button>
+                        </div>
+                        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200 bg-white space-y-3">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <input type="text" placeholder="Buscar documentos..." value={nfHistorySearch} onChange={(e) => setNfHistorySearch(e.target.value)} className="w-full pl-9 pr-3 h-8 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50" />
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs flex-1">
+                              {(["all", "nf", "comprovante"] as const).map((t) => (
+                                <button key={t} onClick={() => setNfHistoryType(t)} className={`flex-1 py-1.5 font-semibold transition-colors ${nfHistoryType === t ? "bg-indigo-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                                  {t === "all" ? "Todos" : t === "nf" ? "NF" : "Comprovantes"}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                              {(["all", "Pago", "Pendente", "Cancelado"] as const).map((s) => (
+                                <button key={s} onClick={() => setNfHistoryStatus(s)} className={`px-2.5 py-1.5 font-semibold transition-colors ${nfHistoryStatus === s ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                                  {s === "all" ? "Todos" : s}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                          {(() => {
+                            const filtered = paymentHistory.filter((p) => {
+                              if (nfHistoryType !== "all" && p.type !== nfHistoryType) return false;
+                              if (nfHistoryStatus !== "all" && p.status !== nfHistoryStatus) return false;
+                              if (nfHistorySearch && !JSON.stringify(p).toLowerCase().includes(nfHistorySearch.toLowerCase())) return false;
+                              return true;
+                            });
+                            if (filtered.length === 0)
+                              return (
+                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-2">
+                                  <FileText className="h-8 w-8 opacity-30" />
+                                  <p className="text-sm">Nenhum documento encontrado</p>
+                                </div>
+                              );
+                            return (
+                              <div className="divide-y divide-slate-100">
+                                {filtered.map((payment) => {
+                                  const methodLabel: Record<string, string> = { pix: "Pix", boleto: "Boleto", cartao: "Cartão", allkoins: "Allkoins" };
+                                  const statusColor: Record<string, string> = { Pago: "bg-green-100 text-green-800", Pendente: "bg-yellow-100 text-yellow-800", Cancelado: "bg-red-100 text-red-800" };
+                                  return (
+                                    <div key={payment.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+                                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${payment.type === "nf" ? "bg-indigo-100" : "bg-green-100"}`}>
+                                        {payment.type === "nf" ? <FileText className="h-3.5 w-3.5 text-indigo-600" /> : <CheckCircle className="h-3.5 w-3.5 text-green-600" />}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-slate-800">{payment.type === "nf" ? "Nota Fiscal" : "Comprovante"} · {methodLabel[payment.method] || payment.method}</p>
+                                        <p className="text-[10px] text-slate-400">{new Date(payment.date).toLocaleDateString("pt-BR")} · R$ {payment.amount.toLocaleString("pt-BR")}</p>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor[payment.status] || "bg-slate-100 text-slate-700"}`}>{payment.status}</span>
+                                        {payment.type === "nf" && (
+                                          <>
+                                            <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors" title="Visualizar"><Eye className="h-3.5 w-3.5" /></button>
+                                            <button className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Baixar"><Download className="h-3.5 w-3.5" /></button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
+                          {paymentHistory.length} documento{paymentHistory.length !== 1 ? "s" : ""} no total · {company.name}
+                        </div>
+                      </SheetContent>
+                    </Sheet>
+
                     {/* Add Card Modal */}
                     {showAddCardModal && (
                       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                         <Card className="w-full max-w-md">
                           <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-bold">
-                                Adicionar Cartão
-                              </h3>
-                              <button
-                                onClick={() => setShowAddCardModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                <X className="h-5 w-5" />
-                              </button>
+                              <h3 className="text-lg font-bold">Adicionar Cartão</h3>
+                              <button onClick={() => setShowAddCardModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
                             </div>
-
                             <div className="space-y-3">
                               <div>
-                                <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                  Número do Cartão
-                                </label>
-                                <Input
-                                  value={newCardData.number}
-                                  onChange={(e) =>
-                                    setNewCardData({
-                                      ...newCardData,
-                                      number: e.target.value.slice(0, 16),
-                                    })
-                                  }
-                                  placeholder="1234 5678 9012 3456"
-                                  className="text-sm h-8"
-                                />
+                                <label className="text-xs font-semibold text-gray-600 block mb-1">Número do Cartão</label>
+                                <Input value={newCardData.number} onChange={(e) => setNewCardData({ ...newCardData, number: e.target.value.slice(0, 16) })} placeholder="1234 5678 9012 3456" className="text-sm h-8" />
                               </div>
-
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                    Validade
-                                  </label>
-                                  <Input
-                                    value={newCardData.expiry}
-                                    onChange={(e) =>
-                                      setNewCardData({
-                                        ...newCardData,
-                                        expiry: e.target.value.slice(0, 5),
-                                      })
-                                    }
-                                    placeholder="MM/YY"
-                                    className="text-sm h-8"
-                                  />
+                                  <label className="text-xs font-semibold text-gray-600 block mb-1">Validade</label>
+                                  <Input value={newCardData.expiry} onChange={(e) => setNewCardData({ ...newCardData, expiry: e.target.value.slice(0, 5) })} placeholder="MM/YY" className="text-sm h-8" />
                                 </div>
                                 <div>
-                                  <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                    CVV
-                                  </label>
-                                  <Input
-                                    value={newCardData.cvv}
-                                    onChange={(e) =>
-                                      setNewCardData({
-                                        ...newCardData,
-                                        cvv: e.target.value.slice(0, 4),
-                                      })
-                                    }
-                                    placeholder="123"
-                                    className="text-sm h-8"
-                                    type="password"
-                                  />
+                                  <label className="text-xs font-semibold text-gray-600 block mb-1">CVV</label>
+                                  <Input value={newCardData.cvv} onChange={(e) => setNewCardData({ ...newCardData, cvv: e.target.value.slice(0, 4) })} placeholder="123" className="text-sm h-8" type="password" />
                                 </div>
                               </div>
-
                               <div>
-                                <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                  Nome do Titular
-                                </label>
-                                <Input
-                                  value={newCardData.holderName}
-                                  onChange={(e) =>
-                                    setNewCardData({
-                                      ...newCardData,
-                                      holderName: e.target.value,
-                                    })
-                                  }
-                                  placeholder="João da Silva"
-                                  className="text-sm h-8"
-                                />
+                                <label className="text-xs font-semibold text-gray-600 block mb-1">Nome do Titular</label>
+                                <Input value={newCardData.holderName} onChange={(e) => setNewCardData({ ...newCardData, holderName: e.target.value })} placeholder="João da Silva" className="text-sm h-8" />
                               </div>
-
                               <div className="flex gap-2 pt-3 border-t">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setShowAddCardModal(false)}
-                                  className="flex-1 text-sm h-8"
-                                >
-                                  Cancelar
-                                </Button>
-                                <Button
-                                  onClick={handleAddCard}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm h-8"
-                                >
-                                  Adicionar
-                                </Button>
+                                <Button variant="outline" onClick={() => setShowAddCardModal(false)} className="flex-1 text-sm h-8">Cancelar</Button>
+                                <Button onClick={handleAddCard} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm h-8">Adicionar</Button>
                               </div>
                             </div>
                           </div>
@@ -5719,6 +5019,20 @@ export function CompanyViewSlidePanel({
               </Tabs>
             </div>
           </div>
+
+          {/* Export Extrato Modal — inside SheetContent so Radix doesn't fire onInteractOutside */}
+          <ExportExtratoModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            rows={companyWalletStatements.map((s) => ({
+              date: s.date,
+              description: s.reason,
+              type: s.type,
+              amount: s.amount,
+              balanceAfter: s.balanceAfter,
+            }))}
+            companyName={company.name || "empresa"}
+          />
         </SheetContent>
       </Sheet>
 

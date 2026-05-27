@@ -109,235 +109,369 @@ import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (from?: Date, to?: Date): any => {
   const now = new Date();
-  const f = from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const f =
+    from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
   const t = to ?? now;
   const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000));
   const m = days / 30; // multiplier relative to 30-day base
   const sc = (base: number) => Math.round(base * m); // scale financial/count
   const scSoft = (base: number) => Math.round(base * (0.5 + m * 0.5)); // softer scale for counts
-  return ({
-  revenue: {
-    total: sc(270800),
-    growth: 18.1,
-    totalGrowth: 18.1,
-    series: [],
-    trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map(v => Math.round(v * m / 1)),
-    creditPlan: sc(114000),
-    creditPlanGrowth: 18,
-    recurring: sc(97600),
-    recurringGrowth: 8,
-    oneTime: sc(59200),
-    oneTimeGrowth: 14,
-  },
-  activeProjects: {
-    total: scSoft(127),
-    growth: 5.2,
-    series: [],
-    agencies: scSoft(48),
-    agenciesGrowth: 7,
-    leadPremium: scSoft(63),
-    leadPremiumGrowth: 9,
-    nomades: scSoft(16),
-    nomadesGrowth: 3,
-    newTotal: sc(22),
-    newAgencies: sc(9),
-    newLeadPremium: sc(10),
-    newNomades: sc(3),
-  },
-  creditPlans: {
-    total: sc(114000),
-    growth: 18,
-    series: [],
-    basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
-    partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
-    premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
-  },
-  mrr: {
-    total: sc(97600),
-    growth: 8,
-    series: [],
-    newMrr: sc(12400),
-    expansion: sc(5200),
-    contraction: sc(1800),
-    churnRevenue: sc(3100),
-    baseMrr: sc(89600),
-    netChange: sc(12700),
-    trendGrowth: 12,
-    trendData: [72000, 78000, 82000, 86000, 91000, 97600].map(v => sc(v)),
-  },
-  churn: {
-    total: 0,
-    growth: 0,
-    series: [],
-    inactiveAccounts: sc(23),
-    inactiveGrowth: 4,
-    agencies: sc(8),
-    leadPremium: sc(5),
-    nomades: sc(7),
-    free: sc(3),
-    cancelledProjects: sc(11),
-    cancelledGrowth: 2,
-    revenueChurn: sc(9300),
-    revenueChurnRate: 3.2,
-  },
-  averageTicket: {
-    total: 0,
-    growth: 5,
-    series: [],
-    general: 1213,
-    generalGrowth: 5,
-    perProject: 2840,
-    perProjectGrowth: 7,
-    trendData: [980, 1050, 1100, 1180, 1210, 1213],
-  },
-  ltv: {
-    total: 0,
-    growth: 12,
-    series: [],
-    value: 8740,
-    agencies: 14200,
-    agenciesGrowth: 9,
-    leadPremium: 11500,
-    leadPremiumGrowth: 15,
-    nomades: 3800,
-    nomadesGrowth: 6,
-    hist0to1k: 120,
-    hist1kto5k: 280,
-    hist5kto15k: 95,
-    hist15kplus: 30,
-  },
-  accountsReceivable: {
-    total: sc(187400),
-    growth: 12,
-    series: [],
-    creditPlans: sc(98200),
-    postPaid: sc(54700),
-    others: sc(34500),
-    received: sc(143600),
-  },
-  platformActivities: {
-    activeAgencies: scSoft(34),
-    avgSessionMinutes: 47,
-    mau: scSoft(1240),
-    dau: scSoft(312),
-    sessions: sc(8740),
-    actionsExecuted: sc(52300),
-    trendData: [420, 510, 480, 630, 590, 710, 680].map(v => sc(v)),
-  },
-  nomads: {
-    total: scSoft(148),
-    growth: 6,
-    active: scSoft(112),
-    activeGrowth: 9,
-    inactive: scSoft(36),
-    inactiveChange: -3,
-    newInPeriod: sc(14),
-    churn: sc(5),
-    retention30d: 82,
-    trendData: [95, 100, 104, 108, 110, 112].map(v => scSoft(v)),
-  },
-  nomadsIndicators: {
-    deliveryRate: 94.3,
-    avgRating: 4.7,
-    avgTimePerTask: 3.2,
-    certified: 68,
-    retention90d: 79,
-  },
-  nomadsRanking: { items: [] },
-  agenciesRanking: [
-    { id: "1", name: "Digital Works",  avatar: "DW", rating: 4.9, projects: 23, contribution: "R$ 48k", specialty: "Dev & Design",    color: "from-blue-500 to-indigo-600" },
-    { id: "2", name: "Criativa Lab",   avatar: "CL", rating: 4.8, projects: 18, contribution: "R$ 37k", specialty: "Branding",         color: "from-pink-500 to-rose-600" },
-    { id: "3", name: "Inovax Agency",  avatar: "IA", rating: 4.7, projects: 15, contribution: "R$ 31k", specialty: "Marketing 360",    color: "from-violet-500 to-purple-600" },
-    { id: "4", name: "PixelForge",     avatar: "PF", rating: 4.6, projects: 12, contribution: "R$ 24k", specialty: "UX/UI",            color: "from-cyan-500 to-teal-600" },
-    { id: "5", name: "BluePrint Co.",  avatar: "BP", rating: 4.5, projects: 10, contribution: "R$ 19k", specialty: "Arquitetura",      color: "from-amber-500 to-orange-600" },
-  ],
-  tasks: {
-    total: sc(552),
-    items: [],
-    completed: sc(412),
-    completedGrowth: 8,
-    inProgress: scSoft(57),
-    inProgressGrowth: 4,
-    contracted: scSoft(83),
-    contractedGrowth: 12,
-    cancelled: sc(14),
-    cancelledChange: -2,
-    slaCompliance: 91.4,
-  },
-  activeUsers: {
-    total: scSoft(284),
-    empresas: scSoft(92),
-    empresasGrowth: 5,
-    agencias: scSoft(61),
-    agenciasGrowth: 7,
-    nomades: scSoft(112),
-    nomadesGrowth: 9,
-    admins: scSoft(19),
-    adminsGrowth: 3,
-    series: [],
-  },
-  partnerProgram: {
-    total: scSoft(38),
-    items: [],
-    invitesSent: sc(124),
-    pending: scSoft(47),
-    accepted: scSoft(38),
-    diamond: 3,
-    platinum: 6,
-    gold: 11,
-    silver: 12,
-    bronze: 6,
-    mrrGenerated: sc(22400),
-  },
-  cmv: {
-    totalCosts: sc(87400),
-    revenue: sc(270800),
-    cmvPercent: 32.3,
-    prevCmvPercent: 34.1,
-    nomades: { value: sc(42800), percent: 49 },
-    impostos: { value: sc(18200), percent: 21 },
-    comissoes: { value: sc(14900), percent: 17 },
-    outros: { value: sc(11500), percent: 13 },
-    variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
-  },
-  statusOverview: {
-    projects: {
-      ongoing: scSoft(42),
-      approved: scSoft(18),
-      completed: sc(156),
-      cancelled: sc(7),
-      delayed: scSoft(11),
+  return {
+    revenue: {
+      total: sc(270800),
+      growth: 18.1,
+      totalGrowth: 18.1,
+      series: [],
+      trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map((v) =>
+        Math.round((v * m) / 1),
+      ),
+      creditPlan: sc(114000),
+      creditPlanGrowth: 18,
+      recurring: sc(97600),
+      recurringGrowth: 8,
+      oneTime: sc(59200),
+      oneTimeGrowth: 14,
     },
-    tasks: { contracted: scSoft(83), inProgress: scSoft(57), completed: sc(412), archived: sc(34) },
-    leads: { new: scSoft(29), contacted: scSoft(15), proposal: scSoft(8), won: sc(12), lost: sc(5) },
-  },
-  metrics: {},
-  activity: [],
-  alerts: [],
-  performers: [
-    { id: "1", name: "Carlos Mendonça",  avatar: "CM", rating: 4.9, projects: sc(34),   badge: "gold",   tasks: sc(128), revenue: `R$ ${sc(52)}k`, specialty: "Dev Full Stack" },
-    { id: "2", name: "Ana Beatriz Lima",  avatar: "AB", rating: 4.8, projects: sc(29),   badge: "gold",   tasks: sc(115), revenue: `R$ ${sc(44)}k`, specialty: "UI/UX Design" },
-    { id: "3", name: "Rafael Torres",     avatar: "RT", rating: 4.7, projects: sc(26),   badge: "gold",   tasks: sc(98),  revenue: `R$ ${sc(39)}k`, specialty: "Marketing Digital" },
-    { id: "4", name: "Juliana Ferreira",  avatar: "JF", rating: 4.6, projects: sc(22),   badge: "silver", tasks: sc(84),  revenue: `R$ ${sc(31)}k`, specialty: "Copywriting" },
-    { id: "5", name: "Marcos Oliveira",   avatar: "MO", rating: 4.6, projects: sc(21),   badge: "silver", tasks: sc(79),  revenue: `R$ ${sc(28)}k`, specialty: "Dev Backend" },
-    { id: "6", name: "Priscila Santos",   avatar: "PS", rating: 4.5, projects: sc(19),   badge: "silver", tasks: sc(71),  revenue: `R$ ${sc(24)}k`, specialty: "SEO" },
-    { id: "7", name: "Diego Cavalcante",  avatar: "DC", rating: 4.4, projects: sc(17),   badge: "bronze", tasks: sc(63),  revenue: `R$ ${sc(19)}k`, specialty: "Tráfego Pago" },
-    { id: "8", name: "Fernanda Costa",    avatar: "FC", rating: 4.3, projects: sc(15),   badge: "bronze", tasks: sc(57),  revenue: `R$ ${sc(16)}k`, specialty: "Social Media" },
-  ],
-  userDistribution: [],
-  systemAlerts: [],
-  adminProfiles: [],
-  permissionMatrix: [],
-  managementTools: [],
-});
+    activeProjects: {
+      total: scSoft(127),
+      growth: 5.2,
+      series: [],
+      agencies: scSoft(48),
+      agenciesGrowth: 7,
+      leadPremium: scSoft(63),
+      leadPremiumGrowth: 9,
+      nomades: scSoft(16),
+      nomadesGrowth: 3,
+      newTotal: sc(22),
+      newAgencies: sc(9),
+      newLeadPremium: sc(10),
+      newNomades: sc(3),
+    },
+    creditPlans: {
+      total: sc(114000),
+      growth: 18,
+      series: [],
+      basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
+      partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
+      premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
+    },
+    mrr: {
+      total: sc(97600),
+      growth: 8,
+      series: [],
+      newMrr: sc(12400),
+      expansion: sc(5200),
+      contraction: sc(1800),
+      churnRevenue: sc(3100),
+      baseMrr: sc(89600),
+      netChange: sc(12700),
+      trendGrowth: 12,
+      trendData: [72000, 78000, 82000, 86000, 91000, 97600].map((v) => sc(v)),
+    },
+    churn: {
+      total: 0,
+      growth: 0,
+      series: [],
+      inactiveAccounts: sc(23),
+      inactiveGrowth: 4,
+      agencies: sc(8),
+      leadPremium: sc(5),
+      nomades: sc(7),
+      free: sc(3),
+      cancelledProjects: sc(11),
+      cancelledGrowth: 2,
+      revenueChurn: sc(9300),
+      revenueChurnRate: 3.2,
+    },
+    averageTicket: {
+      total: 0,
+      growth: 5,
+      series: [],
+      general: 1213,
+      generalGrowth: 5,
+      perProject: 2840,
+      perProjectGrowth: 7,
+      trendData: [980, 1050, 1100, 1180, 1210, 1213],
+    },
+    ltv: {
+      total: 0,
+      growth: 12,
+      series: [],
+      value: 8740,
+      agencies: 14200,
+      agenciesGrowth: 9,
+      leadPremium: 11500,
+      leadPremiumGrowth: 15,
+      nomades: 3800,
+      nomadesGrowth: 6,
+      hist0to1k: 120,
+      hist1kto5k: 280,
+      hist5kto15k: 95,
+      hist15kplus: 30,
+    },
+    accountsReceivable: {
+      total: sc(187400),
+      growth: 12,
+      series: [],
+      creditPlans: sc(98200),
+      postPaid: sc(54700),
+      others: sc(34500),
+      received: sc(143600),
+    },
+    platformActivities: {
+      activeAgencies: scSoft(34),
+      avgSessionMinutes: 47,
+      mau: scSoft(1240),
+      dau: scSoft(312),
+      sessions: sc(8740),
+      actionsExecuted: sc(52300),
+      trendData: [420, 510, 480, 630, 590, 710, 680].map((v) => sc(v)),
+    },
+    nomads: {
+      total: scSoft(148),
+      growth: 6,
+      active: scSoft(112),
+      activeGrowth: 9,
+      inactive: scSoft(36),
+      inactiveChange: -3,
+      newInPeriod: sc(14),
+      churn: sc(5),
+      retention30d: 82,
+      trendData: [95, 100, 104, 108, 110, 112].map((v) => scSoft(v)),
+    },
+    nomadsIndicators: {
+      deliveryRate: 94.3,
+      avgRating: 4.7,
+      avgTimePerTask: 3.2,
+      certified: 68,
+      retention90d: 79,
+    },
+    nomadsRanking: { items: [] },
+    agenciesRanking: [
+      {
+        id: "1",
+        name: "Digital Works",
+        avatar: "DW",
+        rating: 4.9,
+        projects: 23,
+        contribution: "R$ 48k",
+        specialty: "Dev & Design",
+        color: "from-blue-500 to-indigo-600",
+      },
+      {
+        id: "2",
+        name: "Criativa Lab",
+        avatar: "CL",
+        rating: 4.8,
+        projects: 18,
+        contribution: "R$ 37k",
+        specialty: "Branding",
+        color: "from-pink-500 to-rose-600",
+      },
+      {
+        id: "3",
+        name: "Inovax Agency",
+        avatar: "IA",
+        rating: 4.7,
+        projects: 15,
+        contribution: "R$ 31k",
+        specialty: "Marketing 360",
+        color: "from-violet-500 to-purple-600",
+      },
+      {
+        id: "4",
+        name: "PixelForge",
+        avatar: "PF",
+        rating: 4.6,
+        projects: 12,
+        contribution: "R$ 24k",
+        specialty: "UX/UI",
+        color: "from-cyan-500 to-teal-600",
+      },
+      {
+        id: "5",
+        name: "BluePrint Co.",
+        avatar: "BP",
+        rating: 4.5,
+        projects: 10,
+        contribution: "R$ 19k",
+        specialty: "Arquitetura",
+        color: "from-amber-500 to-orange-600",
+      },
+    ],
+    tasks: {
+      total: sc(552),
+      items: [],
+      completed: sc(412),
+      completedGrowth: 8,
+      inProgress: scSoft(57),
+      inProgressGrowth: 4,
+      contracted: scSoft(83),
+      contractedGrowth: 12,
+      cancelled: sc(14),
+      cancelledChange: -2,
+      slaCompliance: 91.4,
+    },
+    activeUsers: {
+      total: scSoft(284),
+      empresas: scSoft(92),
+      empresasGrowth: 5,
+      agencias: scSoft(61),
+      agenciasGrowth: 7,
+      nomades: scSoft(112),
+      nomadesGrowth: 9,
+      admins: scSoft(19),
+      adminsGrowth: 3,
+      series: [],
+    },
+    partnerProgram: {
+      total: scSoft(38),
+      items: [],
+      invitesSent: sc(124),
+      pending: scSoft(47),
+      accepted: scSoft(38),
+      diamond: 3,
+      platinum: 6,
+      gold: 11,
+      silver: 12,
+      bronze: 6,
+      mrrGenerated: sc(22400),
+    },
+    cmv: {
+      totalCosts: sc(87400),
+      revenue: sc(270800),
+      cmvPercent: 32.3,
+      prevCmvPercent: 34.1,
+      nomades: { value: sc(42800), percent: 49 },
+      impostos: { value: sc(18200), percent: 21 },
+      comissoes: { value: sc(14900), percent: 17 },
+      outros: { value: sc(11500), percent: 13 },
+      variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
+    },
+    statusOverview: {
+      projects: {
+        ongoing: scSoft(42),
+        approved: scSoft(18),
+        completed: sc(156),
+        cancelled: sc(7),
+        delayed: scSoft(11),
+      },
+      tasks: {
+        contracted: scSoft(83),
+        inProgress: scSoft(57),
+        completed: sc(412),
+        archived: sc(34),
+      },
+      leads: {
+        new: scSoft(29),
+        contacted: scSoft(15),
+        proposal: scSoft(8),
+        won: sc(12),
+        lost: sc(5),
+      },
+    },
+    metrics: {},
+    activity: [],
+    alerts: [],
+    performers: [
+      {
+        id: "1",
+        name: "Carlos Mendonça",
+        avatar: "CM",
+        rating: 4.9,
+        projects: sc(34),
+        badge: "gold",
+        tasks: sc(128),
+        revenue: `R$ ${sc(52)}k`,
+        specialty: "Dev Full Stack",
+      },
+      {
+        id: "2",
+        name: "Ana Beatriz Lima",
+        avatar: "AB",
+        rating: 4.8,
+        projects: sc(29),
+        badge: "gold",
+        tasks: sc(115),
+        revenue: `R$ ${sc(44)}k`,
+        specialty: "UI/UX Design",
+      },
+      {
+        id: "3",
+        name: "Rafael Torres",
+        avatar: "RT",
+        rating: 4.7,
+        projects: sc(26),
+        badge: "gold",
+        tasks: sc(98),
+        revenue: `R$ ${sc(39)}k`,
+        specialty: "Marketing Digital",
+      },
+      {
+        id: "4",
+        name: "Juliana Ferreira",
+        avatar: "JF",
+        rating: 4.6,
+        projects: sc(22),
+        badge: "silver",
+        tasks: sc(84),
+        revenue: `R$ ${sc(31)}k`,
+        specialty: "Copywriting",
+      },
+      {
+        id: "5",
+        name: "Marcos Oliveira",
+        avatar: "MO",
+        rating: 4.6,
+        projects: sc(21),
+        badge: "silver",
+        tasks: sc(79),
+        revenue: `R$ ${sc(28)}k`,
+        specialty: "Dev Backend",
+      },
+      {
+        id: "6",
+        name: "Priscila Santos",
+        avatar: "PS",
+        rating: 4.5,
+        projects: sc(19),
+        badge: "silver",
+        tasks: sc(71),
+        revenue: `R$ ${sc(24)}k`,
+        specialty: "SEO",
+      },
+      {
+        id: "7",
+        name: "Diego Cavalcante",
+        avatar: "DC",
+        rating: 4.4,
+        projects: sc(17),
+        badge: "bronze",
+        tasks: sc(63),
+        revenue: `R$ ${sc(19)}k`,
+        specialty: "Tráfego Pago",
+      },
+      {
+        id: "8",
+        name: "Fernanda Costa",
+        avatar: "FC",
+        rating: 4.3,
+        projects: sc(15),
+        badge: "bronze",
+        tasks: sc(57),
+        revenue: `R$ ${sc(16)}k`,
+        specialty: "Social Media",
+      },
+    ],
+    userDistribution: [],
+    systemAlerts: [],
+    adminProfiles: [],
+    permissionMatrix: [],
+    managementTools: [],
+  };
 };
 import { Switch } from "@/components/ui/switch"; // Added Switch
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
@@ -637,28 +771,55 @@ const MANUAL_WIDGET_MAP: Record<keyof ManualDataEntry, string> = {
 
 const mergeManualData = (base: any, entry: ManualDataEntry): any => {
   const m = { ...base };
-  if (entry.revenue_total != null) m.revenue = { ...m.revenue, total: entry.revenue_total };
+  if (entry.revenue_total != null)
+    m.revenue = { ...m.revenue, total: entry.revenue_total };
   if (entry.mrr_total != null) m.mrr = { ...m.mrr, total: entry.mrr_total };
-  if (entry.creditPlans_total != null) m.creditPlans = { ...m.creditPlans, total: entry.creditPlans_total };
-  if (entry.accountsReceivable_total != null) m.accountsReceivable = { ...m.accountsReceivable, total: entry.accountsReceivable_total };
-  if (entry.cmv_totalCosts != null) m.cmv = { ...m.cmv, totalCosts: entry.cmv_totalCosts };
-  if (entry.activeProjects_total != null) m.activeProjects = { ...m.activeProjects, total: entry.activeProjects_total };
+  if (entry.creditPlans_total != null)
+    m.creditPlans = { ...m.creditPlans, total: entry.creditPlans_total };
+  if (entry.accountsReceivable_total != null)
+    m.accountsReceivable = {
+      ...m.accountsReceivable,
+      total: entry.accountsReceivable_total,
+    };
+  if (entry.cmv_totalCosts != null)
+    m.cmv = { ...m.cmv, totalCosts: entry.cmv_totalCosts };
+  if (entry.activeProjects_total != null)
+    m.activeProjects = {
+      ...m.activeProjects,
+      total: entry.activeProjects_total,
+    };
   const tasksOverride: any = {};
   if (entry.tasks_total != null) tasksOverride.total = entry.tasks_total;
-  if (entry.tasks_completed != null) tasksOverride.completed = entry.tasks_completed;
-  if (entry.tasks_inProgress != null) tasksOverride.inProgress = entry.tasks_inProgress;
-  if (entry.tasks_slaCompliance != null) tasksOverride.slaCompliance = entry.tasks_slaCompliance;
-  if (Object.keys(tasksOverride).length) m.tasks = { ...m.tasks, ...tasksOverride };
-  if (entry.nomads_total != null) m.nomads = { ...m.nomads, total: entry.nomads_total };
-  if (entry.nomads_active != null) m.nomads = { ...m.nomads, active: entry.nomads_active };
+  if (entry.tasks_completed != null)
+    tasksOverride.completed = entry.tasks_completed;
+  if (entry.tasks_inProgress != null)
+    tasksOverride.inProgress = entry.tasks_inProgress;
+  if (entry.tasks_slaCompliance != null)
+    tasksOverride.slaCompliance = entry.tasks_slaCompliance;
+  if (Object.keys(tasksOverride).length)
+    m.tasks = { ...m.tasks, ...tasksOverride };
+  if (entry.nomads_total != null)
+    m.nomads = { ...m.nomads, total: entry.nomads_total };
+  if (entry.nomads_active != null)
+    m.nomads = { ...m.nomads, active: entry.nomads_active };
   const ppOverride: any = {};
-  if (entry.partnerProgram_total != null) ppOverride.total = entry.partnerProgram_total;
-  if (entry.partnerProgram_invitesSent != null) ppOverride.invitesSent = entry.partnerProgram_invitesSent;
-  if (entry.partnerProgram_mrrGenerated != null) ppOverride.mrrGenerated = entry.partnerProgram_mrrGenerated;
-  if (Object.keys(ppOverride).length) m.partnerProgram = { ...m.partnerProgram, ...ppOverride };
-  if (entry.churn_revenueChurnRate != null) m.churn = { ...m.churn, revenueChurnRate: entry.churn_revenueChurnRate };
-  if (entry.churn_revenueChurn != null) m.churn = { ...m.churn, revenueChurn: entry.churn_revenueChurn };
-  if (entry.averageTicket_general != null) m.averageTicket = { ...m.averageTicket, general: entry.averageTicket_general };
+  if (entry.partnerProgram_total != null)
+    ppOverride.total = entry.partnerProgram_total;
+  if (entry.partnerProgram_invitesSent != null)
+    ppOverride.invitesSent = entry.partnerProgram_invitesSent;
+  if (entry.partnerProgram_mrrGenerated != null)
+    ppOverride.mrrGenerated = entry.partnerProgram_mrrGenerated;
+  if (Object.keys(ppOverride).length)
+    m.partnerProgram = { ...m.partnerProgram, ...ppOverride };
+  if (entry.churn_revenueChurnRate != null)
+    m.churn = { ...m.churn, revenueChurnRate: entry.churn_revenueChurnRate };
+  if (entry.churn_revenueChurn != null)
+    m.churn = { ...m.churn, revenueChurn: entry.churn_revenueChurn };
+  if (entry.averageTicket_general != null)
+    m.averageTicket = {
+      ...m.averageTicket,
+      general: entry.averageTicket_general,
+    };
   if (entry.ltv_value != null) m.ltv = { ...m.ltv, value: entry.ltv_value };
   return m;
 };
@@ -803,11 +964,15 @@ export default function AdminDashboardPage() {
   };
 
   // ── Historical data (persisted in localStorage) ──────────────────────────
-  const [historicalData, setHistoricalData] = useState<Record<string, ManualDataEntry>>(() => {
+  const [historicalData, setHistoricalData] = useState<
+    Record<string, ManualDataEntry>
+  >(() => {
     try {
       const saved = localStorage.getItem("dashboard_historical_data");
       return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   });
 
   // Period-aware dashboard data — recomputed whenever the selected period changes
@@ -819,7 +984,10 @@ export default function AdminDashboardPage() {
     );
     const base = generateDashboardData(from, to);
     // Merge manual data if the period covers exactly one calendar month
-    if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
+    if (
+      from.getFullYear() === to.getFullYear() &&
+      from.getMonth() === to.getMonth()
+    ) {
       const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
       const entry = historicalData[key];
       if (entry) return mergeManualData(base, entry);
@@ -999,7 +1167,7 @@ export default function AdminDashboardPage() {
     if (override && override.mode === "custom" && override.customPeriod) {
       // Backward-compat: derive periodKey from label if not stored (old localStorage data)
       const labelToKey: Record<string, string> = {
-        "Hoje": "today",
+        Hoje: "today",
         "Últimos 7 dias": "7days",
         "Últimos 30 dias": "30days",
         "Este mês": "thisMonth",
@@ -1007,7 +1175,9 @@ export default function AdminDashboardPage() {
         "Últimos 90 dias": "90days",
         "Último ano": "365days",
       };
-      const periodKey = override.customPeriod.periodKey ?? labelToKey[override.customPeriod.label];
+      const periodKey =
+        override.customPeriod.periodKey ??
+        labelToKey[override.customPeriod.label];
       return {
         from: new Date(override.customPeriod.from),
         periodKey,
@@ -1142,25 +1312,46 @@ export default function AdminDashboardPage() {
       `[data-widget-id="${widgetId}"]`,
     ) as HTMLElement;
     if (!widgetElement) {
-      toast({ title: "Erro ao exportar", description: "Widget não encontrado", variant: "destructive" });
+      toast({
+        title: "Erro ao exportar",
+        description: "Widget não encontrado",
+        variant: "destructive",
+      });
       return;
     }
     try {
-      const exportButtons = widgetElement.querySelectorAll("[data-export-button],[data-share-button]");
-      exportButtons.forEach((btn) => { (btn as HTMLElement).style.display = "none"; });
+      const exportButtons = widgetElement.querySelectorAll(
+        "[data-export-button],[data-share-button]",
+      );
+      exportButtons.forEach((btn) => {
+        (btn as HTMLElement).style.display = "none";
+      });
 
-      const dataUrl = await toPng(widgetElement, { quality: 1, pixelRatio: 2, backgroundColor: "#f1f5f9", cacheBust: true });
+      const dataUrl = await toPng(widgetElement, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: "#f1f5f9",
+        cacheBust: true,
+      });
 
-      exportButtons.forEach((btn) => { (btn as HTMLElement).style.display = ""; });
+      exportButtons.forEach((btn) => {
+        (btn as HTMLElement).style.display = "";
+      });
 
       const img = new Image();
       img.src = dataUrl;
-      await new Promise((res) => { img.onload = res; });
+      await new Promise((res) => {
+        img.onload = res;
+      });
 
       const ratio = img.height / img.width;
       const pdfW = 210; // A4 mm
       const pdfH = Math.min(pdfW * ratio, 297);
-      const pdf = new jsPDF({ orientation: pdfH > pdfW ? "portrait" : "landscape", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({
+        orientation: pdfH > pdfW ? "portrait" : "landscape",
+        unit: "mm",
+        format: "a4",
+      });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
       const imgW = pageW - 16;
@@ -1171,10 +1362,17 @@ export default function AdminDashboardPage() {
       const sanitizedTitle = widgetTitle.replace(/[^a-zA-Z0-9]/g, "_");
       pdf.save(`widget_${sanitizedTitle}_${dateStr}.pdf`);
 
-      toast({ title: "Widget exportado", description: `O widget "${widgetTitle}" foi exportado como PDF` });
+      toast({
+        title: "Widget exportado",
+        description: `O widget "${widgetTitle}" foi exportado como PDF`,
+      });
     } catch (error) {
       console.error("Error exporting widget to PDF:", error);
-      toast({ title: "Erro ao exportar", description: "Não foi possível exportar como PDF", variant: "destructive" });
+      toast({
+        title: "Erro ao exportar",
+        description: "Não foi possível exportar como PDF",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1211,7 +1409,11 @@ export default function AdminDashboardPage() {
       <div className="w-px h-4 bg-border/60 shrink-0" />
       <div className="relative">
         <button
-          onClick={() => setShowExportDropdown(showExportDropdown === widgetId ? null : widgetId)}
+          onClick={() =>
+            setShowExportDropdown(
+              showExportDropdown === widgetId ? null : widgetId,
+            )
+          }
           className="flex items-center justify-center h-7 w-7 cursor-pointer text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150 rounded-r-lg"
           title="Exportar widget"
           data-export-button
@@ -1220,10 +1422,16 @@ export default function AdminDashboardPage() {
         </button>
         {showExportDropdown === widgetId && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowExportDropdown(null)} />
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowExportDropdown(null)}
+            />
             <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
               <button
-                onClick={() => { exportWidgetToPng(widgetId, widgetTitle); setShowExportDropdown(null); }}
+                onClick={() => {
+                  exportWidgetToPng(widgetId, widgetTitle);
+                  setShowExportDropdown(null);
+                }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
               >
                 <ImageDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1231,7 +1439,10 @@ export default function AdminDashboardPage() {
               </button>
               <div className="h-px bg-border/50" />
               <button
-                onClick={() => { exportWidgetToPdf(widgetId, widgetTitle); setShowExportDropdown(null); }}
+                onClick={() => {
+                  exportWidgetToPdf(widgetId, widgetTitle);
+                  setShowExportDropdown(null);
+                }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-xs cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
               >
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1525,8 +1736,12 @@ export default function AdminDashboardPage() {
 
   // ── Public share dialog state ──────────────────────────────────────────────
   const [showPublicShareDialog, setShowPublicShareDialog] = useState(false);
-  const [shareTarget, setShareTarget] = useState<ShareConfig["target"] | null>(null);
-  const [sharePermission, setSharePermission] = useState<"view" | "comment">("view");
+  const [shareTarget, setShareTarget] = useState<ShareConfig["target"] | null>(
+    null,
+  );
+  const [sharePermission, setSharePermission] = useState<"view" | "comment">(
+    "view",
+  );
   const [sharePinEnabled, setSharePinEnabled] = useState(false);
   const [sharePin, setSharePin] = useState("");
   const [shareExpiryEnabled, setShareExpiryEnabled] = useState(false);
@@ -1536,11 +1751,15 @@ export default function AdminDashboardPage() {
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Historical modal states ──────────────────────────────────────────────────
-  const [showExportDropdown, setShowExportDropdown] = useState<string | null>(null);
+  const [showExportDropdown, setShowExportDropdown] = useState<string | null>(
+    null,
+  );
   const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
-  const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>({});
+  const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>(
+    {},
+  );
   const setHistField = (key: keyof ManualDataEntry, value: string) => {
     const num = value === "" ? undefined : Number(value);
     setHistFormData((prev) => ({ ...prev, [key]: num }));
@@ -1549,46 +1768,77 @@ export default function AdminDashboardPage() {
   // Active manual entry for current period
   const activeManualKey = useMemo(() => {
     const { from, to } = getDateRangeFromPeriod(
-      globalPeriod.type, globalPeriod.from, globalPeriod.to,
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
     );
-    if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
+    if (
+      from.getFullYear() === to.getFullYear() &&
+      from.getMonth() === to.getMonth()
+    ) {
       return `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalPeriod.type, globalPeriod.from, globalPeriod.to]);
 
-  const activeManualEntry = activeManualKey ? (historicalData[activeManualKey] ?? null) : null;
+  const activeManualEntry = activeManualKey
+    ? (historicalData[activeManualKey] ?? null)
+    : null;
 
   const manualAffectedWidgets = useMemo<Set<string>>(() => {
     if (!activeManualEntry) return new Set();
     const s = new Set<string>();
-    (Object.keys(activeManualEntry) as Array<keyof ManualDataEntry>).forEach((k) => {
-      if (activeManualEntry[k] != null && MANUAL_WIDGET_MAP[k]) s.add(MANUAL_WIDGET_MAP[k]);
-    });
+    (Object.keys(activeManualEntry) as Array<keyof ManualDataEntry>).forEach(
+      (k) => {
+        if (activeManualEntry[k] != null && MANUAL_WIDGET_MAP[k])
+          s.add(MANUAL_WIDGET_MAP[k]);
+      },
+    );
     return s;
   }, [activeManualEntry]);
 
   // Historical handlers
-  const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const MONTH_NAMES = [
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
+  ];
 
   const openHistoricalModal = (key?: string) => {
-    const k = key ?? (() => {
-      const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    })();
+    const k =
+      key ??
+      (() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      })();
     setHistModalKey(k);
     setHistFormData(historicalData[k] ?? {});
     setShowHistoricalModal(true);
   };
 
   const saveHistoricalEntry = () => {
-    const updated = { ...historicalData, [histModalKey]: histFormData as ManualDataEntry };
+    const updated = {
+      ...historicalData,
+      [histModalKey]: histFormData as ManualDataEntry,
+    };
     setHistoricalData(updated);
     localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
     setShowHistoricalModal(false);
     const [y, m] = histModalKey.split("-").map(Number);
-    toast({ title: "Dados históricos salvos", description: `Dados de ${MONTH_NAMES[m - 1]}/${y} registrados com sucesso.` });
+    toast({
+      title: "Dados históricos salvos",
+      description: `Dados de ${MONTH_NAMES[m - 1]}/${y} registrados com sucesso.`,
+    });
   };
 
   const deleteHistoricalEntry = (key: string) => {
@@ -1643,7 +1893,8 @@ export default function AdminDashboardPage() {
       target: shareTarget,
       permission: sharePermission,
       pin: sharePinEnabled && sharePin.length === 4 ? sharePin : undefined,
-      expiry: shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
+      expiry:
+        shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
     };
     const token = generatePublicToken(config);
     setGeneratedShareLink(`${window.location.origin}/dashboard/share/${token}`);
@@ -1652,7 +1903,10 @@ export default function AdminDashboardPage() {
   const handleCopyShareLink = () => {
     if (!generatedShareLink) return;
     navigator.clipboard.writeText(generatedShareLink);
-    toast({ title: "Link copiado!", description: "O link foi copiado para a área de transferência." });
+    toast({
+      title: "Link copiado!",
+      description: "O link foi copiado para a área de transferência.",
+    });
   };
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -2176,7 +2430,10 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const getMetricsForPeriod = (periodTypeOverride?: string, widgetPeriodKey?: string) => {
+  const getMetricsForPeriod = (
+    periodTypeOverride?: string,
+    widgetPeriodKey?: string,
+  ) => {
     const baseMetrics = {
       "7d": {
         totalUsers: { value: "2,847", change: 8.5, trend: "up" as const },
@@ -3062,7 +3319,10 @@ export default function AdminDashboardPage() {
     avgRating: "Avaliação Média",
   };
 
-  const renderMetricCard = (metricType: MetricType, metricsSource?: typeof metrics) => {
+  const renderMetricCard = (
+    metricType: MetricType,
+    metricsSource?: typeof metrics,
+  ) => {
     const metricsData = metricsSource ?? metrics;
     const metric = metricsData[metricType];
     if (!metric || !metricCards.find((m) => m.id === metricType)?.visible)
@@ -3318,122 +3578,342 @@ export default function AdminDashboardPage() {
     const mPaW = mData.platformActivities;
     const mArW = mData.accountsReceivable;
 
-    const cfgMap: Record<string, { icon: React.ReactNode; subtitle: string }> = {
-      metrics:              { icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Métricas principais da plataforma" },
-      revenue:              { icon: <DollarSign className="h-6 w-6" />,    subtitle: "Receita total e breakdown" },
-      platformActivities:   { icon: <Activity className="h-6 w-6" />,      subtitle: "Engajamento e atividades" },
-      accountsReceivable:   { icon: <DollarSign className="h-6 w-6" />,    subtitle: "Contas a receber por categoria" },
-      mrr:                  { icon: <TrendingUp className="h-6 w-6" />,    subtitle: "Receita recorrente mensal" },
-      churn:                { icon: <TrendingDown className="h-6 w-6" />,  subtitle: "Análise de cancelamentos" },
-      creditPlans:          { icon: <CreditCard className="h-6 w-6" />,    subtitle: "Planos de crédito ativos" },
-      activeProjectsWidget: { icon: <Briefcase className="h-6 w-6" />,     subtitle: "Projetos ativos por tipo" },
-      averageTicket:        { icon: <Calculator className="h-6 w-6" />,    subtitle: "Ticket médio por cliente" },
-      ltv:                  { icon: <Star className="h-6 w-6" />,          subtitle: "Valor vitalício do cliente" },
-      cmv:                  { icon: <Calculator className="h-6 w-6" />,    subtitle: "Custo de mercadoria vendida" },
-      nomads:               { icon: <Users className="h-6 w-6" />,         subtitle: "Visão geral dos nômades" },
-      nomadsRanking:        { icon: <Trophy className="h-6 w-6" />,        subtitle: "Ranking de performance" },
-      agenciesRanking:      { icon: <Building2 className="h-6 w-6" />,     subtitle: "Ranking das agências da plataforma" },
-      statusOverview:       { icon: <LayoutGrid className="h-6 w-6" />,    subtitle: "Status de projetos e tarefas" },
-      tasks:                { icon: <CheckSquare className="h-6 w-6" />,   subtitle: "Tarefas e execução" },
-      nomadsIndicators:     { icon: <Users className="h-6 w-6" />,         subtitle: "KPIs de desempenho e qualidade" },
-      activity:             { icon: <Activity className="h-6 w-6" />,      subtitle: "Atividades recentes" },
-      alerts:               { icon: <Bell className="h-6 w-6" />,          subtitle: "Alertas e notificações" },
-      performers:           { icon: <Award className="h-6 w-6" />,         subtitle: "Top performers" },
-      quickActions:         { icon: <Zap className="h-6 w-6" />,           subtitle: "Ações rápidas" },
-      partnerProgram:       { icon: <Award className="h-6 w-6" />,          subtitle: "Convites e partners por nível" },
+    const cfgMap: Record<string, { icon: React.ReactNode; subtitle: string }> =
+      {
+        metrics: {
+          icon: <LayoutGrid className="h-6 w-6" />,
+          subtitle: "Métricas principais da plataforma",
+        },
+        revenue: {
+          icon: <DollarSign className="h-6 w-6" />,
+          subtitle: "Receita total e breakdown",
+        },
+        platformActivities: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Engajamento e atividades",
+        },
+        accountsReceivable: {
+          icon: <DollarSign className="h-6 w-6" />,
+          subtitle: "Contas a receber por categoria",
+        },
+        mrr: {
+          icon: <TrendingUp className="h-6 w-6" />,
+          subtitle: "Receita recorrente mensal",
+        },
+        churn: {
+          icon: <TrendingDown className="h-6 w-6" />,
+          subtitle: "Análise de cancelamentos",
+        },
+        creditPlans: {
+          icon: <CreditCard className="h-6 w-6" />,
+          subtitle: "Planos de crédito ativos",
+        },
+        activeProjectsWidget: {
+          icon: <Briefcase className="h-6 w-6" />,
+          subtitle: "Projetos ativos por tipo",
+        },
+        averageTicket: {
+          icon: <Calculator className="h-6 w-6" />,
+          subtitle: "Ticket médio por cliente",
+        },
+        ltv: {
+          icon: <Star className="h-6 w-6" />,
+          subtitle: "Valor vitalício do cliente",
+        },
+        cmv: {
+          icon: <Calculator className="h-6 w-6" />,
+          subtitle: "Custo de mercadoria vendida",
+        },
+        nomads: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "Visão geral dos nômades",
+        },
+        nomadsRanking: {
+          icon: <Trophy className="h-6 w-6" />,
+          subtitle: "Ranking de performance",
+        },
+        agenciesRanking: {
+          icon: <Building2 className="h-6 w-6" />,
+          subtitle: "Ranking das agências da plataforma",
+        },
+        statusOverview: {
+          icon: <LayoutGrid className="h-6 w-6" />,
+          subtitle: "Status de projetos e tarefas",
+        },
+        tasks: {
+          icon: <CheckSquare className="h-6 w-6" />,
+          subtitle: "Tarefas e execução",
+        },
+        nomadsIndicators: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "KPIs de desempenho e qualidade",
+        },
+        activity: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Atividades recentes",
+        },
+        alerts: {
+          icon: <Bell className="h-6 w-6" />,
+          subtitle: "Alertas e notificações",
+        },
+        performers: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Top performers",
+        },
+        quickActions: {
+          icon: <Zap className="h-6 w-6" />,
+          subtitle: "Ações rápidas",
+        },
+        partnerProgram: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Convites e partners por nível",
+        },
+      };
+    const cfg = cfgMap[detailsWidgetId] ?? {
+      icon: <Settings className="h-6 w-6" />,
+      subtitle: "Detalhes do widget",
     };
-    const cfg = cfgMap[detailsWidgetId] ?? { icon: <Settings className="h-6 w-6" />, subtitle: "Detalhes do widget" };
 
     const renderContent = () => {
       switch (detailsWidgetId) {
         case "metrics": {
           const mp = getMetricsForPeriod(undefined, modalPeriodKey);
-          const items: Array<{ key: string; label: string; value: string | number; change?: number; trend?: "up" | "down"; suffix?: string }> = [
-            { key: "totalUsers",     label: "Total de Usuários", value: mp.totalUsers.value,     change: mp.totalUsers.change,     trend: mp.totalUsers.trend },
-            { key: "activeUsers",    label: "Usuários Ativos",   value: mp.activeUsers.value,    change: mp.activeUsers.change,    trend: mp.activeUsers.trend },
-            { key: "companies",      label: "Empresas",          value: mp.companies.value,      change: mp.companies.change,      trend: mp.companies.trend },
-            { key: "activeProjects", label: "Projetos Ativos",   value: mp.activeProjects.value, change: mp.activeProjects.change, trend: mp.activeProjects.trend },
-            { key: "revenue",        label: "Receita",           value: mp.revenue.value, change: mp.revenue.change, trend: mp.revenue.trend },
-            { key: "avgRating",      label: "Avaliação Média",   value: Number(mp.avgRating.value).toFixed(1), change: mp.avgRating.change, trend: mp.avgRating.trend, suffix: " / 5.0" },
+          const items: Array<{
+            key: string;
+            label: string;
+            value: string | number;
+            change?: number;
+            trend?: "up" | "down";
+            suffix?: string;
+          }> = [
+            {
+              key: "totalUsers",
+              label: "Total de Usuários",
+              value: mp.totalUsers.value,
+              change: mp.totalUsers.change,
+              trend: mp.totalUsers.trend,
+            },
+            {
+              key: "activeUsers",
+              label: "Usuários Ativos",
+              value: mp.activeUsers.value,
+              change: mp.activeUsers.change,
+              trend: mp.activeUsers.trend,
+            },
+            {
+              key: "companies",
+              label: "Empresas",
+              value: mp.companies.value,
+              change: mp.companies.change,
+              trend: mp.companies.trend,
+            },
+            {
+              key: "activeProjects",
+              label: "Projetos Ativos",
+              value: mp.activeProjects.value,
+              change: mp.activeProjects.change,
+              trend: mp.activeProjects.trend,
+            },
+            {
+              key: "revenue",
+              label: "Receita",
+              value: mp.revenue.value,
+              change: mp.revenue.change,
+              trend: mp.revenue.trend,
+            },
+            {
+              key: "avgRating",
+              label: "Avaliação Média",
+              value: Number(mp.avgRating.value).toFixed(1),
+              change: mp.avgRating.change,
+              trend: mp.avgRating.trend,
+              suffix: " / 5.0",
+            },
           ];
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 {items.map((it) => (
-                  <div key={it.key} className="p-3 rounded-lg border border-border/50 bg-muted/20">
+                  <div
+                    key={it.key}
+                    className="p-3 rounded-lg border border-border/50 bg-muted/20"
+                  >
                     <p className="text-xs text-muted-foreground">{it.label}</p>
                     <p className="text-xl font-bold mt-0.5">
-                      {typeof it.value === "number" ? it.value.toLocaleString("pt-BR") : it.value}
-                      {it.suffix && <span className="text-xs font-normal text-muted-foreground">{it.suffix}</span>}
+                      {typeof it.value === "number"
+                        ? it.value.toLocaleString("pt-BR")
+                        : it.value}
+                      {it.suffix && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {it.suffix}
+                        </span>
+                      )}
                     </p>
                     {it.change != null && (
                       <div className="flex items-center justify-between mt-1">
-                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${it.trend === "up" ? "text-success" : "text-destructive"}`}>
-                          {it.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                          {it.trend === "up" ? "+" : "-"}{Math.abs(it.change)}{it.key === "avgRating" ? " pts" : "%"}
+                        <span
+                          className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${it.trend === "up" ? "text-success" : "text-destructive"}`}
+                        >
+                          {it.trend === "up" ? (
+                            <TrendingUp className="h-3 w-3" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3" />
+                          )}
+                          {it.trend === "up" ? "+" : "-"}
+                          {Math.abs(it.change)}
+                          {it.key === "avgRating" ? " pts" : "%"}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">vs. anterior</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          vs. anterior
+                        </span>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-              {mp.revenue.breakdown && (() => {
-                const parseKVal = (s: string | number) => {
-                  if (typeof s === "number") return s;
-                  const cleaned = String(s).replace(/[R$\s]/g, "");
-                  const num = parseFloat(cleaned);
-                  return cleaned.toLowerCase().includes("k") ? num * 1000 : (isNaN(num) ? 0 : num);
-                };
-                const cpNum = parseKVal((mp.revenue.breakdown.creditPlan as any)?.value ?? mp.revenue.breakdown.creditPlan);
-                const rcNum = parseKVal((mp.revenue.breakdown.recurring as any)?.value ?? mp.revenue.breakdown.recurring);
-                const otNum = parseKVal((mp.revenue.breakdown.oneTime as any)?.value ?? mp.revenue.breakdown.oneTime);
-                const total = cpNum + rcNum + otNum;
-                const cpDisp = (mp.revenue.breakdown.creditPlan as any)?.value ?? `R$ ${cpNum.toLocaleString("pt-BR")}`;
-                const rcDisp = (mp.revenue.breakdown.recurring as any)?.value ?? `R$ ${rcNum.toLocaleString("pt-BR")}`;
-                const otDisp = (mp.revenue.breakdown.oneTime as any)?.value ?? `R$ ${otNum.toLocaleString("pt-BR")}`;
-                return (
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-3">Composição da Receita</p>
-                    {[
-                      { label: "Planos de Crédito", display: cpDisp, numeric: cpNum, color: "bg-blue-500" },
-                      { label: "Recorrente",        display: rcDisp, numeric: rcNum, color: "bg-purple-500" },
-                      { label: "Avulso",            display: otDisp, numeric: otNum, color: "bg-amber-500" },
-                    ].map((item) => {
-                      const pct = total > 0 ? (item.numeric / total) * 100 : 0;
-                      return (
-                        <div key={item.label} className="mb-2 last:mb-0">
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-muted-foreground">{item.label}</span>
-                            <span className="font-medium">{item.display}</span>
+              {mp.revenue.breakdown &&
+                (() => {
+                  const parseKVal = (s: string | number) => {
+                    if (typeof s === "number") return s;
+                    const cleaned = String(s).replace(/[R$\s]/g, "");
+                    const num = parseFloat(cleaned);
+                    return cleaned.toLowerCase().includes("k")
+                      ? num * 1000
+                      : isNaN(num)
+                        ? 0
+                        : num;
+                  };
+                  const cpNum = parseKVal(
+                    (mp.revenue.breakdown.creditPlan as any)?.value ??
+                      mp.revenue.breakdown.creditPlan,
+                  );
+                  const rcNum = parseKVal(
+                    (mp.revenue.breakdown.recurring as any)?.value ??
+                      mp.revenue.breakdown.recurring,
+                  );
+                  const otNum = parseKVal(
+                    (mp.revenue.breakdown.oneTime as any)?.value ??
+                      mp.revenue.breakdown.oneTime,
+                  );
+                  const total = cpNum + rcNum + otNum;
+                  const cpDisp =
+                    (mp.revenue.breakdown.creditPlan as any)?.value ??
+                    `R$ ${cpNum.toLocaleString("pt-BR")}`;
+                  const rcDisp =
+                    (mp.revenue.breakdown.recurring as any)?.value ??
+                    `R$ ${rcNum.toLocaleString("pt-BR")}`;
+                  const otDisp =
+                    (mp.revenue.breakdown.oneTime as any)?.value ??
+                    `R$ ${otNum.toLocaleString("pt-BR")}`;
+                  return (
+                    <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                      <p className="text-sm font-semibold mb-3">
+                        Composição da Receita
+                      </p>
+                      {[
+                        {
+                          label: "Planos de Crédito",
+                          display: cpDisp,
+                          numeric: cpNum,
+                          color: "bg-blue-500",
+                        },
+                        {
+                          label: "Recorrente",
+                          display: rcDisp,
+                          numeric: rcNum,
+                          color: "bg-purple-500",
+                        },
+                        {
+                          label: "Avulso",
+                          display: otDisp,
+                          numeric: otNum,
+                          color: "bg-amber-500",
+                        },
+                      ].map((item) => {
+                        const pct =
+                          total > 0 ? (item.numeric / total) * 100 : 0;
+                        return (
+                          <div key={item.label} className="mb-2 last:mb-0">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">
+                                {item.label}
+                              </span>
+                              <span className="font-medium">
+                                {item.display}
+                              </span>
+                            </div>
+                            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                              <div
+                                className={`h-2 ${item.color} rounded-full`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                            <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               {mp.avgRating.breakdown && (
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                  <p className="text-sm font-semibold mb-3">Avaliação por Segmento</p>
+                  <p className="text-sm font-semibold mb-3">
+                    Avaliação por Segmento
+                  </p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {[
-                      { label: "Nômades",       value: Number((mp.avgRating.breakdown.nomades as any)?.value ?? mp.avgRating.breakdown.nomades) },
-                      { label: "Agências",      value: Number((mp.avgRating.breakdown.agencies as any)?.value ?? mp.avgRating.breakdown.agencies) },
-                      { label: "Lead Premium",  value: Number((mp.avgRating.breakdown.leadPremium as any)?.value ?? mp.avgRating.breakdown.leadPremium) },
-                      { label: "Suporte",       value: Number((mp.avgRating.breakdown.support as any)?.value ?? mp.avgRating.breakdown.support) },
-                      { label: "Projetos",      value: Number((mp.avgRating.breakdown.projects as any)?.value ?? mp.avgRating.breakdown.projects) },
+                      {
+                        label: "Nômades",
+                        value: Number(
+                          (mp.avgRating.breakdown.nomades as any)?.value ??
+                            mp.avgRating.breakdown.nomades,
+                        ),
+                      },
+                      {
+                        label: "Agências",
+                        value: Number(
+                          (mp.avgRating.breakdown.agencies as any)?.value ??
+                            mp.avgRating.breakdown.agencies,
+                        ),
+                      },
+                      {
+                        label: "Lead Premium",
+                        value: Number(
+                          (mp.avgRating.breakdown.leadPremium as any)?.value ??
+                            mp.avgRating.breakdown.leadPremium,
+                        ),
+                      },
+                      {
+                        label: "Suporte",
+                        value: Number(
+                          (mp.avgRating.breakdown.support as any)?.value ??
+                            mp.avgRating.breakdown.support,
+                        ),
+                      },
+                      {
+                        label: "Projetos",
+                        value: Number(
+                          (mp.avgRating.breakdown.projects as any)?.value ??
+                            mp.avgRating.breakdown.projects,
+                        ),
+                      },
                     ].map((s) => (
-                      <div key={s.label} className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground truncate">{s.label}</span>
+                      <div
+                        key={s.label}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-xs text-muted-foreground truncate">
+                          {s.label}
+                        </span>
                         <div className="flex items-center gap-1.5">
                           <div className="h-1.5 w-16 bg-secondary rounded-full overflow-hidden">
-                            <div className="h-1.5 bg-amber-500 rounded-full" style={{ width: `${(s.value / 5) * 100}%` }} />
+                            <div
+                              className="h-1.5 bg-amber-500 rounded-full"
+                              style={{ width: `${(s.value / 5) * 100}%` }}
+                            />
                           </div>
-                          <span className="text-xs font-semibold w-7 text-right">{s.value.toFixed(1)}</span>
+                          <span className="text-xs font-semibold w-7 text-right">
+                            {s.value.toFixed(1)}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -3451,12 +3931,20 @@ export default function AdminDashboardPage() {
               <div className="p-4 rounded-xl bg-success/10 border border-success/20">
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Receita Total</p>
-                    <p className="text-3xl font-bold mt-0.5">R$ {(rv.total / 1000).toFixed(1)}k</p>
-                    <p className="text-xs text-muted-foreground mt-1">no período selecionado</p>
+                    <p className="text-sm text-muted-foreground">
+                      Receita Total
+                    </p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {(rv.total / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      no período selecionado
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-success">+{rv.totalGrowth}%</p>
+                    <p className="text-sm font-bold text-success">
+                      +{rv.totalGrowth}%
+                    </p>
                     <p className="text-xs text-muted-foreground">vs anterior</p>
                   </div>
                 </div>
@@ -3464,36 +3952,118 @@ export default function AdminDashboardPage() {
               {/* 2-per-row plan cards */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Plano de Crédito",  value: rv.creditPlan, growth: rv.creditPlanGrowth, bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",       text: "text-sky-700 dark:text-sky-300",       color: "bg-sky-500" },
-                  { label: "Compra Recorrente", value: rv.recurring,  growth: rv.recurringGrowth,  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300",   color: "bg-amber-500" },
-                ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-xl border ${item.bg}`}>
-                    <div className="flex items-center gap-1.5 mb-1.5"><div className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`} /><span className={`text-xs font-medium ${item.text} truncate`}>{item.label}</span></div>
-                    <p className="text-lg font-bold">R$ {(item.value / 1000).toFixed(1)}k</p>
-                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden"><div className={`h-full ${item.color} rounded-full`} style={{ width: `${(item.value / Math.max(1, rv.total)) * 100}%` }} /></div>
-                    <p className="text-[10px] text-success mt-1">+{item.growth}%  ·  {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}% do total</p>
+                  {
+                    label: "Plano de Crédito",
+                    value: rv.creditPlan,
+                    growth: rv.creditPlanGrowth,
+                    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                    text: "text-sky-700 dark:text-sky-300",
+                    color: "bg-sky-500",
+                  },
+                  {
+                    label: "Compra Recorrente",
+                    value: rv.recurring,
+                    growth: rv.recurringGrowth,
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                    color: "bg-amber-500",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-3 rounded-xl border ${item.bg}`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${item.text} truncate`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      R$ {(item.value / 1000).toFixed(1)}k
+                    </p>
+                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${item.color} rounded-full`}
+                        style={{
+                          width: `${(item.value / Math.max(1, rv.total)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-success mt-1">
+                      +{item.growth}% ·{" "}
+                      {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}%
+                      do total
+                    </p>
                   </div>
                 ))}
               </div>
               {/* Avulso full row */}
               <div className="p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-emerald-500" /><span className="text-sm font-medium">Compra Avulsa</span></div>
-                  <div><span className="text-sm font-bold">R$ {(rv.oneTime / 1000).toFixed(1)}k</span><span className="text-xs text-success ml-2">+{rv.oneTimeGrowth}%</span></div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium">Compra Avulsa</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold">
+                      R$ {(rv.oneTime / 1000).toFixed(1)}k
+                    </span>
+                    <span className="text-xs text-success ml-2">
+                      +{rv.oneTimeGrowth}%
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%` }} /></div>
+                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
               </div>
               {/* Composition bar */}
               <div>
-                <p className="text-sm font-semibold mb-2">Composição da Receita</p>
+                <p className="text-sm font-semibold mb-2">
+                  Composição da Receita
+                </p>
                 <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
-                  <div className="bg-sky-500 transition-all" style={{ width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%` }} />
-                  <div className="bg-amber-500 transition-all" style={{ width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%` }} />
-                  <div className="bg-emerald-500 transition-all" style={{ width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%` }} />
+                  <div
+                    className="bg-sky-500 transition-all"
+                    style={{
+                      width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-amber-500 transition-all"
+                    style={{
+                      width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
                 </div>
                 <div className="flex gap-4 mt-2">
-                  {[["bg-sky-500","Crédito"],["bg-amber-500","Recorrente"],["bg-emerald-500","Avulso"]].map(([c,l]) => (
-                    <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                  {[
+                    ["bg-sky-500", "Crédito"],
+                    ["bg-amber-500", "Recorrente"],
+                    ["bg-emerald-500", "Avulso"],
+                  ].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {l}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -3501,53 +4071,91 @@ export default function AdminDashboardPage() {
           );
 
         case "platformActivities": {
-          const engagementRate = mPaW.mau > 0 ? Math.round((mPaW.dau / mPaW.mau) * 100) : 0;
-          const actionsPerSession = mPaW.sessions > 0 ? (mPaW.actionsExecuted / mPaW.sessions).toFixed(1) : "0";
+          const engagementRate =
+            mPaW.mau > 0 ? Math.round((mPaW.dau / mPaW.mau) * 100) : 0;
+          const actionsPerSession =
+            mPaW.sessions > 0
+              ? (mPaW.actionsExecuted / mPaW.sessions).toFixed(1)
+              : "0";
           const activityTypes = [
             { label: "Mensagens", pct: 35, color: "bg-info" },
-            { label: "Tarefas",   pct: 27, color: "bg-success" },
-            { label: "Projetos",  pct: 19, color: "bg-chart-4" },
-            { label: "Uploads",   pct: 12, color: "bg-warning" },
-            { label: "Outros",    pct: 7,  color: "bg-muted-foreground" },
+            { label: "Tarefas", pct: 27, color: "bg-success" },
+            { label: "Projetos", pct: 19, color: "bg-chart-4" },
+            { label: "Uploads", pct: 12, color: "bg-warning" },
+            { label: "Outros", pct: 7, color: "bg-muted-foreground" },
           ];
           const maxTrend = Math.max(1, ...mPaW.trendData);
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "MAU",       value: mPaW.mau.toLocaleString("pt-BR") },
-                  { label: "DAU",       value: mPaW.dau.toLocaleString("pt-BR") },
-                  { label: "Agências",  value: mPaW.activeAgencies },
-                  { label: "Sessões",   value: mPaW.sessions.toLocaleString("pt-BR") },
-                  { label: "Ações",     value: mPaW.actionsExecuted.toLocaleString("pt-BR") },
-                  { label: "Tempo méd.", value: `${mPaW.avgSessionMinutes} min` },
+                  { label: "MAU", value: mPaW.mau.toLocaleString("pt-BR") },
+                  { label: "DAU", value: mPaW.dau.toLocaleString("pt-BR") },
+                  { label: "Agências", value: mPaW.activeAgencies },
+                  {
+                    label: "Sessões",
+                    value: mPaW.sessions.toLocaleString("pt-BR"),
+                  },
+                  {
+                    label: "Ações",
+                    value: mPaW.actionsExecuted.toLocaleString("pt-BR"),
+                  },
+                  {
+                    label: "Tempo méd.",
+                    value: `${mPaW.avgSessionMinutes} min`,
+                  },
                 ].map((k) => (
-                  <div key={k.label} className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
-                    <p className="text-[11px] text-muted-foreground">{k.label}</p>
-                    <p className="text-base font-bold text-sky-700 dark:text-sky-300 mt-0.5">{k.value}</p>
+                  <div
+                    key={k.label}
+                    className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800"
+                  >
+                    <p className="text-[11px] text-muted-foreground">
+                      {k.label}
+                    </p>
+                    <p className="text-base font-bold text-sky-700 dark:text-sky-300 mt-0.5">
+                      {k.value}
+                    </p>
                   </div>
                 ))}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg border border-border/50 bg-muted/20">
-                  <p className="text-xs text-muted-foreground">Taxa de Engajamento</p>
+                  <p className="text-xs text-muted-foreground">
+                    Taxa de Engajamento
+                  </p>
                   <div className="flex items-baseline justify-between mt-1">
                     <span className="text-lg font-bold">{engagementRate}%</span>
-                    <span className="text-[10px] text-muted-foreground">DAU / MAU</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      DAU / MAU
+                    </span>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden mt-1.5">
-                    <div className="h-1.5 bg-info rounded-full" style={{ width: `${engagementRate}%` }} />
+                    <div
+                      className="h-1.5 bg-info rounded-full"
+                      style={{ width: `${engagementRate}%` }}
+                    />
                   </div>
                 </div>
                 <div className="p-3 rounded-lg border border-border/50 bg-muted/20">
-                  <p className="text-xs text-muted-foreground">Ações por Sessão</p>
+                  <p className="text-xs text-muted-foreground">
+                    Ações por Sessão
+                  </p>
                   <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-lg font-bold">{actionsPerSession}</span>
-                    <span className="text-[10px] text-muted-foreground">ações/sessão</span>
+                    <span className="text-lg font-bold">
+                      {actionsPerSession}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      ações/sessão
+                    </span>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden mt-1.5">
-                    <div className="h-1.5 bg-success rounded-full" style={{ width: `${Math.min(100, parseFloat(actionsPerSession) * 10)}%` }} />
+                    <div
+                      className="h-1.5 bg-success rounded-full"
+                      style={{
+                        width: `${Math.min(100, parseFloat(actionsPerSession) * 10)}%`,
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -3561,19 +4169,33 @@ export default function AdminDashboardPage() {
                       <span className="font-medium">{t.pct}%</span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className={`h-2 ${t.color} rounded-full`} style={{ width: `${t.pct}%` }} />
+                      <div
+                        className={`h-2 ${t.color} rounded-full`}
+                        style={{ width: `${t.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
 
               <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                <p className="text-sm font-semibold mb-3">Tendência — Últimos 7 dias</p>
+                <p className="text-sm font-semibold mb-3">
+                  Tendência — Últimos 7 dias
+                </p>
                 <div className="flex items-end gap-1.5 h-28">
                   {mPaW.trendData.map((value, idx) => (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full bg-sky-400 dark:bg-sky-500 rounded-t transition-all" style={{ height: `${(value / maxTrend) * 100}%` }} title={`Dia ${idx + 1}: ${value}`} />
-                      <span className="text-[9px] text-muted-foreground">{idx + 1}</span>
+                    <div
+                      key={idx}
+                      className="flex-1 flex flex-col items-center gap-1"
+                    >
+                      <div
+                        className="w-full bg-sky-400 dark:bg-sky-500 rounded-t transition-all"
+                        style={{ height: `${(value / maxTrend) * 100}%` }}
+                        title={`Dia ${idx + 1}: ${value}`}
+                      />
+                      <span className="text-[9px] text-muted-foreground">
+                        {idx + 1}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -3585,42 +4207,86 @@ export default function AdminDashboardPage() {
         case "accountsReceivable": {
           const outstanding = mArW.creditPlans + mArW.postPaid + mArW.others;
           const collectionTotal = outstanding + mArW.received;
-          const collectionRate = collectionTotal > 0 ? Math.round((mArW.received / collectionTotal) * 100) : 0;
+          const collectionRate =
+            collectionTotal > 0
+              ? Math.round((mArW.received / collectionTotal) * 100)
+              : 0;
           const categories = [
-            { label: "Planos de Crédito", value: mArW.creditPlans, color: "bg-blue-500",    chip: "text-blue-700 dark:text-blue-300",     bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" },
-            { label: "Pós-pagos",         value: mArW.postPaid,    color: "bg-purple-500",  chip: "text-purple-700 dark:text-purple-300", bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800" },
-            { label: "Outros",            value: mArW.others,      color: "bg-amber-500",   chip: "text-amber-700 dark:text-amber-300",   bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
-            { label: "Recebido",          value: mArW.received,    color: "bg-green-500",   chip: "text-green-700 dark:text-green-300",   bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" },
+            {
+              label: "Planos de Crédito",
+              value: mArW.creditPlans,
+              color: "bg-blue-500",
+              chip: "text-blue-700 dark:text-blue-300",
+              bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+            },
+            {
+              label: "Pós-pagos",
+              value: mArW.postPaid,
+              color: "bg-purple-500",
+              chip: "text-purple-700 dark:text-purple-300",
+              bg: "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800",
+            },
+            {
+              label: "Outros",
+              value: mArW.others,
+              color: "bg-amber-500",
+              chip: "text-amber-700 dark:text-amber-300",
+              bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+            },
+            {
+              label: "Recebido",
+              value: mArW.received,
+              color: "bg-green-500",
+              chip: "text-green-700 dark:text-green-300",
+              bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
+            },
           ];
           const aging = [
-            { label: "0-30 dias",  pct: 55, color: "bg-emerald-500" },
+            { label: "0-30 dias", pct: 55, color: "bg-emerald-500" },
             { label: "31-60 dias", pct: 25, color: "bg-amber-500" },
             { label: "61-90 dias", pct: 12, color: "bg-orange-500" },
-            { label: "90+ dias",   pct: 8,  color: "bg-rose-500" },
+            { label: "90+ dias", pct: 8, color: "bg-rose-500" },
           ];
           return (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total a Receber</p>
-                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">R$ {mArW.total.toLocaleString("pt-BR")},00</p>
+                    <p className="text-sm text-muted-foreground">
+                      Total a Receber
+                    </p>
+                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      R$ {mArW.total.toLocaleString("pt-BR")},00
+                    </p>
                   </div>
-                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 shrink-0">+{mArW.growth}%</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 shrink-0">
+                    +{mArW.growth}%
+                  </Badge>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl border border-border/50 bg-muted/20">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">Taxa de Cobrança</span>
-                  <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{collectionRate}%</span>
+                  <span className="text-sm font-semibold">
+                    Taxa de Cobrança
+                  </span>
+                  <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+                    {collectionRate}%
+                  </span>
                 </div>
                 <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-2.5 bg-emerald-500 rounded-full" style={{ width: `${collectionRate}%` }} />
+                  <div
+                    className="h-2.5 bg-emerald-500 rounded-full"
+                    style={{ width: `${collectionRate}%` }}
+                  />
                 </div>
                 <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
-                  <span>Recebido: R$ {mArW.received.toLocaleString("pt-BR")}</span>
-                  <span>Pendente: R$ {outstanding.toLocaleString("pt-BR")}</span>
+                  <span>
+                    Recebido: R$ {mArW.received.toLocaleString("pt-BR")}
+                  </span>
+                  <span>
+                    Pendente: R$ {outstanding.toLocaleString("pt-BR")}
+                  </span>
                 </div>
               </div>
 
@@ -3628,16 +4294,31 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Composição</p>
                 <div className="grid grid-cols-2 gap-3">
                   {categories.map((c) => {
-                    const pct = collectionTotal > 0 ? Math.round((c.value / collectionTotal) * 100) : 0;
+                    const pct =
+                      collectionTotal > 0
+                        ? Math.round((c.value / collectionTotal) * 100)
+                        : 0;
                     return (
-                      <div key={c.label} className={`p-3 rounded-lg border ${c.bg}`}>
+                      <div
+                        key={c.label}
+                        className={`p-3 rounded-lg border ${c.bg}`}
+                      >
                         <div className="flex items-center justify-between mb-1">
-                          <span className={`text-xs font-medium ${c.chip}`}>{c.label}</span>
-                          <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                          <span className={`text-xs font-medium ${c.chip}`}>
+                            {c.label}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {pct}%
+                          </span>
                         </div>
-                        <p className={`text-sm font-bold ${c.chip}`}>R$ {c.value.toLocaleString("pt-BR")}</p>
+                        <p className={`text-sm font-bold ${c.chip}`}>
+                          R$ {c.value.toLocaleString("pt-BR")}
+                        </p>
                         <div className="h-1.5 bg-secondary/60 rounded-full overflow-hidden mt-1.5">
-                          <div className={`h-1.5 ${c.color} rounded-full`} style={{ width: `${pct}%` }} />
+                          <div
+                            className={`h-1.5 ${c.color} rounded-full`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
                     );
@@ -3651,10 +4332,18 @@ export default function AdminDashboardPage() {
                   <div key={a.label}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted-foreground">{a.label}</span>
-                      <span className="font-medium">{a.pct}%{" · "}R$ {Math.round((outstanding * a.pct) / 100).toLocaleString("pt-BR")}</span>
+                      <span className="font-medium">
+                        {a.pct}%{" · "}R${" "}
+                        {Math.round((outstanding * a.pct) / 100).toLocaleString(
+                          "pt-BR",
+                        )}
+                      </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className={`h-2 ${a.color} rounded-full`} style={{ width: `${a.pct}%` }} />
+                      <div
+                        className={`h-2 ${a.color} rounded-full`}
+                        style={{ width: `${a.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -3671,27 +4360,71 @@ export default function AdminDashboardPage() {
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">MRR Total</p>
-                    <p className="text-3xl font-bold mt-0.5">R$ {mrrW.total.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground mt-1">ARR: <span className="font-semibold text-foreground">R$ {(mrrW.total * 12 / 1000).toFixed(0)}k</span></p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {mrrW.total.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ARR:{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {((mrrW.total * 12) / 1000).toFixed(0)}k
+                      </span>
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-success">+{mrrW.growth}%</p>
-                    <p className="text-xs text-muted-foreground">{mrrW.newContracts} novos contratos</p>
-                    <p className="text-xs font-medium text-destructive">Churn: {mrrW.churnRate}%</p>
+                    <p className="text-sm font-bold text-success">
+                      +{mrrW.growth}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {mrrW.newContracts} novos contratos
+                    </p>
+                    <p className="text-xs font-medium text-destructive">
+                      Churn: {mrrW.churnRate}%
+                    </p>
                   </div>
                 </div>
               </div>
               {/* Composition cards */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "New MRR",    value: mrrW.newMrr,       sign: "+", bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
-                  { label: "Expansion",  value: mrrW.expansion,    sign: "+", bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",             text: "text-blue-700 dark:text-blue-300" },
-                  { label: "Contraction",value: mrrW.contraction,  sign: "-", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",         text: "text-amber-700 dark:text-amber-300" },
-                  { label: "Churn R$",   value: mrrW.churnRevenue, sign: "-", bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",                 text: "text-red-700 dark:text-red-300" },
-                ].map(item => (
-                  <div key={item.label} className={`p-3 rounded-xl border ${item.bg}`}>
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className={`text-lg font-bold ${item.text}`}>{item.sign}R$ {item.value.toLocaleString("pt-BR")}</p>
+                  {
+                    label: "New MRR",
+                    value: mrrW.newMrr,
+                    sign: "+",
+                    bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800",
+                    text: "text-emerald-700 dark:text-emerald-300",
+                  },
+                  {
+                    label: "Expansion",
+                    value: mrrW.expansion,
+                    sign: "+",
+                    bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                    text: "text-blue-700 dark:text-blue-300",
+                  },
+                  {
+                    label: "Contraction",
+                    value: mrrW.contraction,
+                    sign: "-",
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                  },
+                  {
+                    label: "Churn R$",
+                    value: mrrW.churnRevenue,
+                    sign: "-",
+                    bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
+                    text: "text-red-700 dark:text-red-300",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-3 rounded-xl border ${item.bg}`}
+                  >
+                    <p className="text-xs text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p className={`text-lg font-bold ${item.text}`}>
+                      {item.sign}R$ {item.value.toLocaleString("pt-BR")}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -3699,11 +4432,20 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl border bg-muted/20">
                   <p className="text-xs text-muted-foreground">Base MRR</p>
-                  <p className="text-lg font-bold">R$ {(mrrW.baseMrr / 1000).toFixed(1)}k</p>
+                  <p className="text-lg font-bold">
+                    R$ {(mrrW.baseMrr / 1000).toFixed(1)}k
+                  </p>
                 </div>
-                <div className={`p-3 rounded-xl border ${mrrW.netChange >= 0 ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"}`}>
+                <div
+                  className={`p-3 rounded-xl border ${mrrW.netChange >= 0 ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"}`}
+                >
                   <p className="text-xs text-muted-foreground">Net Change</p>
-                  <p className={`text-lg font-bold ${mrrW.netChange >= 0 ? "text-success" : "text-destructive"}`}>{mrrW.netChange >= 0 ? "+" : ""}R$ {mrrW.netChange.toLocaleString("pt-BR")}</p>
+                  <p
+                    className={`text-lg font-bold ${mrrW.netChange >= 0 ? "text-success" : "text-destructive"}`}
+                  >
+                    {mrrW.netChange >= 0 ? "+" : ""}R${" "}
+                    {mrrW.netChange.toLocaleString("pt-BR")}
+                  </p>
                 </div>
               </div>
               {/* Composition bar */}
@@ -3711,28 +4453,77 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Composição</p>
                 <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
                   {[
-                    { pct: (mrrW.newMrr / Math.max(1, mrrW.total)) * 100,      color: "bg-emerald-500" },
-                    { pct: (mrrW.expansion / Math.max(1, mrrW.total)) * 100,   color: "bg-blue-500" },
-                    { pct: (mrrW.baseMrr / Math.max(1, mrrW.total)) * 100,     color: "bg-slate-400" },
-                    { pct: (mrrW.contraction / Math.max(1, mrrW.total)) * 100, color: "bg-amber-400" },
-                    { pct: (mrrW.churnRevenue / Math.max(1, mrrW.total)) * 100,color: "bg-red-500" },
-                  ].map((s, i) => <div key={i} className={`${s.color} transition-all`} style={{ width: `${s.pct}%` }} />)}
+                    {
+                      pct: (mrrW.newMrr / Math.max(1, mrrW.total)) * 100,
+                      color: "bg-emerald-500",
+                    },
+                    {
+                      pct: (mrrW.expansion / Math.max(1, mrrW.total)) * 100,
+                      color: "bg-blue-500",
+                    },
+                    {
+                      pct: (mrrW.baseMrr / Math.max(1, mrrW.total)) * 100,
+                      color: "bg-slate-400",
+                    },
+                    {
+                      pct: (mrrW.contraction / Math.max(1, mrrW.total)) * 100,
+                      color: "bg-amber-400",
+                    },
+                    {
+                      pct: (mrrW.churnRevenue / Math.max(1, mrrW.total)) * 100,
+                      color: "bg-red-500",
+                    },
+                  ].map((s, i) => (
+                    <div
+                      key={i}
+                      className={`${s.color} transition-all`}
+                      style={{ width: `${s.pct}%` }}
+                    />
+                  ))}
                 </div>
                 <div className="flex gap-3 mt-2 flex-wrap">
-                  {[["bg-emerald-500","New"],["bg-blue-500","Expansion"],["bg-slate-400","Base"],["bg-amber-400","Contraction"],["bg-red-500","Churn"]].map(([c,l]) => (
-                    <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                  {[
+                    ["bg-emerald-500", "New"],
+                    ["bg-blue-500", "Expansion"],
+                    ["bg-slate-400", "Base"],
+                    ["bg-amber-400", "Contraction"],
+                    ["bg-red-500", "Churn"],
+                  ].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {l}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
               {/* Trend summary */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: "Menor",  value: `R$ ${(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k`, bg: "bg-muted/20" },
-                  { label: "Médio",  value: `R$ ${(mrrW.trendData.reduce((a, b) => a + b, 0) / mrrW.trendData.length / 1000).toFixed(1)}k`, bg: "bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800" },
-                  { label: "Atual",  value: `R$ ${(mrrW.total / 1000).toFixed(1)}k`, bg: "bg-primary/10" },
-                ].map(s => (
-                  <div key={s.label} className={`p-2 rounded-lg ${s.bg} text-center`}>
-                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  {
+                    label: "Menor",
+                    value: `R$ ${(Math.min(...mrrW.trendData) / 1000).toFixed(0)}k`,
+                    bg: "bg-muted/20",
+                  },
+                  {
+                    label: "Médio",
+                    value: `R$ ${(mrrW.trendData.reduce((a, b) => a + b, 0) / mrrW.trendData.length / 1000).toFixed(1)}k`,
+                    bg: "bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800",
+                  },
+                  {
+                    label: "Atual",
+                    value: `R$ ${(mrrW.total / 1000).toFixed(1)}k`,
+                    bg: "bg-primary/10",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className={`p-2 rounded-lg ${s.bg} text-center`}
+                  >
+                    <p className="text-[10px] text-muted-foreground">
+                      {s.label}
+                    </p>
                     <p className="text-sm font-bold">{s.value}</p>
                   </div>
                 ))}
@@ -3746,14 +4537,24 @@ export default function AdminDashboardPage() {
               {/* Hero 2 cols */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800">
-                  <p className="text-xs text-muted-foreground">Clientes Inativados</p>
-                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300 mt-0.5">{churnW.inactiveAccounts}</p>
-                  <p className="text-xs text-destructive font-medium mt-1">+{churnW.inactiveGrowth}%</p>
+                  <p className="text-xs text-muted-foreground">
+                    Clientes Inativados
+                  </p>
+                  <p className="text-3xl font-bold text-rose-700 dark:text-rose-300 mt-0.5">
+                    {churnW.inactiveAccounts}
+                  </p>
+                  <p className="text-xs text-destructive font-medium mt-1">
+                    +{churnW.inactiveGrowth}%
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
                   <p className="text-xs text-muted-foreground">Revenue Churn</p>
-                  <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-0.5">R$ {(churnW.revenueChurn / 1000).toFixed(1)}k</p>
-                  <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">Taxa: {churnW.revenueChurnRate}%</p>
+                  <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-0.5">
+                    R$ {(churnW.revenueChurn / 1000).toFixed(1)}k
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">
+                    Taxa: {churnW.revenueChurnRate}%
+                  </p>
                 </div>
               </div>
               {/* Account type 2x2 grid */}
@@ -3761,14 +4562,41 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Por tipo de conta</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { label: "Agências",     value: churnW.agencies,    bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
-                    { label: "Lead Premium", value: churnW.leadPremium, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
-                    { label: "Nômades",      value: churnW.nomades,     bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
-                    { label: "Free",         value: churnW.free,        bg: "bg-muted/20",                                                                text: "text-muted-foreground" },
-                  ].map(t => (
-                    <div key={t.label} className={`flex items-center justify-between p-3 rounded-xl border ${t.bg}`}>
-                      <span className="text-sm text-muted-foreground">{t.label}</span>
-                      <span className={`text-xl font-bold ${t.text}`}>{t.value}</span>
+                    {
+                      label: "Agências",
+                      value: churnW.agencies,
+                      bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                      text: "text-blue-700 dark:text-blue-300",
+                    },
+                    {
+                      label: "Lead Premium",
+                      value: churnW.leadPremium,
+                      bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                      text: "text-violet-700 dark:text-violet-300",
+                    },
+                    {
+                      label: "Nômades",
+                      value: churnW.nomades,
+                      bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                      text: "text-amber-700 dark:text-amber-300",
+                    },
+                    {
+                      label: "Free",
+                      value: churnW.free,
+                      bg: "bg-muted/20",
+                      text: "text-muted-foreground",
+                    },
+                  ].map((t) => (
+                    <div
+                      key={t.label}
+                      className={`flex items-center justify-between p-3 rounded-xl border ${t.bg}`}
+                    >
+                      <span className="text-sm text-muted-foreground">
+                        {t.label}
+                      </span>
+                      <span className={`text-xl font-bold ${t.text}`}>
+                        {t.value}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -3777,10 +4605,14 @@ export default function AdminDashboardPage() {
               <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold">Projetos Cancelados</span>
+                  <span className="text-sm font-semibold">
+                    Projetos Cancelados
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{churnW.cancelledProjects}</span>
+                  <span className="text-2xl font-bold">
+                    {churnW.cancelledProjects}
+                  </span>
                   <Badge variant="destructive" className="gap-1">
                     <TrendingUp className="h-3 w-3" />+{churnW.cancelledGrowth}%
                   </Badge>
@@ -3790,16 +4622,26 @@ export default function AdminDashboardPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Perda de MRR</span>
-                  <span className="font-semibold text-destructive">{churnW.revenueChurnRate}% do total</span>
+                  <span className="font-semibold text-destructive">
+                    {churnW.revenueChurnRate}% do total
+                  </span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${Math.min(100, churnW.revenueChurnRate * 5)}%` }} />
+                  <div
+                    className="h-full bg-destructive rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, churnW.revenueChurnRate * 5)}%`,
+                    }}
+                  />
                 </div>
               </div>
               {/* Alert */}
               <div className="flex items-start gap-2 p-3 rounded-xl border border-destructive/20 bg-destructive/5">
                 <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <p className="text-xs text-destructive">Churn de clientes aumentou {churnW.inactiveGrowth}% vs período anterior. Considere ações de retenção.</p>
+                <p className="text-xs text-destructive">
+                  Churn de clientes aumentou {churnW.inactiveGrowth}% vs período
+                  anterior. Considere ações de retenção.
+                </p>
               </div>
             </div>
           );
@@ -3811,8 +4653,12 @@ export default function AdminDashboardPage() {
               <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total em Planos de Crédito</p>
-                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">R$ {(cpW.total / 1000).toFixed(0)}k</p>
+                    <p className="text-sm text-muted-foreground">
+                      Total em Planos de Crédito
+                    </p>
+                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">
+                      R$ {(cpW.total / 1000).toFixed(0)}k
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 text-success text-sm font-semibold">
                     <TrendingUp className="h-4 w-4" />+{cpW.growth}%
@@ -3824,24 +4670,70 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Por Plano</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { label: "Básico",  data: cpW.basic,   bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300", bar: "bg-violet-500", positive: true },
-                    { label: "Partner", data: cpW.partner, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",         text: "text-blue-700 dark:text-blue-300",     bar: "bg-blue-500",   positive: true },
-                    { label: "Premium", data: cpW.premium, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300",   bar: "bg-amber-500",  positive: cpW.premium.growth >= 0 },
-                  ].map(p => {
-                    const pct = cpW.total > 0 ? Math.round((p.data.revenue / cpW.total) * 100) : 0;
+                    {
+                      label: "Básico",
+                      data: cpW.basic,
+                      bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                      text: "text-violet-700 dark:text-violet-300",
+                      bar: "bg-violet-500",
+                      positive: true,
+                    },
+                    {
+                      label: "Partner",
+                      data: cpW.partner,
+                      bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                      text: "text-blue-700 dark:text-blue-300",
+                      bar: "bg-blue-500",
+                      positive: true,
+                    },
+                    {
+                      label: "Premium",
+                      data: cpW.premium,
+                      bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                      text: "text-amber-700 dark:text-amber-300",
+                      bar: "bg-amber-500",
+                      positive: cpW.premium.growth >= 0,
+                    },
+                  ].map((p) => {
+                    const pct =
+                      cpW.total > 0
+                        ? Math.round((p.data.revenue / cpW.total) * 100)
+                        : 0;
                     return (
-                      <div key={p.label} className={`p-3 rounded-xl border ${p.bg}`}>
+                      <div
+                        key={p.label}
+                        className={`p-3 rounded-xl border ${p.bg}`}
+                      >
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-muted-foreground">{p.label}</p>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">Novos: {p.data.newContracts}</Badge>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {p.label}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 px-1.5"
+                          >
+                            Novos: {p.data.newContracts}
+                          </Badge>
                         </div>
-                        <p className={`text-xl font-bold ${p.text}`}>R$ {(p.data.revenue / 1000).toFixed(0)}k</p>
+                        <p className={`text-xl font-bold ${p.text}`}>
+                          R$ {(p.data.revenue / 1000).toFixed(0)}k
+                        </p>
                         <div className="h-1 bg-secondary rounded-full overflow-hidden mt-1.5 mb-1">
-                          <div className={`h-1 ${p.bar} rounded-full`} style={{ width: `${pct}%` }} />
+                          <div
+                            className={`h-1 ${p.bar} rounded-full`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-[10px] text-muted-foreground">{pct}% do total</span>
-                          <span className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}>{p.positive ? "+" : ""}{p.data.growth}%</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {pct}% do total
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}
+                          >
+                            {p.positive ? "+" : ""}
+                            {p.data.growth}%
+                          </span>
                         </div>
                       </div>
                     );
@@ -3850,14 +4742,47 @@ export default function AdminDashboardPage() {
                   <div className="col-span-2 space-y-1.5 pt-1">
                     <div className="flex gap-0.5 h-2 rounded-full overflow-hidden">
                       {[
-                        { pct: cpW.total > 0 ? (cpW.basic.revenue / cpW.total) * 100 : 33, bar: "bg-violet-500" },
-                        { pct: cpW.total > 0 ? (cpW.partner.revenue / cpW.total) * 100 : 33, bar: "bg-blue-500" },
-                        { pct: cpW.total > 0 ? (cpW.premium.revenue / cpW.total) * 100 : 34, bar: "bg-amber-500" },
-                      ].map((s, i) => <div key={i} className={s.bar} style={{ width: `${s.pct}%` }} />)}
+                        {
+                          pct:
+                            cpW.total > 0
+                              ? (cpW.basic.revenue / cpW.total) * 100
+                              : 33,
+                          bar: "bg-violet-500",
+                        },
+                        {
+                          pct:
+                            cpW.total > 0
+                              ? (cpW.partner.revenue / cpW.total) * 100
+                              : 33,
+                          bar: "bg-blue-500",
+                        },
+                        {
+                          pct:
+                            cpW.total > 0
+                              ? (cpW.premium.revenue / cpW.total) * 100
+                              : 34,
+                          bar: "bg-amber-500",
+                        },
+                      ].map((s, i) => (
+                        <div
+                          key={i}
+                          className={s.bar}
+                          style={{ width: `${s.pct}%` }}
+                        />
+                      ))}
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      {[{label:"Básico",bar:"bg-violet-500"},{label:"Partner",bar:"bg-blue-500"},{label:"Premium",bar:"bg-amber-500"}].map(l => (
-                        <div key={l.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${l.bar}`} /><span>{l.label}</span></div>
+                      {[
+                        { label: "Básico", bar: "bg-violet-500" },
+                        { label: "Partner", bar: "bg-blue-500" },
+                        { label: "Premium", bar: "bg-amber-500" },
+                      ].map((l) => (
+                        <div key={l.label} className="flex items-center gap-1">
+                          <div
+                            className={`h-1.5 w-1.5 rounded-full ${l.bar}`}
+                          />
+                          <span>{l.label}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -3872,11 +4797,15 @@ export default function AdminDashboardPage() {
               {/* Hero */}
               <div className="flex items-end justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total de Projetos Ativos</p>
+                  <p className="text-sm text-muted-foreground">
+                    Total de Projetos Ativos
+                  </p>
                   <p className="text-3xl font-bold mt-0.5">{apW.total}</p>
                 </div>
                 <div className="text-right">
-                  <span className="flex items-center gap-1 text-sm font-semibold text-success justify-end"><TrendingUp className="h-4 w-4" />+{apW.growth}%</span>
+                  <span className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
+                    <TrendingUp className="h-4 w-4" />+{apW.growth}%
+                  </span>
                   <p className="text-xs text-muted-foreground">vs anterior</p>
                 </div>
               </div>
@@ -3885,44 +4814,93 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Por Tipo de Conta</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { label: "Agências",     value: apW.agencies,    growth: apW.agenciesGrowth,    bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300" },
-                    { label: "Lead Premium", value: apW.leadPremium, growth: apW.leadPremiumGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",    text: "text-amber-700 dark:text-amber-300" },
-                    { label: "Nômades",      value: apW.nomades,     growth: apW.nomadesGrowth,     bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",        text: "text-teal-700 dark:text-teal-300" },
-                  ].map(t => (
-                    <div key={t.label} className={`p-3 rounded-xl border ${t.bg}`}>
+                    {
+                      label: "Agências",
+                      value: apW.agencies,
+                      growth: apW.agenciesGrowth,
+                      bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800",
+                      text: "text-indigo-700 dark:text-indigo-300",
+                    },
+                    {
+                      label: "Lead Premium",
+                      value: apW.leadPremium,
+                      growth: apW.leadPremiumGrowth,
+                      bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                      text: "text-amber-700 dark:text-amber-300",
+                    },
+                    {
+                      label: "Nômades",
+                      value: apW.nomades,
+                      growth: apW.nomadesGrowth,
+                      bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",
+                      text: "text-teal-700 dark:text-teal-300",
+                    },
+                  ].map((t) => (
+                    <div
+                      key={t.label}
+                      className={`p-3 rounded-xl border ${t.bg}`}
+                    >
                       <p className="text-xs text-muted-foreground">{t.label}</p>
-                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>{t.value}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>
+                        {t.value}
+                      </p>
                       <p className="text-[10px] text-success">+{t.growth}%</p>
                     </div>
                   ))}
                   {/* Novos no período */}
                   <div className="p-3 rounded-xl border border-teal-200/60 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/10">
-                    <p className="text-xs text-muted-foreground">Novos no período</p>
-                    <p className="text-xl font-bold mt-0.5 text-teal-700 dark:text-teal-300">{apW.newTotal}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Novos no período
+                    </p>
+                    <p className="text-xl font-bold mt-0.5 text-teal-700 dark:text-teal-300">
+                      {apW.newTotal}
+                    </p>
                     <div className="flex gap-2 text-[10px] mt-0.5">
-                      <span className="text-indigo-600 dark:text-indigo-400">Ag: {apW.newAgencies}</span>
-                      <span className="text-amber-600 dark:text-amber-400">LP: {apW.newLeadPremium}</span>
-                      <span className="text-teal-600 dark:text-teal-400">Nm: {apW.newNomades}</span>
+                      <span className="text-indigo-600 dark:text-indigo-400">
+                        Ag: {apW.newAgencies}
+                      </span>
+                      <span className="text-amber-600 dark:text-amber-400">
+                        LP: {apW.newLeadPremium}
+                      </span>
+                      <span className="text-teal-600 dark:text-teal-400">
+                        Nm: {apW.newNomades}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
               {/* Distribution bar */}
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground">Distribuição</p>
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Distribuição
+                </p>
                 <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden">
                   {[
-                    { value: apW.agencies,    color: "bg-indigo-500" },
+                    { value: apW.agencies, color: "bg-indigo-500" },
                     { value: apW.leadPremium, color: "bg-amber-500" },
-                    { value: apW.nomades,     color: "bg-teal-500" },
+                    { value: apW.nomades, color: "bg-teal-500" },
                   ].map((s, i) => {
-                    const pct = apW.total > 0 ? (s.value / apW.total) * 100 : 33;
-                    return <div key={i} className={s.color} style={{ width: `${pct}%` }} />;
+                    const pct =
+                      apW.total > 0 ? (s.value / apW.total) * 100 : 33;
+                    return (
+                      <div
+                        key={i}
+                        className={s.color}
+                        style={{ width: `${pct}%` }}
+                      />
+                    );
                   })}
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  {[{label:"Agências",c:"bg-indigo-500"},{label:"Lead Premium",c:"bg-amber-500"},{label:"Nômades",c:"bg-teal-500"}].map(l => (
-                    <div key={l.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${l.c}`} />{l.label}</div>
+                  {[
+                    { label: "Agências", c: "bg-indigo-500" },
+                    { label: "Lead Premium", c: "bg-amber-500" },
+                    { label: "Nômades", c: "bg-teal-500" },
+                  ].map((l) => (
+                    <div key={l.label} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${l.c}`} />
+                      {l.label}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -3936,11 +4914,17 @@ export default function AdminDashboardPage() {
               <div className="p-4 rounded-xl bg-success/10 border border-success/20">
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Ticket Médio Geral</p>
-                    <p className="text-3xl font-bold mt-0.5">R$ {atW.general.toLocaleString("pt-BR")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Ticket Médio Geral
+                    </p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {atW.general.toLocaleString("pt-BR")}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-success">+{atW.generalGrowth}%</p>
+                    <p className="text-sm font-bold text-success">
+                      +{atW.generalGrowth}%
+                    </p>
                     <p className="text-xs text-muted-foreground">vs anterior</p>
                   </div>
                 </div>
@@ -3950,15 +4934,48 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-2">Por Tipo de Conta</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { label: "Agências",     value: 1750, growth: 6, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
-                    { label: "Lead Premium", value: 1120, growth: 2, bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
-                    { label: "Nômades",      value: 680,  growth: 1, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
-                    { label: "Free",         value: 0,    growth: 0, bg: "bg-muted/20",                                                               text: "text-muted-foreground" },
-                  ].map(t => (
-                    <div key={t.label} className={`p-3 rounded-xl border ${t.bg}`}>
+                    {
+                      label: "Agências",
+                      value: 1750,
+                      growth: 6,
+                      bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                      text: "text-blue-700 dark:text-blue-300",
+                    },
+                    {
+                      label: "Lead Premium",
+                      value: 1120,
+                      growth: 2,
+                      bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                      text: "text-violet-700 dark:text-violet-300",
+                    },
+                    {
+                      label: "Nômades",
+                      value: 680,
+                      growth: 1,
+                      bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                      text: "text-amber-700 dark:text-amber-300",
+                    },
+                    {
+                      label: "Free",
+                      value: 0,
+                      growth: 0,
+                      bg: "bg-muted/20",
+                      text: "text-muted-foreground",
+                    },
+                  ].map((t) => (
+                    <div
+                      key={t.label}
+                      className={`p-3 rounded-xl border ${t.bg}`}
+                    >
                       <p className="text-xs text-muted-foreground">{t.label}</p>
-                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
-                      {t.growth > 0 ? <p className="text-[10px] text-success">+{t.growth}%</p> : <p className="text-[10px] text-muted-foreground">—</p>}
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>
+                        R$ {t.value.toLocaleString("pt-BR")}
+                      </p>
+                      {t.growth > 0 ? (
+                        <p className="text-[10px] text-success">+{t.growth}%</p>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground">—</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -3966,8 +4983,12 @@ export default function AdminDashboardPage() {
               {/* Per Project */}
               <div className="flex items-center justify-between p-4 rounded-xl border border-success/30 bg-success/5">
                 <div>
-                  <p className="text-sm text-muted-foreground">Ticket por Projeto</p>
-                  <p className="text-2xl font-bold text-success">R$ {atW.perProject.toLocaleString("pt-BR")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Ticket por Projeto
+                  </p>
+                  <p className="text-2xl font-bold text-success">
+                    R$ {atW.perProject.toLocaleString("pt-BR")}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 text-success text-sm font-semibold">
                   <TrendingUp className="h-5 w-5" />+{atW.perProjectGrowth}%
@@ -3975,15 +4996,31 @@ export default function AdminDashboardPage() {
               </div>
               {/* Trend chart */}
               <div>
-                <p className="text-sm font-semibold mb-2">Tendência (últimos 6 meses)</p>
+                <p className="text-sm font-semibold mb-2">
+                  Tendência (últimos 6 meses)
+                </p>
                 <div className="flex items-end gap-1.5 h-16">
                   {atW.trendData.map((val, idx) => {
                     const maxVal = Math.max(...atW.trendData, 1);
                     const isLast = idx === atW.trendData.length - 1;
                     return (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                        <div className={cn("w-full rounded-t transition-all", isLast ? "bg-success" : "bg-success/30 hover:bg-success/60")} style={{ height: `${(val / maxVal) * 100}%` }} title={`R$ ${val}`} />
-                        <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J"][idx] ?? idx+1}</span>
+                      <div
+                        key={idx}
+                        className="flex-1 flex flex-col items-center gap-1"
+                      >
+                        <div
+                          className={cn(
+                            "w-full rounded-t transition-all",
+                            isLast
+                              ? "bg-success"
+                              : "bg-success/30 hover:bg-success/60",
+                          )}
+                          style={{ height: `${(val / maxVal) * 100}%` }}
+                          title={`R$ ${val}`}
+                        />
+                        <span className="text-[9px] text-muted-foreground">
+                          {["J", "F", "M", "A", "M", "J"][idx] ?? idx + 1}
+                        </span>
                       </div>
                     );
                   })}
@@ -4000,52 +5037,131 @@ export default function AdminDashboardPage() {
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">LTV Médio</p>
-                    <p className="text-3xl font-bold mt-0.5">R$ {ltvW.value.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground mt-1 font-mono">LTV = 24 meses × R$ 420/mês</p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {ltvW.value.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">
+                      LTV = 24 meses × R$ 420/mês
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-success">+{ltvW.growth}%</p>
-                    <div className="mt-1 px-2 py-0.5 rounded bg-info/10 text-info text-xs">Confiança 78%</div>
+                    <p className="text-sm font-bold text-success">
+                      +{ltvW.growth}%
+                    </p>
+                    <div className="mt-1 px-2 py-0.5 rounded bg-info/10 text-info text-xs">
+                      Confiança 78%
+                    </div>
                   </div>
                 </div>
               </div>
               {/* Type breakdown */}
               {[
-                { label: "Agências",     icon: <Building2 className="h-4 w-4" />, value: ltvW.agencies,    growth: ltvW.agenciesGrowth,    up: true,  detail: "28 meses × R$ 507/mês", bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",       text: "text-blue-700 dark:text-blue-300" },
-                { label: "Lead Premium", icon: <Star className="h-4 w-4" />,      value: ltvW.leadPremium, growth: ltvW.leadPremiumGrowth,  up: true,  detail: "22 meses × R$ 414/mês", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
-                { label: "Nômades",      icon: <Users className="h-4 w-4" />,     value: ltvW.nomades,     growth: ltvW.nomadesGrowth,      up: false, detail: "12 meses × R$ 350/mês", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",     text: "text-amber-700 dark:text-amber-300" },
-              ].map(t => (
-                <div key={t.label} className={`flex items-center gap-3 p-4 rounded-xl border ${t.bg}`}>
+                {
+                  label: "Agências",
+                  icon: <Building2 className="h-4 w-4" />,
+                  value: ltvW.agencies,
+                  growth: ltvW.agenciesGrowth,
+                  up: true,
+                  detail: "28 meses × R$ 507/mês",
+                  bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                  text: "text-blue-700 dark:text-blue-300",
+                },
+                {
+                  label: "Lead Premium",
+                  icon: <Star className="h-4 w-4" />,
+                  value: ltvW.leadPremium,
+                  growth: ltvW.leadPremiumGrowth,
+                  up: true,
+                  detail: "22 meses × R$ 414/mês",
+                  bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                  text: "text-violet-700 dark:text-violet-300",
+                },
+                {
+                  label: "Nômades",
+                  icon: <Users className="h-4 w-4" />,
+                  value: ltvW.nomades,
+                  growth: ltvW.nomadesGrowth,
+                  up: false,
+                  detail: "12 meses × R$ 350/mês",
+                  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                  text: "text-amber-700 dark:text-amber-300",
+                },
+              ].map((t) => (
+                <div
+                  key={t.label}
+                  className={`flex items-center gap-3 p-4 rounded-xl border ${t.bg}`}
+                >
                   <div className="shrink-0">{t.icon}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold">{t.label}</p>
                     <p className="text-xs text-muted-foreground">{t.detail}</p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-lg font-bold ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
-                    <p className={`text-xs font-medium ${t.up ? "text-success" : "text-warning"}`}>{t.up ? "+" : ""}{t.growth}%</p>
+                    <p className={`text-lg font-bold ${t.text}`}>
+                      R$ {t.value.toLocaleString("pt-BR")}
+                    </p>
+                    <p
+                      className={`text-xs font-medium ${t.up ? "text-success" : "text-warning"}`}
+                    >
+                      {t.up ? "+" : ""}
+                      {t.growth}%
+                    </p>
                   </div>
                 </div>
               ))}
               <div className="flex items-center gap-3 p-4 rounded-xl border bg-muted/10 opacity-60">
                 <UserCheck className="h-4 w-4 shrink-0" />
-                <div className="flex-1"><p className="text-sm font-semibold">Free</p><p className="text-xs text-muted-foreground">Excluído do cálculo</p></div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">Free</p>
+                  <p className="text-xs text-muted-foreground">
+                    Excluído do cálculo
+                  </p>
+                </div>
                 <p className="text-lg font-bold text-muted-foreground">R$ 0</p>
               </div>
               {/* Distribution */}
               <div>
-                <p className="text-sm font-semibold mb-3">Distribuição de LTVs</p>
+                <p className="text-sm font-semibold mb-3">
+                  Distribuição de LTVs
+                </p>
                 <div className="space-y-2">
                   {[
-                    { label: "R$ 0–1k",  value: ltvW.hist0to1k,   color: "bg-muted-foreground" },
-                    { label: "R$ 1–5k",  value: ltvW.hist1kto5k,  color: "bg-info" },
-                    { label: "R$ 5–15k", value: ltvW.hist5kto15k, color: "bg-chart-4" },
-                    { label: "R$ 15k+",  value: ltvW.hist15kplus, color: "bg-success" },
-                  ].map(h => (
+                    {
+                      label: "R$ 0–1k",
+                      value: ltvW.hist0to1k,
+                      color: "bg-muted-foreground",
+                    },
+                    {
+                      label: "R$ 1–5k",
+                      value: ltvW.hist1kto5k,
+                      color: "bg-info",
+                    },
+                    {
+                      label: "R$ 5–15k",
+                      value: ltvW.hist5kto15k,
+                      color: "bg-chart-4",
+                    },
+                    {
+                      label: "R$ 15k+",
+                      value: ltvW.hist15kplus,
+                      color: "bg-success",
+                    },
+                  ].map((h) => (
                     <div key={h.label} className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">{h.label}</span>
-                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full ${h.color} rounded-full`} style={{ width: `${Math.min(100, (h.value / 400) * 100)}%` }} /></div>
-                      <span className="text-xs font-semibold w-8 text-right">{h.value}</span>
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">
+                        {h.label}
+                      </span>
+                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${h.color} rounded-full`}
+                          style={{
+                            width: `${Math.min(100, (h.value / 400) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold w-8 text-right">
+                        {h.value}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -4056,35 +5172,97 @@ export default function AdminDashboardPage() {
         case "cmv": {
           const mCmv = mData.cmv;
           const mCmvCats = [
-            { label: "Nômades",   value: mCmv.nomades.value,   pct: mCmv.nomades.percent,   color: "bg-blue-500",   text: "text-blue-700 dark:text-blue-300",   bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" },
-            { label: "Impostos",  value: mCmv.impostos.value,  pct: mCmv.impostos.percent,  color: "bg-amber-500",  text: "text-amber-700 dark:text-amber-300",  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
-            { label: "Comissões", value: mCmv.comissoes.value, pct: mCmv.comissoes.percent, color: "bg-violet-500", text: "text-violet-700 dark:text-violet-300", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" },
-            { label: "Outros",    value: mCmv.outros.value,    pct: mCmv.outros.percent,    color: "bg-slate-400",  text: "text-slate-700 dark:text-slate-300",  bg: "bg-muted/20" },
+            {
+              label: "Nômades",
+              value: mCmv.nomades.value,
+              pct: mCmv.nomades.percent,
+              color: "bg-blue-500",
+              text: "text-blue-700 dark:text-blue-300",
+              bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+            },
+            {
+              label: "Impostos",
+              value: mCmv.impostos.value,
+              pct: mCmv.impostos.percent,
+              color: "bg-amber-500",
+              text: "text-amber-700 dark:text-amber-300",
+              bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+            },
+            {
+              label: "Comissões",
+              value: mCmv.comissoes.value,
+              pct: mCmv.comissoes.percent,
+              color: "bg-violet-500",
+              text: "text-violet-700 dark:text-violet-300",
+              bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+            },
+            {
+              label: "Outros",
+              value: mCmv.outros.value,
+              pct: mCmv.outros.percent,
+              color: "bg-slate-400",
+              text: "text-slate-700 dark:text-slate-300",
+              bg: "bg-muted/20",
+            },
           ];
           return (
             <div className="space-y-4">
               {/* Hero */}
-              <div className={`p-4 rounded-xl border ${mCmv.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"}`}>
+              <div
+                className={`p-4 rounded-xl border ${mCmv.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"}`}
+              >
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">CMV</p>
-                    <p className="text-3xl font-bold mt-0.5">{mCmv.cmvPercent.toFixed(1)}%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Custos <span className="font-semibold text-foreground">R$ {(mCmv.totalCosts / 1000).toFixed(1)}k</span> / Receita <span className="font-semibold text-foreground">R$ {(mCmv.revenue / 1000).toFixed(1)}k</span></p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      {mCmv.cmvPercent.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Custos{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {(mCmv.totalCosts / 1000).toFixed(1)}k
+                      </span>{" "}
+                      / Receita{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {(mCmv.revenue / 1000).toFixed(1)}k
+                      </span>
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-bold ${mCmv.variation.cmvPercent < 0 ? "text-success" : "text-destructive"}`}>{mCmv.variation.cmvPercent < 0 ? "↓" : "↑"} {Math.abs(mCmv.variation.cmvPercent).toFixed(1)}pp</p>
-                    {mCmv.cmvPercent > 30 && <p className="text-xs text-warning font-medium mt-1">⚠ CMV alto</p>}
+                    <p
+                      className={`text-sm font-bold ${mCmv.variation.cmvPercent < 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {mCmv.variation.cmvPercent < 0 ? "↓" : "↑"}{" "}
+                      {Math.abs(mCmv.variation.cmvPercent).toFixed(1)}pp
+                    </p>
+                    {mCmv.cmvPercent > 30 && (
+                      <p className="text-xs text-warning font-medium mt-1">
+                        ⚠ CMV alto
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
               {/* Category cards */}
               <div className="grid grid-cols-2 gap-3">
-                {mCmvCats.map(cat => (
-                  <div key={cat.label} className={`p-3 rounded-xl border ${cat.bg}`}>
+                {mCmvCats.map((cat) => (
+                  <div
+                    key={cat.label}
+                    className={`p-3 rounded-xl border ${cat.bg}`}
+                  >
                     <p className="text-xs text-muted-foreground">{cat.label}</p>
-                    <p className={`text-lg font-bold ${cat.text}`}>R$ {(cat.value / 1000).toFixed(1)}k</p>
-                    <div className="mt-1.5 h-1.5 bg-background/60 rounded-full overflow-hidden"><div className={`h-full ${cat.color} rounded-full`} style={{ width: `${cat.pct}%` }} /></div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{cat.pct.toFixed(0)}% do total</p>
+                    <p className={`text-lg font-bold ${cat.text}`}>
+                      R$ {(cat.value / 1000).toFixed(1)}k
+                    </p>
+                    <div className="mt-1.5 h-1.5 bg-background/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${cat.color} rounded-full`}
+                        style={{ width: `${cat.pct}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {cat.pct.toFixed(0)}% do total
+                    </p>
                   </div>
                 ))}
               </div>
@@ -4092,10 +5270,24 @@ export default function AdminDashboardPage() {
               <div>
                 <p className="text-sm font-semibold mb-2">Composição do CMV</p>
                 <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
-                  {mCmvCats.map(c => <div key={c.label} className={`${c.color} transition-all`} style={{ width: `${c.pct}%` }} title={`${c.label}: ${c.pct.toFixed(0)}%`} />)}
+                  {mCmvCats.map((c) => (
+                    <div
+                      key={c.label}
+                      className={`${c.color} transition-all`}
+                      style={{ width: `${c.pct}%` }}
+                      title={`${c.label}: ${c.pct.toFixed(0)}%`}
+                    />
+                  ))}
                 </div>
                 <div className="flex gap-3 mt-2 flex-wrap">
-                  {mCmvCats.map(c => <div key={c.label} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c.color}`} /><span className="text-[10px] text-muted-foreground">{c.label}</span></div>)}
+                  {mCmvCats.map((c) => (
+                    <div key={c.label} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c.color}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {c.label}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -4104,52 +5296,124 @@ export default function AdminDashboardPage() {
 
         case "tasks": {
           const mt = mData.tasks;
-          const tTotal = mt.completed + mt.inProgress + mt.contracted + mt.cancelled;
+          const tTotal =
+            mt.completed + mt.inProgress + mt.contracted + mt.cancelled;
           return (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                <p className="text-sm text-muted-foreground">Total de Tarefas no Período</p>
-                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{mt.total.toLocaleString("pt-BR")}</p>
+                <p className="text-sm text-muted-foreground">
+                  Total de Tarefas no Período
+                </p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">
+                  {mt.total.toLocaleString("pt-BR")}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Concluídas",  value: mt.completed,  change: mt.completedGrowth,  bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",  text: "text-green-700 dark:text-green-300" },
-                  { label: "Em Execução", value: mt.inProgress,  change: mt.inProgressGrowth, bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",    text: "text-blue-700 dark:text-blue-300" },
-                  { label: "Contratadas", value: mt.contracted,  change: mt.contractedGrowth, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",  text: "text-amber-700 dark:text-amber-300" },
-                  { label: "Canceladas",  value: mt.cancelled,   change: mt.cancelledChange,  bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",          text: "text-red-700 dark:text-red-300" },
-                ].map(item => (
-                  <div key={item.label} className={`p-4 rounded-xl border text-center ${item.bg}`}>
-                    <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
-                    <p className={`text-2xl font-bold ${item.text}`}>{item.value.toLocaleString("pt-BR")}</p>
-                    <p className={`text-xs font-medium mt-1 ${item.change >= 0 ? "text-success" : "text-destructive"}`}>{item.change >= 0 ? "+" : ""}{item.change}%</p>
+                  {
+                    label: "Concluídas",
+                    value: mt.completed,
+                    change: mt.completedGrowth,
+                    bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
+                    text: "text-green-700 dark:text-green-300",
+                  },
+                  {
+                    label: "Em Execução",
+                    value: mt.inProgress,
+                    change: mt.inProgressGrowth,
+                    bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                    text: "text-blue-700 dark:text-blue-300",
+                  },
+                  {
+                    label: "Contratadas",
+                    value: mt.contracted,
+                    change: mt.contractedGrowth,
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                  },
+                  {
+                    label: "Canceladas",
+                    value: mt.cancelled,
+                    change: mt.cancelledChange,
+                    bg: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
+                    text: "text-red-700 dark:text-red-300",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-4 rounded-xl border text-center ${item.bg}`}
+                  >
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {item.label}
+                    </p>
+                    <p className={`text-2xl font-bold ${item.text}`}>
+                      {item.value.toLocaleString("pt-BR")}
+                    </p>
+                    <p
+                      className={`text-xs font-medium mt-1 ${item.change >= 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {item.change >= 0 ? "+" : ""}
+                      {item.change}%
+                    </p>
                   </div>
                 ))}
               </div>
               <div className="p-4 rounded-xl border border-border/50 bg-muted/20">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">SLA — Dentro do prazo</span>
-                  <span className="text-base font-bold text-success">{mt.slaCompliance.toFixed(1)}%</span>
+                  <span className="text-sm font-semibold">
+                    SLA — Dentro do prazo
+                  </span>
+                  <span className="text-base font-bold text-success">
+                    {mt.slaCompliance.toFixed(1)}%
+                  </span>
                 </div>
                 <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-2.5 bg-success rounded-full" style={{ width: `${mt.slaCompliance}%` }} />
+                  <div
+                    className="h-2.5 bg-success rounded-full"
+                    style={{ width: `${mt.slaCompliance}%` }}
+                  />
                 </div>
               </div>
               {tTotal > 0 && (
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
                   <p className="text-sm font-semibold">Distribuição</p>
                   {[
-                    { label: "Concluídas",  value: mt.completed,  color: "bg-green-500" },
-                    { label: "Em Execução", value: mt.inProgress,  color: "bg-blue-500" },
-                    { label: "Contratadas", value: mt.contracted,  color: "bg-amber-500" },
-                    { label: "Canceladas",  value: mt.cancelled,   color: "bg-red-500" },
-                  ].map(item => (
+                    {
+                      label: "Concluídas",
+                      value: mt.completed,
+                      color: "bg-green-500",
+                    },
+                    {
+                      label: "Em Execução",
+                      value: mt.inProgress,
+                      color: "bg-blue-500",
+                    },
+                    {
+                      label: "Contratadas",
+                      value: mt.contracted,
+                      color: "bg-amber-500",
+                    },
+                    {
+                      label: "Canceladas",
+                      value: mt.cancelled,
+                      color: "bg-red-500",
+                    },
+                  ].map((item) => (
                     <div key={item.label}>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">{item.label}</span>
-                        <span className="font-medium">{item.value.toLocaleString("pt-BR")} ({Math.round((item.value / tTotal) * 100)}%)</span>
+                        <span className="text-muted-foreground">
+                          {item.label}
+                        </span>
+                        <span className="font-medium">
+                          {item.value.toLocaleString("pt-BR")} (
+                          {Math.round((item.value / tTotal) * 100)}%)
+                        </span>
                       </div>
                       <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                        <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.value / tTotal) * 100}%` }} />
+                        <div
+                          className={`h-2 ${item.color} rounded-full`}
+                          style={{ width: `${(item.value / tTotal) * 100}%` }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -4165,39 +5429,76 @@ export default function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
-                <p className="text-sm text-muted-foreground">Total de Nômades</p>
+                <p className="text-sm text-muted-foreground">
+                  Total de Nômades
+                </p>
                 <div className="flex items-baseline gap-2 mt-0.5">
-                  <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">{mn.total}</p>
-                  <span className="text-sm text-success font-semibold">+{mn.growth}%</span>
+                  <p className="text-3xl font-bold text-teal-700 dark:text-teal-300">
+                    {mn.total}
+                  </p>
+                  <span className="text-sm text-success font-semibold">
+                    +{mn.growth}%
+                  </span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
                   <div className="flex items-center gap-1.5 mb-1">
                     <div className="h-2 w-2 rounded-full bg-success" />
-                    <p className="text-xs font-medium text-muted-foreground">Ativos</p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Ativos
+                    </p>
                   </div>
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">{mn.active}</p>
-                  <p className="text-xs text-success mt-1">+{mn.activeGrowth}% vs anterior</p>
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                    {mn.active}
+                  </p>
+                  <p className="text-xs text-success mt-1">
+                    +{mn.activeGrowth}% vs anterior
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
                   <div className="flex items-center gap-1.5 mb-1">
                     <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                    <p className="text-xs font-medium text-muted-foreground">Inativos</p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Inativos
+                    </p>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{mn.inactive}</p>
-                  <p className="text-xs text-destructive mt-1">{mn.inactiveChange}% vs anterior</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {mn.inactive}
+                  </p>
+                  <p className="text-xs text-destructive mt-1">
+                    {mn.inactiveChange}% vs anterior
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "Novos no período", value: String(mn.newInPeriod), color: "text-info" },
-                  { label: "Churn",            value: String(mn.churn),       color: "text-destructive" },
-                  { label: "Retenção 30d",     value: `${mn.retention30d}%`,  color: "text-success" },
-                ].map(item => (
-                  <div key={item.label} className="p-3 rounded-lg border border-border/50 bg-muted/20 text-center">
-                    <p className="text-[11px] text-muted-foreground">{item.label}</p>
-                    <p className={`text-xl font-bold mt-0.5 ${item.color}`}>{item.value}</p>
+                  {
+                    label: "Novos no período",
+                    value: String(mn.newInPeriod),
+                    color: "text-info",
+                  },
+                  {
+                    label: "Churn",
+                    value: String(mn.churn),
+                    color: "text-destructive",
+                  },
+                  {
+                    label: "Retenção 30d",
+                    value: `${mn.retention30d}%`,
+                    color: "text-success",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="p-3 rounded-lg border border-border/50 bg-muted/20 text-center"
+                  >
+                    <p className="text-[11px] text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p className={`text-xl font-bold mt-0.5 ${item.color}`}>
+                      {item.value}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -4205,9 +5506,18 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-semibold mb-3">Evolução de ativos</p>
                 <div className="flex items-end gap-1.5 h-24">
                   {mn.trendData.map((value, idx) => (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full rounded-t bg-teal-400 dark:bg-teal-500 transition-all" style={{ height: `${(value / maxTrend) * 100}%` }} title={String(value)} />
-                      <span className="text-[9px] text-muted-foreground">D{idx + 1}</span>
+                    <div
+                      key={idx}
+                      className="flex-1 flex flex-col items-center gap-1"
+                    >
+                      <div
+                        className="w-full rounded-t bg-teal-400 dark:bg-teal-500 transition-all"
+                        style={{ height: `${(value / maxTrend) * 100}%` }}
+                        title={String(value)}
+                      />
+                      <span className="text-[9px] text-muted-foreground">
+                        D{idx + 1}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -4221,23 +5531,65 @@ export default function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
-                <p className="text-sm text-muted-foreground">Tempo Médio por Tarefa</p>
-                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">{ni.avgTimePerTask.toFixed(1)} dias</p>
+                <p className="text-sm text-muted-foreground">
+                  Tempo Médio por Tarefa
+                </p>
+                <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">
+                  {ni.avgTimePerTask.toFixed(1)} dias
+                </p>
               </div>
               <div className="space-y-3">
                 {[
-                  { label: "Taxa de Entrega",  display: `${ni.deliveryRate.toFixed(1)}%`,   pct: ni.deliveryRate,          color: "bg-green-500",  chip: "text-green-700 dark:text-green-300",    bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" },
-                  { label: "Avaliação Média",  display: `${ni.avgRating.toFixed(1)} / 5.0`, pct: (ni.avgRating / 5) * 100, color: "bg-amber-500",  chip: "text-amber-700 dark:text-amber-300",    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
-                  { label: "Certificados",     display: `${ni.certified}%`,                 pct: ni.certified,             color: "bg-violet-500", chip: "text-violet-700 dark:text-violet-300",  bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" },
-                  { label: "Retenção 90 dias", display: `${ni.retention90d}%`,              pct: ni.retention90d,          color: "bg-teal-500",   chip: "text-teal-700 dark:text-teal-300",      bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800" },
-                ].map(kpi => (
-                  <div key={kpi.label} className={`p-4 rounded-xl border ${kpi.bg}`}>
+                  {
+                    label: "Taxa de Entrega",
+                    display: `${ni.deliveryRate.toFixed(1)}%`,
+                    pct: ni.deliveryRate,
+                    color: "bg-green-500",
+                    chip: "text-green-700 dark:text-green-300",
+                    bg: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
+                  },
+                  {
+                    label: "Avaliação Média",
+                    display: `${ni.avgRating.toFixed(1)} / 5.0`,
+                    pct: (ni.avgRating / 5) * 100,
+                    color: "bg-amber-500",
+                    chip: "text-amber-700 dark:text-amber-300",
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                  },
+                  {
+                    label: "Certificados",
+                    display: `${ni.certified}%`,
+                    pct: ni.certified,
+                    color: "bg-violet-500",
+                    chip: "text-violet-700 dark:text-violet-300",
+                    bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                  },
+                  {
+                    label: "Retenção 90 dias",
+                    display: `${ni.retention90d}%`,
+                    pct: ni.retention90d,
+                    color: "bg-teal-500",
+                    chip: "text-teal-700 dark:text-teal-300",
+                    bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",
+                  },
+                ].map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className={`p-4 rounded-xl border ${kpi.bg}`}
+                  >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-muted-foreground">{kpi.label}</span>
-                      <span className={`text-base font-bold ${kpi.chip}`}>{kpi.display}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {kpi.label}
+                      </span>
+                      <span className={`text-base font-bold ${kpi.chip}`}>
+                        {kpi.display}
+                      </span>
                     </div>
                     <div className="h-2 bg-secondary/60 rounded-full overflow-hidden">
-                      <div className={`h-2 ${kpi.color} rounded-full`} style={{ width: `${kpi.pct}%` }} />
+                      <div
+                        className={`h-2 ${kpi.color} rounded-full`}
+                        style={{ width: `${kpi.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -4248,35 +5600,70 @@ export default function AdminDashboardPage() {
 
         case "nomadsRanking": {
           const perfList = mData.performers;
-          const medals = ["text-yellow-500", "text-slate-400", "text-amber-600"];
+          const medals = [
+            "text-yellow-500",
+            "text-slate-400",
+            "text-amber-600",
+          ];
           return (
             <div className="space-y-3">
               {perfList.length === 0 ? (
                 <div className="text-center py-8 space-y-2">
                   <Trophy className="h-8 w-8 text-warning mx-auto opacity-40" />
-                  <p className="text-sm text-muted-foreground">Nenhum nômade no ranking ainda.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum nômade no ranking ainda.
+                  </p>
                 </div>
               ) : (
-                perfList.map((performer: { id: string; name: string; rating: number; projects: number; badge: string }, index: number) => (
-                  <div key={performer.id} className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-                    <div className="relative shrink-0">
-                      <div className="h-11 w-11 rounded-full bg-gradient-to-br from-warning to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                        {index + 1}
+                perfList.map(
+                  (
+                    performer: {
+                      id: string;
+                      name: string;
+                      rating: number;
+                      projects: number;
+                      badge: string;
+                    },
+                    index: number,
+                  ) => (
+                    <div
+                      key={performer.id}
+                      className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-warning to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                          {index + 1}
+                        </div>
+                        <Award
+                          className={`absolute -bottom-1 -right-1 h-4 w-4 ${medals[index] ?? "text-chart-4"}`}
+                        />
                       </div>
-                      <Award className={`absolute -bottom-1 -right-1 h-4 w-4 ${medals[index] ?? "text-chart-4"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{performer.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="flex items-center gap-0.5 text-xs"><Star className="h-3 w-3 text-warning fill-warning" />{performer.rating}</span>
-                        <span className="text-xs text-muted-foreground">• {performer.projects} proj.</span>
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${performer.badge === "gold" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : performer.badge === "silver" ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                          {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">
+                          {performer.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="flex items-center gap-0.5 text-xs">
+                            <Star className="h-3 w-3 text-warning fill-warning" />
+                            {performer.rating}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            • {performer.projects} proj.
+                          </span>
+                          <span
+                            className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${performer.badge === "gold" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : performer.badge === "silver" ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}
+                          >
+                            {performer.badge === "gold"
+                              ? "Ouro"
+                              : performer.badge === "silver"
+                                ? "Prata"
+                                : "Bronze"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ),
+                )
               )}
             </div>
           );
@@ -4284,30 +5671,63 @@ export default function AdminDashboardPage() {
 
         case "agenciesRanking": {
           const agList = mData.agenciesRanking;
-          const agMedals = ["text-yellow-500", "text-slate-400", "text-amber-600"];
+          const agMedals = [
+            "text-yellow-500",
+            "text-slate-400",
+            "text-amber-600",
+          ];
           return (
             <div className="space-y-3">
-              {agList.map((agency: { id: string; name: string; rating: number; projects: number; contribution: string }, index: number) => (
-                <div key={agency.id} className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-                  <div className="relative shrink-0">
-                    <div className="h-11 w-11 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                      {index + 1}
+              {agList.map(
+                (
+                  agency: {
+                    id: string;
+                    name: string;
+                    rating: number;
+                    projects: number;
+                    contribution: string;
+                  },
+                  index: number,
+                ) => (
+                  <div
+                    key={agency.id}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="relative shrink-0">
+                      <div className="h-11 w-11 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                        {index + 1}
+                      </div>
+                      {index < 3 && (
+                        <Award
+                          className={`absolute -bottom-1 -right-1 h-4 w-4 ${agMedals[index]}`}
+                        />
+                      )}
                     </div>
-                    {index < 3 && <Award className={`absolute -bottom-1 -right-1 h-4 w-4 ${agMedals[index]}`} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{agency.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="flex items-center gap-0.5 text-xs"><Star className="h-3 w-3 text-warning fill-warning" />{agency.rating}</span>
-                      <span className="text-xs text-muted-foreground">• {agency.projects} proj.</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">
+                        {agency.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-0.5 text-xs">
+                          <Star className="h-3 w-3 text-warning fill-warning" />
+                          {agency.rating}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          • {agency.projects} proj.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold text-cyan-600 dark:text-cyan-400">
+                        {agency.contribution}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        faturamento
+                      </p>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-bold text-cyan-600 dark:text-cyan-400">{agency.contribution}</p>
-                    <p className="text-[10px] text-muted-foreground">faturamento</p>
-                  </div>
-                </div>
-              ))}
+                ),
+              )}
             </div>
           );
         }
@@ -4316,58 +5736,150 @@ export default function AdminDashboardPage() {
           const so = mData.statusOverview;
           const sections = [
             {
-              title: "Projetos", icon: Briefcase,
+              title: "Projetos",
+              icon: Briefcase,
               items: [
-                { label: "Em andamento", value: so.projects.ongoing,   color: "bg-blue-500",    chip: "text-blue-600" },
-                { label: "Aprovados",    value: so.projects.approved,  color: "bg-green-500",   chip: "text-green-600" },
-                { label: "Concluídos",   value: so.projects.completed, color: "bg-emerald-500", chip: "text-emerald-600" },
-                { label: "Cancelados",   value: so.projects.cancelled, color: "bg-red-500",     chip: "text-red-600" },
-                { label: "Em atraso",    value: so.projects.delayed,   color: "bg-amber-500",   chip: "text-amber-600" },
+                {
+                  label: "Em andamento",
+                  value: so.projects.ongoing,
+                  color: "bg-blue-500",
+                  chip: "text-blue-600",
+                },
+                {
+                  label: "Aprovados",
+                  value: so.projects.approved,
+                  color: "bg-green-500",
+                  chip: "text-green-600",
+                },
+                {
+                  label: "Concluídos",
+                  value: so.projects.completed,
+                  color: "bg-emerald-500",
+                  chip: "text-emerald-600",
+                },
+                {
+                  label: "Cancelados",
+                  value: so.projects.cancelled,
+                  color: "bg-red-500",
+                  chip: "text-red-600",
+                },
+                {
+                  label: "Em atraso",
+                  value: so.projects.delayed,
+                  color: "bg-amber-500",
+                  chip: "text-amber-600",
+                },
               ],
             },
             {
-              title: "Tarefas", icon: CheckSquare,
+              title: "Tarefas",
+              icon: CheckSquare,
               items: [
-                { label: "Contratadas", value: so.tasks.contracted, color: "bg-purple-500", chip: "text-purple-600" },
-                { label: "Em execução", value: so.tasks.inProgress, color: "bg-blue-500",   chip: "text-blue-600" },
-                { label: "Concluídas",  value: so.tasks.completed,  color: "bg-green-500",  chip: "text-green-600" },
-                { label: "Arquivadas",  value: so.tasks.archived,   color: "bg-slate-400",  chip: "text-slate-500" },
+                {
+                  label: "Contratadas",
+                  value: so.tasks.contracted,
+                  color: "bg-purple-500",
+                  chip: "text-purple-600",
+                },
+                {
+                  label: "Em execução",
+                  value: so.tasks.inProgress,
+                  color: "bg-blue-500",
+                  chip: "text-blue-600",
+                },
+                {
+                  label: "Concluídas",
+                  value: so.tasks.completed,
+                  color: "bg-green-500",
+                  chip: "text-green-600",
+                },
+                {
+                  label: "Arquivadas",
+                  value: so.tasks.archived,
+                  color: "bg-slate-400",
+                  chip: "text-slate-500",
+                },
               ],
             },
             {
-              title: "Leads", icon: Users,
+              title: "Leads",
+              icon: Users,
               items: [
-                { label: "Novos",             value: so.leads.new,       color: "bg-cyan-500",  chip: "text-cyan-600" },
-                { label: "Em contato",        value: so.leads.contacted, color: "bg-blue-500",  chip: "text-blue-600" },
-                { label: "Proposta enviada",  value: so.leads.proposal,  color: "bg-violet-500",chip: "text-violet-600" },
-                { label: "Fechado",           value: so.leads.won,       color: "bg-green-500", chip: "text-green-600" },
-                { label: "Perdido",           value: so.leads.lost,      color: "bg-red-500",   chip: "text-red-600" },
+                {
+                  label: "Novos",
+                  value: so.leads.new,
+                  color: "bg-cyan-500",
+                  chip: "text-cyan-600",
+                },
+                {
+                  label: "Em contato",
+                  value: so.leads.contacted,
+                  color: "bg-blue-500",
+                  chip: "text-blue-600",
+                },
+                {
+                  label: "Proposta enviada",
+                  value: so.leads.proposal,
+                  color: "bg-violet-500",
+                  chip: "text-violet-600",
+                },
+                {
+                  label: "Fechado",
+                  value: so.leads.won,
+                  color: "bg-green-500",
+                  chip: "text-green-600",
+                },
+                {
+                  label: "Perdido",
+                  value: so.leads.lost,
+                  color: "bg-red-500",
+                  chip: "text-red-600",
+                },
               ],
             },
           ];
           return (
             <div className="space-y-5">
-              {sections.map(section => {
+              {sections.map((section) => {
                 const total = section.items.reduce((s, i) => s + i.value, 0);
                 return (
-                  <div key={section.title} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3">
+                  <div
+                    key={section.title}
+                    className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3"
+                  >
                     <h3 className="text-sm font-semibold flex items-center gap-2">
                       <section.icon className="h-4 w-4 text-muted-foreground" />
                       {section.title}
                     </h3>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {section.items.map(item => (
-                        <div key={item.label} className="p-3 rounded-lg border border-border/30 bg-background/60 text-center">
-                          <p className={`text-xl font-bold ${item.chip}`}>{item.value.toLocaleString("pt-BR")}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{item.label}</p>
+                      {section.items.map((item) => (
+                        <div
+                          key={item.label}
+                          className="p-3 rounded-lg border border-border/30 bg-background/60 text-center"
+                        >
+                          <p className={`text-xl font-bold ${item.chip}`}>
+                            {item.value.toLocaleString("pt-BR")}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {item.label}
+                          </p>
                         </div>
                       ))}
                     </div>
                     {total > 0 && (
                       <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                        {section.items.filter(i => i.value > 0).map(item => (
-                          <div key={item.label} className={`${item.color} h-2`} style={{ width: `${(item.value / total) * 100}%` }} title={`${item.label}: ${item.value}`} />
-                        ))}
+                        {section.items
+                          .filter((i) => i.value > 0)
+                          .map((item) => (
+                            <div
+                              key={item.label}
+                              className={`${item.color} h-2`}
+                              style={{
+                                width: `${(item.value / total) * 100}%`,
+                              }}
+                              title={`${item.label}: ${item.value}`}
+                            />
+                          ))}
                       </div>
                     )}
                   </div>
@@ -4384,38 +5896,108 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl border border-chart-2/20 bg-chart-2/5 text-center">
                   <Users className="h-6 w-6 text-chart-2 mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-chart-2">{mData.activeUsers.total.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Total registrado</p>
+                  <p className="text-2xl font-bold text-chart-2">
+                    {mData.activeUsers.total.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Total registrado
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
                   <TrendingUp className="h-6 w-6 text-success mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-success">+{mData.activeUsers.empresasGrowth}%</p>
-                  <p className="text-xs text-muted-foreground">Crescimento médio</p>
+                  <p className="text-2xl font-bold text-success">
+                    +{mData.activeUsers.empresasGrowth}%
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Crescimento médio
+                  </p>
                 </div>
               </div>
               {/* Per-type breakdown */}
               <div className="grid grid-cols-2 gap-2.5">
-                {([
-                  { type: "Empresas", count: mData.activeUsers.empresas, growth: `+${mData.activeUsers.empresasGrowth}%`, percentage: Math.round(mData.activeUsers.empresas / mData.activeUsers.total * 100), bg: "bg-info/5 border-info/20", text: "text-info", bar: "bg-info", icon: Building2 },
-                  { type: "Agências", count: mData.activeUsers.agencias, growth: `+${mData.activeUsers.agenciasGrowth}%`, percentage: Math.round(mData.activeUsers.agencias / mData.activeUsers.total * 100), bg: "bg-success/5 border-success/20", text: "text-success", bar: "bg-success", icon: Briefcase },
-                  { type: "Nômades",  count: mData.activeUsers.nomades,  growth: `+${mData.activeUsers.nomadesGrowth}%`,  percentage: Math.round(mData.activeUsers.nomades / mData.activeUsers.total * 100),  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", bar: "bg-chart-4", icon: UserCheck },
-                  { type: "Admins",   count: mData.activeUsers.admins,   growth: `+${mData.activeUsers.adminsGrowth}%`,   percentage: Math.round(mData.activeUsers.admins / mData.activeUsers.total * 100),   bg: "bg-warning/5 border-warning/20", text: "text-warning", bar: "bg-warning", icon: Shield },
-                ]).map((ut) => {
+                {[
+                  {
+                    type: "Empresas",
+                    count: mData.activeUsers.empresas,
+                    growth: `+${mData.activeUsers.empresasGrowth}%`,
+                    percentage: Math.round(
+                      (mData.activeUsers.empresas / mData.activeUsers.total) *
+                        100,
+                    ),
+                    bg: "bg-info/5 border-info/20",
+                    text: "text-info",
+                    bar: "bg-info",
+                    icon: Building2,
+                  },
+                  {
+                    type: "Agências",
+                    count: mData.activeUsers.agencias,
+                    growth: `+${mData.activeUsers.agenciasGrowth}%`,
+                    percentage: Math.round(
+                      (mData.activeUsers.agencias / mData.activeUsers.total) *
+                        100,
+                    ),
+                    bg: "bg-success/5 border-success/20",
+                    text: "text-success",
+                    bar: "bg-success",
+                    icon: Briefcase,
+                  },
+                  {
+                    type: "Nômades",
+                    count: mData.activeUsers.nomades,
+                    growth: `+${mData.activeUsers.nomadesGrowth}%`,
+                    percentage: Math.round(
+                      (mData.activeUsers.nomades / mData.activeUsers.total) *
+                        100,
+                    ),
+                    bg: "bg-chart-4/5 border-chart-4/20",
+                    text: "text-chart-4",
+                    bar: "bg-chart-4",
+                    icon: UserCheck,
+                  },
+                  {
+                    type: "Admins",
+                    count: mData.activeUsers.admins,
+                    growth: `+${mData.activeUsers.adminsGrowth}%`,
+                    percentage: Math.round(
+                      (mData.activeUsers.admins / mData.activeUsers.total) *
+                        100,
+                    ),
+                    bg: "bg-warning/5 border-warning/20",
+                    text: "text-warning",
+                    bar: "bg-warning",
+                    icon: Shield,
+                  },
+                ].map((ut) => {
                   const Icon = ut.icon;
                   return (
-                    <div key={ut.type} className={`p-3 rounded-xl border ${ut.bg} space-y-2`}>
+                    <div
+                      key={ut.type}
+                      className={`p-3 rounded-xl border ${ut.bg} space-y-2`}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <Icon className={`h-4 w-4 ${ut.text}`} />
-                          <p className={`text-xs font-semibold ${ut.text}`}>{ut.type}</p>
+                          <p className={`text-xs font-semibold ${ut.text}`}>
+                            {ut.type}
+                          </p>
                         </div>
-                        <span className="text-[10px] font-medium text-success">{ut.growth}</span>
+                        <span className="text-[10px] font-medium text-success">
+                          {ut.growth}
+                        </span>
                       </div>
-                      <p className={`text-2xl font-bold ${ut.text}`}>{ut.count.toLocaleString()}</p>
+                      <p className={`text-2xl font-bold ${ut.text}`}>
+                        {ut.count.toLocaleString()}
+                      </p>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-1">{ut.percentage}% do total</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          {ut.percentage}% do total
+                        </p>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${ut.bar}`} style={{ width: `${ut.percentage}%` }} />
+                          <div
+                            className={`h-full rounded-full ${ut.bar}`}
+                            style={{ width: `${ut.percentage}%` }}
+                          />
                         </div>
                       </div>
                     </div>
@@ -4432,32 +6014,77 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
                   <UserCheck className="h-6 w-6 text-success mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-success">{mData.activeUsers.total.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Total ativo hoje</p>
+                  <p className="text-2xl font-bold text-success">
+                    {mData.activeUsers.total.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Total ativo hoje
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl border border-info/20 bg-info/5 text-center">
                   <TrendingUp className="h-6 w-6 text-info mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-info">{mData.activeUsers.empresas + mData.activeUsers.agencias}</p>
-                  <p className="text-xs text-muted-foreground">Empresas + Agências</p>
+                  <p className="text-2xl font-bold text-info">
+                    {mData.activeUsers.empresas + mData.activeUsers.agencias}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Empresas + Agências
+                  </p>
                 </div>
               </div>
               {/* Per-type 2-per-row */}
               <div className="grid grid-cols-2 gap-2.5">
-                {([
-                  { type: "Empresas", count: mData.activeUsers.empresas, growth: `+${mData.activeUsers.empresasGrowth}%`, bg: "bg-info/5 border-info/20", text: "text-info", icon: Building2 },
-                  { type: "Agências", count: mData.activeUsers.agencias, growth: `+${mData.activeUsers.agenciasGrowth}%`, bg: "bg-success/5 border-success/20", text: "text-success", icon: Briefcase },
-                  { type: "Nômades",  count: mData.activeUsers.nomades,  growth: `+${mData.activeUsers.nomadesGrowth}%`,  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", icon: UserCheck },
-                  { type: "Admins",   count: mData.activeUsers.admins,   growth: `+${mData.activeUsers.adminsGrowth}%`,   bg: "bg-warning/5 border-warning/20", text: "text-warning", icon: Shield },
-                ]).map((item) => {
+                {[
+                  {
+                    type: "Empresas",
+                    count: mData.activeUsers.empresas,
+                    growth: `+${mData.activeUsers.empresasGrowth}%`,
+                    bg: "bg-info/5 border-info/20",
+                    text: "text-info",
+                    icon: Building2,
+                  },
+                  {
+                    type: "Agências",
+                    count: mData.activeUsers.agencias,
+                    growth: `+${mData.activeUsers.agenciasGrowth}%`,
+                    bg: "bg-success/5 border-success/20",
+                    text: "text-success",
+                    icon: Briefcase,
+                  },
+                  {
+                    type: "Nômades",
+                    count: mData.activeUsers.nomades,
+                    growth: `+${mData.activeUsers.nomadesGrowth}%`,
+                    bg: "bg-chart-4/5 border-chart-4/20",
+                    text: "text-chart-4",
+                    icon: UserCheck,
+                  },
+                  {
+                    type: "Admins",
+                    count: mData.activeUsers.admins,
+                    growth: `+${mData.activeUsers.adminsGrowth}%`,
+                    bg: "bg-warning/5 border-warning/20",
+                    text: "text-warning",
+                    icon: Shield,
+                  },
+                ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.type} className={`p-3 rounded-xl border ${item.bg} space-y-1`}>
+                    <div
+                      key={item.type}
+                      className={`p-3 rounded-xl border ${item.bg} space-y-1`}
+                    >
                       <div className="flex items-center justify-between">
                         <Icon className={`h-4 w-4 ${item.text}`} />
-                        <span className="text-[10px] font-medium text-success">{item.growth}</span>
+                        <span className="text-[10px] font-medium text-success">
+                          {item.growth}
+                        </span>
                       </div>
-                      <p className={`text-2xl font-bold ${item.text}`}>{item.count.toLocaleString()}</p>
-                      <p className={`text-xs font-medium ${item.text}`}>{item.type}</p>
+                      <p className={`text-2xl font-bold ${item.text}`}>
+                        {item.count.toLocaleString()}
+                      </p>
+                      <p className={`text-xs font-medium ${item.text}`}>
+                        {item.type}
+                      </p>
                     </div>
                   );
                 })}
@@ -4470,33 +6097,77 @@ export default function AdminDashboardPage() {
             <div className="space-y-4">
               {/* Type summary */}
               <div className="grid grid-cols-3 gap-2.5">
-                {([
-                  { label: "Sucesso", type: "success", color: "text-success", border: "border-success/20", bg: "bg-success/5" },
-                  { label: "Info",    type: "info",    color: "text-info",    border: "border-info/20",    bg: "bg-info/5" },
-                  { label: "Aviso",   type: "warning", color: "text-warning", border: "border-warning/20", bg: "bg-warning/5" },
-                ] as const).map((s) => (
-                  <div key={s.type} className={`p-3 rounded-xl border ${s.border} ${s.bg} text-center`}>
-                    <div className="shrink-0 flex justify-center mb-1">{getAlertIcon(s.type)}</div>
-                    <p className={`text-xl font-bold ${s.color}`}>{systemAlertsData.filter(a => a.type === s.type).length}</p>
-                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                {(
+                  [
+                    {
+                      label: "Sucesso",
+                      type: "success",
+                      color: "text-success",
+                      border: "border-success/20",
+                      bg: "bg-success/5",
+                    },
+                    {
+                      label: "Info",
+                      type: "info",
+                      color: "text-info",
+                      border: "border-info/20",
+                      bg: "bg-info/5",
+                    },
+                    {
+                      label: "Aviso",
+                      type: "warning",
+                      color: "text-warning",
+                      border: "border-warning/20",
+                      bg: "bg-warning/5",
+                    },
+                  ] as const
+                ).map((s) => (
+                  <div
+                    key={s.type}
+                    className={`p-3 rounded-xl border ${s.border} ${s.bg} text-center`}
+                  >
+                    <div className="shrink-0 flex justify-center mb-1">
+                      {getAlertIcon(s.type)}
+                    </div>
+                    <p className={`text-xl font-bold ${s.color}`}>
+                      {systemAlertsData.filter((a) => a.type === s.type).length}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {s.label}
+                    </p>
                   </div>
                 ))}
               </div>
               {/* Full log */}
               <div className="space-y-2">
                 {systemAlertsData.map((alert, i) => (
-                  <div key={i} className={cn("flex items-center gap-3 p-3 rounded-xl border",
-                    alert.type === "success" && "bg-success/5 border-success/20",
-                    alert.type === "warning" && "bg-warning/5 border-warning/20",
-                    alert.type === "info"    && "bg-info/5 border-info/20",
-                  )}>
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-xl border",
+                      alert.type === "success" &&
+                        "bg-success/5 border-success/20",
+                      alert.type === "warning" &&
+                        "bg-warning/5 border-warning/20",
+                      alert.type === "info" && "bg-info/5 border-info/20",
+                    )}
+                  >
                     <div className="shrink-0">{getAlertIcon(alert.type)}</div>
                     <p className="text-sm flex-1">{alert.message}</p>
-                    <Badge variant="outline" className={cn("text-xs shrink-0",
-                      alert.type === "success" && "bg-success/10 text-success-foreground border-success/30",
-                      alert.type === "warning" && "bg-warning/10 text-warning-foreground border-warning/30",
-                      alert.type === "info"    && "bg-info/10 text-info-foreground border-info/30",
-                    )}>{alert.time}</Badge>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs shrink-0",
+                        alert.type === "success" &&
+                          "bg-success/10 text-success-foreground border-success/30",
+                        alert.type === "warning" &&
+                          "bg-warning/10 text-warning-foreground border-warning/30",
+                        alert.type === "info" &&
+                          "bg-info/10 text-info-foreground border-info/30",
+                      )}
+                    >
+                      {alert.time}
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -4505,45 +6176,105 @@ export default function AdminDashboardPage() {
 
         case "partnerProgram": {
           const mpP = mData.partnerProgram;
-          const totalPartners = mpP.diamond + mpP.platinum + mpP.gold + mpP.silver + mpP.bronze;
+          const totalPartners =
+            mpP.diamond + mpP.platinum + mpP.gold + mpP.silver + mpP.bronze;
           return (
             <div className="space-y-4">
               {/* KPI invite stats */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-border/40 bg-muted/30 text-center">
                   <p className="text-2xl font-bold">{mpP.invitesSent}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Convites Enviados</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Convites Enviados
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
-                  <p className="text-2xl font-bold text-warning">{mpP.pending}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Pendentes</p>
+                  <p className="text-2xl font-bold text-warning">
+                    {mpP.pending}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pendentes
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl border border-success/20 bg-success/5 text-center">
-                  <p className="text-2xl font-bold text-success">{mpP.accepted}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Aceitos</p>
+                  <p className="text-2xl font-bold text-success">
+                    {mpP.accepted}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Aceitos
+                  </p>
                 </div>
               </div>
               {/* Partner levels 2-per-row */}
               <div>
-                <p className="text-sm font-semibold mb-2.5">Partners Ativos por Nível</p>
+                <p className="text-sm font-semibold mb-2.5">
+                  Partners Ativos por Nível
+                </p>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    { level: "Diamond",  count: mpP.diamond,  bar: "bg-sky-500",    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",              text: "text-sky-600 dark:text-sky-400" },
-                    { level: "Platinum", count: mpP.platinum, bar: "bg-violet-500", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-600 dark:text-violet-400" },
-                    { level: "Gold",     count: mpP.gold,     bar: "bg-yellow-500", bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",  text: "text-yellow-600 dark:text-yellow-400" },
-                    { level: "Silver",   count: mpP.silver,   bar: "bg-slate-400",  bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",      text: "text-slate-600 dark:text-slate-400" },
-                    { level: "Bronze",   count: mpP.bronze,   bar: "bg-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",  text: "text-orange-600 dark:text-orange-400" },
-                  ]).map((item) => {
-                    const pct = totalPartners > 0 ? Math.round(item.count / totalPartners * 100) : 0;
+                  {[
+                    {
+                      level: "Diamond",
+                      count: mpP.diamond,
+                      bar: "bg-sky-500",
+                      bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                      text: "text-sky-600 dark:text-sky-400",
+                    },
+                    {
+                      level: "Platinum",
+                      count: mpP.platinum,
+                      bar: "bg-violet-500",
+                      bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                      text: "text-violet-600 dark:text-violet-400",
+                    },
+                    {
+                      level: "Gold",
+                      count: mpP.gold,
+                      bar: "bg-yellow-500",
+                      bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",
+                      text: "text-yellow-600 dark:text-yellow-400",
+                    },
+                    {
+                      level: "Silver",
+                      count: mpP.silver,
+                      bar: "bg-slate-400",
+                      bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",
+                      text: "text-slate-600 dark:text-slate-400",
+                    },
+                    {
+                      level: "Bronze",
+                      count: mpP.bronze,
+                      bar: "bg-orange-500",
+                      bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",
+                      text: "text-orange-600 dark:text-orange-400",
+                    },
+                  ].map((item) => {
+                    const pct =
+                      totalPartners > 0
+                        ? Math.round((item.count / totalPartners) * 100)
+                        : 0;
                     return (
-                      <div key={item.level} className={`p-3 rounded-xl border ${item.bg} space-y-2`}>
+                      <div
+                        key={item.level}
+                        className={`p-3 rounded-xl border ${item.bg} space-y-2`}
+                      >
                         <div className="flex items-center justify-between">
-                          <p className={`text-sm font-bold ${item.text}`}>{item.level}</p>
-                          <span className={`text-[10px] font-medium ${item.text}`}>{pct}%</span>
+                          <p className={`text-sm font-bold ${item.text}`}>
+                            {item.level}
+                          </p>
+                          <span
+                            className={`text-[10px] font-medium ${item.text}`}
+                          >
+                            {pct}%
+                          </span>
                         </div>
-                        <p className={`text-2xl font-bold ${item.text}`}>{item.count}</p>
+                        <p className={`text-2xl font-bold ${item.text}`}>
+                          {item.count}
+                        </p>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${pct}%` }} />
+                          <div
+                            className={`h-full rounded-full ${item.bar}`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
                     );
@@ -4555,11 +6286,17 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-success" />
                   <div>
-                    <p className="text-sm font-semibold">MRR gerado por Partners</p>
-                    <p className="text-xs text-muted-foreground">{totalPartners} partners ativos</p>
+                    <p className="text-sm font-semibold">
+                      MRR gerado por Partners
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {totalPartners} partners ativos
+                    </p>
                   </div>
                 </div>
-                <p className="text-xl font-bold text-success">R$ {mpP.mrrGenerated.toLocaleString("pt-BR")}</p>
+                <p className="text-xl font-bold text-success">
+                  R$ {mpP.mrrGenerated.toLocaleString("pt-BR")}
+                </p>
               </div>
             </div>
           );
@@ -4572,30 +6309,46 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl border border-chart-4/20 bg-chart-4/5 text-center">
                   <Shield className="h-6 w-6 text-chart-4 mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-chart-4">{adminProfilesData.length}</p>
+                  <p className="text-2xl font-bold text-chart-4">
+                    {adminProfilesData.length}
+                  </p>
                   <p className="text-xs text-muted-foreground">Perfis ativos</p>
                 </div>
                 <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-center">
                   <Users className="h-6 w-6 text-primary mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-primary">{adminProfilesData.reduce((s, p) => s + p.users, 0)}</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {adminProfilesData.reduce((s, p) => s + p.users, 0)}
+                  </p>
                   <p className="text-xs text-muted-foreground">Admins totais</p>
                 </div>
               </div>
               {/* Profile grid */}
               <div className="grid grid-cols-2 gap-2.5">
                 {adminProfilesData.map((profile, index) => (
-                  <div key={index} className="p-3 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-2">
+                  <div
+                    key={index}
+                    className="p-3 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-2"
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <Badge className={`text-[10px] px-1.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}>{profile.name}</Badge>
-                      <span className="text-xs text-muted-foreground shrink-0">{profile.users} us.</span>
+                      <Badge
+                        className={`text-[10px] px-1.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}
+                      >
+                        {profile.name}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {profile.users} us.
+                      </span>
                     </div>
                     <div>
                       <p className="text-sm font-bold">{profile.permissions}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{profile.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {profile.description}
+                      </p>
                     </div>
                     <Link to="/admin/permissoes">
                       <button className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mt-1">
-                        Gerenciar Permissões <ArrowRightIcon className="h-3 w-3" />
+                        Gerenciar Permissões{" "}
+                        <ArrowRightIcon className="h-3 w-3" />
                       </button>
                     </Link>
                   </div>
@@ -4609,12 +6362,29 @@ export default function AdminDashboardPage() {
             <div className="space-y-4">
               {/* Header summary */}
               <div className="grid grid-cols-4 gap-2">
-                {(["Master","Financeiro","Comercial","Operacional"] as const).map((role, i) => {
-                  const colors = ["text-destructive border-destructive/20 bg-destructive/5","text-success border-success/20 bg-success/5","text-info border-info/20 bg-info/5","text-chart-4 border-chart-4/20 bg-chart-4/5"];
-                  const keys = ["master","financeiro","comercial","operacional"] as const;
-                  const count = permissionMatrixData.filter(r => r[keys[i]]).length;
+                {(
+                  ["Master", "Financeiro", "Comercial", "Operacional"] as const
+                ).map((role, i) => {
+                  const colors = [
+                    "text-destructive border-destructive/20 bg-destructive/5",
+                    "text-success border-success/20 bg-success/5",
+                    "text-info border-info/20 bg-info/5",
+                    "text-chart-4 border-chart-4/20 bg-chart-4/5",
+                  ];
+                  const keys = [
+                    "master",
+                    "financeiro",
+                    "comercial",
+                    "operacional",
+                  ] as const;
+                  const count = permissionMatrixData.filter(
+                    (r) => r[keys[i]],
+                  ).length;
                   return (
-                    <div key={role} className={`p-2.5 rounded-xl border text-center ${colors[i]}`}>
+                    <div
+                      key={role}
+                      className={`p-2.5 rounded-xl border text-center ${colors[i]}`}
+                    >
                       <p className="text-lg font-bold">{count}</p>
                       <p className="text-[10px] font-medium truncate">{role}</p>
                     </div>
@@ -4626,21 +6396,68 @@ export default function AdminDashboardPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr className="border-b">
-                      <th className="text-left py-3 px-3 font-semibold text-xs">Módulo</th>
-                      <th className="text-center py-3 px-3 font-semibold text-xs text-destructive">Master</th>
-                      <th className="text-center py-3 px-3 font-semibold text-xs text-success">Fin.</th>
-                      <th className="text-center py-3 px-3 font-semibold text-xs text-info">Com.</th>
-                      <th className="text-center py-3 px-3 font-semibold text-xs text-chart-4">Op.</th>
+                      <th className="text-left py-3 px-3 font-semibold text-xs">
+                        Módulo
+                      </th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-destructive">
+                        Master
+                      </th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-success">
+                        Fin.
+                      </th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-info">
+                        Com.
+                      </th>
+                      <th className="text-center py-3 px-3 font-semibold text-xs text-chart-4">
+                        Op.
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {permissionMatrixData.map((row, index) => (
-                      <tr key={index} className="border-b hover:bg-muted/30 transition-colors">
-                        <td className="py-2.5 px-3 font-medium text-xs">{row.module}</td>
-                        <td className="text-center py-2.5 px-3">{row.master ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
-                        <td className="text-center py-2.5 px-3">{row.financeiro ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
-                        <td className="text-center py-2.5 px-3">{row.comercial ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
-                        <td className="text-center py-2.5 px-3">{row.operacional ? <CheckCircle2 className="h-4 w-4 text-success mx-auto" /> : <span className="text-muted-foreground/30 text-xs">—</span>}</td>
+                      <tr
+                        key={index}
+                        className="border-b hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="py-2.5 px-3 font-medium text-xs">
+                          {row.module}
+                        </td>
+                        <td className="text-center py-2.5 px-3">
+                          {row.master ? (
+                            <CheckCircle2 className="h-4 w-4 text-success mx-auto" />
+                          ) : (
+                            <span className="text-muted-foreground/30 text-xs">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center py-2.5 px-3">
+                          {row.financeiro ? (
+                            <CheckCircle2 className="h-4 w-4 text-success mx-auto" />
+                          ) : (
+                            <span className="text-muted-foreground/30 text-xs">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center py-2.5 px-3">
+                          {row.comercial ? (
+                            <CheckCircle2 className="h-4 w-4 text-success mx-auto" />
+                          ) : (
+                            <span className="text-muted-foreground/30 text-xs">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center py-2.5 px-3">
+                          {row.operacional ? (
+                            <CheckCircle2 className="h-4 w-4 text-success mx-auto" />
+                          ) : (
+                            <span className="text-muted-foreground/30 text-xs">
+                              —
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -4648,7 +6465,10 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex items-start gap-2 p-3 rounded-xl bg-info/5 border border-info/20">
                 <Key className="h-4 w-4 text-info mt-0.5 shrink-0" />
-                <p className="text-xs text-muted-foreground"><strong>Nota:</strong> Apenas o usuário Master pode criar e gerenciar outros perfis administrativos.</p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Nota:</strong> Apenas o usuário Master pode criar e
+                  gerenciar outros perfis administrativos.
+                </p>
               </div>
             </div>
           );
@@ -4656,23 +6476,81 @@ export default function AdminDashboardPage() {
         case "managementTools":
           return (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Acesse as principais ferramentas de gerenciamento da plataforma.</p>
+              <p className="text-sm text-muted-foreground">
+                Acesse as principais ferramentas de gerenciamento da plataforma.
+              </p>
               <div className="grid grid-cols-2 gap-3">
-                {([
-                  { to: "/admin/usuarios",      icon: Users,       label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",              border: "border-info/20",        bg: "bg-info/5",        text: "text-info" },
-                  { to: "/admin/permissoes",    icon: Shield,      label: "Gerenciar Permissões",         desc: "Criar e editar perfis administrativos",         border: "border-destructive/20", bg: "bg-destructive/5", text: "text-destructive" },
-                  { to: "/admin/relatorios",    icon: FileText,    label: "Relatórios Financeiros",        desc: "Visualizar receitas e pagamentos",               border: "border-success/20",     bg: "bg-success/5",     text: "text-success" },
-                  { to: "/admin/configuracoes", icon: Settings,    label: "Configurações da Plataforma",  desc: "Ajustar parâmetros do sistema",                 border: "border-warning/20",     bg: "bg-warning/5",     text: "text-warning" },
-                  { to: "/admin/disputas",      icon: AlertCircle, label: "Resolver Disputas",            desc: "Mediar conflitos entre usuários",               border: "border-chart-4/20",     bg: "bg-chart-4/5",     text: "text-chart-4" },
-                  { to: "/admin/logs",          icon: Activity,    label: "Logs do Sistema",              desc: "Monitorar atividades e erros",                  border: "border-border/40",      bg: "bg-muted/30",      text: "text-foreground" },
-                ] as const).map((tool) => {
+                {(
+                  [
+                    {
+                      to: "/admin/usuarios",
+                      icon: Users,
+                      label: "Gerenciar Usuários",
+                      desc: "Criar, editar e desativar contas",
+                      border: "border-info/20",
+                      bg: "bg-info/5",
+                      text: "text-info",
+                    },
+                    {
+                      to: "/admin/permissoes",
+                      icon: Shield,
+                      label: "Gerenciar Permissões",
+                      desc: "Criar e editar perfis administrativos",
+                      border: "border-destructive/20",
+                      bg: "bg-destructive/5",
+                      text: "text-destructive",
+                    },
+                    {
+                      to: "/admin/relatorios",
+                      icon: FileText,
+                      label: "Relatórios Financeiros",
+                      desc: "Visualizar receitas e pagamentos",
+                      border: "border-success/20",
+                      bg: "bg-success/5",
+                      text: "text-success",
+                    },
+                    {
+                      to: "/admin/configuracoes",
+                      icon: Settings,
+                      label: "Configurações da Plataforma",
+                      desc: "Ajustar parâmetros do sistema",
+                      border: "border-warning/20",
+                      bg: "bg-warning/5",
+                      text: "text-warning",
+                    },
+                    {
+                      to: "/admin/disputas",
+                      icon: AlertCircle,
+                      label: "Resolver Disputas",
+                      desc: "Mediar conflitos entre usuários",
+                      border: "border-chart-4/20",
+                      bg: "bg-chart-4/5",
+                      text: "text-chart-4",
+                    },
+                    {
+                      to: "/admin/logs",
+                      icon: Activity,
+                      label: "Logs do Sistema",
+                      desc: "Monitorar atividades e erros",
+                      border: "border-border/40",
+                      bg: "bg-muted/30",
+                      text: "text-foreground",
+                    },
+                  ] as const
+                ).map((tool) => {
                   const Icon = tool.icon;
                   return (
                     <Link key={tool.to} to={tool.to}>
-                      <div className={`p-3 rounded-xl border ${tool.border} ${tool.bg} hover:opacity-80 transition-opacity`}>
+                      <div
+                        className={`p-3 rounded-xl border ${tool.border} ${tool.bg} hover:opacity-80 transition-opacity`}
+                      >
                         <Icon className={`h-5 w-5 ${tool.text} mb-1.5`} />
-                        <p className={`text-xs font-semibold ${tool.text}`}>{tool.label}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{tool.desc}</p>
+                        <p className={`text-xs font-semibold ${tool.text}`}>
+                          {tool.label}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {tool.desc}
+                        </p>
                       </div>
                     </Link>
                   );
@@ -4687,7 +6565,9 @@ export default function AdminDashboardPage() {
               {topPerformers.length === 0 ? (
                 <div className="text-center py-8 space-y-2">
                   <Trophy className="h-8 w-8 text-warning mx-auto opacity-40" />
-                  <p className="text-sm text-muted-foreground">Nenhum nômade no ranking ainda.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum nômade no ranking ainda.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -4695,23 +6575,57 @@ export default function AdminDashboardPage() {
                   <div className="grid grid-cols-3 gap-2.5">
                     {topPerformers.slice(0, 3).map((performer, index) => {
                       const mc = [
-                        { ring: "ring-yellow-400", bg: "from-yellow-400 to-amber-500", text: "text-yellow-700 dark:text-yellow-300", chip: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800" },
-                        { ring: "ring-slate-400",  bg: "from-slate-400 to-slate-500",  text: "text-slate-600 dark:text-slate-400",   chip: "bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-700" },
-                        { ring: "ring-amber-600",  bg: "from-amber-600 to-orange-600", text: "text-amber-700 dark:text-amber-400",   chip: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+                        {
+                          ring: "ring-yellow-400",
+                          bg: "from-yellow-400 to-amber-500",
+                          text: "text-yellow-700 dark:text-yellow-300",
+                          chip: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",
+                        },
+                        {
+                          ring: "ring-slate-400",
+                          bg: "from-slate-400 to-slate-500",
+                          text: "text-slate-600 dark:text-slate-400",
+                          chip: "bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-700",
+                        },
+                        {
+                          ring: "ring-amber-600",
+                          bg: "from-amber-600 to-orange-600",
+                          text: "text-amber-700 dark:text-amber-400",
+                          chip: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                        },
                       ][index]!;
                       return (
-                        <div key={performer.id} className={`p-3 rounded-xl border ring-1 ${mc.ring} ${mc.chip} text-center`}>
-                          <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-base mx-auto mb-1.5`}>
+                        <div
+                          key={performer.id}
+                          className={`p-3 rounded-xl border ring-1 ${mc.ring} ${mc.chip} text-center`}
+                        >
+                          <div
+                            className={`h-10 w-10 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-base mx-auto mb-1.5`}
+                          >
                             {index + 1}
                           </div>
-                          <p className={`text-xs font-bold truncate ${mc.text}`}>{performer.name.split(" ")[0]}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
+                          <p
+                            className={`text-xs font-bold truncate ${mc.text}`}
+                          >
+                            {performer.name.split(" ")[0]}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {performer.specialty}
+                          </p>
                           <div className="flex items-center justify-center gap-0.5 mt-1">
                             <Star className="h-2.5 w-2.5 text-warning fill-warning" />
-                            <span className="text-[10px] font-medium">{performer.rating}</span>
+                            <span className="text-[10px] font-medium">
+                              {performer.rating}
+                            </span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">{performer.projects} proj.</p>
-                          <p className={`text-[10px] font-semibold mt-0.5 ${mc.text}`}>{performer.revenue}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {performer.projects} proj.
+                          </p>
+                          <p
+                            className={`text-[10px] font-semibold mt-0.5 ${mc.text}`}
+                          >
+                            {performer.revenue}
+                          </p>
                         </div>
                       );
                     })}
@@ -4720,18 +6634,35 @@ export default function AdminDashboardPage() {
                   {topPerformers.length > 3 && (
                     <div className="grid grid-cols-2 gap-2">
                       {topPerformers.slice(3).map((performer, idx) => (
-                        <div key={performer.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-                          <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 text-muted-foreground">{idx + 4}</div>
+                        <div
+                          key={performer.id}
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
+                        >
+                          <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 text-muted-foreground">
+                            {idx + 4}
+                          </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate">{performer.name.split(" ")[0]}</p>
+                            <p className="text-xs font-semibold truncate">
+                              {performer.name.split(" ")[0]}
+                            </p>
                             <div className="flex items-center gap-1 mt-0.5">
                               <Star className="h-2.5 w-2.5 text-warning fill-warning" />
-                              <span className="text-[10px]">{performer.rating}</span>
-                              <span className="text-[10px] text-muted-foreground">· {performer.projects} proj.</span>
+                              <span className="text-[10px]">
+                                {performer.rating}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                · {performer.projects} proj.
+                              </span>
                             </div>
                           </div>
-                          <Badge className={`text-[10px] h-4 px-1 shrink-0 ${getBadgeColor(performer.badge)}`}>
-                            {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
+                          <Badge
+                            className={`text-[10px] h-4 px-1 shrink-0 ${getBadgeColor(performer.badge)}`}
+                          >
+                            {performer.badge === "gold"
+                              ? "Ouro"
+                              : performer.badge === "silver"
+                                ? "Prata"
+                                : "Bronze"}
                           </Badge>
                         </div>
                       ))}
@@ -4749,24 +6680,40 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 text-center">
                   <AlertCircle className="h-6 w-6 text-destructive mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-destructive">{systemAlerts.filter(a => a.priority === "high").length}</p>
-                  <p className="text-xs text-muted-foreground">Alta prioridade</p>
+                  <p className="text-2xl font-bold text-destructive">
+                    {systemAlerts.filter((a) => a.priority === "high").length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Alta prioridade
+                  </p>
                 </div>
                 <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
                   <AlertTriangle className="h-6 w-6 text-warning mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-warning">{systemAlerts.filter(a => a.priority === "medium").length}</p>
-                  <p className="text-xs text-muted-foreground">Média prioridade</p>
+                  <p className="text-2xl font-bold text-warning">
+                    {systemAlerts.filter((a) => a.priority === "medium").length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Média prioridade
+                  </p>
                 </div>
               </div>
               {/* Full alert list */}
               <div className="space-y-2.5">
                 {systemAlerts.map((alert) => (
-                  <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-xl border ${getAlertColor(alert.type)}`}>
-                    <div className="mt-0.5 shrink-0">{getAlertIcon(alert.type)}</div>
+                  <div
+                    key={alert.id}
+                    className={`flex items-start gap-3 p-3 rounded-xl border ${getAlertColor(alert.type)}`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {getAlertIcon(alert.type)}
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <p className="text-sm font-semibold">{alert.title}</p>
-                        <Badge variant="outline" className={`text-xs shrink-0 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs shrink-0 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
+                        >
                           {alert.priority === "high" ? "Alta" : "Média"}
                         </Badge>
                       </div>
@@ -4779,9 +6726,16 @@ export default function AdminDashboardPage() {
               <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
                 <p className="text-sm font-semibold">Registro do sistema</p>
                 {systemAlertsData.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground truncate">{a.message}</span>
-                    <span className="text-muted-foreground shrink-0 ml-2">{a.time}</span>
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="text-muted-foreground truncate">
+                      {a.message}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 ml-2">
+                      {a.time}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -4791,23 +6745,81 @@ export default function AdminDashboardPage() {
         case "quickActions":
           return (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Acesse rapidamente as principais áreas de administração.</p>
+              <p className="text-sm text-muted-foreground">
+                Acesse rapidamente as principais áreas de administração.
+              </p>
               <div className="grid grid-cols-2 gap-3">
-                {([
-                  { to: "/admin/usuarios",      icon: Users,     label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",         border: "border-info/20",    bg: "bg-info/5",    text: "text-info" },
-                  { to: "/admin/nomades",       icon: UserCheck, label: "Gerenciar Nômades",            desc: "Ver e gerenciar a base de nômades",        border: "border-success/20", bg: "bg-success/5", text: "text-success" },
-                  { to: "/admin/projetos",      icon: Briefcase, label: "Ver Projetos",                 desc: "Todos os projetos ativos",                  border: "border-chart-4/20", bg: "bg-chart-4/5", text: "text-chart-4" },
-                  { to: "/admin/configuracoes", icon: Settings,  label: "Configurações",                desc: "Ajustar parâmetros do sistema",             border: "border-warning/20", bg: "bg-warning/5", text: "text-warning" },
-                  { to: "/admin/permissoes",    icon: Key,       label: "Permissões",                   desc: "Perfis e acessos administrativos",          border: "border-violet-200 dark:border-violet-800", bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-600 dark:text-violet-400" },
-                  { to: "/admin/relatorios",    icon: FileText,  label: "Relatórios",                   desc: "Financeiro e operacional",                  border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-950/20", text: "text-emerald-600 dark:text-emerald-400" },
-                ] as const).map((action) => {
+                {(
+                  [
+                    {
+                      to: "/admin/usuarios",
+                      icon: Users,
+                      label: "Gerenciar Usuários",
+                      desc: "Criar, editar e desativar contas",
+                      border: "border-info/20",
+                      bg: "bg-info/5",
+                      text: "text-info",
+                    },
+                    {
+                      to: "/admin/nomades",
+                      icon: UserCheck,
+                      label: "Gerenciar Nômades",
+                      desc: "Ver e gerenciar a base de nômades",
+                      border: "border-success/20",
+                      bg: "bg-success/5",
+                      text: "text-success",
+                    },
+                    {
+                      to: "/admin/projetos",
+                      icon: Briefcase,
+                      label: "Ver Projetos",
+                      desc: "Todos os projetos ativos",
+                      border: "border-chart-4/20",
+                      bg: "bg-chart-4/5",
+                      text: "text-chart-4",
+                    },
+                    {
+                      to: "/admin/configuracoes",
+                      icon: Settings,
+                      label: "Configurações",
+                      desc: "Ajustar parâmetros do sistema",
+                      border: "border-warning/20",
+                      bg: "bg-warning/5",
+                      text: "text-warning",
+                    },
+                    {
+                      to: "/admin/permissoes",
+                      icon: Key,
+                      label: "Permissões",
+                      desc: "Perfis e acessos administrativos",
+                      border: "border-violet-200 dark:border-violet-800",
+                      bg: "bg-violet-50 dark:bg-violet-950/20",
+                      text: "text-violet-600 dark:text-violet-400",
+                    },
+                    {
+                      to: "/admin/relatorios",
+                      icon: FileText,
+                      label: "Relatórios",
+                      desc: "Financeiro e operacional",
+                      border: "border-emerald-200 dark:border-emerald-800",
+                      bg: "bg-emerald-50 dark:bg-emerald-950/20",
+                      text: "text-emerald-600 dark:text-emerald-400",
+                    },
+                  ] as const
+                ).map((action) => {
                   const Icon = action.icon;
                   return (
                     <Link key={action.to} to={action.to}>
-                      <div className={`p-3 rounded-xl border ${action.border} ${action.bg} hover:opacity-80 transition-opacity`}>
+                      <div
+                        className={`p-3 rounded-xl border ${action.border} ${action.bg} hover:opacity-80 transition-opacity`}
+                      >
                         <Icon className={`h-5 w-5 ${action.text} mb-1.5`} />
-                        <p className={`text-xs font-semibold ${action.text}`}>{action.label}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{action.desc}</p>
+                        <p className={`text-xs font-semibold ${action.text}`}>
+                          {action.label}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {action.desc}
+                        </p>
                       </div>
                     </Link>
                   );
@@ -4822,15 +6834,23 @@ export default function AdminDashboardPage() {
               <div className="p-3 bg-muted/30 rounded-full w-fit mx-auto">
                 <Settings className="h-6 w-6 text-muted-foreground" />
               </div>
-              <p className="text-sm text-muted-foreground">Detalhes detalhados em breve para este widget.</p>
+              <p className="text-sm text-muted-foreground">
+                Detalhes detalhados em breve para este widget.
+              </p>
             </div>
           );
       }
     };
 
     return (
-      <Dialog open={!!detailsWidgetId} onOpenChange={() => setDetailsWidgetId(null)}>
-        <DialogContent className="!max-w-[1000px] w-[calc(100vw-2rem)] p-0 overflow-hidden" showCloseButton={false}>
+      <Dialog
+        open={!!detailsWidgetId}
+        onOpenChange={() => setDetailsWidgetId(null)}
+      >
+        <DialogContent
+          className="!max-w-[1000px] w-[calc(100vw-2rem)] p-0 overflow-hidden"
+          showCloseButton={false}
+        >
           {/* Brand-gradient header */}
           <div className="app-brand-header px-5 py-4 text-white">
             {/* Top row: icon + title/subtitle | period badge + action buttons */}
@@ -4841,56 +6861,81 @@ export default function AdminDashboardPage() {
               </div>
               {/* Title + subtitle — grows but never forces other items to wrap */}
               <div className="flex-1 min-w-0">
-                <h2 className="text-base font-bold leading-tight truncate">{title}</h2>
-                <p className="text-xs text-white/70 mt-0.5 truncate">{cfg.subtitle}</p>
+                <h2 className="text-base font-bold leading-tight truncate">
+                  {title}
+                </h2>
+                <p className="text-xs text-white/70 mt-0.5 truncate">
+                  {cfg.subtitle}
+                </p>
               </div>
               {/* Period selector dropdown — white-themed for the gradient header */}
-              {widgetInstance && (() => {
-                const wp = widgetPeriods.find((p) => p.widgetId === widgetInstance.id);
-                const isCustom = wp?.mode === "custom";
-                const periodOptions = [
-                  { key: "global",    label: "Período global" },
-                  { key: "today",     label: "Hoje" },
-                  { key: "7days",     label: "Últimos 7 dias" },
-                  { key: "30days",    label: "Últimos 30 dias" },
-                  { key: "thisMonth", label: "Este mês" },
-                  { key: "lastMonth", label: "Mês passado" },
-                  { key: "90days",    label: "Últimos 90 dias" },
-                  { key: "365days",   label: "Último ano" },
-                ];
-                const activeLabel = isCustom ? wp!.customPeriod!.label : "Período global";
-                return (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-white/20 hover:bg-white/30 text-white rounded-full px-3 py-1.5 whitespace-nowrap transition-colors shrink-0">
-                        <Calendar className="h-3 w-3 opacity-80" />
-                        {activeLabel}
-                        <ChevronDown className="h-3 w-3 opacity-70" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52 z-[9999]">
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">Período do widget</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {periodOptions.map((opt) => {
-                        const isSelected =
-                          opt.key === "global"
-                            ? !isCustom
-                            : isCustom && wp!.customPeriod!.label === opt.label;
-                        return (
-                          <DropdownMenuItem
-                            key={opt.key}
-                            onClick={() => setWidgetCustomPeriod(widgetInstance.id, opt.key === "global" ? "global" : opt.key)}
-                            className="text-xs"
-                          >
-                            <Check className={cn("mr-2 h-3 w-3", isSelected ? "opacity-100" : "opacity-0")} />
-                            {opt.label}
-                          </DropdownMenuItem>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                );
-              })()}
+              {widgetInstance &&
+                (() => {
+                  const wp = widgetPeriods.find(
+                    (p) => p.widgetId === widgetInstance.id,
+                  );
+                  const isCustom = wp?.mode === "custom";
+                  const periodOptions = [
+                    { key: "global", label: "Período global" },
+                    { key: "today", label: "Hoje" },
+                    { key: "7days", label: "Últimos 7 dias" },
+                    { key: "30days", label: "Últimos 30 dias" },
+                    { key: "thisMonth", label: "Este mês" },
+                    { key: "lastMonth", label: "Mês passado" },
+                    { key: "90days", label: "Últimos 90 dias" },
+                    { key: "365days", label: "Último ano" },
+                  ];
+                  const activeLabel = isCustom
+                    ? wp!.customPeriod!.label
+                    : "Período global";
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-white/20 hover:bg-white/30 text-white rounded-full px-3 py-1.5 whitespace-nowrap transition-colors shrink-0">
+                          <Calendar className="h-3 w-3 opacity-80" />
+                          {activeLabel}
+                          <ChevronDown className="h-3 w-3 opacity-70" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-52 z-[9999]"
+                      >
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                          Período do widget
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {periodOptions.map((opt) => {
+                          const isSelected =
+                            opt.key === "global"
+                              ? !isCustom
+                              : isCustom &&
+                                wp!.customPeriod!.label === opt.label;
+                          return (
+                            <DropdownMenuItem
+                              key={opt.key}
+                              onClick={() =>
+                                setWidgetCustomPeriod(
+                                  widgetInstance.id,
+                                  opt.key === "global" ? "global" : opt.key,
+                                )
+                              }
+                              className="text-xs"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-3 w-3",
+                                  isSelected ? "opacity-100" : "opacity-0",
+                                )}
+                              />
+                              {opt.label}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
               {/* Divider */}
               <div className="h-6 w-px bg-white/20 shrink-0" />
               {/* Action icon buttons */}
@@ -4920,7 +6965,10 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           {/* Scrollable content — overflow-y-scroll keeps scrollbar always visible */}
-          <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll transition-opacity duration-150" key={`${detailsWidgetId}-${modalPeriod.label}`}>
+          <div
+            className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll transition-opacity duration-150"
+            key={`${detailsWidgetId}-${modalPeriod.label}`}
+          >
             {renderContent()}
           </div>
         </DialogContent>
@@ -5018,20 +7066,22 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* Controls row */}
                 <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => setIsEditingMetrics(!isEditingMetrics)}
-                      title={isEditingMetrics ? "Concluir Edição" : "Editar Widgets"}
-                      className={cn(
-                        "flex items-center justify-center h-7 w-7 rounded-md border shrink-0 transition-all duration-200",
-                        isEditingMetrics
-                          ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30"
-                          : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                      )}
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <WidgetPeriodSelector widgetId={widget.id} />
-                  </div>
+                  <button
+                    onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                    title={
+                      isEditingMetrics ? "Concluir Edição" : "Editar Widgets"
+                    }
+                    className={cn(
+                      "flex items-center justify-center h-7 w-7 rounded-md border shrink-0 transition-all duration-200",
+                      isEditingMetrics
+                        ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30"
+                        : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                    )}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
                 <WidgetExportButton
                   widgetId={widget.type}
                   widgetTitle={getWidgetTitle(widget.type)}
@@ -5078,19 +7128,49 @@ export default function AdminDashboardPage() {
                   {(() => {
                     // Compute widget-specific metrics based on per-widget period override
                     const wp = effectivePeriod as { periodKey?: string };
-                    const widgetBase = getMetricsForPeriod(undefined, wp.periodKey);
-                    const widgetMetrics = !apiStats ? widgetBase : {
-                      ...widgetBase,
-                      totalUsers: { ...widgetBase.totalUsers, value: (apiStats.nomades?.total ?? 0).toLocaleString("pt-BR") },
-                      activeUsers: { ...widgetBase.activeUsers, value: (apiStats.nomades?.active ?? 0).toLocaleString("pt-BR") },
-                      companies: { ...widgetBase.companies, value: (apiStats.companies?.total ?? 0).toLocaleString("pt-BR") },
-                      activeProjects: { ...widgetBase.activeProjects, value: (apiStats.projects?.active ?? 0).toLocaleString("pt-BR") },
-                      revenue: { ...widgetBase.revenue, value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k` },
-                    };
+                    const widgetBase = getMetricsForPeriod(
+                      undefined,
+                      wp.periodKey,
+                    );
+                    const widgetMetrics = !apiStats
+                      ? widgetBase
+                      : {
+                          ...widgetBase,
+                          totalUsers: {
+                            ...widgetBase.totalUsers,
+                            value: (
+                              apiStats.nomades?.total ?? 0
+                            ).toLocaleString("pt-BR"),
+                          },
+                          activeUsers: {
+                            ...widgetBase.activeUsers,
+                            value: (
+                              apiStats.nomades?.active ?? 0
+                            ).toLocaleString("pt-BR"),
+                          },
+                          companies: {
+                            ...widgetBase.companies,
+                            value: (
+                              apiStats.companies?.total ?? 0
+                            ).toLocaleString("pt-BR"),
+                          },
+                          activeProjects: {
+                            ...widgetBase.activeProjects,
+                            value: (
+                              apiStats.projects?.active ?? 0
+                            ).toLocaleString("pt-BR"),
+                          },
+                          revenue: {
+                            ...widgetBase.revenue,
+                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
+                          },
+                        };
                     return metricCards
                       .filter((m) => m.visible)
                       .sort((a, b) => a.order - b.order)
-                      .map((metricCard) => renderMetricCard(metricCard.id, widgetMetrics));
+                      .map((metricCard) =>
+                        renderMetricCard(metricCard.id, widgetMetrics),
+                      );
                   })()}
                 </div>
               </CardContent>
@@ -5110,49 +7190,120 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0"><Users className="h-4 w-4 text-chart-2" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Distribuição por tipo de conta</p>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0">
+                    <Users className="h-4 w-4 text-chart-2" />
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{auW.total.toLocaleString("pt-BR")}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Distribuição por tipo de conta
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {auW.total.toLocaleString("pt-BR")}
+                  </Badge>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    { type: "Empresas", count: auW.empresas, growth: `+${auW.empresasGrowth}%`, percentage: Math.round(auW.empresas / auW.total * 100), bg: "bg-info/5 border-info/20", text: "text-info", bar: "bg-info" },
-                    { type: "Agências", count: auW.agencias, growth: `+${auW.agenciasGrowth}%`, percentage: Math.round(auW.agencias / auW.total * 100), bg: "bg-success/5 border-success/20", text: "text-success", bar: "bg-success" },
-                    { type: "Nômades",  count: auW.nomades,  growth: `+${auW.nomadesGrowth}%`,  percentage: Math.round(auW.nomades / auW.total * 100),  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", bar: "bg-chart-4" },
-                    { type: "Admins",   count: auW.admins,   growth: `+${auW.adminsGrowth}%`,   percentage: Math.round(auW.admins / auW.total * 100),   bg: "bg-warning/5 border-warning/20", text: "text-warning", bar: "bg-warning" },
-                  ]).map((ut) => (
-                    <div key={ut.type} className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}>
+                  {[
+                    {
+                      type: "Empresas",
+                      count: auW.empresas,
+                      growth: `+${auW.empresasGrowth}%`,
+                      percentage: Math.round((auW.empresas / auW.total) * 100),
+                      bg: "bg-info/5 border-info/20",
+                      text: "text-info",
+                      bar: "bg-info",
+                    },
+                    {
+                      type: "Agências",
+                      count: auW.agencias,
+                      growth: `+${auW.agenciasGrowth}%`,
+                      percentage: Math.round((auW.agencias / auW.total) * 100),
+                      bg: "bg-success/5 border-success/20",
+                      text: "text-success",
+                      bar: "bg-success",
+                    },
+                    {
+                      type: "Nômades",
+                      count: auW.nomades,
+                      growth: `+${auW.nomadesGrowth}%`,
+                      percentage: Math.round((auW.nomades / auW.total) * 100),
+                      bg: "bg-chart-4/5 border-chart-4/20",
+                      text: "text-chart-4",
+                      bar: "bg-chart-4",
+                    },
+                    {
+                      type: "Admins",
+                      count: auW.admins,
+                      growth: `+${auW.adminsGrowth}%`,
+                      percentage: Math.round((auW.admins / auW.total) * 100),
+                      bg: "bg-warning/5 border-warning/20",
+                      text: "text-warning",
+                      bar: "bg-warning",
+                    },
+                  ].map((ut) => (
+                    <div
+                      key={ut.type}
+                      className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}
+                    >
                       <div className="flex items-center justify-between">
-                        <p className={`text-xs font-semibold ${ut.text}`}>{ut.type}</p>
-                        <span className="text-[10px] font-medium text-success">{ut.growth}</span>
+                        <p className={`text-xs font-semibold ${ut.text}`}>
+                          {ut.type}
+                        </p>
+                        <span className="text-[10px] font-medium text-success">
+                          {ut.growth}
+                        </span>
                       </div>
-                      <p className={`text-xl font-bold ${ut.text}`}>{ut.count.toLocaleString()}</p>
+                      <p className={`text-xl font-bold ${ut.text}`}>
+                        {ut.count.toLocaleString()}
+                      </p>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-1">{ut.percentage}% do total</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          {ut.percentage}% do total
+                        </p>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${ut.bar}`} style={{ width: `${ut.percentage}%` }} />
+                          <div
+                            className={`h-full rounded-full ${ut.bar}`}
+                            style={{ width: `${ut.percentage}%` }}
+                          />
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Total registrado</p>
-                  <p className="text-sm font-bold">{auW.total.toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total registrado
+                  </p>
+                  <p className="text-sm font-bold">
+                    {auW.total.toLocaleString("pt-BR")}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -5170,22 +7321,43 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0"><AlertTriangle className="h-4 w-4 text-destructive" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Alertas e notificações do sistema</p>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{systemAlertsData.length} itens</Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Alertas e notificações do sistema
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {systemAlertsData.length} itens
+                  </Badge>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-2">
                 {systemAlertsData.map((alert, index) => (
@@ -5193,20 +7365,27 @@ export default function AdminDashboardPage() {
                     key={index}
                     className={cn(
                       "flex items-center gap-2.5 p-2.5 rounded-xl border transition-all hover:shadow-sm",
-                      alert.type === "success" && "bg-success/5 border-success/20",
-                      alert.type === "warning" && "bg-warning/5 border-warning/20",
-                      alert.type === "info"    && "bg-info/5 border-info/20",
+                      alert.type === "success" &&
+                        "bg-success/5 border-success/20",
+                      alert.type === "warning" &&
+                        "bg-warning/5 border-warning/20",
+                      alert.type === "info" && "bg-info/5 border-info/20",
                     )}
                   >
                     <div className="shrink-0">{getAlertIcon(alert.type)}</div>
-                    <p className="text-xs flex-1 line-clamp-1">{alert.message}</p>
+                    <p className="text-xs flex-1 line-clamp-1">
+                      {alert.message}
+                    </p>
                     <Badge
                       variant="outline"
                       className={cn(
                         "text-[10px] shrink-0 h-4 px-1.5",
-                        alert.type === "success" && "bg-success/10 text-success-foreground border-success/30",
-                        alert.type === "warning" && "bg-warning/10 text-warning-foreground border-warning/30",
-                        alert.type === "info"    && "bg-info/10 text-info-foreground border-info/30",
+                        alert.type === "success" &&
+                          "bg-success/10 text-success-foreground border-success/30",
+                        alert.type === "warning" &&
+                          "bg-warning/10 text-warning-foreground border-warning/30",
+                        alert.type === "info" &&
+                          "bg-info/10 text-info-foreground border-info/30",
                       )}
                     >
                       {alert.time}
@@ -5229,33 +7408,68 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0"><Shield className="h-4 w-4 text-chart-4" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Perfis de acesso e permissões</p>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-chart-4/10 rounded-lg shrink-0">
+                    <Shield className="h-4 w-4 text-chart-4" />
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{adminProfilesData.reduce((s, p) => s + p.users, 0)} usuários</Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Perfis de acesso e permissões
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {adminProfilesData.reduce((s, p) => s + p.users, 0)}{" "}
+                    usuários
+                  </Badge>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="grid grid-cols-2 gap-2.5">
                   {adminProfilesData.map((profile, index) => (
-                    <div key={index} className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-1.5">
+                    <div
+                      key={index}
+                      className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors space-y-1.5"
+                    >
                       <div className="flex items-center justify-between">
-                        <Badge className={`text-[10px] px-1.5 py-0.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}>{profile.name}</Badge>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{profile.users} us.</span>
+                        <Badge
+                          className={`text-[10px] px-1.5 py-0.5 bg-gradient-to-r text-white shrink-0 ${profile.color}`}
+                        >
+                          {profile.name}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground shrink-0">
+                          {profile.users} us.
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold leading-tight">{profile.permissions}</p>
-                      <p className="text-[10px] text-muted-foreground line-clamp-2">{profile.description}</p>
+                      <p className="text-xs font-semibold leading-tight">
+                        {profile.permissions}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground line-clamp-2">
+                        {profile.description}
+                      </p>
                       <Link to="/admin/permissoes">
                         <button className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-1 mt-0.5">
                           Gerenciar <ArrowRightIcon className="h-2.5 w-2.5" />
@@ -5280,44 +7494,104 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Lock className="h-4 w-4 text-warning" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Matriz de acesso por módulo</p>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Lock className="h-4 w-4 text-warning" />
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{permissionMatrixData.length} módulos</Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Matriz de acesso por módulo
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {permissionMatrixData.length} módulos
+                  </Badge>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 {/* Column headers */}
                 <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 mb-2 px-2.5">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Módulo</span>
-                  <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide text-center w-12">Master</span>
-                  <span className="text-[10px] font-semibold text-success uppercase tracking-wide text-center w-12">Fin.</span>
-                  <span className="text-[10px] font-semibold text-info uppercase tracking-wide text-center w-12">Com.</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    Módulo
+                  </span>
+                  <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide text-center w-12">
+                    Master
+                  </span>
+                  <span className="text-[10px] font-semibold text-success uppercase tracking-wide text-center w-12">
+                    Fin.
+                  </span>
+                  <span className="text-[10px] font-semibold text-info uppercase tracking-wide text-center w-12">
+                    Com.
+                  </span>
                 </div>
                 <div className="space-y-1.5">
                   {permissionMatrixData.map((row, index) => (
-                    <div key={index} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 items-center p-2.5 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 transition-colors">
-                      <span className="text-xs font-medium truncate">{row.module}</span>
-                      <div className="w-12 flex justify-center">{row.master ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
-                      <div className="w-12 flex justify-center">{row.financeiro ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
-                      <div className="w-12 flex justify-center">{row.comercial ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <span className="text-muted-foreground/40 text-xs">—</span>}</div>
+                    <div
+                      key={index}
+                      className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 items-center p-2.5 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 transition-colors"
+                    >
+                      <span className="text-xs font-medium truncate">
+                        {row.module}
+                      </span>
+                      <div className="w-12 flex justify-center">
+                        {row.master ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs">
+                            —
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-12 flex justify-center">
+                        {row.financeiro ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs">
+                            —
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-12 flex justify-center">
+                        {row.comercial ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs">
+                            —
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-info/5 border border-info/20">
                   <Key className="h-3.5 w-3.5 text-info mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-muted-foreground">Apenas Master pode criar outros perfis administrativos.</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Apenas Master pode criar outros perfis administrativos.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -5335,39 +7609,116 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-muted rounded-lg shrink-0"><Settings className="h-4 w-4 text-muted-foreground" /></div>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-muted rounded-lg shrink-0">
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Ferramentas de gerenciamento</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Ferramentas de gerenciamento
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    { to: "/admin/usuarios",      label: "Gerenciar Usuários",          desc: "Criar, editar e desativar contas",            border: "border-info/20",        bg: "bg-info/5 hover:bg-info/10",           text: "text-info",        icon: Users },
-                    { to: "/admin/permissoes",    label: "Gerenciar Permissões",         desc: "Criar e editar perfis administrativos",       border: "border-destructive/20", bg: "bg-destructive/5 hover:bg-destructive/10", text: "text-destructive",  icon: Shield },
-                    { to: "/admin/relatorios",    label: "Relatórios Financeiros",        desc: "Visualizar receitas e pagamentos",            border: "border-success/20",     bg: "bg-success/5 hover:bg-success/10",     text: "text-success",     icon: FileText },
-                    { to: "/admin/configuracoes", label: "Configurações da Plataforma",   desc: "Ajustar parâmetros do sistema",             border: "border-warning/20",     bg: "bg-warning/5 hover:bg-warning/10",     text: "text-warning",     icon: Settings },
-                    { to: "/admin/disputas",      label: "Resolver Disputas",             desc: "Mediar conflitos entre usuários",            border: "border-chart-4/20",     bg: "bg-chart-4/5 hover:bg-chart-4/10",     text: "text-chart-4",     icon: AlertCircle },
-                    { to: "/admin/logs",          label: "Logs do Sistema",               desc: "Monitorar atividades e erros",               border: "border-border/40",      bg: "bg-muted/30 hover:bg-muted/50",        text: "text-foreground",  icon: Activity },
-                  ] as const).map((tool) => {
+                  {(
+                    [
+                      {
+                        to: "/admin/usuarios",
+                        label: "Gerenciar Usuários",
+                        desc: "Criar, editar e desativar contas",
+                        border: "border-info/20",
+                        bg: "bg-info/5 hover:bg-info/10",
+                        text: "text-info",
+                        icon: Users,
+                      },
+                      {
+                        to: "/admin/permissoes",
+                        label: "Gerenciar Permissões",
+                        desc: "Criar e editar perfis administrativos",
+                        border: "border-destructive/20",
+                        bg: "bg-destructive/5 hover:bg-destructive/10",
+                        text: "text-destructive",
+                        icon: Shield,
+                      },
+                      {
+                        to: "/admin/relatorios",
+                        label: "Relatórios Financeiros",
+                        desc: "Visualizar receitas e pagamentos",
+                        border: "border-success/20",
+                        bg: "bg-success/5 hover:bg-success/10",
+                        text: "text-success",
+                        icon: FileText,
+                      },
+                      {
+                        to: "/admin/configuracoes",
+                        label: "Configurações da Plataforma",
+                        desc: "Ajustar parâmetros do sistema",
+                        border: "border-warning/20",
+                        bg: "bg-warning/5 hover:bg-warning/10",
+                        text: "text-warning",
+                        icon: Settings,
+                      },
+                      {
+                        to: "/admin/disputas",
+                        label: "Resolver Disputas",
+                        desc: "Mediar conflitos entre usuários",
+                        border: "border-chart-4/20",
+                        bg: "bg-chart-4/5 hover:bg-chart-4/10",
+                        text: "text-chart-4",
+                        icon: AlertCircle,
+                      },
+                      {
+                        to: "/admin/logs",
+                        label: "Logs do Sistema",
+                        desc: "Monitorar atividades e erros",
+                        border: "border-border/40",
+                        bg: "bg-muted/30 hover:bg-muted/50",
+                        text: "text-foreground",
+                        icon: Activity,
+                      },
+                    ] as const
+                  ).map((tool) => {
                     const Icon = tool.icon;
                     return (
                       <Link key={tool.to} to={tool.to}>
-                        <div className={`p-3 rounded-xl border ${tool.border} ${tool.bg} transition-colors`}>
+                        <div
+                          className={`p-3 rounded-xl border ${tool.border} ${tool.bg} transition-colors`}
+                        >
                           <Icon className={`h-4 w-4 ${tool.text} mb-1.5`} />
-                          <p className={`text-xs font-semibold ${tool.text} leading-tight`}>{tool.label}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{tool.desc}</p>
+                          <p
+                            className={`text-xs font-semibold ${tool.text} leading-tight`}
+                          >
+                            {tool.label}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                            {tool.desc}
+                          </p>
                         </div>
                       </Link>
                     );
@@ -5475,22 +7826,43 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Bell className="h-4 w-4 text-warning" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Alertas ativos e prioridades</p>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Bell className="h-4 w-4 text-warning" />
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">{systemAlerts.length} alertas</Badge>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Alertas ativos e prioridades
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {systemAlerts.length} alertas
+                  </Badge>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-2.5 px-4 pb-4">
                 {/* Priority summary 2-per-row */}
@@ -5498,31 +7870,57 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center gap-2 p-2.5 rounded-xl border border-destructive/20 bg-destructive/5">
                     <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                     <div>
-                      <p className="text-[10px] text-muted-foreground">Alta prioridade</p>
-                      <p className="text-sm font-bold text-destructive">{systemAlerts.filter(a => a.priority === "high").length}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Alta prioridade
+                      </p>
+                      <p className="text-sm font-bold text-destructive">
+                        {
+                          systemAlerts.filter((a) => a.priority === "high")
+                            .length
+                        }
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 p-2.5 rounded-xl border border-warning/20 bg-warning/5">
                     <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
                     <div>
-                      <p className="text-[10px] text-muted-foreground">Média prioridade</p>
-                      <p className="text-sm font-bold text-warning">{systemAlerts.filter(a => a.priority === "medium").length}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Média prioridade
+                      </p>
+                      <p className="text-sm font-bold text-warning">
+                        {
+                          systemAlerts.filter((a) => a.priority === "medium")
+                            .length
+                        }
+                      </p>
                     </div>
                   </div>
                 </div>
                 {/* Compact alert list */}
                 <div className="space-y-2">
                   {systemAlerts.map((alert) => (
-                    <div key={alert.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${getAlertColor(alert.type)} transition-all duration-200 hover:shadow-sm`}>
-                      <div className="mt-0.5 shrink-0">{getAlertIcon(alert.type)}</div>
+                    <div
+                      key={alert.id}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${getAlertColor(alert.type)} transition-all duration-200 hover:shadow-sm`}
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        {getAlertIcon(alert.type)}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <p className="text-xs font-semibold truncate">{alert.title}</p>
-                          <Badge variant="outline" className={`text-[10px] shrink-0 h-4 px-1.5 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}>
+                          <p className="text-xs font-semibold truncate">
+                            {alert.title}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] shrink-0 h-4 px-1.5 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
+                          >
                             {alert.priority === "high" ? "Alta" : "Média"}
                           </Badge>
                         </div>
-                        <p className="text-[10px] opacity-80 line-clamp-1">{alert.description}</p>
+                        <p className="text-[10px] opacity-80 line-clamp-1">
+                          {alert.description}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -5533,123 +7931,6 @@ export default function AdminDashboardPage() {
         );
 
       case "performers":
-        return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
-            onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
-          >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0"><Star className="h-4 w-4 text-warning" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Top nômades por desempenho</p>
-                  </div>
-                  <Link to="/admin/nomades" className="shrink-0">
-                    <Button variant="ghost" size="sm" className="text-xs hover:bg-primary/10">Ver todos <ArrowRightIcon className="h-3 w-3 ml-1" /></Button>
-                  </Link>
-                </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {topPerformers.map((performer, index) => {
-                    const rankColors = ["bg-yellow-500","bg-slate-400","bg-amber-600","bg-muted-foreground/60","bg-muted-foreground/50","bg-muted-foreground/40","bg-muted-foreground/30","bg-muted-foreground/20"];
-                    return (
-                      <div key={performer.id} className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${rankColors[index] ?? "bg-muted-foreground/20"}`}>
-                            {index + 1}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate">{performer.name.split(" ")[0]}</p>
-                            <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-0.5">
-                            <Star className="h-3 w-3 text-warning fill-warning" />
-                            <span className="text-xs font-medium">{performer.rating}</span>
-                            <span className="text-[10px] text-muted-foreground ml-1">· {performer.projects} proj.</span>
-                          </div>
-                          <Badge className={`text-[10px] h-4 px-1.5 ${getBadgeColor(performer.badge)}`}>
-                            {performer.badge === "gold" ? "Ouro" : performer.badge === "silver" ? "Prata" : "Bronze"}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
-      case "quickActions":
-        return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
-            onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
-          >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><Zap className="h-4 w-4 text-primary" /></div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Atalhos de administração</p>
-                  </div>
-                </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    { to: "/admin/usuarios",      icon: Users,     label: "Gerenciar Usuários",  border: "border-info/20",    bg: "bg-info/5 hover:bg-info/10",         text: "text-info" },
-                    { to: "/admin/nomades",       icon: UserCheck, label: "Gerenciar Nômades",   border: "border-success/20", bg: "bg-success/5 hover:bg-success/10",   text: "text-success" },
-                    { to: "/admin/projetos",      icon: Briefcase, label: "Ver Projetos",        border: "border-chart-4/20", bg: "bg-chart-4/5 hover:bg-chart-4/10",   text: "text-chart-4" },
-                    { to: "/admin/configuracoes", icon: Settings,  label: "Configurações",       border: "border-warning/20", bg: "bg-warning/5 hover:bg-warning/10",   text: "text-warning" },
-                  ] as const).map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <Link key={action.to} to={action.to}>
-                        <button className={`w-full p-3 rounded-xl border ${action.border} ${action.bg} transition-colors text-center space-y-1.5`}>
-                          <Icon className={`h-5 w-5 ${action.text} mx-auto`} />
-                          <p className={`text-xs font-medium ${action.text}`}>{action.label}</p>
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
-      case "revenue": {
-        const effectivePeriod = getWidgetPeriod(widget.id);
-        const wRvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).revenue;
         return (
           <div
             key={widget.id}
@@ -5672,25 +7953,268 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
+                    <Star className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Top nômades por desempenho
+                    </p>
+                  </div>
+                  <Link to="/admin/nomades" className="shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs hover:bg-primary/10"
+                    >
+                      Ver todos <ArrowRightIcon className="h-3 w-3 ml-1" />
+                    </Button>
+                  </Link>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {topPerformers.map((performer, index) => {
+                    const rankColors = [
+                      "bg-yellow-500",
+                      "bg-slate-400",
+                      "bg-amber-600",
+                      "bg-muted-foreground/60",
+                      "bg-muted-foreground/50",
+                      "bg-muted-foreground/40",
+                      "bg-muted-foreground/30",
+                      "bg-muted-foreground/20",
+                    ];
+                    return (
+                      <div
+                        key={performer.id}
+                        className="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div
+                            className={`h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${rankColors[index] ?? "bg-muted-foreground/20"}`}
+                          >
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold truncate">
+                              {performer.name.split(" ")[0]}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {performer.specialty}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-0.5">
+                            <Star className="h-3 w-3 text-warning fill-warning" />
+                            <span className="text-xs font-medium">
+                              {performer.rating}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground ml-1">
+                              · {performer.projects} proj.
+                            </span>
+                          </div>
+                          <Badge
+                            className={`text-[10px] h-4 px-1.5 ${getBadgeColor(performer.badge)}`}
+                          >
+                            {performer.badge === "gold"
+                              ? "Ouro"
+                              : performer.badge === "silver"
+                                ? "Prata"
+                                : "Bronze"}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "quickActions":
+        return (
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <Zap className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Atalhos de administração
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {(
+                    [
+                      {
+                        to: "/admin/usuarios",
+                        icon: Users,
+                        label: "Gerenciar Usuários",
+                        border: "border-info/20",
+                        bg: "bg-info/5 hover:bg-info/10",
+                        text: "text-info",
+                      },
+                      {
+                        to: "/admin/nomades",
+                        icon: UserCheck,
+                        label: "Gerenciar Nômades",
+                        border: "border-success/20",
+                        bg: "bg-success/5 hover:bg-success/10",
+                        text: "text-success",
+                      },
+                      {
+                        to: "/admin/projetos",
+                        icon: Briefcase,
+                        label: "Ver Projetos",
+                        border: "border-chart-4/20",
+                        bg: "bg-chart-4/5 hover:bg-chart-4/10",
+                        text: "text-chart-4",
+                      },
+                      {
+                        to: "/admin/configuracoes",
+                        icon: Settings,
+                        label: "Configurações",
+                        border: "border-warning/20",
+                        bg: "bg-warning/5 hover:bg-warning/10",
+                        text: "text-warning",
+                      },
+                    ] as const
+                  ).map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <Link key={action.to} to={action.to}>
+                        <button
+                          className={`w-full p-3 rounded-xl border ${action.border} ${action.bg} transition-colors text-center space-y-1.5`}
+                        >
+                          <Icon className={`h-5 w-5 ${action.text} mx-auto`} />
+                          <p className={`text-xs font-medium ${action.text}`}>
+                            {action.label}
+                          </p>
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "revenue": {
+        const effectivePeriod = getWidgetPeriod(widget.id);
+        const wRvW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).revenue;
+        return (
+          <div
+            key={widget.id}
+            data-widget-id={widget.type}
+            draggable={isCustomizeMode}
+            onDragStart={(e) => handleDragStart(e, widget.id)}
+            onDragOver={(e) => handleDragOver(e, widget.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, widget.id)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
+          >
+            {isCustomizeMode && renderCustomizeControls(widget)}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="pb-3 relative">
+                <div className="flex items-center gap-3 pr-20">
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
                   <div className="p-2 bg-success/10 rounded-lg shrink-0">
                     <DollarSign className="h-4 w-4 text-success" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">Receita</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Total e por tipo de plano</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      Receita
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Total e por tipo de plano
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle="Receita" />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle="Receita"
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-3">
                 {/* Hero */}
                 <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-success/10 border border-success/20">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Receita Total</p>
-                    <p className="text-3xl font-bold tracking-tight">R$ {(wRvW.total / 1000).toFixed(1)}k</p>
-                    <p className="text-xs text-muted-foreground mt-1">Receita total no período</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Receita Total
+                    </p>
+                    <p className="text-3xl font-bold tracking-tight">
+                      R$ {(wRvW.total / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Receita total no período
+                    </p>
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
@@ -5705,32 +8229,66 @@ export default function AdminDashboardPage() {
                   <div className="p-3 rounded-xl border bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
-                      <span className="text-xs font-medium text-sky-700 dark:text-sky-300 truncate">Plano de Crédito</span>
+                      <span className="text-xs font-medium text-sky-700 dark:text-sky-300 truncate">
+                        Plano de Crédito
+                      </span>
                     </div>
-                    <p className="text-lg font-bold">R$ {(wRvW.creditPlan / 1000).toFixed(1)}k</p>
+                    <p className="text-lg font-bold">
+                      R$ {(wRvW.creditPlan / 1000).toFixed(1)}k
+                    </p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="h-2.5 w-2.5 text-success" />
-                      <span className="text-[10px] font-semibold text-success">+{wRvW.creditPlanGrowth}%</span>
-                      <span className="text-[10px] text-muted-foreground ml-auto">{((wRvW.creditPlan / Math.max(1, wRvW.total)) * 100).toFixed(0)}%</span>
+                      <span className="text-[10px] font-semibold text-success">
+                        +{wRvW.creditPlanGrowth}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {(
+                          (wRvW.creditPlan / Math.max(1, wRvW.total)) *
+                          100
+                        ).toFixed(0)}
+                        %
+                      </span>
                     </div>
                     <div className="mt-1.5 h-1 bg-sky-100 dark:bg-sky-950 rounded-full overflow-hidden">
-                      <div className="h-full bg-sky-500 rounded-full" style={{ width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%` }} />
+                      <div
+                        className="h-full bg-sky-500 rounded-full"
+                        style={{
+                          width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%`,
+                        }}
+                      />
                     </div>
                   </div>
                   {/* Recorrente */}
                   <div className="p-3 rounded-xl border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300 truncate">Compra Recorrente</span>
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300 truncate">
+                        Compra Recorrente
+                      </span>
                     </div>
-                    <p className="text-lg font-bold">R$ {(wRvW.recurring / 1000).toFixed(1)}k</p>
+                    <p className="text-lg font-bold">
+                      R$ {(wRvW.recurring / 1000).toFixed(1)}k
+                    </p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="h-2.5 w-2.5 text-success" />
-                      <span className="text-[10px] font-semibold text-success">+{wRvW.recurringGrowth}%</span>
-                      <span className="text-[10px] text-muted-foreground ml-auto">{((wRvW.recurring / Math.max(1, wRvW.total)) * 100).toFixed(0)}%</span>
+                      <span className="text-[10px] font-semibold text-success">
+                        +{wRvW.recurringGrowth}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {(
+                          (wRvW.recurring / Math.max(1, wRvW.total)) *
+                          100
+                        ).toFixed(0)}
+                        %
+                      </span>
                     </div>
                     <div className="mt-1.5 h-1 bg-amber-100 dark:bg-amber-950 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%` }} />
+                      <div
+                        className="h-full bg-amber-500 rounded-full"
+                        style={{
+                          width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%`,
+                        }}
+                      />
                     </div>
                   </div>
                   {/* Avulso — full row */}
@@ -5738,32 +8296,69 @@ export default function AdminDashboardPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Compra Avulsa</span>
+                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          Compra Avulsa
+                        </span>
                       </div>
                       <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-bold">R$ {(wRvW.oneTime / 1000).toFixed(1)}k</span>
-                        <span className="text-[10px] font-semibold text-success">+{wRvW.oneTimeGrowth}%</span>
+                        <span className="text-sm font-bold">
+                          R$ {(wRvW.oneTime / 1000).toFixed(1)}k
+                        </span>
+                        <span className="text-[10px] font-semibold text-success">
+                          +{wRvW.oneTimeGrowth}%
+                        </span>
                       </div>
                     </div>
                     <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%` }} />
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{
+                          width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%`,
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
                 {/* Composition bar */}
                 <div>
                   <div className="flex h-2 rounded-full overflow-hidden bg-muted gap-px">
-                    <div className="bg-sky-500 transition-all" style={{ width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%` }} />
-                    <div className="bg-amber-500 transition-all" style={{ width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%` }} />
-                    <div className="bg-emerald-500 transition-all" style={{ width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%` }} />
+                    <div
+                      className="bg-sky-500 transition-all"
+                      style={{
+                        width: `${(wRvW.creditPlan / Math.max(1, wRvW.total)) * 100}%`,
+                      }}
+                    />
+                    <div
+                      className="bg-amber-500 transition-all"
+                      style={{
+                        width: `${(wRvW.recurring / Math.max(1, wRvW.total)) * 100}%`,
+                      }}
+                    />
+                    <div
+                      className="bg-emerald-500 transition-all"
+                      style={{
+                        width: `${(wRvW.oneTime / Math.max(1, wRvW.total)) * 100}%`,
+                      }}
+                    />
                   </div>
                   <div className="flex gap-3 mt-1.5">
-                    {[["bg-sky-500","Crédito"],["bg-amber-500","Recorrente"],["bg-emerald-500","Avulso"]].map(([c,l]) => (
-                      <div key={l} className="flex items-center gap-1"><div className={`h-1.5 w-1.5 rounded-full ${c}`} /><span className="text-[10px] text-muted-foreground">{l}</span></div>
+                    {[
+                      ["bg-sky-500", "Crédito"],
+                      ["bg-amber-500", "Recorrente"],
+                      ["bg-emerald-500", "Avulso"],
+                    ].map(([c, l]) => (
+                      <div key={l} className="flex items-center gap-1">
+                        <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                        <span className="text-[10px] text-muted-foreground">
+                          {l}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground text-center">Comparado ao mesmo período anterior</p>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Comparado ao mesmo período anterior
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -5772,11 +8367,53 @@ export default function AdminDashboardPage() {
 
       case "activeProjectsWidget": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wApW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).activeProjects;
+        const wApW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).activeProjects;
         const apTypes = [
-          { label: "Agências",     value: wApW.agencies,    growth: wApW.agenciesGrowth,    newVal: wApW.newAgencies,    bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300", bar: ["bg-indigo-400/50","bg-indigo-400/65","bg-indigo-500/80","bg-indigo-600"] },
-          { label: "Lead Premium", value: wApW.leadPremium, growth: wApW.leadPremiumGrowth, newVal: wApW.newLeadPremium, bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",   text: "text-amber-700 dark:text-amber-300",   bar: ["bg-amber-400/50","bg-amber-400/65","bg-amber-500/80","bg-amber-600"] },
-          { label: "Nômades",      value: wApW.nomades,     growth: wApW.nomadesGrowth,     newVal: wApW.newNomades,     bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",       text: "text-teal-700 dark:text-teal-300",     bar: ["bg-teal-400/50","bg-teal-400/65","bg-teal-500/80","bg-teal-600"] },
+          {
+            label: "Agências",
+            value: wApW.agencies,
+            growth: wApW.agenciesGrowth,
+            newVal: wApW.newAgencies,
+            bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800",
+            text: "text-indigo-700 dark:text-indigo-300",
+            bar: [
+              "bg-indigo-400/50",
+              "bg-indigo-400/65",
+              "bg-indigo-500/80",
+              "bg-indigo-600",
+            ],
+          },
+          {
+            label: "Lead Premium",
+            value: wApW.leadPremium,
+            growth: wApW.leadPremiumGrowth,
+            newVal: wApW.newLeadPremium,
+            bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+            text: "text-amber-700 dark:text-amber-300",
+            bar: [
+              "bg-amber-400/50",
+              "bg-amber-400/65",
+              "bg-amber-500/80",
+              "bg-amber-600",
+            ],
+          },
+          {
+            label: "Nômades",
+            value: wApW.nomades,
+            growth: wApW.nomadesGrowth,
+            newVal: wApW.newNomades,
+            bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",
+            text: "text-teal-700 dark:text-teal-300",
+            bar: [
+              "bg-teal-400/50",
+              "bg-teal-400/65",
+              "bg-teal-500/80",
+              "bg-teal-600",
+            ],
+          },
         ];
         const apBarHeights = [55, 70, 85, 100];
         return (
@@ -5789,27 +8426,48 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><Briefcase className="h-4 w-4 text-primary" /></div>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Projetos ativos no período</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Projetos ativos no período
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4">
                 {/* Hero */}
                 <div className="flex items-end justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
                   <div>
-                    <p className="text-xs text-muted-foreground">Total de Projetos Ativos</p>
+                    <p className="text-xs text-muted-foreground">
+                      Total de Projetos Ativos
+                    </p>
                     <p className="text-3xl font-bold mt-0.5">{wApW.total}</p>
                   </div>
                   <div className="text-right">
@@ -5821,17 +8479,28 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* 2-per-row compact cards */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  {apTypes.map(t => (
-                    <div key={t.label} className={`p-2.5 rounded-xl border ${t.bg}`}>
+                  {apTypes.map((t) => (
+                    <div
+                      key={t.label}
+                      className={`p-2.5 rounded-xl border ${t.bg}`}
+                    >
                       <div className="flex items-start justify-between">
-                        <p className="text-xs text-muted-foreground">{t.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.label}
+                        </p>
                         <div className="flex items-end gap-0.5 h-6">
                           {apBarHeights.map((h, i) => (
-                            <div key={i} className={`w-1 ${t.bar[i]} rounded-t`} style={{ height: `${h}%` }} />
+                            <div
+                              key={i}
+                              className={`w-1 ${t.bar[i]} rounded-t`}
+                              style={{ height: `${h}%` }}
+                            />
                           ))}
                         </div>
                       </div>
-                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>{t.value}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${t.text}`}>
+                        {t.value}
+                      </p>
                       <p className="text-[10px] text-success">+{t.growth}%</p>
                     </div>
                   ))}
@@ -5839,22 +8508,52 @@ export default function AdminDashboardPage() {
                   <div className="col-span-2 flex items-center justify-between p-2.5 rounded-xl border border-teal-200/60 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/10">
                     <div className="flex items-center gap-2">
                       <Plus className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                      <span className="text-sm font-semibold">Novos no período:</span>
-                      <span className="text-sm font-bold text-teal-700 dark:text-teal-300">{wApW.newTotal}</span>
+                      <span className="text-sm font-semibold">
+                        Novos no período:
+                      </span>
+                      <span className="text-sm font-bold text-teal-700 dark:text-teal-300">
+                        {wApW.newTotal}
+                      </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span><span className="text-indigo-600 dark:text-indigo-400 font-medium">Agências: </span>{wApW.newAgencies}</span>
+                      <span>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                          Agências:{" "}
+                        </span>
+                        {wApW.newAgencies}
+                      </span>
                       <span>•</span>
-                      <span><span className="text-amber-600 dark:text-amber-400 font-medium">LP: </span>{wApW.newLeadPremium}</span>
+                      <span>
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">
+                          LP:{" "}
+                        </span>
+                        {wApW.newLeadPremium}
+                      </span>
                     </div>
                   </div>
                 </div>
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="flex-1 text-xs bg-transparent"><FileText className="h-3.5 w-3.5 mr-1" />Ver detalhes</Button>
-                  <Button variant="outline" size="sm" className="flex-1 text-xs bg-transparent"><Download className="h-3.5 w-3.5 mr-1" />Exportar gráfico</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs bg-transparent"
+                  >
+                    <FileText className="h-3.5 w-3.5 mr-1" />
+                    Ver detalhes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs bg-transparent"
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Exportar gráfico
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">Comparado ao mesmo período anterior</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Comparado ao mesmo período anterior
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -5863,12 +8562,36 @@ export default function AdminDashboardPage() {
 
       case "creditPlans": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wCpW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).creditPlans;
+        const wCpW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).creditPlans;
         const cpTotal = Math.max(1, wCpW.total);
         const cpPlans = [
-          { label: "Básico",   data: wCpW.basic,   bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-700 dark:text-violet-300",  bar: "bg-violet-500", positive: true },
-          { label: "Partner",  data: wCpW.partner,  bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",          text: "text-blue-700 dark:text-blue-300",      bar: "bg-blue-500",   positive: true },
-          { label: "Premium",  data: wCpW.premium,  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",      text: "text-amber-700 dark:text-amber-300",    bar: "bg-amber-500",  positive: wCpW.premium.growth >= 0 },
+          {
+            label: "Básico",
+            data: wCpW.basic,
+            bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+            text: "text-violet-700 dark:text-violet-300",
+            bar: "bg-violet-500",
+            positive: true,
+          },
+          {
+            label: "Partner",
+            data: wCpW.partner,
+            bg: "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+            text: "text-blue-700 dark:text-blue-300",
+            bar: "bg-blue-500",
+            positive: true,
+          },
+          {
+            label: "Premium",
+            data: wCpW.premium,
+            bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+            text: "text-amber-700 dark:text-amber-300",
+            bar: "bg-amber-500",
+            positive: wCpW.premium.growth >= 0,
+          },
         ];
         return (
           <div
@@ -5880,28 +8603,51 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0"><CreditCard className="h-4 w-4 text-primary" /></div>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Receita por plano de crédito</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Receita por plano de crédito
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4">
                 {/* Hero */}
                 <div className="flex items-end justify-between p-4 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800">
                   <div>
-                    <p className="text-xs text-muted-foreground">Total de entrada no período</p>
-                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">R$ {(wCpW.total / 1000).toFixed(0)}k</p>
+                    <p className="text-xs text-muted-foreground">
+                      Total de entrada no período
+                    </p>
+                    <p className="text-3xl font-bold text-violet-700 dark:text-violet-300 mt-0.5">
+                      R$ {(wCpW.total / 1000).toFixed(0)}k
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 text-success text-sm font-semibold">
                     <TrendingUp className="h-4 w-4" />+{wCpW.growth}%
@@ -5909,21 +8655,43 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* 2-per-row compact plan cards */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  {cpPlans.map(p => {
+                  {cpPlans.map((p) => {
                     const pct = Math.round((p.data.revenue / cpTotal) * 100);
                     return (
-                      <div key={p.label} className={`p-2.5 rounded-xl border ${p.bg}`}>
+                      <div
+                        key={p.label}
+                        className={`p-2.5 rounded-xl border ${p.bg}`}
+                      >
                         <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">{p.label}</p>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">Novos: {p.data.newContracts}</Badge>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {p.label}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 px-1.5"
+                          >
+                            Novos: {p.data.newContracts}
+                          </Badge>
                         </div>
-                        <p className={`text-lg font-bold ${p.text}`}>R$ {(p.data.revenue / 1000).toFixed(0)}k</p>
+                        <p className={`text-lg font-bold ${p.text}`}>
+                          R$ {(p.data.revenue / 1000).toFixed(0)}k
+                        </p>
                         <div className="h-1 bg-secondary rounded-full overflow-hidden mt-1.5 mb-1">
-                          <div className={`h-1 ${p.bar} rounded-full`} style={{ width: `${pct}%` }} />
+                          <div
+                            className={`h-1 ${p.bar} rounded-full`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-muted-foreground">{pct}% do total</span>
-                          <span className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}>{p.positive ? "+" : ""}{p.data.growth}%</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {pct}% do total
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold ${p.positive ? "text-success" : "text-destructive"}`}
+                          >
+                            {p.positive ? "+" : ""}
+                            {p.data.growth}%
+                          </span>
                         </div>
                       </div>
                     );
@@ -5931,14 +8699,22 @@ export default function AdminDashboardPage() {
                   {/* Composition bar spanning full width */}
                   <div className="col-span-2 space-y-1.5">
                     <div className="flex gap-0.5 h-2 rounded-full overflow-hidden">
-                      {cpPlans.map(p => (
-                        <div key={p.label} className={`${p.bar}`} style={{ width: `${Math.round((p.data.revenue / cpTotal) * 100)}%` }} />
+                      {cpPlans.map((p) => (
+                        <div
+                          key={p.label}
+                          className={`${p.bar}`}
+                          style={{
+                            width: `${Math.round((p.data.revenue / cpTotal) * 100)}%`,
+                          }}
+                        />
                       ))}
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      {cpPlans.map(p => (
+                      {cpPlans.map((p) => (
                         <div key={p.label} className="flex items-center gap-1">
-                          <div className={`h-1.5 w-1.5 rounded-full ${p.bar}`} />
+                          <div
+                            className={`h-1.5 w-1.5 rounded-full ${p.bar}`}
+                          />
                           <span>{p.label}</span>
                         </div>
                       ))}
@@ -5947,10 +8723,26 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="flex-1 gap-1 bg-transparent text-xs"><FileText className="h-3.5 w-3.5 mr-1" />Ver contratos</Button>
-                  <Button variant="outline" size="sm" className="flex-1 gap-1 bg-transparent text-xs"><Download className="h-3.5 w-3.5 mr-1" />Exportar relatório</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1 bg-transparent text-xs"
+                  >
+                    <FileText className="h-3.5 w-3.5 mr-1" />
+                    Ver contratos
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1 bg-transparent text-xs"
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Exportar relatório
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">Entrada = soma das primeiras cobranças no período</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Entrada = soma das primeiras cobranças no período
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -5959,13 +8751,41 @@ export default function AdminDashboardPage() {
 
       case "mrr": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wMrrW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).mrr;
+        const wMrrW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).mrr;
         const mrrComposition = [
-          { label: "New",        value: wMrrW.newMrr,      color: "bg-emerald-500", pct: (wMrrW.newMrr / Math.max(1, wMrrW.total)) * 100 },
-          { label: "Expansion",  value: wMrrW.expansion,   color: "bg-blue-500",    pct: (wMrrW.expansion / Math.max(1, wMrrW.total)) * 100 },
-          { label: "Base",       value: wMrrW.baseMrr,     color: "bg-slate-400",   pct: (wMrrW.baseMrr / Math.max(1, wMrrW.total)) * 100 },
-          { label: "Contraction",value: wMrrW.contraction, color: "bg-amber-400",   pct: (wMrrW.contraction / Math.max(1, wMrrW.total)) * 100 },
-          { label: "Churn",      value: wMrrW.churnRevenue,color: "bg-red-500",     pct: (wMrrW.churnRevenue / Math.max(1, wMrrW.total)) * 100 },
+          {
+            label: "New",
+            value: wMrrW.newMrr,
+            color: "bg-emerald-500",
+            pct: (wMrrW.newMrr / Math.max(1, wMrrW.total)) * 100,
+          },
+          {
+            label: "Expansion",
+            value: wMrrW.expansion,
+            color: "bg-blue-500",
+            pct: (wMrrW.expansion / Math.max(1, wMrrW.total)) * 100,
+          },
+          {
+            label: "Base",
+            value: wMrrW.baseMrr,
+            color: "bg-slate-400",
+            pct: (wMrrW.baseMrr / Math.max(1, wMrrW.total)) * 100,
+          },
+          {
+            label: "Contraction",
+            value: wMrrW.contraction,
+            color: "bg-amber-400",
+            pct: (wMrrW.contraction / Math.max(1, wMrrW.total)) * 100,
+          },
+          {
+            label: "Churn",
+            value: wMrrW.churnRevenue,
+            color: "bg-red-500",
+            pct: (wMrrW.churnRevenue / Math.max(1, wMrrW.total)) * 100,
+          },
         ];
         return (
           <div
@@ -5996,43 +8816,99 @@ export default function AdminDashboardPage() {
                     <TrendingUp className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Receita recorrente mensal</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Receita recorrente mensal
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Hero value */}
                 <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">MRR Total</p>
-                    <p className="text-3xl font-bold tracking-tight">R$ {wMrrW.total.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground mt-1">ARR: <span className="font-semibold text-foreground">R$ {(wMrrW.total * 12 / 1000).toFixed(0)}k</span></p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      MRR Total
+                    </p>
+                    <p className="text-3xl font-bold tracking-tight">
+                      R$ {wMrrW.total.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ARR:{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {((wMrrW.total * 12) / 1000).toFixed(0)}k
+                      </span>
+                    </p>
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
                       <ArrowUpRight className="h-4 w-4" />+{wMrrW.growth}%
                     </div>
                     <p className="text-xs text-muted-foreground">vs anterior</p>
-                    <div className="mt-2 text-xs font-medium text-muted-foreground">Churn Rate: <span className="text-destructive font-bold">{wMrrW.churnRate}%</span></div>
+                    <div className="mt-2 text-xs font-medium text-muted-foreground">
+                      Churn Rate:{" "}
+                      <span className="text-destructive font-bold">
+                        {wMrrW.churnRate}%
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Composition pills */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: "New",         value: wMrrW.newMrr,       sign: "+", bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800" },
-                    { label: "Expansion",   value: wMrrW.expansion,    sign: "+", bg: "bg-blue-500/10",    text: "text-blue-600 dark:text-blue-400",       border: "border-blue-200 dark:border-blue-800" },
-                    { label: "Contraction", value: wMrrW.contraction,  sign: "-", bg: "bg-amber-500/10",   text: "text-amber-600 dark:text-amber-400",     border: "border-amber-200 dark:border-amber-800" },
-                    { label: "Churn R$",    value: wMrrW.churnRevenue, sign: "-", bg: "bg-red-500/10",     text: "text-red-600 dark:text-red-400",         border: "border-red-200 dark:border-red-800" },
-                  ].map(item => (
-                    <div key={item.label} className={`px-3 py-2.5 rounded-lg border ${item.bg} ${item.border}`}>
-                      <p className="text-[10px] font-medium text-muted-foreground">{item.label}</p>
-                      <p className={`text-base font-bold ${item.text}`}>{item.sign}R$ {item.value.toLocaleString("pt-BR")}</p>
+                    {
+                      label: "New",
+                      value: wMrrW.newMrr,
+                      sign: "+",
+                      bg: "bg-emerald-500/10",
+                      text: "text-emerald-600 dark:text-emerald-400",
+                      border: "border-emerald-200 dark:border-emerald-800",
+                    },
+                    {
+                      label: "Expansion",
+                      value: wMrrW.expansion,
+                      sign: "+",
+                      bg: "bg-blue-500/10",
+                      text: "text-blue-600 dark:text-blue-400",
+                      border: "border-blue-200 dark:border-blue-800",
+                    },
+                    {
+                      label: "Contraction",
+                      value: wMrrW.contraction,
+                      sign: "-",
+                      bg: "bg-amber-500/10",
+                      text: "text-amber-600 dark:text-amber-400",
+                      border: "border-amber-200 dark:border-amber-800",
+                    },
+                    {
+                      label: "Churn R$",
+                      value: wMrrW.churnRevenue,
+                      sign: "-",
+                      bg: "bg-red-500/10",
+                      text: "text-red-600 dark:text-red-400",
+                      border: "border-red-200 dark:border-red-800",
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className={`px-3 py-2.5 rounded-lg border ${item.bg} ${item.border}`}
+                    >
+                      <p className="text-[10px] font-medium text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className={`text-base font-bold ${item.text}`}>
+                        {item.sign}R$ {item.value.toLocaleString("pt-BR")}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -6040,19 +8916,32 @@ export default function AdminDashboardPage() {
                 {/* Composition bar */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">Composição</p>
-                    <p className="text-xs text-muted-foreground">Base: R$ {(wMrrW.baseMrr / 1000).toFixed(1)}k</p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Composição
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Base: R$ {(wMrrW.baseMrr / 1000).toFixed(1)}k
+                    </p>
                   </div>
                   <div className="flex h-2.5 rounded-full overflow-hidden bg-muted gap-px">
-                    {mrrComposition.map(c => (
-                      <div key={c.label} className={`${c.color} transition-all`} style={{ width: `${c.pct}%` }} title={`${c.label}: R$ ${c.value.toLocaleString("pt-BR")}`} />
+                    {mrrComposition.map((c) => (
+                      <div
+                        key={c.label}
+                        className={`${c.color} transition-all`}
+                        style={{ width: `${c.pct}%` }}
+                        title={`${c.label}: R$ ${c.value.toLocaleString("pt-BR")}`}
+                      />
                     ))}
                   </div>
                   <div className="flex gap-3 mt-2 flex-wrap">
-                    {mrrComposition.map(c => (
+                    {mrrComposition.map((c) => (
                       <div key={c.label} className="flex items-center gap-1">
-                        <div className={`h-1.5 w-1.5 rounded-full ${c.color}`} />
-                        <span className="text-[10px] text-muted-foreground">{c.label}</span>
+                        <div
+                          className={`h-1.5 w-1.5 rounded-full ${c.color}`}
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          {c.label}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -6062,8 +8951,12 @@ export default function AdminDashboardPage() {
                 <div className="pt-1 border-t">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold">Tendência</p>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] dark:bg-green-950/20 dark:text-green-400 dark:border-green-800">
-                      <TrendingUp className="h-2.5 w-2.5 mr-1" />+{wMrrW.trendGrowth}%
+                    <Badge
+                      variant="outline"
+                      className="bg-green-50 text-green-700 border-green-200 text-[10px] dark:bg-green-950/20 dark:text-green-400 dark:border-green-800"
+                    >
+                      <TrendingUp className="h-2.5 w-2.5 mr-1" />+
+                      {wMrrW.trendGrowth}%
                     </Badge>
                   </div>
                   <div className="flex items-end gap-1 h-16">
@@ -6071,13 +8964,36 @@ export default function AdminDashboardPage() {
                       const maxV = Math.max(1, ...wMrrW.trendData);
                       const isLast = i === wMrrW.trendData.length - 1;
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+                        <div
+                          key={i}
+                          className="flex-1 flex flex-col items-center gap-1 group"
+                        >
                           <div
-                            className={cn("w-full rounded-t transition-all", isLast ? "bg-primary" : "bg-primary/30 group-hover:bg-primary/60")}
+                            className={cn(
+                              "w-full rounded-t transition-all",
+                              isLast
+                                ? "bg-primary"
+                                : "bg-primary/30 group-hover:bg-primary/60",
+                            )}
                             style={{ height: `${(v / maxV) * 100}%` }}
                             title={`R$ ${(v / 1000).toFixed(0)}k`}
                           />
-                          <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J","J","A","S","O","N","D"][i] ?? i+1}</span>
+                          <span className="text-[9px] text-muted-foreground">
+                            {[
+                              "J",
+                              "F",
+                              "M",
+                              "A",
+                              "M",
+                              "J",
+                              "J",
+                              "A",
+                              "S",
+                              "O",
+                              "N",
+                              "D",
+                            ][i] ?? i + 1}
+                          </span>
                         </div>
                       );
                     })}
@@ -6091,7 +9007,10 @@ export default function AdminDashboardPage() {
 
       case "churn": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wChW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).churn;
+        const wChW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).churn;
         return (
           <div
             key={widget.id}
@@ -6114,17 +9033,28 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
                   <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
                     <TrendingDown className="h-4 w-4 text-destructive" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">CHURN</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Perda de clientes e receita</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      CHURN
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Perda de clientes e receita
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle="CHURN" />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle="CHURN"
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-3">
                 {/* Hero: 2 cols */}
@@ -6132,36 +9062,81 @@ export default function AdminDashboardPage() {
                   <div className="p-3 rounded-xl border bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800">
                     <div className="flex items-center gap-1.5 mb-1">
                       <Users className="h-3 w-3 text-rose-600 dark:text-rose-400" />
-                      <span className="text-[10px] text-muted-foreground">Clientes Inativados</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Clientes Inativados
+                      </span>
                     </div>
-                    <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">{wChW.inactiveAccounts}</p>
+                    <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">
+                      {wChW.inactiveAccounts}
+                    </p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="h-2.5 w-2.5 text-destructive" />
-                      <span className="text-[10px] font-semibold text-destructive">+{wChW.inactiveGrowth}%</span>
+                      <span className="text-[10px] font-semibold text-destructive">
+                        +{wChW.inactiveGrowth}%
+                      </span>
                     </div>
                   </div>
                   <div className="p-3 rounded-xl border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
                     <div className="flex items-center gap-1.5 mb-1">
                       <DollarSign className="h-3 w-3 text-red-600 dark:text-red-400" />
-                      <span className="text-[10px] text-muted-foreground">Revenue Churn</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Revenue Churn
+                      </span>
                     </div>
-                    <p className="text-lg font-bold text-red-700 dark:text-red-300">R$ {(wChW.revenueChurn / 1000).toFixed(1)}k</p>
-                    <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mt-1">Churn Rate: {wChW.revenueChurnRate}%</p>
+                    <p className="text-lg font-bold text-red-700 dark:text-red-300">
+                      R$ {(wChW.revenueChurn / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mt-1">
+                      Churn Rate: {wChW.revenueChurnRate}%
+                    </p>
                   </div>
                 </div>
                 {/* Account type 2x2 grid */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Por tipo de conta</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Por tipo de conta
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: "Agências",     value: wChW.agencies,    bg: "bg-blue-50 dark:bg-blue-950/20",    text: "text-blue-700 dark:text-blue-300",    border: "border-blue-200 dark:border-blue-800" },
-                      { label: "Lead Premium", value: wChW.leadPremium, bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-800" },
-                      { label: "Nômades",      value: wChW.nomades,     bg: "bg-amber-50 dark:bg-amber-950/20",  text: "text-amber-700 dark:text-amber-300",  border: "border-amber-200 dark:border-amber-800" },
-                      { label: "Free",         value: wChW.free,        bg: "bg-muted/20",                       text: "text-muted-foreground",               border: "border-border/50" },
-                    ].map(t => (
-                      <div key={t.label} className={`flex items-center justify-between p-2.5 rounded-lg border ${t.bg} ${t.border}`}>
-                        <span className="text-xs text-muted-foreground">{t.label}</span>
-                        <span className={`text-base font-bold ${t.text}`}>{t.value}</span>
+                      {
+                        label: "Agências",
+                        value: wChW.agencies,
+                        bg: "bg-blue-50 dark:bg-blue-950/20",
+                        text: "text-blue-700 dark:text-blue-300",
+                        border: "border-blue-200 dark:border-blue-800",
+                      },
+                      {
+                        label: "Lead Premium",
+                        value: wChW.leadPremium,
+                        bg: "bg-violet-50 dark:bg-violet-950/20",
+                        text: "text-violet-700 dark:text-violet-300",
+                        border: "border-violet-200 dark:border-violet-800",
+                      },
+                      {
+                        label: "Nômades",
+                        value: wChW.nomades,
+                        bg: "bg-amber-50 dark:bg-amber-950/20",
+                        text: "text-amber-700 dark:text-amber-300",
+                        border: "border-amber-200 dark:border-amber-800",
+                      },
+                      {
+                        label: "Free",
+                        value: wChW.free,
+                        bg: "bg-muted/20",
+                        text: "text-muted-foreground",
+                        border: "border-border/50",
+                      },
+                    ].map((t) => (
+                      <div
+                        key={t.label}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border ${t.bg} ${t.border}`}
+                      >
+                        <span className="text-xs text-muted-foreground">
+                          {t.label}
+                        </span>
+                        <span className={`text-base font-bold ${t.text}`}>
+                          {t.value}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -6170,12 +9145,20 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-muted/20">
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold">Projetos Cancelados</span>
+                    <span className="text-sm font-semibold">
+                      Projetos Cancelados
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">{wChW.cancelledProjects}</span>
-                    <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0.5">
-                      <TrendingUp className="h-2.5 w-2.5" />+{wChW.cancelledGrowth}%
+                    <span className="text-xl font-bold">
+                      {wChW.cancelledProjects}
+                    </span>
+                    <Badge
+                      variant="destructive"
+                      className="gap-1 text-[10px] px-1.5 py-0.5"
+                    >
+                      <TrendingUp className="h-2.5 w-2.5" />+
+                      {wChW.cancelledGrowth}%
                     </Badge>
                   </div>
                 </div>
@@ -6183,10 +9166,17 @@ export default function AdminDashboardPage() {
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Perda de MRR</span>
-                    <span className="font-semibold text-destructive">{wChW.revenueChurnRate}% do total</span>
+                    <span className="font-semibold text-destructive">
+                      {wChW.revenueChurnRate}% do total
+                    </span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${Math.min(100, wChW.revenueChurnRate * 5)}%` }} />
+                    <div
+                      className="h-full bg-destructive rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, wChW.revenueChurnRate * 5)}%`,
+                      }}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -6197,12 +9187,43 @@ export default function AdminDashboardPage() {
 
       case "averageTicket": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wAtW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).averageTicket;
+        const wAtW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).averageTicket;
         const atTypes = [
-          { label: "Agências",     value: 1750, growth: 6,  bg: "bg-blue-50 dark:bg-blue-950/20",    text: "text-blue-700 dark:text-blue-300",    border: "border-blue-200 dark:border-blue-800" },
-          { label: "Lead Premium", value: 1120, growth: 2,  bg: "bg-violet-50 dark:bg-violet-950/20", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-800" },
-          { label: "Nômades",      value: 680,  growth: 1,  bg: "bg-amber-50 dark:bg-amber-950/20",  text: "text-amber-700 dark:text-amber-300",  border: "border-amber-200 dark:border-amber-800" },
-          { label: "Free",         value: 0,    growth: 0,  bg: "bg-muted/20",                       text: "text-muted-foreground",               border: "border-border/50" },
+          {
+            label: "Agências",
+            value: 1750,
+            growth: 6,
+            bg: "bg-blue-50 dark:bg-blue-950/20",
+            text: "text-blue-700 dark:text-blue-300",
+            border: "border-blue-200 dark:border-blue-800",
+          },
+          {
+            label: "Lead Premium",
+            value: 1120,
+            growth: 2,
+            bg: "bg-violet-50 dark:bg-violet-950/20",
+            text: "text-violet-700 dark:text-violet-300",
+            border: "border-violet-200 dark:border-violet-800",
+          },
+          {
+            label: "Nômades",
+            value: 680,
+            growth: 1,
+            bg: "bg-amber-50 dark:bg-amber-950/20",
+            text: "text-amber-700 dark:text-amber-300",
+            border: "border-amber-200 dark:border-amber-800",
+          },
+          {
+            label: "Free",
+            value: 0,
+            growth: 0,
+            bg: "bg-muted/20",
+            text: "text-muted-foreground",
+            border: "border-border/50",
+          },
         ];
         return (
           <div
@@ -6226,25 +9247,40 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
                   <div className="p-2 bg-success/10 rounded-lg shrink-0">
                     <DollarSign className="h-4 w-4 text-success" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">Ticket Médio</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Valor médio por cliente e projeto</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      Ticket Médio
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Valor médio por cliente e projeto
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-3">
                 {/* Hero */}
                 <div className="p-4 rounded-xl bg-success/10 border border-success/20">
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Ticket Médio Geral</p>
-                      <p className="text-3xl font-bold tracking-tight text-success">R$ {wAtW.general.toLocaleString("pt-BR")}</p>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Ticket Médio Geral
+                      </p>
+                      <p className="text-3xl font-bold tracking-tight text-success">
+                        R$ {wAtW.general.toLocaleString("pt-BR")}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1 text-success text-sm font-semibold">
                       <TrendingUp className="h-4 w-4" />+{wAtW.generalGrowth}%
@@ -6253,19 +9289,32 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* 2x2 account type grid */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Por Tipo de Conta</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Por Tipo de Conta
+                  </p>
                   <div className="grid grid-cols-2 gap-2.5">
-                    {atTypes.map(t => (
-                      <div key={t.label} className={`p-3 rounded-xl border ${t.bg} ${t.border}`}>
-                        <p className="text-xs text-muted-foreground">{t.label}</p>
-                        <p className={`text-lg font-bold mt-0.5 ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
+                    {atTypes.map((t) => (
+                      <div
+                        key={t.label}
+                        className={`p-3 rounded-xl border ${t.bg} ${t.border}`}
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          {t.label}
+                        </p>
+                        <p className={`text-lg font-bold mt-0.5 ${t.text}`}>
+                          R$ {t.value.toLocaleString("pt-BR")}
+                        </p>
                         {t.growth > 0 ? (
                           <div className="flex items-center gap-1 mt-1">
                             <TrendingUp className="h-2.5 w-2.5 text-success" />
-                            <span className="text-[10px] font-semibold text-success">+{t.growth}%</span>
+                            <span className="text-[10px] font-semibold text-success">
+                              +{t.growth}%
+                            </span>
                           </div>
                         ) : (
-                          <p className="text-[10px] text-muted-foreground mt-1">—</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            —
+                          </p>
                         )}
                       </div>
                     ))}
@@ -6275,7 +9324,9 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between p-3 rounded-xl border border-success/30 bg-success/5">
                   <div>
                     <p className="text-xs text-muted-foreground">Por Projeto</p>
-                    <p className="text-xl font-bold text-success">R$ {wAtW.perProject.toLocaleString("pt-BR")}</p>
+                    <p className="text-xl font-bold text-success">
+                      R$ {wAtW.perProject.toLocaleString("pt-BR")}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 text-success text-sm font-semibold">
                     <TrendingUp className="h-4 w-4" />+{wAtW.perProjectGrowth}%
@@ -6283,19 +9334,31 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* Trend chart */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Tendência (últimos 6 meses)</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Tendência (últimos 6 meses)
+                  </p>
                   <div className="flex items-end gap-1.5 h-16">
                     {wAtW.trendData.map((val, idx) => {
                       const maxVal = Math.max(...wAtW.trendData, 1);
                       const isLast = idx === wAtW.trendData.length - 1;
                       return (
-                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          key={idx}
+                          className="flex-1 flex flex-col items-center gap-1"
+                        >
                           <div
-                            className={cn("w-full rounded-t transition-all", isLast ? "bg-success" : "bg-success/30 hover:bg-success/60")}
+                            className={cn(
+                              "w-full rounded-t transition-all",
+                              isLast
+                                ? "bg-success"
+                                : "bg-success/30 hover:bg-success/60",
+                            )}
                             style={{ height: `${(val / maxVal) * 100}%` }}
                             title={`R$ ${val}`}
                           />
-                          <span className="text-[9px] text-muted-foreground">{["J","F","M","A","M","J"][idx] ?? idx+1}</span>
+                          <span className="text-[9px] text-muted-foreground">
+                            {["J", "F", "M", "A", "M", "J"][idx] ?? idx + 1}
+                          </span>
                         </div>
                       );
                     })}
@@ -6309,11 +9372,44 @@ export default function AdminDashboardPage() {
 
       case "ltv": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wLtvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).ltv;
+        const wLtvW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).ltv;
         const ltvTypes = [
-          { label: "Agências",      icon: <Building2 className="h-4 w-4" />, value: wLtvW.agencies,    growth: wLtvW.agenciesGrowth,    up: true,  detail: "28 meses × R$ 507/mês", bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   border: "border-blue-200 dark:border-blue-800" },
-          { label: "Lead Premium",  icon: <Star className="h-4 w-4" />,      value: wLtvW.leadPremium, growth: wLtvW.leadPremiumGrowth,  up: true,  detail: "22 meses × R$ 414/mês", bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400",border: "border-violet-200 dark:border-violet-800" },
-          { label: "Nômades",       icon: <Users className="h-4 w-4" />,     value: wLtvW.nomades,     growth: wLtvW.nomadesGrowth,      up: false, detail: "12 meses × R$ 350/mês", bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800" },
+          {
+            label: "Agências",
+            icon: <Building2 className="h-4 w-4" />,
+            value: wLtvW.agencies,
+            growth: wLtvW.agenciesGrowth,
+            up: true,
+            detail: "28 meses × R$ 507/mês",
+            bg: "bg-blue-500/10",
+            text: "text-blue-600 dark:text-blue-400",
+            border: "border-blue-200 dark:border-blue-800",
+          },
+          {
+            label: "Lead Premium",
+            icon: <Star className="h-4 w-4" />,
+            value: wLtvW.leadPremium,
+            growth: wLtvW.leadPremiumGrowth,
+            up: true,
+            detail: "22 meses × R$ 414/mês",
+            bg: "bg-violet-500/10",
+            text: "text-violet-600 dark:text-violet-400",
+            border: "border-violet-200 dark:border-violet-800",
+          },
+          {
+            label: "Nômades",
+            icon: <Users className="h-4 w-4" />,
+            value: wLtvW.nomades,
+            growth: wLtvW.nomadesGrowth,
+            up: false,
+            detail: "12 meses × R$ 350/mês",
+            bg: "bg-amber-500/10",
+            text: "text-amber-600 dark:text-amber-400",
+            border: "border-amber-200 dark:border-amber-800",
+          },
         ];
         return (
           <div
@@ -6344,75 +9440,144 @@ export default function AdminDashboardPage() {
                     <TrendingUp className="h-4 w-4 text-chart-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Valor vitalício do cliente</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Valor vitalício do cliente
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Hero */}
                 <div className="flex items-end justify-between gap-2 p-4 rounded-xl bg-gradient-to-br from-chart-4/10 to-chart-4/5 border border-chart-4/20">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">LTV Médio</p>
-                    <p className="text-3xl font-bold tracking-tight">R$ {wLtvW.value.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground mt-1">24 meses × R$ 420/mês</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      LTV Médio
+                    </p>
+                    <p className="text-3xl font-bold tracking-tight">
+                      R$ {wLtvW.value.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      24 meses × R$ 420/mês
+                    </p>
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1 text-sm font-semibold text-success justify-end">
                       <ArrowUp className="h-4 w-4" />+{wLtvW.growth}%
                     </div>
                     <p className="text-xs text-muted-foreground">vs anterior</p>
-                    <div className="mt-2 px-2 py-1 rounded-md bg-info/10 text-info text-xs font-medium">Confiança 78%</div>
+                    <div className="mt-2 px-2 py-1 rounded-md bg-info/10 text-info text-xs font-medium">
+                      Confiança 78%
+                    </div>
                   </div>
                 </div>
 
                 {/* Type breakdown */}
                 <div className="space-y-2">
-                  {ltvTypes.map(t => (
-                    <div key={t.label} className={`flex items-center gap-3 p-3 rounded-xl border ${t.bg} ${t.border}`}>
-                      <div className={`shrink-0 p-1.5 rounded-md bg-background/60 ${t.text}`}>{t.icon}</div>
+                  {ltvTypes.map((t) => (
+                    <div
+                      key={t.label}
+                      className={`flex items-center gap-3 p-3 rounded-xl border ${t.bg} ${t.border}`}
+                    >
+                      <div
+                        className={`shrink-0 p-1.5 rounded-md bg-background/60 ${t.text}`}
+                      >
+                        {t.icon}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold">{t.label}</p>
-                        <p className="text-[10px] text-muted-foreground">{t.detail}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {t.detail}
+                        </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className={`text-base font-bold ${t.text}`}>R$ {t.value.toLocaleString("pt-BR")}</p>
-                        <div className={`flex items-center gap-0.5 justify-end text-[10px] font-medium ${t.up ? "text-success" : "text-warning"}`}>
-                          {t.up ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+                        <p className={`text-base font-bold ${t.text}`}>
+                          R$ {t.value.toLocaleString("pt-BR")}
+                        </p>
+                        <div
+                          className={`flex items-center gap-0.5 justify-end text-[10px] font-medium ${t.up ? "text-success" : "text-warning"}`}
+                        >
+                          {t.up ? (
+                            <ArrowUp className="h-2.5 w-2.5" />
+                          ) : (
+                            <ArrowDown className="h-2.5 w-2.5" />
+                          )}
                           {t.growth}%
                         </div>
                       </div>
                     </div>
                   ))}
                   <div className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-muted/10 opacity-60">
-                    <div className="shrink-0 p-1.5 rounded-md bg-background/60 text-muted-foreground"><UserCheck className="h-4 w-4" /></div>
+                    <div className="shrink-0 p-1.5 rounded-md bg-background/60 text-muted-foreground">
+                      <UserCheck className="h-4 w-4" />
+                    </div>
                     <div className="flex-1">
                       <p className="text-sm font-semibold">Free</p>
-                      <p className="text-[10px] text-muted-foreground">Excluído do cálculo</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Excluído do cálculo
+                      </p>
                     </div>
-                    <p className="text-base font-bold text-muted-foreground">R$ 0</p>
+                    <p className="text-base font-bold text-muted-foreground">
+                      R$ 0
+                    </p>
                   </div>
                 </div>
 
                 {/* Distribution histogram compact */}
                 <div className="pt-1 border-t space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Distribuição de LTVs</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Distribuição de LTVs
+                  </p>
                   {[
-                    { label: "R$ 0–1k",  value: wLtvW.hist0to1k,   color: "bg-muted-foreground", max: 400 },
-                    { label: "R$ 1–5k",  value: wLtvW.hist1kto5k,  color: "bg-info",             max: 400 },
-                    { label: "R$ 5–15k", value: wLtvW.hist5kto15k, color: "bg-chart-4",          max: 400 },
-                    { label: "R$ 15k+",  value: wLtvW.hist15kplus, color: "bg-success",          max: 400 },
-                  ].map(h => (
+                    {
+                      label: "R$ 0–1k",
+                      value: wLtvW.hist0to1k,
+                      color: "bg-muted-foreground",
+                      max: 400,
+                    },
+                    {
+                      label: "R$ 1–5k",
+                      value: wLtvW.hist1kto5k,
+                      color: "bg-info",
+                      max: 400,
+                    },
+                    {
+                      label: "R$ 5–15k",
+                      value: wLtvW.hist5kto15k,
+                      color: "bg-chart-4",
+                      max: 400,
+                    },
+                    {
+                      label: "R$ 15k+",
+                      value: wLtvW.hist15kplus,
+                      color: "bg-success",
+                      max: 400,
+                    },
+                  ].map((h) => (
                     <div key={h.label} className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground w-16 shrink-0">{h.label}</span>
+                      <span className="text-[10px] text-muted-foreground w-16 shrink-0">
+                        {h.label}
+                      </span>
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full ${h.color} rounded-full`} style={{ width: `${Math.min(100, (h.value / h.max) * 100)}%` }} />
+                        <div
+                          className={`h-full ${h.color} rounded-full`}
+                          style={{
+                            width: `${Math.min(100, (h.value / h.max) * 100)}%`,
+                          }}
+                        />
                       </div>
-                      <span className="text-[10px] font-medium w-8 text-right">{h.value}</span>
+                      <span className="text-[10px] font-medium w-8 text-right">
+                        {h.value}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -6423,12 +9588,51 @@ export default function AdminDashboardPage() {
       }
       case "cmv": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wCmvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).cmv;
+        const wCmvW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).cmv;
         const cmvCategories = [
-          { key: "nomades",   label: "Nômades",   value: wCmvW.nomades.value,   pct: wCmvW.nomades.percent,   bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   bar: "bg-blue-500",    border: "border-blue-200 dark:border-blue-800" },
-          { key: "impostos",  label: "Impostos",  value: wCmvW.impostos.value,  pct: wCmvW.impostos.percent,  bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400",  bar: "bg-amber-500",   border: "border-amber-200 dark:border-amber-800" },
-          { key: "comissoes", label: "Comissões", value: wCmvW.comissoes.value, pct: wCmvW.comissoes.percent, bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", bar: "bg-violet-500",  border: "border-violet-200 dark:border-violet-800" },
-          { key: "outros",    label: "Outros",    value: wCmvW.outros.value,    pct: wCmvW.outros.percent,    bg: "bg-slate-500/10",  text: "text-slate-600 dark:text-slate-400",  bar: "bg-slate-400",   border: "border-slate-200 dark:border-slate-700" },
+          {
+            key: "nomades",
+            label: "Nômades",
+            value: wCmvW.nomades.value,
+            pct: wCmvW.nomades.percent,
+            bg: "bg-blue-500/10",
+            text: "text-blue-600 dark:text-blue-400",
+            bar: "bg-blue-500",
+            border: "border-blue-200 dark:border-blue-800",
+          },
+          {
+            key: "impostos",
+            label: "Impostos",
+            value: wCmvW.impostos.value,
+            pct: wCmvW.impostos.percent,
+            bg: "bg-amber-500/10",
+            text: "text-amber-600 dark:text-amber-400",
+            bar: "bg-amber-500",
+            border: "border-amber-200 dark:border-amber-800",
+          },
+          {
+            key: "comissoes",
+            label: "Comissões",
+            value: wCmvW.comissoes.value,
+            pct: wCmvW.comissoes.percent,
+            bg: "bg-violet-500/10",
+            text: "text-violet-600 dark:text-violet-400",
+            bar: "bg-violet-500",
+            border: "border-violet-200 dark:border-violet-800",
+          },
+          {
+            key: "outros",
+            label: "Outros",
+            value: wCmvW.outros.value,
+            pct: wCmvW.outros.percent,
+            bg: "bg-slate-500/10",
+            text: "text-slate-600 dark:text-slate-400",
+            bar: "bg-slate-400",
+            border: "border-slate-200 dark:border-slate-700",
+          },
         ];
         const cmvDown = wCmvW.variation.cmvPercent < 0;
         return (
@@ -6460,34 +9664,61 @@ export default function AdminDashboardPage() {
                     <Calculator className="h-4 w-4 text-warning" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Custos vs. receita da plataforma</p>
+                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Custos vs. receita da plataforma
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Hero */}
-                <div className={`flex items-end justify-between gap-2 p-4 rounded-xl border ${wCmvW.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-500/10 border-green-200 dark:border-green-800"}`}>
+                <div
+                  className={`flex items-end justify-between gap-2 p-4 rounded-xl border ${wCmvW.cmvPercent > 30 ? "bg-warning/10 border-warning/30" : "bg-green-500/10 border-green-200 dark:border-green-800"}`}
+                >
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">CMV Total</p>
-                    <p className="text-3xl font-bold tracking-tight">{wCmvW.cmvPercent.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      CMV Total
+                    </p>
+                    <p className="text-3xl font-bold tracking-tight">
+                      {wCmvW.cmvPercent.toFixed(1)}%
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Custos <span className="font-semibold text-foreground">R$ {(wCmvW.totalCosts / 1000).toFixed(1)}k</span> / Receita <span className="font-semibold text-foreground">R$ {(wCmvW.revenue / 1000).toFixed(1)}k</span>
+                      Custos{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {(wCmvW.totalCosts / 1000).toFixed(1)}k
+                      </span>{" "}
+                      / Receita{" "}
+                      <span className="font-semibold text-foreground">
+                        R$ {(wCmvW.revenue / 1000).toFixed(1)}k
+                      </span>
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className={`flex items-center gap-1 text-sm font-semibold justify-end ${cmvDown ? "text-success" : "text-destructive"}`}>
-                      {cmvDown ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
+                    <div
+                      className={`flex items-center gap-1 text-sm font-semibold justify-end ${cmvDown ? "text-success" : "text-destructive"}`}
+                    >
+                      {cmvDown ? (
+                        <TrendingDown className="h-4 w-4" />
+                      ) : (
+                        <TrendingUp className="h-4 w-4" />
+                      )}
                       {Math.abs(wCmvW.variation.cmvPercent).toFixed(1)}pp
                     </div>
                     <p className="text-xs text-muted-foreground">vs anterior</p>
                     {wCmvW.cmvPercent > 30 && (
                       <div className="mt-1 flex items-center gap-1 text-[10px] text-warning font-medium">
-                        <AlertTriangle className="h-3 w-3" />CMV alto
+                        <AlertTriangle className="h-3 w-3" />
+                        CMV alto
                       </div>
                     )}
                   </div>
@@ -6495,18 +9726,30 @@ export default function AdminDashboardPage() {
 
                 {/* Category breakdown */}
                 <div className="space-y-2">
-                  {cmvCategories.map(cat => (
-                    <div key={cat.key} className={`flex items-center gap-3 p-2.5 rounded-lg border ${cat.bg} ${cat.border}`}>
+                  {cmvCategories.map((cat) => (
+                    <div
+                      key={cat.key}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg border ${cat.bg} ${cat.border}`}
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-semibold">{cat.label}</span>
-                          <span className={`text-sm font-bold ${cat.text}`}>R$ {(cat.value / 1000).toFixed(1)}k</span>
+                          <span className="text-sm font-semibold">
+                            {cat.label}
+                          </span>
+                          <span className={`text-sm font-bold ${cat.text}`}>
+                            R$ {(cat.value / 1000).toFixed(1)}k
+                          </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 bg-background/60 rounded-full overflow-hidden">
-                            <div className={`h-full ${cat.bar} rounded-full`} style={{ width: `${cat.pct}%` }} />
+                            <div
+                              className={`h-full ${cat.bar} rounded-full`}
+                              style={{ width: `${cat.pct}%` }}
+                            />
                           </div>
-                          <span className="text-[10px] text-muted-foreground font-medium w-10 text-right">{cat.pct.toFixed(0)}%</span>
+                          <span className="text-[10px] text-muted-foreground font-medium w-10 text-right">
+                            {cat.pct.toFixed(0)}%
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -6515,17 +9758,28 @@ export default function AdminDashboardPage() {
 
                 {/* Composition bar */}
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Composição do CMV</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                    Composição do CMV
+                  </p>
                   <div className="flex h-2.5 rounded-full overflow-hidden bg-muted gap-px">
-                    {cmvCategories.map(cat => (
-                      <div key={cat.key} className={`${cat.bar} transition-all`} style={{ width: `${cat.pct}%` }} title={`${cat.label}: ${cat.pct.toFixed(0)}%`} />
+                    {cmvCategories.map((cat) => (
+                      <div
+                        key={cat.key}
+                        className={`${cat.bar} transition-all`}
+                        style={{ width: `${cat.pct}%` }}
+                        title={`${cat.label}: ${cat.pct.toFixed(0)}%`}
+                      />
                     ))}
                   </div>
                   <div className="flex gap-3 mt-1.5 flex-wrap">
-                    {cmvCategories.map(cat => (
+                    {cmvCategories.map((cat) => (
                       <div key={cat.key} className="flex items-center gap-1">
-                        <div className={`h-1.5 w-1.5 rounded-full ${cat.bar}`} />
-                        <span className="text-[10px] text-muted-foreground">{cat.label}</span>
+                        <div
+                          className={`h-1.5 w-1.5 rounded-full ${cat.bar}`}
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          {cat.label}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -6537,15 +9791,42 @@ export default function AdminDashboardPage() {
       }
 
       case "platformActivities": {
-        const wPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
+        const wPaW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).platformActivities;
         const paMetrics = [
-          { label: "MAU",            value: wPaW.mau.toLocaleString("pt-BR"),              growth: 5,  bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",         text: "text-sky-700 dark:text-sky-300" },
-          { label: "DAU",            value: wPaW.dau.toLocaleString("pt-BR"),              growth: 3,  bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300" },
-          { label: "Agências Ativas",value: String(wPaW.activeAgencies),                   growth: 7,  bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
-          { label: "Tempo médio",    value: `${wPaW.avgSessionMinutes} min`,               growth: 4,  bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",       text: "text-teal-700 dark:text-teal-300" },
+          {
+            label: "MAU",
+            value: wPaW.mau.toLocaleString("pt-BR"),
+            growth: 5,
+            bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+            text: "text-sky-700 dark:text-sky-300",
+          },
+          {
+            label: "DAU",
+            value: wPaW.dau.toLocaleString("pt-BR"),
+            growth: 3,
+            bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800",
+            text: "text-indigo-700 dark:text-indigo-300",
+          },
+          {
+            label: "Agências Ativas",
+            value: String(wPaW.activeAgencies),
+            growth: 7,
+            bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+            text: "text-violet-700 dark:text-violet-300",
+          },
+          {
+            label: "Tempo médio",
+            value: `${wPaW.avgSessionMinutes} min`,
+            growth: 4,
+            bg: "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800",
+            text: "text-teal-700 dark:text-teal-300",
+          },
         ];
         const paTrendMax = Math.max(1, ...wPaW.trendData);
-        const paDays = ["S","T","Q","Q","S","S","D"];
+        const paDays = ["S", "T", "Q", "Q", "S", "S", "D"];
         return (
           <div
             key={widget.id}
@@ -6556,29 +9837,56 @@ export default function AdminDashboardPage() {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, widget.id)}
             onDragEnd={handleDragEnd}
-            className={cn("relative transition-all duration-200", isCustomizeMode && "cursor-move", draggedWidget === widget.id && "opacity-50 scale-95", getDragOverClasses(widget.id), !draggedWidget && !dragOverWidget && "hover:scale-[1.01]")}
+            className={cn(
+              "relative transition-all duration-200",
+              isCustomizeMode && "cursor-move",
+              draggedWidget === widget.id && "opacity-50 scale-95",
+              getDragOverClasses(widget.id),
+              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
+            )}
           >
             {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+            <Card
+              className="border-0 shadow-lg overflow-hidden"
+              data-widget-id={widget.type}
+            >
               <CardHeader className="pb-3 relative">
                 <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
-                  <div className="p-2 bg-info/10 rounded-lg shrink-0"><Activity className="h-4 w-4 text-info" /></div>
+                  {isCustomizeMode && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="p-2 bg-info/10 rounded-lg shrink-0">
+                    <Activity className="h-4 w-4 text-info" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Atividades recentes na plataforma</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Atividades recentes na plataforma
+                    </p>
                   </div>
                 </div>
-                <div className="mt-2"><WidgetPeriodSelector widgetId={widget.id} /></div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <div className="mt-2">
+                  <WidgetPeriodSelector widgetId={widget.id} />
+                </div>
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4">
                 {/* 2x2 compact metric cards */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  {paMetrics.map(m => (
-                    <div key={m.label} className={`p-2.5 rounded-xl border ${m.bg}`}>
+                  {paMetrics.map((m) => (
+                    <div
+                      key={m.label}
+                      className={`p-2.5 rounded-xl border ${m.bg}`}
+                    >
                       <p className="text-xs text-muted-foreground">{m.label}</p>
-                      <p className={`text-xl font-bold mt-0.5 ${m.text}`}>{m.value}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${m.text}`}>
+                        {m.value}
+                      </p>
                       <p className="text-[10px] text-success">+{m.growth}%</p>
                     </div>
                   ))}
@@ -6586,10 +9894,19 @@ export default function AdminDashboardPage() {
                 {/* Sessions + Actions row */}
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { label: "Sessões",         value: wPaW.sessions.toLocaleString("pt-BR") },
-                    { label: "Ações executadas", value: wPaW.actionsExecuted.toLocaleString("pt-BR") },
-                  ].map(s => (
-                    <div key={s.label} className="p-2.5 rounded-xl border border-border/50 bg-muted/20">
+                    {
+                      label: "Sessões",
+                      value: wPaW.sessions.toLocaleString("pt-BR"),
+                    },
+                    {
+                      label: "Ações executadas",
+                      value: wPaW.actionsExecuted.toLocaleString("pt-BR"),
+                    },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="p-2.5 rounded-xl border border-border/50 bg-muted/20"
+                    >
                       <p className="text-xs text-muted-foreground">{s.label}</p>
                       <p className="text-lg font-bold mt-0.5">{s.value}</p>
                     </div>
@@ -6597,14 +9914,30 @@ export default function AdminDashboardPage() {
                 </div>
                 {/* Trend chart */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Atividade — últimos 7 dias</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Atividade — últimos 7 dias
+                  </p>
                   <div className="flex items-end gap-1 h-14">
                     {wPaW.trendData.map((v, i) => {
                       const isLast = i === wPaW.trendData.length - 1;
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div className={cn("w-full rounded-t", isLast ? "bg-info" : "bg-info/40 hover:bg-info/70")} style={{ height: `${(v / paTrendMax) * 100}%` }} title={`Dia ${i+1}: ${v}`} />
-                          <span className="text-[9px] text-muted-foreground">{paDays[i] ?? i+1}</span>
+                        <div
+                          key={i}
+                          className="flex-1 flex flex-col items-center gap-1"
+                        >
+                          <div
+                            className={cn(
+                              "w-full rounded-t",
+                              isLast
+                                ? "bg-info"
+                                : "bg-info/40 hover:bg-info/70",
+                            )}
+                            style={{ height: `${(v / paTrendMax) * 100}%` }}
+                            title={`Dia ${i + 1}: ${v}`}
+                          />
+                          <span className="text-[9px] text-muted-foreground">
+                            {paDays[i] ?? i + 1}
+                          </span>
                         </div>
                       );
                     })}
@@ -6617,7 +9950,10 @@ export default function AdminDashboardPage() {
       }
 
       case "nomads": {
-        const wNmW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomads;
+        const wNmW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).nomads;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -6626,7 +9962,9 @@ export default function AdminDashboardPage() {
                   <Users className="h-4 w-4 text-chart-2" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Nômades</CardTitle>
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Nômades
+                  </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Visão rápida da base de nômades
                   </p>
@@ -6641,7 +9979,6 @@ export default function AdminDashboardPage() {
               />
             </CardHeader>
             <CardContent className="space-y-4">
-
               {/* Total em cima - Destaque grande */}
               <div className="rounded-lg border-2 border-chart-2/30 bg-chart-2/5 p-4 text-center">
                 <p className="text-xs font-medium text-chart-2 mb-1">
@@ -6776,15 +10113,42 @@ export default function AdminDashboardPage() {
       }
 
       case "nomadsRanking": {
-        const wPerfW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).performers;
+        const wPerfW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).performers;
         const top3 = wPerfW.slice(0, 3);
         const rest = wPerfW.slice(3);
-        const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
-        const podiumIdx   = top3.length >= 3 ? [1, 0, 2] : [0, 1, 2];
+        const podiumOrder =
+          top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
+        const podiumIdx = top3.length >= 3 ? [1, 0, 2] : [0, 1, 2];
         const medalColors = [
-          { ring: "ring-yellow-400", bg: "from-yellow-400 to-amber-500", shadow: "shadow-yellow-400/40", crown: "text-yellow-400", label: "bg-yellow-400/20 text-yellow-700 dark:text-yellow-400", barH: "h-20" },
-          { ring: "ring-slate-400",  bg: "from-slate-400 to-slate-500",  shadow: "shadow-slate-400/40",  crown: "text-slate-400",  label: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",    barH: "h-16" },
-          { ring: "ring-amber-600",  bg: "from-amber-600 to-orange-600", shadow: "shadow-amber-600/40",  crown: "text-amber-600",  label: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", barH: "h-14" },
+          {
+            ring: "ring-yellow-400",
+            bg: "from-yellow-400 to-amber-500",
+            shadow: "shadow-yellow-400/40",
+            crown: "text-yellow-400",
+            label: "bg-yellow-400/20 text-yellow-700 dark:text-yellow-400",
+            barH: "h-20",
+          },
+          {
+            ring: "ring-slate-400",
+            bg: "from-slate-400 to-slate-500",
+            shadow: "shadow-slate-400/40",
+            crown: "text-slate-400",
+            label:
+              "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+            barH: "h-16",
+          },
+          {
+            ring: "ring-amber-600",
+            bg: "from-amber-600 to-orange-600",
+            shadow: "shadow-amber-600/40",
+            crown: "text-amber-600",
+            label:
+              "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+            barH: "h-14",
+          },
         ];
         const posLabels = ["🥇 1º Lugar", "🥈 2º Lugar", "🥉 3º Lugar"];
         return (
@@ -6795,14 +10159,21 @@ export default function AdminDashboardPage() {
                   <Trophy className="h-4 w-4 text-warning" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Ranking de Nômades</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">Os melhores nômades da plataforma</p>
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Ranking de Nômades
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Os melhores nômades da plataforma
+                  </p>
                 </div>
               </div>
               <div className="mt-2">
                 <WidgetPeriodSelector widgetId={widget.id} />
               </div>
-              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-4">
               {/* Podium — top 3 */}
@@ -6812,12 +10183,21 @@ export default function AdminDashboardPage() {
                     const rank = podiumIdx[pIdx];
                     const mc = medalColors[rank];
                     return (
-                      <div key={performer.id} className={`flex flex-col items-center gap-1.5 ${rank === 0 ? "scale-110 z-10" : ""}`}>
+                      <div
+                        key={performer.id}
+                        className={`flex flex-col items-center gap-1.5 ${rank === 0 ? "scale-110 z-10" : ""}`}
+                      >
                         {/* Crown for #1 */}
-                        {rank === 0 && <Trophy className="h-5 w-5 text-yellow-400 drop-shadow" />}
+                        {rank === 0 && (
+                          <Trophy className="h-5 w-5 text-yellow-400 drop-shadow" />
+                        )}
                         {/* Avatar */}
-                        <div className={`relative ring-2 ${mc.ring} rounded-full shadow-lg ${mc.shadow}`}>
-                          <div className={`h-14 w-14 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-lg`}>
+                        <div
+                          className={`relative ring-2 ${mc.ring} rounded-full shadow-lg ${mc.shadow}`}
+                        >
+                          <div
+                            className={`h-14 w-14 rounded-full bg-gradient-to-br ${mc.bg} flex items-center justify-center text-white font-bold text-lg`}
+                          >
                             {performer.avatar}
                           </div>
                           <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-background rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none border">
@@ -6825,18 +10205,31 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
                         {/* Name */}
-                        <p className="text-xs font-semibold text-center leading-tight max-w-[72px] truncate">{performer.name.split(" ")[0]}</p>
-                        <p className="text-[10px] text-muted-foreground text-center max-w-[72px] truncate">{performer.specialty}</p>
+                        <p className="text-xs font-semibold text-center leading-tight max-w-[72px] truncate">
+                          {performer.name.split(" ")[0]}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground text-center max-w-[72px] truncate">
+                          {performer.specialty}
+                        </p>
                         {/* Rating */}
                         <div className="flex items-center gap-0.5">
-                          {[1,2,3,4,5].map(s => (
-                            <Star key={s} className={`h-2.5 w-2.5 ${s <= Math.round(performer.rating) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              className={`h-2.5 w-2.5 ${s <= Math.round(performer.rating) ? "text-warning fill-warning" : "text-muted-foreground"}`}
+                            />
                           ))}
                         </div>
-                        <span className="text-[10px] font-bold">{performer.rating}</span>
+                        <span className="text-[10px] font-bold">
+                          {performer.rating}
+                        </span>
                         {/* Podium bar */}
-                        <div className={`w-14 ${mc.barH} bg-gradient-to-b ${mc.bg} rounded-t-lg opacity-80 flex items-start justify-center pt-1`}>
-                          <span className="text-white text-[9px] font-bold">{performer.projects} proj.</span>
+                        <div
+                          className={`w-14 ${mc.barH} bg-gradient-to-b ${mc.bg} rounded-t-lg opacity-80 flex items-start justify-center pt-1`}
+                        >
+                          <span className="text-white text-[9px] font-bold">
+                            {performer.projects} proj.
+                          </span>
                         </div>
                       </div>
                     );
@@ -6849,20 +10242,33 @@ export default function AdminDashboardPage() {
                   {rest.map((performer, idx) => {
                     const rank = idx + 3;
                     return (
-                      <div key={performer.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
-                        <span className="text-sm font-bold text-muted-foreground w-5 text-center">{rank + 1}</span>
+                      <div
+                        key={performer.id}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <span className="text-sm font-bold text-muted-foreground w-5 text-center">
+                          {rank + 1}
+                        </span>
                         <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">
                           {performer.avatar}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{performer.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{performer.specialty}</p>
+                          <p className="text-sm font-semibold truncate">
+                            {performer.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {performer.specialty}
+                          </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <Star className="h-3 w-3 text-warning fill-warning" />
-                          <span className="text-xs font-medium">{performer.rating}</span>
+                          <span className="text-xs font-medium">
+                            {performer.rating}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground shrink-0">{performer.projects} proj.</span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {performer.projects} proj.
+                        </span>
                       </div>
                     );
                   })}
@@ -6880,11 +10286,18 @@ export default function AdminDashboardPage() {
       }
 
       case "agenciesRanking": {
-        const wAgRankW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).agenciesRanking;
+        const wAgRankW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).agenciesRanking;
         const agTop3 = wAgRankW.slice(0, 3);
         const agRest = wAgRankW.slice(3);
         const agMedalIcons = ["🥇", "🥈", "🥉"];
-        const agMedalRings = ["ring-yellow-400 shadow-yellow-400/30", "ring-slate-400 shadow-slate-400/30", "ring-amber-600 shadow-amber-600/30"];
+        const agMedalRings = [
+          "ring-yellow-400 shadow-yellow-400/30",
+          "ring-slate-400 shadow-slate-400/30",
+          "ring-amber-600 shadow-amber-600/30",
+        ];
         return (
           <div
             key={widget.id}
@@ -6914,39 +10327,66 @@ export default function AdminDashboardPage() {
                     <Building2 className="h-4 w-4 text-cyan-500" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">{getWidgetTitle(widget.type)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Ranking das agências da plataforma</p>
+                    <CardTitle className="text-base font-semibold leading-tight">
+                      {getWidgetTitle(widget.type)}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Ranking das agências da plataforma
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Top 3 — large cards */}
                 <div className="grid grid-cols-3 gap-2">
                   {agTop3.map((agency, idx) => (
-                    <div key={agency.id} className="relative flex flex-col items-center gap-2 p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors text-center">
-                      <span className="absolute top-1.5 left-2 text-sm leading-none">{agMedalIcons[idx]}</span>
+                    <div
+                      key={agency.id}
+                      className="relative flex flex-col items-center gap-2 p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors text-center"
+                    >
+                      <span className="absolute top-1.5 left-2 text-sm leading-none">
+                        {agMedalIcons[idx]}
+                      </span>
                       {/* Logo */}
-                      <div className={`ring-2 ${agMedalRings[idx]} rounded-full shadow-md mt-3`}>
-                        <div className={`h-12 w-12 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white font-bold text-base`}>
+                      <div
+                        className={`ring-2 ${agMedalRings[idx]} rounded-full shadow-md mt-3`}
+                      >
+                        <div
+                          className={`h-12 w-12 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white font-bold text-base`}
+                        >
                           {agency.avatar}
                         </div>
                       </div>
                       <div>
-                        <p className="text-xs font-bold leading-tight truncate w-full">{agency.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{agency.specialty}</p>
+                        <p className="text-xs font-bold leading-tight truncate w-full">
+                          {agency.name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {agency.specialty}
+                        </p>
                       </div>
                       <div className="flex items-center gap-0.5">
-                        {[1,2,3,4,5].map(s => (
-                          <Star key={s} className={`h-2.5 w-2.5 ${s <= Math.round(agency.rating) ? "text-warning fill-warning" : "text-muted-foreground/30"}`} />
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`h-2.5 w-2.5 ${s <= Math.round(agency.rating) ? "text-warning fill-warning" : "text-muted-foreground/30"}`}
+                          />
                         ))}
                       </div>
                       <div className="flex gap-2 text-[10px]">
-                        <span className="font-semibold text-foreground">{agency.projects} proj.</span>
-                        <span className="font-bold text-emerald-600">{agency.contribution}</span>
+                        <span className="font-semibold text-foreground">
+                          {agency.projects} proj.
+                        </span>
+                        <span className="font-bold text-emerald-600">
+                          {agency.contribution}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -6955,20 +10395,35 @@ export default function AdminDashboardPage() {
                 {agRest.length > 0 && (
                   <div className="space-y-1.5 pt-1 border-t">
                     {agRest.map((agency, idx) => (
-                      <div key={agency.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors">
-                        <span className="text-xs font-bold text-muted-foreground w-5 text-center">{idx + 4}</span>
-                        <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                      <div
+                        key={agency.id}
+                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <span className="text-xs font-bold text-muted-foreground w-5 text-center">
+                          {idx + 4}
+                        </span>
+                        <div
+                          className={`h-8 w-8 rounded-full bg-gradient-to-br ${agency.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+                        >
                           {agency.avatar}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{agency.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{agency.specialty}</p>
+                          <p className="text-sm font-semibold truncate">
+                            {agency.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {agency.specialty}
+                          </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <Star className="h-3 w-3 text-warning fill-warning" />
-                          <span className="text-xs font-medium">{agency.rating}</span>
+                          <span className="text-xs font-medium">
+                            {agency.rating}
+                          </span>
                         </div>
-                        <span className="text-xs font-bold text-emerald-600 shrink-0">{agency.contribution}</span>
+                        <span className="text-xs font-bold text-emerald-600 shrink-0">
+                          {agency.contribution}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -6980,7 +10435,10 @@ export default function AdminDashboardPage() {
       }
 
       case "statusOverview": {
-        const wSoW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).statusOverview;
+        const wSoW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).statusOverview;
         const soSections = [
           {
             label: "Projetos",
@@ -6989,11 +10447,46 @@ export default function AdminDashboardPage() {
             iconColor: "text-blue-500",
             href: "/admin/projects",
             items: [
-              { label: "Andamento", count: wSoW.projects.ongoing,   status: "ongoing",   bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   dot: "bg-blue-500" },
-              { label: "Aprovados",  count: wSoW.projects.approved,  status: "approved",  bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",  dot: "bg-green-500" },
-              { label: "Concluídos", count: wSoW.projects.completed, status: "completed", bg: "bg-emerald-500/10",text: "text-emerald-600 dark:text-emerald-400",dot: "bg-emerald-500" },
-              { label: "Cancelados", count: wSoW.projects.cancelled, status: "cancelled", bg: "bg-red-500/10",    text: "text-red-600 dark:text-red-400",      dot: "bg-red-500" },
-              { label: "Atraso",     count: wSoW.projects.delayed,   status: "delayed",   bg: "bg-amber-500/10",  text: "text-amber-600 dark:text-amber-400",  dot: "bg-amber-500" },
+              {
+                label: "Andamento",
+                count: wSoW.projects.ongoing,
+                status: "ongoing",
+                bg: "bg-blue-500/10",
+                text: "text-blue-600 dark:text-blue-400",
+                dot: "bg-blue-500",
+              },
+              {
+                label: "Aprovados",
+                count: wSoW.projects.approved,
+                status: "approved",
+                bg: "bg-green-500/10",
+                text: "text-green-600 dark:text-green-400",
+                dot: "bg-green-500",
+              },
+              {
+                label: "Concluídos",
+                count: wSoW.projects.completed,
+                status: "completed",
+                bg: "bg-emerald-500/10",
+                text: "text-emerald-600 dark:text-emerald-400",
+                dot: "bg-emerald-500",
+              },
+              {
+                label: "Cancelados",
+                count: wSoW.projects.cancelled,
+                status: "cancelled",
+                bg: "bg-red-500/10",
+                text: "text-red-600 dark:text-red-400",
+                dot: "bg-red-500",
+              },
+              {
+                label: "Atraso",
+                count: wSoW.projects.delayed,
+                status: "delayed",
+                bg: "bg-amber-500/10",
+                text: "text-amber-600 dark:text-amber-400",
+                dot: "bg-amber-500",
+              },
             ],
           },
           {
@@ -7003,10 +10496,38 @@ export default function AdminDashboardPage() {
             iconColor: "text-violet-500",
             href: "/admin/tasks",
             items: [
-              { label: "Contratadas", count: wSoW.tasks.contracted, status: "contracted", bg: "bg-purple-500/10",  text: "text-purple-600 dark:text-purple-400", dot: "bg-purple-500" },
-              { label: "Execução",    count: wSoW.tasks.inProgress, status: "inprogress", bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",     dot: "bg-blue-500" },
-              { label: "Concluídas",  count: wSoW.tasks.completed,  status: "completed",  bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",   dot: "bg-green-500" },
-              { label: "Arquivadas",  count: wSoW.tasks.archived,   status: "archived",   bg: "bg-slate-500/10",  text: "text-slate-600 dark:text-slate-400",   dot: "bg-slate-500" },
+              {
+                label: "Contratadas",
+                count: wSoW.tasks.contracted,
+                status: "contracted",
+                bg: "bg-purple-500/10",
+                text: "text-purple-600 dark:text-purple-400",
+                dot: "bg-purple-500",
+              },
+              {
+                label: "Execução",
+                count: wSoW.tasks.inProgress,
+                status: "inprogress",
+                bg: "bg-blue-500/10",
+                text: "text-blue-600 dark:text-blue-400",
+                dot: "bg-blue-500",
+              },
+              {
+                label: "Concluídas",
+                count: wSoW.tasks.completed,
+                status: "completed",
+                bg: "bg-green-500/10",
+                text: "text-green-600 dark:text-green-400",
+                dot: "bg-green-500",
+              },
+              {
+                label: "Arquivadas",
+                count: wSoW.tasks.archived,
+                status: "archived",
+                bg: "bg-slate-500/10",
+                text: "text-slate-600 dark:text-slate-400",
+                dot: "bg-slate-500",
+              },
             ],
           },
           {
@@ -7016,11 +10537,46 @@ export default function AdminDashboardPage() {
             iconColor: "text-cyan-500",
             href: "/admin/leads",
             items: [
-              { label: "Novos",     count: wSoW.leads.new,       status: "new",      bg: "bg-cyan-500/10",   text: "text-cyan-600 dark:text-cyan-400",    dot: "bg-cyan-500" },
-              { label: "Contato",   count: wSoW.leads.contacted, status: "contacted",bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",    dot: "bg-blue-500" },
-              { label: "Proposta",  count: wSoW.leads.proposal,  status: "proposal", bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-500" },
-              { label: "Fechados",  count: wSoW.leads.won,       status: "won",      bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",   dot: "bg-green-500" },
-              { label: "Perdidos",  count: wSoW.leads.lost,      status: "lost",     bg: "bg-red-500/10",    text: "text-red-600 dark:text-red-400",       dot: "bg-red-500" },
+              {
+                label: "Novos",
+                count: wSoW.leads.new,
+                status: "new",
+                bg: "bg-cyan-500/10",
+                text: "text-cyan-600 dark:text-cyan-400",
+                dot: "bg-cyan-500",
+              },
+              {
+                label: "Contato",
+                count: wSoW.leads.contacted,
+                status: "contacted",
+                bg: "bg-blue-500/10",
+                text: "text-blue-600 dark:text-blue-400",
+                dot: "bg-blue-500",
+              },
+              {
+                label: "Proposta",
+                count: wSoW.leads.proposal,
+                status: "proposal",
+                bg: "bg-violet-500/10",
+                text: "text-violet-600 dark:text-violet-400",
+                dot: "bg-violet-500",
+              },
+              {
+                label: "Fechados",
+                count: wSoW.leads.won,
+                status: "won",
+                bg: "bg-green-500/10",
+                text: "text-green-600 dark:text-green-400",
+                dot: "bg-green-500",
+              },
+              {
+                label: "Perdidos",
+                count: wSoW.leads.lost,
+                status: "lost",
+                bg: "bg-red-500/10",
+                text: "text-red-600 dark:text-red-400",
+                dot: "bg-red-500",
+              },
             ],
           },
         ];
@@ -7053,31 +10609,52 @@ export default function AdminDashboardPage() {
                     <LayoutGrid className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">Visão Geral por Status</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Status de projetos, tarefas e leads</p>
+                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">
+                      Visão Geral por Status
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Status de projetos, tarefas e leads
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
-                <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+                <WidgetExportButton
+                  widgetId={widget.type}
+                  widgetTitle={getWidgetTitle(widget.type)}
+                />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {soSections.map((section) => (
                   <div key={section.label}>
-                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${section.iconBg} mb-2`}>
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${section.iconBg} mb-2`}
+                    >
                       <span className={section.iconColor}>{section.icon}</span>
-                      <span className={`text-xs font-semibold ${section.iconColor}`}>{section.label}</span>
+                      <span
+                        className={`text-xs font-semibold ${section.iconColor}`}
+                      >
+                        {section.label}
+                      </span>
                     </div>
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1.5">
                       {section.items.map((item) => (
                         <button
                           key={item.status}
-                          onClick={() => { window.location.href = `${section.href}?status=${item.status}`; }}
+                          onClick={() => {
+                            window.location.href = `${section.href}?status=${item.status}`;
+                          }}
                           className={`p-2.5 rounded-lg ${item.bg} hover:brightness-90 transition-all duration-200 text-left group`}
                         >
-                          <div className={`text-base font-bold leading-none ${item.text}`}>{item.count}</div>
-                          <div className="text-[10px] leading-tight text-muted-foreground mt-1 truncate">{item.label}</div>
+                          <div
+                            className={`text-base font-bold leading-none ${item.text}`}
+                          >
+                            {item.count}
+                          </div>
+                          <div className="text-[10px] leading-tight text-muted-foreground mt-1 truncate">
+                            {item.label}
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -7090,7 +10667,10 @@ export default function AdminDashboardPage() {
       }
 
       case "accountsReceivable": {
-        const wArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
+        const wArW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).accountsReceivable;
         return (
           <div
             key={widget.id}
@@ -7158,58 +10738,58 @@ export default function AdminDashboardPage() {
                     Composição por Tipo
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                  {/* Planos de Crédito */}
-                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                        Planos de Crédito
+                    {/* Planos de Crédito */}
+                    <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                          Planos de Crédito
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                        R$ {wArW.creditPlans.toLocaleString("pt-BR")},00
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                      R$ {wArW.creditPlans.toLocaleString("pt-BR")},00
-                    </span>
-                  </div>
 
-                  {/* Pós-pagos */}
-                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                        Pós-pagos
+                    {/* Pós-pagos */}
+                    <div className="flex flex-col gap-2 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                        <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                          Pós-pagos
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                        R$ {wArW.postPaid.toLocaleString("pt-BR")},00
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                      R$ {wArW.postPaid.toLocaleString("pt-BR")},00
-                    </span>
-                  </div>
 
-                  {/* Outros Contratos */}
-                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                        Outros Contratos
+                    {/* Outros Contratos */}
+                    <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <FileDown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Outros Contratos
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        R$ {wArW.others.toLocaleString("pt-BR")},00
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                      R$ {wArW.others.toLocaleString("pt-BR")},00
-                    </span>
-                  </div>
 
-                  {/* Recebido no período */}
-                  <div className="flex flex-col gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
-                        Recebido
+                    {/* Recebido no período */}
+                    <div className="flex flex-col gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                        <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                          Recebido
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-green-700 dark:text-green-300">
+                        R$ {wArW.received.toLocaleString("pt-BR")},00
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-green-700 dark:text-green-300">
-                      R$ {wArW.received.toLocaleString("pt-BR")},00
-                    </span>
                   </div>
-                </div>
                 </div>
 
                 {/* Ver Detalhes Button */}
@@ -7241,7 +10821,10 @@ export default function AdminDashboardPage() {
       }
 
       case "tasks": {
-        const wTasksW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).tasks;
+        const wTasksW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).tasks;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -7250,7 +10833,9 @@ export default function AdminDashboardPage() {
                   <CheckSquare className="h-4 w-4 text-success" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Tarefas (Resumo)</CardTitle>
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Tarefas (Resumo)
+                  </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Executadas, em execução e contratadas
                   </p>
@@ -7266,10 +10851,30 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
-                { label: "Concluídas",  value: wTasksW.completed,  change: wTasksW.completedGrowth,  color: "text-success" },
-                { label: "Em Execução", value: wTasksW.inProgress,  change: wTasksW.inProgressGrowth, color: "text-info" },
-                { label: "Contratadas", value: wTasksW.contracted,  change: wTasksW.contractedGrowth, color: "text-warning" },
-                { label: "Canceladas",  value: wTasksW.cancelled,   change: wTasksW.cancelledChange,  color: "text-destructive" },
+                {
+                  label: "Concluídas",
+                  value: wTasksW.completed,
+                  change: wTasksW.completedGrowth,
+                  color: "text-success",
+                },
+                {
+                  label: "Em Execução",
+                  value: wTasksW.inProgress,
+                  change: wTasksW.inProgressGrowth,
+                  color: "text-info",
+                },
+                {
+                  label: "Contratadas",
+                  value: wTasksW.contracted,
+                  change: wTasksW.contractedGrowth,
+                  color: "text-warning",
+                },
+                {
+                  label: "Canceladas",
+                  value: wTasksW.cancelled,
+                  change: wTasksW.cancelledChange,
+                  color: "text-destructive",
+                },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -7301,7 +10906,10 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-2 bg-success rounded-full" style={{ width: `${wTasksW.slaCompliance}%` }} />
+                  <div
+                    className="h-2 bg-success rounded-full"
+                    style={{ width: `${wTasksW.slaCompliance}%` }}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -7310,7 +10918,10 @@ export default function AdminDashboardPage() {
       }
 
       case "nomadsIndicators": {
-        const wNiW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomadsIndicators;
+        const wNiW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).nomadsIndicators;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -7337,11 +10948,36 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               {[
-                { label: "Taxa de Entrega",      value: `${wNiW.deliveryRate.toFixed(1).replace(".", ",")}%`,       icon: CheckSquare, color: "text-success" },
-                { label: "Avaliação Média",      value: `${wNiW.avgRating.toFixed(1).replace(".", ",")} ★`,         icon: Star,        color: "text-warning" },
-                { label: "Tempo Médio / Tarefa", value: `${wNiW.avgTimePerTask.toFixed(1).replace(".", ",")} dias`,  icon: Clock,       color: "text-info" },
-                { label: "Nômades Certificados", value: `${wNiW.certified}%`,                                       icon: Award,       color: "text-chart-4" },
-                { label: "Retenção 90 dias",     value: `${wNiW.retention90d}%`,                                    icon: TrendingUp,  color: "text-success" },
+                {
+                  label: "Taxa de Entrega",
+                  value: `${wNiW.deliveryRate.toFixed(1).replace(".", ",")}%`,
+                  icon: CheckSquare,
+                  color: "text-success",
+                },
+                {
+                  label: "Avaliação Média",
+                  value: `${wNiW.avgRating.toFixed(1).replace(".", ",")} ★`,
+                  icon: Star,
+                  color: "text-warning",
+                },
+                {
+                  label: "Tempo Médio / Tarefa",
+                  value: `${wNiW.avgTimePerTask.toFixed(1).replace(".", ",")} dias`,
+                  icon: Clock,
+                  color: "text-info",
+                },
+                {
+                  label: "Nômades Certificados",
+                  value: `${wNiW.certified}%`,
+                  icon: Award,
+                  color: "text-chart-4",
+                },
+                {
+                  label: "Retenção 90 dias",
+                  value: `${wNiW.retention90d}%`,
+                  icon: TrendingUp,
+                  color: "text-success",
+                },
               ].map((kpi) => (
                 <div
                   key={kpi.label}
@@ -7367,42 +11003,97 @@ export default function AdminDashboardPage() {
 
       case "activeUsers":
         return (
-          <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+          <Card
+            className="border-0 shadow-lg overflow-hidden"
+            data-widget-id={widget.type}
+          >
             <CardHeader className="pb-3 relative">
               <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-success/10 rounded-lg shrink-0"><UserCheck className="h-4 w-4 text-success" /></div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Usuários Ativos</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">Ativos por tipo de conta no período</p>
+                <div className="p-2 bg-success/10 rounded-lg shrink-0">
+                  <UserCheck className="h-4 w-4 text-success" />
                 </div>
-                <Badge variant="outline" className="text-xs shrink-0">{auW.total.toLocaleString()}</Badge>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Usuários Ativos
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ativos por tipo de conta no período
+                  </p>
+                </div>
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {auW.total.toLocaleString()}
+                </Badge>
               </div>
-              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <div className="grid grid-cols-2 gap-2.5">
-                {([
-                  { type: "Empresas", count: auW.empresas, growth: `+${auW.empresasGrowth}%`, bg: "bg-info/5 border-info/20",    text: "text-info",    icon: Building2 },
-                  { type: "Agências", count: auW.agencias, growth: `+${auW.agenciasGrowth}%`, bg: "bg-success/5 border-success/20", text: "text-success", icon: Briefcase },
-                  { type: "Nômades",  count: auW.nomades,  growth: `+${auW.nomadesGrowth}%`,  bg: "bg-chart-4/5 border-chart-4/20", text: "text-chart-4", icon: UserCheck },
-                  { type: "Admins",   count: auW.admins,   growth: `+${auW.adminsGrowth}%`,   bg: "bg-warning/5 border-warning/20", text: "text-warning", icon: Shield },
-                ]).map((item) => {
+                {[
+                  {
+                    type: "Empresas",
+                    count: auW.empresas,
+                    growth: `+${auW.empresasGrowth}%`,
+                    bg: "bg-info/5 border-info/20",
+                    text: "text-info",
+                    icon: Building2,
+                  },
+                  {
+                    type: "Agências",
+                    count: auW.agencias,
+                    growth: `+${auW.agenciasGrowth}%`,
+                    bg: "bg-success/5 border-success/20",
+                    text: "text-success",
+                    icon: Briefcase,
+                  },
+                  {
+                    type: "Nômades",
+                    count: auW.nomades,
+                    growth: `+${auW.nomadesGrowth}%`,
+                    bg: "bg-chart-4/5 border-chart-4/20",
+                    text: "text-chart-4",
+                    icon: UserCheck,
+                  },
+                  {
+                    type: "Admins",
+                    count: auW.admins,
+                    growth: `+${auW.adminsGrowth}%`,
+                    bg: "bg-warning/5 border-warning/20",
+                    text: "text-warning",
+                    icon: Shield,
+                  },
+                ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.type} className={`p-2.5 rounded-xl border ${item.bg} space-y-1`}>
+                    <div
+                      key={item.type}
+                      className={`p-2.5 rounded-xl border ${item.bg} space-y-1`}
+                    >
                       <div className="flex items-center justify-between">
                         <Icon className={`h-4 w-4 ${item.text}`} />
-                        <span className="text-[10px] font-medium text-success">{item.growth}</span>
+                        <span className="text-[10px] font-medium text-success">
+                          {item.growth}
+                        </span>
                       </div>
-                      <p className={`text-xl font-bold ${item.text}`}>{item.count.toLocaleString()}</p>
-                      <p className={`text-xs font-medium ${item.text}`}>{item.type}</p>
+                      <p className={`text-xl font-bold ${item.text}`}>
+                        {item.count.toLocaleString()}
+                      </p>
+                      <p className={`text-xs font-medium ${item.text}`}>
+                        {item.type}
+                      </p>
                     </div>
                   );
                 })}
               </div>
               <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Total ativo hoje</p>
-                <p className="text-sm font-bold">{auW.total.toLocaleString("pt-BR")}</p>
+                <p className="text-xs text-muted-foreground">
+                  Total ativo hoje
+                </p>
+                <p className="text-sm font-bold">
+                  {auW.total.toLocaleString("pt-BR")}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -7410,55 +11101,150 @@ export default function AdminDashboardPage() {
 
       case "partnerProgram":
         return (
-          <Card className="border-0 shadow-lg overflow-hidden" data-widget-id={widget.type}>
+          <Card
+            className="border-0 shadow-lg overflow-hidden"
+            data-widget-id={widget.type}
+          >
             <CardHeader className="pb-3 relative">
               <div className="flex items-center gap-3 pr-20">
-                <div className="p-2 bg-amber-500/10 rounded-lg shrink-0"><Award className="h-4 w-4 text-amber-500" /></div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-base font-semibold leading-tight">Programa Partner</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">Convites e partners ativos por nível</p>
+                <div className="p-2 bg-amber-500/10 rounded-lg shrink-0">
+                  <Award className="h-4 w-4 text-amber-500" />
                 </div>
-                <Badge variant="outline" className="text-xs shrink-0 text-success border-success/30">{ppW.accepted} ativos</Badge>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-semibold leading-tight">
+                    Programa Partner
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Convites e partners ativos por nível
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-xs shrink-0 text-success border-success/30"
+                >
+                  {ppW.accepted} ativos
+                </Badge>
               </div>
-              <WidgetExportButton widgetId={widget.type} widgetTitle={getWidgetTitle(widget.type)} />
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
               {/* Invite stats 3-col */}
               <div className="grid grid-cols-3 gap-2">
-                {([
-                  { label: "Enviados",  value: ppW.invitesSent, bg: "bg-muted/40 border-border/40",    text: "text-foreground" },
-                  { label: "Pendentes", value: ppW.pending,     bg: "bg-warning/5 border-warning/20", text: "text-warning" },
-                  { label: "Aceitos",   value: ppW.accepted,    bg: "bg-success/5 border-success/20", text: "text-success" },
-                ] as const).map((s) => (
-                  <div key={s.label} className={`flex flex-col items-center p-2.5 rounded-xl border ${s.bg} text-center`}>
-                    <span className={`text-xl font-bold ${s.text}`}>{s.value}</span>
-                    <span className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{s.label}</span>
+                {(
+                  [
+                    {
+                      label: "Enviados",
+                      value: ppW.invitesSent,
+                      bg: "bg-muted/40 border-border/40",
+                      text: "text-foreground",
+                    },
+                    {
+                      label: "Pendentes",
+                      value: ppW.pending,
+                      bg: "bg-warning/5 border-warning/20",
+                      text: "text-warning",
+                    },
+                    {
+                      label: "Aceitos",
+                      value: ppW.accepted,
+                      bg: "bg-success/5 border-success/20",
+                      text: "text-success",
+                    },
+                  ] as const
+                ).map((s) => (
+                  <div
+                    key={s.label}
+                    className={`flex flex-col items-center p-2.5 rounded-xl border ${s.bg} text-center`}
+                  >
+                    <span className={`text-xl font-bold ${s.text}`}>
+                      {s.value}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                      {s.label}
+                    </span>
                   </div>
                 ))}
               </div>
               {/* Levels 2-per-row compact */}
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Partners por Nível</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Partners por Nível
+                </p>
                 <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { level: "Diamond",  count: ppW.diamond,  bar: "bg-sky-500",    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",              text: "text-sky-600 dark:text-sky-400" },
-                    { level: "Platinum", count: ppW.platinum, bar: "bg-violet-500", bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",  text: "text-violet-600 dark:text-violet-400" },
-                    { level: "Gold",     count: ppW.gold,     bar: "bg-yellow-500", bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",  text: "text-yellow-600 dark:text-yellow-400" },
-                    { level: "Silver",   count: ppW.silver,   bar: "bg-slate-400",  bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",      text: "text-slate-600 dark:text-slate-400" },
-                    { level: "Bronze",   count: ppW.bronze,   bar: "bg-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",  text: "text-orange-600 dark:text-orange-400" },
-                  ]).map((item) => {
-                    const total = ppW.diamond + ppW.platinum + ppW.gold + ppW.silver + ppW.bronze;
-                    const pct = total > 0 ? Math.round(item.count / total * 100) : 0;
+                  {[
+                    {
+                      level: "Diamond",
+                      count: ppW.diamond,
+                      bar: "bg-sky-500",
+                      bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                      text: "text-sky-600 dark:text-sky-400",
+                    },
+                    {
+                      level: "Platinum",
+                      count: ppW.platinum,
+                      bar: "bg-violet-500",
+                      bg: "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800",
+                      text: "text-violet-600 dark:text-violet-400",
+                    },
+                    {
+                      level: "Gold",
+                      count: ppW.gold,
+                      bar: "bg-yellow-500",
+                      bg: "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",
+                      text: "text-yellow-600 dark:text-yellow-400",
+                    },
+                    {
+                      level: "Silver",
+                      count: ppW.silver,
+                      bar: "bg-slate-400",
+                      bg: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700",
+                      text: "text-slate-600 dark:text-slate-400",
+                    },
+                    {
+                      level: "Bronze",
+                      count: ppW.bronze,
+                      bar: "bg-orange-500",
+                      bg: "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",
+                      text: "text-orange-600 dark:text-orange-400",
+                    },
+                  ].map((item) => {
+                    const total =
+                      ppW.diamond +
+                      ppW.platinum +
+                      ppW.gold +
+                      ppW.silver +
+                      ppW.bronze;
+                    const pct =
+                      total > 0 ? Math.round((item.count / total) * 100) : 0;
                     return (
-                      <div key={item.level} className={`flex items-center gap-2.5 p-2.5 rounded-xl border ${item.bg}`}>
-                        <div className={`h-7 w-7 rounded-full ${item.bar} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{item.count}</div>
+                      <div
+                        key={item.level}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border ${item.bg}`}
+                      >
+                        <div
+                          className={`h-7 w-7 rounded-full ${item.bar} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+                        >
+                          {item.count}
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-semibold ${item.text}`}>{item.level}</p>
+                          <p className={`text-xs font-semibold ${item.text}`}>
+                            {item.level}
+                          </p>
                           <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
-                            <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${pct}%` }} />
+                            <div
+                              className={`h-full rounded-full ${item.bar}`}
+                              style={{ width: `${pct}%` }}
+                            />
                           </div>
                         </div>
-                        <span className={`text-[10px] font-medium shrink-0 ${item.text}`}>{pct}%</span>
+                        <span
+                          className={`text-[10px] font-medium shrink-0 ${item.text}`}
+                        >
+                          {pct}%
+                        </span>
                       </div>
                     );
                   })}
@@ -7466,8 +11252,12 @@ export default function AdminDashboardPage() {
               </div>
               {/* MRR footer */}
               <div className="pt-2.5 border-t flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">MRR gerado por Partners</p>
-                <span className="text-sm font-bold text-success">R$ {ppW.mrrGenerated.toLocaleString("pt-BR")}</span>
+                <p className="text-xs text-muted-foreground">
+                  MRR gerado por Partners
+                </p>
+                <span className="text-sm font-bold text-success">
+                  R$ {ppW.mrrGenerated.toLocaleString("pt-BR")}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -7913,208 +11703,208 @@ export default function AdminDashboardPage() {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {/* Dashboard selector dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-              >
-                <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                <span className="truncate">
-                  {savedDashboards.find((d) => d.id === currentDashboardId)
-                    ?.name ?? "Selecionar dashboard"}
-                </span>
-                <ChevronDown className="h-3 w-3 shrink-0 opacity-50 ml-auto" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">
-                Dashboards salvos
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {savedDashboards.map((db) => (
-                <div
-                  key={db.id}
-                  className="flex items-center px-1 py-0.5 rounded hover:bg-muted/60 group"
+            {/* Dashboard selector dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
                 >
-                  <button
-                    className="flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded text-xs"
-                    onClick={() => {
-                      handleLoadDashboard(db.id);
-                      toast({
-                        title: `Dashboard carregado`,
-                        description: db.name,
-                      });
-                    }}
+                  <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                  <span className="truncate">
+                    {savedDashboards.find((d) => d.id === currentDashboardId)
+                      ?.name ?? "Selecionar dashboard"}
+                  </span>
+                  <ChevronDown className="h-3 w-3 shrink-0 opacity-50 ml-auto" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">
+                  Dashboards salvos
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {savedDashboards.map((db) => (
+                  <div
+                    key={db.id}
+                    className="flex items-center px-1 py-0.5 rounded hover:bg-muted/60 group"
                   >
-                    <LayoutGrid
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0",
-                        currentDashboardId === db.id
-                          ? "text-violet-500"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "truncate font-medium",
-                        currentDashboardId === db.id &&
-                          "text-violet-600 dark:text-violet-400",
-                      )}
-                    >
-                      {db.name}
-                    </span>
-                    {currentDashboardId === db.id && (
-                      <Check className="h-3 w-3 text-violet-500 shrink-0 ml-auto" />
-                    )}
-                  </button>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
                     <button
-                      onClick={() => handleSetDefaultDashboard(db.id)}
-                      className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                      title={
-                        db.isDefault
-                          ? "Dashboard padrão"
-                          : "Definir como padrão"
-                      }
+                      className="flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded text-xs"
+                      onClick={() => {
+                        handleLoadDashboard(db.id);
+                        toast({
+                          title: `Dashboard carregado`,
+                          description: db.name,
+                        });
+                      }}
                     >
-                      <Star
+                      <LayoutGrid
                         className={cn(
-                          "h-3.5 w-3.5",
-                          db.isDefault
-                            ? "fill-amber-400 text-amber-400"
-                            : "text-muted-foreground hover:text-amber-400",
+                          "h-3.5 w-3.5 shrink-0",
+                          currentDashboardId === db.id
+                            ? "text-violet-500"
+                            : "text-muted-foreground",
                         )}
                       />
+                      <span
+                        className={cn(
+                          "truncate font-medium",
+                          currentDashboardId === db.id &&
+                            "text-violet-600 dark:text-violet-400",
+                        )}
+                      >
+                        {db.name}
+                      </span>
+                      {currentDashboardId === db.id && (
+                        <Check className="h-3 w-3 text-violet-500 shrink-0 ml-auto" />
+                      )}
                     </button>
-                    <button
-                      onClick={() => {
-                        setDeletingDashboardId(db.id);
-                        setShowDeleteDashboardDialog(true);
-                      }}
-                      className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                      title="Excluir dashboard"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                    </button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                      <button
+                        onClick={() => handleSetDefaultDashboard(db.id)}
+                        className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                        title={
+                          db.isDefault
+                            ? "Dashboard padrão"
+                            : "Definir como padrão"
+                        }
+                      >
+                        <Star
+                          className={cn(
+                            "h-3.5 w-3.5",
+                            db.isDefault
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-muted-foreground hover:text-amber-400",
+                          )}
+                        />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeletingDashboardId(db.id);
+                          setShowDeleteDashboardDialog(true);
+                        }}
+                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        title="Excluir dashboard"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {savedDashboards.length === 0 && (
-                <p className="px-3 py-3 text-xs text-muted-foreground text-center">
-                  Nenhum dashboard salvo
-                </p>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  setDraftWidgets([]);
-                  setEditHeaderName("");
-                  setIsEditingHeaderName(true);
-                  setEditModalMode("adicionar");
-                  setIsNewDashboardMode(true);
-                  setIsEditDashboardModalOpen(true);
-                }}
-                className="text-xs text-violet-600 dark:text-violet-400 font-medium cursor-pointer gap-1.5"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Criar novo dashboard
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Export dropdown */}
-          <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <>
-                    <Download className="h-3.5 w-3.5 animate-pulse" />
-                    Exportando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-3.5 w-3.5" />
-                    Exportar
-                    <ChevronDown className="h-2.5 w-2.5" />
-                  </>
+                ))}
+                {savedDashboards.length === 0 && (
+                  <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+                    Nenhum dashboard salvo
+                  </p>
                 )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-1.5" align="end">
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  handleExportAs("pdf");
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-              >
-                <FileText className="h-3.5 w-3.5 text-red-500" />
-                Exportar como PDF
-              </button>
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  handleExportAs("png");
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-              >
-                <ImageDown className="h-3.5 w-3.5 text-blue-500" />
-                Exportar como PNG
-              </button>
-            </PopoverContent>
-          </Popover>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setDraftWidgets([]);
+                    setEditHeaderName("");
+                    setIsEditingHeaderName(true);
+                    setEditModalMode("adicionar");
+                    setIsNewDashboardMode(true);
+                    setIsEditDashboardModalOpen(true);
+                  }}
+                  className="text-xs text-violet-600 dark:text-violet-400 font-medium cursor-pointer gap-1.5"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar novo dashboard
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {/* Dados Históricos */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openHistoricalModal()}
-            className="h-8 px-3 gap-1.5 text-xs font-medium border-amber-200 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-500 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400"
-          >
-            <History className="h-3.5 w-3.5" />
-            Histórico
-            {Object.keys(historicalData).length > 0 && (
-              <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] h-4 w-4 flex items-center justify-center shrink-0">
-                {Object.keys(historicalData).length}
-              </span>
-            )}
-          </Button>
+            {/* Export dropdown */}
+            <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <>
+                      <Download className="h-3.5 w-3.5 animate-pulse" />
+                      Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-3.5 w-3.5" />
+                      Exportar
+                      <ChevronDown className="h-2.5 w-2.5" />
+                    </>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-1.5" align="end">
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    handleExportAs("pdf");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                >
+                  <FileText className="h-3.5 w-3.5 text-red-500" />
+                  Exportar como PDF
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    handleExportAs("png");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                >
+                  <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                  Exportar como PNG
+                </button>
+              </PopoverContent>
+            </Popover>
 
-          {/* Compartilhar Dashboard */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={openDashboardPublicShare}
-            className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            Compartilhar
-          </Button>
+            {/* Dados Históricos */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openHistoricalModal()}
+              className="h-8 px-3 gap-1.5 text-xs font-medium border-amber-200 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-500 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400"
+            >
+              <History className="h-3.5 w-3.5" />
+              Histórico
+              {Object.keys(historicalData).length > 0 && (
+                <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] h-4 w-4 flex items-center justify-center shrink-0">
+                  {Object.keys(historicalData).length}
+                </span>
+              )}
+            </Button>
 
-          {/* Editar Dashboard */}
-          <Button
-            onClick={() => {
-              setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
-              const currentDb = savedDashboards.find(
-                (d) => d.id === currentDashboardId,
-              );
-              setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
-              setIsEditingHeaderName(false);
-              setIsEditDashboardModalOpen(true);
-            }}
-            className="h-8 px-3 gap-1.5 text-xs font-medium btn-brand shadow-sm rounded-lg"
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-            Editar
-          </Button>
+            {/* Compartilhar Dashboard */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openDashboardPublicShare}
+              className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Compartilhar
+            </Button>
+
+            {/* Editar Dashboard */}
+            <Button
+              onClick={() => {
+                setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
+                const currentDb = savedDashboards.find(
+                  (d) => d.id === currentDashboardId,
+                );
+                setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
+                setIsEditingHeaderName(false);
+                setIsEditDashboardModalOpen(true);
+              }}
+              className="h-8 px-3 gap-1.5 text-xs font-medium btn-brand shadow-sm rounded-lg"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+              Editar
+            </Button>
           </div>
         </div>
       </div>
@@ -8358,12 +12148,18 @@ export default function AdminDashboardPage() {
       </Dialog>
 
       {/* ── Public Share Dialog ───────────────────────────────────────────── */}
-      <Dialog open={showPublicShareDialog} onOpenChange={setShowPublicShareDialog}>
+      <Dialog
+        open={showPublicShareDialog}
+        onOpenChange={setShowPublicShareDialog}
+      >
         <DialogContent className="sm:max-w-md p-0 overflow-hidden">
           {/* Brand gradient header strip */}
           <div
             className="px-6 pt-5 pb-4"
-            style={{ background: "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)" }}
+            style={{
+              background:
+                "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)",
+            }}
           >
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 shrink-0">
@@ -8383,180 +12179,214 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="px-6 pt-4 pb-6 space-y-4">
-          <Tabs value={shareActiveTab} onValueChange={setShareActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="permission">Permissão</TabsTrigger>
-              <TabsTrigger value="pin">PIN</TabsTrigger>
-              <TabsTrigger value="expiry">Expiração</TabsTrigger>
-            </TabsList>
+            <Tabs
+              value={shareActiveTab}
+              onValueChange={setShareActiveTab}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="permission">Permissão</TabsTrigger>
+                <TabsTrigger value="pin">PIN</TabsTrigger>
+                <TabsTrigger value="expiry">Expiração</TabsTrigger>
+              </TabsList>
 
-            {/* Permissão */}
-            <TabsContent value="permission" className="space-y-3 pt-2">
-              <p className="text-sm text-muted-foreground">
-                Quem acessar o link poderá:
-              </p>
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setSharePermission("view")}
-                  className={cn(
-                    "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
-                    sharePermission === "view"
-                      ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  <div className={cn(
-                    "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                    sharePermission === "view" ? "border-violet-500" : "border-muted-foreground",
-                  )}>
-                    {sharePermission === "view" && (
-                      <div className="h-2 w-2 rounded-full bg-violet-500" />
+              {/* Permissão */}
+              <TabsContent value="permission" className="space-y-3 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Quem acessar o link poderá:
+                </p>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setSharePermission("view")}
+                    className={cn(
+                      "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
+                      sharePermission === "view"
+                        ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
+                        : "border-border hover:bg-muted/50",
                     )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Somente Visualizar</p>
-                    <p className="text-xs text-muted-foreground">Acesso de leitura aos dados do dashboard</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSharePermission("comment")}
-                  className={cn(
-                    "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
-                    sharePermission === "comment"
-                      ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  <div className={cn(
-                    "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                    sharePermission === "comment" ? "border-violet-500" : "border-muted-foreground",
-                  )}>
-                    {sharePermission === "comment" && (
-                      <div className="h-2 w-2 rounded-full bg-violet-500" />
+                  >
+                    <div
+                      className={cn(
+                        "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        sharePermission === "view"
+                          ? "border-violet-500"
+                          : "border-muted-foreground",
+                      )}
+                    >
+                      {sharePermission === "view" && (
+                        <div className="h-2 w-2 rounded-full bg-violet-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Somente Visualizar</p>
+                      <p className="text-xs text-muted-foreground">
+                        Acesso de leitura aos dados do dashboard
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSharePermission("comment")}
+                    className={cn(
+                      "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
+                      sharePermission === "comment"
+                        ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
+                        : "border-border hover:bg-muted/50",
                     )}
-                  </div>
+                  >
+                    <div
+                      className={cn(
+                        "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        sharePermission === "comment"
+                          ? "border-violet-500"
+                          : "border-muted-foreground",
+                      )}
+                    >
+                      {sharePermission === "comment" && (
+                        <div className="h-2 w-2 rounded-full bg-violet-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        Visualizar + Comentar
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Pode adicionar comentários e anotações
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </TabsContent>
+
+              {/* PIN */}
+              <TabsContent value="pin" className="space-y-3 pt-2">
+                <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <p className="text-sm font-medium">Visualizar + Comentar</p>
-                    <p className="text-xs text-muted-foreground">Pode adicionar comentários e anotações</p>
+                    <p className="text-sm font-medium">Proteger com PIN</p>
+                    <p className="text-xs text-muted-foreground">
+                      Solicitar um PIN de 4 dígitos para acessar
+                    </p>
                   </div>
-                </button>
-              </div>
-            </TabsContent>
-
-            {/* PIN */}
-            <TabsContent value="pin" className="space-y-3 pt-2">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="text-sm font-medium">Proteger com PIN</p>
-                  <p className="text-xs text-muted-foreground">Solicitar um PIN de 4 dígitos para acessar</p>
-                </div>
-                <Switch
-                  checked={sharePinEnabled}
-                  onCheckedChange={(v) => {
-                    setSharePinEnabled(v);
-                    if (!v) setSharePin("");
-                    setGeneratedShareLink("");
-                  }}
-                />
-              </div>
-              {sharePinEnabled && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="share-pin" className="text-sm">PIN (4 dígitos)</Label>
-                  <Input
-                    id="share-pin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={4}
-                    value={sharePin}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                      setSharePin(v);
-                      setGeneratedShareLink("");
-                    }}
-                    placeholder="••••"
-                    className="text-center tracking-[0.5em] text-lg w-28"
-                  />
-                  {sharePinEnabled && sharePin.length > 0 && sharePin.length < 4 && (
-                    <p className="text-xs text-destructive">Digite exatamente 4 dígitos</p>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Expiração */}
-            <TabsContent value="expiry" className="space-y-3 pt-2">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="text-sm font-medium">Definir Expiração</p>
-                  <p className="text-xs text-muted-foreground">O link deixa de funcionar após essa data</p>
-                </div>
-                <Switch
-                  checked={shareExpiryEnabled}
-                  onCheckedChange={(v) => {
-                    setShareExpiryEnabled(v);
-                    if (!v) setShareExpiry("");
-                    setGeneratedShareLink("");
-                  }}
-                />
-              </div>
-              {shareExpiryEnabled && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="share-expiry" className="text-sm">Data de expiração</Label>
-                  <Input
-                    id="share-expiry"
-                    type="date"
-                    value={shareExpiry}
-                    min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => {
-                      setShareExpiry(e.target.value);
+                  <Switch
+                    checked={sharePinEnabled}
+                    onCheckedChange={(v) => {
+                      setSharePinEnabled(v);
+                      if (!v) setSharePin("");
                       setGeneratedShareLink("");
                     }}
                   />
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                {sharePinEnabled && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="share-pin" className="text-sm">
+                      PIN (4 dígitos)
+                    </Label>
+                    <Input
+                      id="share-pin"
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={sharePin}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                        setSharePin(v);
+                        setGeneratedShareLink("");
+                      }}
+                      placeholder="••••"
+                      className="text-center tracking-[0.5em] text-lg w-28"
+                    />
+                    {sharePinEnabled &&
+                      sharePin.length > 0 &&
+                      sharePin.length < 4 && (
+                        <p className="text-xs text-destructive">
+                          Digite exatamente 4 dígitos
+                        </p>
+                      )}
+                  </div>
+                )}
+              </TabsContent>
 
-          {/* Generated Link */}
-          <div className="space-y-2 pt-1">
-            <div className="flex gap-2">
-              <Button
-                className="flex-1 btn-brand"
-                onClick={handleGenerateShareLink}
-                disabled={sharePinEnabled && sharePin.length !== 4}
-              >
-                <Link2 className="h-4 w-4 mr-1.5" />
-                Gerar Link
-              </Button>
-            </div>
-            {generatedShareLink && (
-              <div className="flex gap-2 items-center">
-                <Input
-                  readOnly
-                  value={generatedShareLink}
-                  className="text-xs font-mono bg-muted/40"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
+              {/* Expiração */}
+              <TabsContent value="expiry" className="space-y-3 pt-2">
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium">Definir Expiração</p>
+                    <p className="text-xs text-muted-foreground">
+                      O link deixa de funcionar após essa data
+                    </p>
+                  </div>
+                  <Switch
+                    checked={shareExpiryEnabled}
+                    onCheckedChange={(v) => {
+                      setShareExpiryEnabled(v);
+                      if (!v) setShareExpiry("");
+                      setGeneratedShareLink("");
+                    }}
+                  />
+                </div>
+                {shareExpiryEnabled && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="share-expiry" className="text-sm">
+                      Data de expiração
+                    </Label>
+                    <Input
+                      id="share-expiry"
+                      type="date"
+                      value={shareExpiry}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        setShareExpiry(e.target.value);
+                        setGeneratedShareLink("");
+                      }}
+                    />
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {/* Generated Link */}
+            <div className="space-y-2 pt-1">
+              <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
-                  onClick={handleCopyShareLink}
+                  className="flex-1 btn-brand"
+                  onClick={handleGenerateShareLink}
+                  disabled={sharePinEnabled && sharePin.length !== 4}
                 >
-                  <Copy className="h-3.5 w-3.5" />
-                  Copiar
+                  <Link2 className="h-4 w-4 mr-1.5" />
+                  Gerar Link
                 </Button>
               </div>
-            )}
-          </div>
+              {generatedShareLink && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    readOnly
+                    value={generatedShareLink}
+                    className="text-xs font-mono bg-muted/40"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
+                    onClick={handleCopyShareLink}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar
+                  </Button>
+                </div>
+              )}
+            </div>
 
-          <div className="flex justify-end pt-1">
-            <Button variant="ghost" size="sm" onClick={() => setShowPublicShareDialog(false)}>
-              Fechar
-            </Button>
-          </div>
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPublicShareDialog(false)}
+              >
+                Fechar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -8585,7 +12415,9 @@ export default function AdminDashboardPage() {
               Dados Históricos Manuais
             </DialogTitle>
             <DialogDescription>
-              Insira dados reais para um mês específico. Serão aplicados sobre os dados gerados quando o período do dashboard corresponder a esse mês.
+              Insira dados reais para um mês específico. Serão aplicados sobre
+              os dados gerados quando o período do dashboard corresponder a esse
+              mês.
             </DialogDescription>
           </DialogHeader>
 
@@ -8609,34 +12441,85 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* 4 collapsible groups */}
-          <Accordion type="multiple" defaultValue={["financeiro"]} className="space-y-1">
-
+          <Accordion
+            type="multiple"
+            defaultValue={["financeiro"]}
+            className="space-y-1"
+          >
             {/* Group 1: Financeiro */}
-            <AccordionItem value="financeiro" className="border rounded-lg px-3">
+            <AccordionItem
+              value="financeiro"
+              className="border rounded-lg px-3"
+            >
               <AccordionTrigger className="text-sm font-semibold py-3">
                 💰 Financeiro
               </AccordionTrigger>
               <AccordionContent>
                 <div className="grid grid-cols-2 gap-3 pb-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Receita Total (R$)</Label>
-                    <Input type="number" placeholder="ex: 85000" value={histFormData.revenue_total ?? ""} onChange={(e) => setHistField("revenue_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Receita Total (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 85000"
+                      value={histFormData.revenue_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("revenue_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">MRR (R$)</Label>
-                    <Input type="number" placeholder="ex: 42000" value={histFormData.mrr_total ?? ""} onChange={(e) => setHistField("mrr_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      MRR (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 42000"
+                      value={histFormData.mrr_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("mrr_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Planos de Crédito (qtd)</Label>
-                    <Input type="number" placeholder="ex: 120" value={histFormData.creditPlans_total ?? ""} onChange={(e) => setHistField("creditPlans_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Planos de Crédito (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 120"
+                      value={histFormData.creditPlans_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("creditPlans_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Contas a Receber (R$)</Label>
-                    <Input type="number" placeholder="ex: 15000" value={histFormData.accountsReceivable_total ?? ""} onChange={(e) => setHistField("accountsReceivable_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Contas a Receber (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 15000"
+                      value={histFormData.accountsReceivable_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("accountsReceivable_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">CMV — Custo Total (R$)</Label>
-                    <Input type="number" placeholder="ex: 18000" value={histFormData.cmv_totalCosts ?? ""} onChange={(e) => setHistField("cmv_totalCosts", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      CMV — Custo Total (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 18000"
+                      value={histFormData.cmv_totalCosts ?? ""}
+                      onChange={(e) =>
+                        setHistField("cmv_totalCosts", e.target.value)
+                      }
+                    />
                   </div>
                 </div>
               </AccordionContent>
@@ -8650,24 +12533,71 @@ export default function AdminDashboardPage() {
               <AccordionContent>
                 <div className="grid grid-cols-2 gap-3 pb-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Projetos Ativos (qtd)</Label>
-                    <Input type="number" placeholder="ex: 38" value={histFormData.activeProjects_total ?? ""} onChange={(e) => setHistField("activeProjects_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Projetos Ativos (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 38"
+                      value={histFormData.activeProjects_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("activeProjects_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Tarefas Totais (qtd)</Label>
-                    <Input type="number" placeholder="ex: 540" value={histFormData.tasks_total ?? ""} onChange={(e) => setHistField("tasks_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Tarefas Totais (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 540"
+                      value={histFormData.tasks_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("tasks_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Tarefas Concluídas (qtd)</Label>
-                    <Input type="number" placeholder="ex: 312" value={histFormData.tasks_completed ?? ""} onChange={(e) => setHistField("tasks_completed", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Tarefas Concluídas (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 312"
+                      value={histFormData.tasks_completed ?? ""}
+                      onChange={(e) =>
+                        setHistField("tasks_completed", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Tarefas Em Progresso (qtd)</Label>
-                    <Input type="number" placeholder="ex: 95" value={histFormData.tasks_inProgress ?? ""} onChange={(e) => setHistField("tasks_inProgress", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Tarefas Em Progresso (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 95"
+                      value={histFormData.tasks_inProgress ?? ""}
+                      onChange={(e) =>
+                        setHistField("tasks_inProgress", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">SLA Compliance (%)</Label>
-                    <Input type="number" placeholder="ex: 89" min="0" max="100" value={histFormData.tasks_slaCompliance ?? ""} onChange={(e) => setHistField("tasks_slaCompliance", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      SLA Compliance (%)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 89"
+                      min="0"
+                      max="100"
+                      value={histFormData.tasks_slaCompliance ?? ""}
+                      onChange={(e) =>
+                        setHistField("tasks_slaCompliance", e.target.value)
+                      }
+                    />
                   </div>
                 </div>
               </AccordionContent>
@@ -8681,51 +12611,142 @@ export default function AdminDashboardPage() {
               <AccordionContent>
                 <div className="grid grid-cols-2 gap-3 pb-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Nômades Total (qtd)</Label>
-                    <Input type="number" placeholder="ex: 210" value={histFormData.nomads_total ?? ""} onChange={(e) => setHistField("nomads_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Nômades Total (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 210"
+                      value={histFormData.nomads_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("nomads_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Nômades Ativos (qtd)</Label>
-                    <Input type="number" placeholder="ex: 178" value={histFormData.nomads_active ?? ""} onChange={(e) => setHistField("nomads_active", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Nômades Ativos (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 178"
+                      value={histFormData.nomads_active ?? ""}
+                      onChange={(e) =>
+                        setHistField("nomads_active", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Parceiros Ativos (qtd)</Label>
-                    <Input type="number" placeholder="ex: 45" value={histFormData.partnerProgram_total ?? ""} onChange={(e) => setHistField("partnerProgram_total", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Parceiros Ativos (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 45"
+                      value={histFormData.partnerProgram_total ?? ""}
+                      onChange={(e) =>
+                        setHistField("partnerProgram_total", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Convites Enviados (qtd)</Label>
-                    <Input type="number" placeholder="ex: 90" value={histFormData.partnerProgram_invitesSent ?? ""} onChange={(e) => setHistField("partnerProgram_invitesSent", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Convites Enviados (qtd)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 90"
+                      value={histFormData.partnerProgram_invitesSent ?? ""}
+                      onChange={(e) =>
+                        setHistField(
+                          "partnerProgram_invitesSent",
+                          e.target.value,
+                        )
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">MRR Gerado Parceiros (R$)</Label>
-                    <Input type="number" placeholder="ex: 6200" value={histFormData.partnerProgram_mrrGenerated ?? ""} onChange={(e) => setHistField("partnerProgram_mrrGenerated", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      MRR Gerado Parceiros (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 6200"
+                      value={histFormData.partnerProgram_mrrGenerated ?? ""}
+                      onChange={(e) =>
+                        setHistField(
+                          "partnerProgram_mrrGenerated",
+                          e.target.value,
+                        )
+                      }
+                    />
                   </div>
                 </div>
               </AccordionContent>
             </AccordionItem>
 
             {/* Group 4: Churn, Ticket & LTV */}
-            <AccordionItem value="indicadores" className="border rounded-lg px-3">
+            <AccordionItem
+              value="indicadores"
+              className="border rounded-lg px-3"
+            >
               <AccordionTrigger className="text-sm font-semibold py-3">
                 📊 Churn, Ticket &amp; LTV
               </AccordionTrigger>
               <AccordionContent>
                 <div className="grid grid-cols-2 gap-3 pb-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Churn de Receita (%)</Label>
-                    <Input type="number" placeholder="ex: 3.2" step="0.1" value={histFormData.churn_revenueChurnRate ?? ""} onChange={(e) => setHistField("churn_revenueChurnRate", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Churn de Receita (%)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 3.2"
+                      step="0.1"
+                      value={histFormData.churn_revenueChurnRate ?? ""}
+                      onChange={(e) =>
+                        setHistField("churn_revenueChurnRate", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Receita Perdida — Churn (R$)</Label>
-                    <Input type="number" placeholder="ex: 1800" value={histFormData.churn_revenueChurn ?? ""} onChange={(e) => setHistField("churn_revenueChurn", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Receita Perdida — Churn (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 1800"
+                      value={histFormData.churn_revenueChurn ?? ""}
+                      onChange={(e) =>
+                        setHistField("churn_revenueChurn", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Ticket Médio Geral (R$)</Label>
-                    <Input type="number" placeholder="ex: 950" value={histFormData.averageTicket_general ?? ""} onChange={(e) => setHistField("averageTicket_general", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      Ticket Médio Geral (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 950"
+                      value={histFormData.averageTicket_general ?? ""}
+                      onChange={(e) =>
+                        setHistField("averageTicket_general", e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">LTV (R$)</Label>
-                    <Input type="number" placeholder="ex: 11400" value={histFormData.ltv_value ?? ""} onChange={(e) => setHistField("ltv_value", e.target.value)} />
+                    <Label className="text-xs text-muted-foreground">
+                      LTV (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 11400"
+                      value={histFormData.ltv_value ?? ""}
+                      onChange={(e) =>
+                        setHistField("ltv_value", e.target.value)
+                      }
+                    />
                   </div>
                 </div>
               </AccordionContent>
@@ -8735,14 +12756,19 @@ export default function AdminDashboardPage() {
           {/* Saved entries list */}
           {Object.keys(historicalData).length > 0 && (
             <div className="border-t border-border/40 pt-3 space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">Meses com dados salvos:</p>
+              <p className="text-xs text-muted-foreground font-medium">
+                Meses com dados salvos:
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(historicalData)
                   .sort(([a], [b]) => b.localeCompare(a))
                   .map(([key]) => {
                     const [y, m] = key.split("-").map(Number);
                     return (
-                      <div key={key} className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-0.5">
+                      <div
+                        key={key}
+                        className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-0.5"
+                      >
                         <button
                           onClick={() => {
                             setHistModalKey(key);
@@ -8767,7 +12793,10 @@ export default function AdminDashboardPage() {
           )}
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowHistoricalModal(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowHistoricalModal(false)}
+            >
               Cancelar
             </Button>
             <Button

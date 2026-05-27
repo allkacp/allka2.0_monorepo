@@ -301,7 +301,12 @@ export function CompanyUsersTab({
         status: (u.online_status === "online" ? "online" : "offline") as
           | "online"
           | "offline",
-        profile: assoc.role === "company_admin" ? "Administrador" : assoc.role === "company_financial" ? "Financeiro" : "Usuário",
+        profile:
+          assoc.role === "company_admin"
+            ? "Administrador"
+            : assoc.role === "company_financial"
+              ? "Financeiro"
+              : "Usuário",
         lastAccess: u.last_login
           ? new Date(u.last_login).toLocaleString("pt-BR")
           : "Nunca",
@@ -800,7 +805,11 @@ export function CompanyUsersTab({
       avatar: platformUser.name.substring(0, 2).toUpperCase(),
       status: "online",
       profile:
-        platformUser.role === "company_admin" ? "Administrador" : platformUser.role === "company_financial" ? "Financeiro" : "Usuário",
+        platformUser.role === "company_admin"
+          ? "Administrador"
+          : platformUser.role === "company_financial"
+            ? "Financeiro"
+            : "Usuário",
       lastAccess: "Agora",
       createdAt: new Date().toLocaleDateString("pt-BR"),
       isBlocked: false,
@@ -1270,8 +1279,8 @@ export function CompanyUsersTab({
                                   : user.profile === "Financeiro"
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : user.profile === "Gerente"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-slate-50 text-slate-600 border-slate-200"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-slate-50 text-slate-600 border-slate-200"
                               }`}
                             >
                               {user.profile}

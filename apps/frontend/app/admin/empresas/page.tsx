@@ -295,8 +295,6 @@ export default function EmpresasPage() {
   const navigate = useNavigate();
   const { empresaId: urlEmpresaId } = useParams<{ empresaId?: string }>();
 
-
-
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
     | "empresa"
@@ -323,9 +321,9 @@ export default function EmpresasPage() {
       if (raw) {
         const arr = JSON.parse(raw) as string[];
         if (Array.isArray(arr) && arr.length > 0) {
-          return new Set(arr.filter((k): k is ColKey =>
-            allColumns.some((c) => c.key === k),
-          ));
+          return new Set(
+            arr.filter((k): k is ColKey => allColumns.some((c) => c.key === k)),
+          );
         }
       }
     } catch {
@@ -627,7 +625,8 @@ export default function EmpresasPage() {
       commercial_contact_email: c.commercial_contact_email || undefined,
       commercial_contact_phone: c.commercial_contact_phone || undefined,
       commercial_contact_whatsapp: c.commercial_contact_whatsapp || undefined,
-      commercial_contact_preferred_channel: c.commercial_contact_preferred_channel || undefined,
+      commercial_contact_preferred_channel:
+        c.commercial_contact_preferred_channel || undefined,
       commercial_contact_notes: c.commercial_contact_notes || undefined,
       // Financial contact
       financial_contact_name: c.financial_contact_name || undefined,
@@ -635,10 +634,12 @@ export default function EmpresasPage() {
       financial_contact_email: c.financial_contact_email || undefined,
       financial_contact_phone: c.financial_contact_phone || undefined,
       financial_contact_whatsapp: c.financial_contact_whatsapp || undefined,
-      financial_contact_preferred_channel: c.financial_contact_preferred_channel || undefined,
+      financial_contact_preferred_channel:
+        c.financial_contact_preferred_channel || undefined,
       financial_contact_notes: c.financial_contact_notes || undefined,
       financial_contact_user_id: c.financial_contact_user_id || undefined,
-      use_master_as_financial_fallback: c.use_master_as_financial_fallback ?? true,
+      use_master_as_financial_fallback:
+        c.use_master_as_financial_fallback ?? true,
     })) as Company[];
     setCompanies(mapped);
   }, [apiCompanies]);
