@@ -297,10 +297,36 @@ export default function EmpresasPage() {
     { key: "tipo", label: "Tipo" },
     { key: "acoes", label: "Ações", required: true },
   ];
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
-    new Set(allColumns.map((c) => c.key)),
-  );
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
+    // Persist user choice per browser. To apply per backend user, swap the
+    // key with the userId from your auth context.
+    try {
+      const raw = localStorage.getItem("empresas:visibleCols");
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr) && arr.length > 0) {
+          return new Set(arr.filter((k): k is ColKey =>
+            allColumns.some((c) => c.key === k),
+          ));
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return new Set(allColumns.map((c) => c.key));
+  });
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  // Persist whenever visibleCols changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "empresas:visibleCols",
+        JSON.stringify(Array.from(visibleCols)),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [visibleCols]);
   const toggleCol = (key: ColKey) => {
     setVisibleCols((prev) => {
       const next = new Set(prev);
@@ -318,8 +344,8 @@ export default function EmpresasPage() {
     cnpj: 210,
     status: 145,
     plano: 145,
-    tipo: 130,
-    acoes: 116,
+    tipo: 160,
+    acoes: 130,
   };
   const allMinWidths: Record<ColKey, number> = {
     empresa: 200,
@@ -327,8 +353,8 @@ export default function EmpresasPage() {
     cnpj: 180,
     status: 110,
     plano: 110,
-    tipo: 100,
-    acoes: 116,
+    tipo: 130,
+    acoes: 130,
   };
   const defaultColWidths = visibleColumnsList.map(
     (c) => allDefaultWidths[c.key],
@@ -415,7 +441,14 @@ export default function EmpresasPage() {
 
   // Deep-link: open company view from URL param
   useEffect(() => {
-    if (!urlEmpresaId) return;
+    if (!urlEmpresaId) {
+      // Route changed away from /admin/empresas/:id — close the panel
+      if (viewPanelOpen) {
+        setViewPanelOpen(false);
+        setSelectedCompany(null);
+      }
+      return;
+    }
     if (companiesLoading) return; // wait until list is loaded
     const numId = parseInt(urlEmpresaId, 10);
     // First try: find in already-mapped companies list by sequential id
@@ -564,6 +597,12 @@ export default function EmpresasPage() {
       // partner_level drives the plan display; use API value or fall back to demo rotation
       partner_level:
         c.plan || c.partner_level || DEMO_PLANS[idx % DEMO_PLANS.length],
+      // account_type alias for filtering by plan tier (same value as partner_level)
+      account_type:
+        c.account_type ||
+        c.plan ||
+        c.partner_level ||
+        DEMO_PLANS[idx % DEMO_PLANS.length],
     })) as Company[];
     setCompanies(mapped);
   }, [apiCompanies]);
@@ -1387,10 +1426,9 @@ export default function EmpresasPage() {
                       ...(col.key === "acoes"
                         ? {
                             right: 0,
-                            minWidth: 116,
+                            minWidth: 130,
                             borderLeft: "1px solid rgba(148,163,184,0.18)",
-                            boxShadow:
-                              "-4px 0 10px -2px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
+                            boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
                           }
                         : {}),
                     }}
@@ -1875,9 +1913,8 @@ export default function EmpresasPage() {
                         position: "sticky",
                         right: 0,
                         zIndex: 1,
-                        minWidth: 116,
+                        minWidth: 130,
                         borderLeft: "1px solid rgba(148,163,184,0.18)",
-                        boxShadow: "-4px 0 10px -2px rgba(0,0,0,0.06)",
                       }}
                     >
                       {/* Pill container */}
@@ -2501,14 +2538,14 @@ export default function EmpresasPage() {
                         </div>
                       )}
 
-                      {/* Tipo e Status */}
+                      {/* Tipo e Status (Tipo desabilitado: esta tela lista apenas Empresas) */}
                       {hasSection("tipo", "status") && (
                         <div>
                           <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                            Tipo · Status
+                            Status
                           </p>
                           <div className="space-y-2">
-                            {has("tipo") && (
+                            {false && has("tipo") && (
                               <div className="flex flex-wrap gap-1.5">
                                 {[
                                   { v: "company", l: "Empresa" },
@@ -2583,11 +2620,14 @@ export default function EmpresasPage() {
                             {has("plano") && (
                               <div className="flex flex-wrap gap-1.5">
                                 {[
-                                  "Basic",
-                                  "Standard",
-                                  "Premium",
-                                  "Enterprise",
-                                ].map((v) => (
+                                  { v: "lite", l: "Lite" },
+                                  { v: "start", l: "Start" },
+                                  { v: "standard", l: "Standard" },
+                                  { v: "growth", l: "Growth" },
+                                  { v: "scale", l: "Scale" },
+                                  { v: "squad", l: "Squad" },
+                                  { v: "enterprise", l: "Enterprise" },
+                                ].map(({ v, l }) => (
                                   <button
                                     key={v}
                                     onClick={() => {
@@ -2609,7 +2649,7 @@ export default function EmpresasPage() {
                                     }}
                                     className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${advancedFilters.accountTypes.includes(v) ? "bg-violet-500 text-white border-violet-500" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-violet-300"}`}
                                   >
-                                    {v}
+                                    {l}
                                   </button>
                                 ))}
                               </div>

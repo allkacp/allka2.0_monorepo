@@ -1065,6 +1065,7 @@ export function CompanyViewSlidePanel({
     <>
       <Sheet
         open={open && !showMigrateModal}
+        modal={false}
         onOpenChange={(o) => {
           if (!o && !showSaveConfirm && !showCancelConfirm) onClose();
         }}
@@ -3331,31 +3332,194 @@ export function CompanyViewSlidePanel({
                               discount: "",
                               price: "",
                             };
+                            const currentPlanKey = (
+                              company.partner_level || ""
+                            ).toLowerCase();
+                            const allPlans: Array<{
+                              key: string;
+                              name: string;
+                              price: string;
+                              discount: string;
+                              features: string[];
+                              color: string;
+                            }> = [
+                              {
+                                key: "lite",
+                                name: "Lite",
+                                price: "R$ 300/mês",
+                                discount: "—",
+                                features: [
+                                  "Até 2 usuários",
+                                  "Suporte por email",
+                                  "Projetos ilimitados",
+                                ],
+                                color: "from-slate-400 to-slate-500",
+                              },
+                              {
+                                key: "start",
+                                name: "Start",
+                                price: "R$ 500/mês",
+                                discount: "5% off",
+                                features: [
+                                  "Até 5 usuários",
+                                  "Suporte prioritário",
+                                  "Relatórios básicos",
+                                ],
+                                color: "from-cyan-500 to-blue-500",
+                              },
+                              {
+                                key: "standard",
+                                name: "Standard",
+                                price: "R$ 1.000/mês",
+                                discount: "10% off",
+                                features: [
+                                  "Até 10 usuários",
+                                  "Integrações básicas",
+                                  "Relatórios completos",
+                                ],
+                                color: "from-blue-500 to-indigo-500",
+                              },
+                              {
+                                key: "growth",
+                                name: "Growth",
+                                price: "R$ 1.500/mês",
+                                discount: "15% off",
+                                features: [
+                                  "Até 20 usuários",
+                                  "Integrações avançadas",
+                                  "Gerente de conta",
+                                ],
+                                color: "from-indigo-500 to-purple-500",
+                              },
+                              {
+                                key: "scale",
+                                name: "Scale",
+                                price: "R$ 3.000/mês",
+                                discount: "20% off",
+                                features: [
+                                  "Até 50 usuários",
+                                  "API completa",
+                                  "SLA dedicado",
+                                ],
+                                color: "from-purple-500 to-fuchsia-500",
+                              },
+                              {
+                                key: "squad",
+                                name: "Squad",
+                                price: "R$ 5.000/mês",
+                                discount: "20% off",
+                                features: [
+                                  "Squad dedicado",
+                                  "Onboarding white-glove",
+                                  "Customizações",
+                                ],
+                                color: "from-fuchsia-500 to-pink-500",
+                              },
+                              {
+                                key: "enterprise",
+                                name: "Enterprise",
+                                price: "Sob consulta",
+                                discount: "—",
+                                features: [
+                                  "Usuários ilimitados",
+                                  "Infraestrutura dedicada",
+                                  "Contrato customizado",
+                                ],
+                                color: "from-amber-500 to-orange-500",
+                              },
+                            ];
                             return (
-                              <div className="flex items-center gap-3 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl px-4 py-3 text-white shadow-sm">
-                                <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                                  <Crown className="h-4.5 w-4.5 text-white" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-base font-bold leading-tight">
-                                      {plan.name}
-                                    </span>
-                                    <span className="inline-flex items-center gap-0.5 bg-white/20 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
-                                      Ativo
-                                    </span>
+                              <div className="space-y-3">
+                                {/* Current plan banner */}
+                                <div className="flex items-center gap-3 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl px-4 py-3 text-white shadow-sm ring-2 ring-blue-400/40">
+                                  <div className="h-9 w-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                                    <Crown className="h-4.5 w-4.5 text-white" />
                                   </div>
-                                  <div className="flex items-center gap-3 mt-0.5">
-                                    <span className="text-xs font-semibold text-blue-100">
-                                      {plan.price}
-                                    </span>
-                                    {plan.discount && (
-                                      <span className="inline-flex items-center gap-1 bg-emerald-400/30 text-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                        <TrendingUp className="h-2.5 w-2.5" />
-                                        {plan.discount} desc.
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-base font-bold leading-tight">
+                                        {plan.name}
                                       </span>
-                                    )}
+                                      <span className="inline-flex items-center gap-1 bg-white text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                        <Check className="h-2.5 w-2.5" />
+                                        Plano vigente
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-0.5">
+                                      <span className="text-xs font-semibold text-blue-100">
+                                        {plan.price}
+                                      </span>
+                                      {plan.discount && (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-400/30 text-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                          <TrendingUp className="h-2.5 w-2.5" />
+                                          {plan.discount} desc.
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Compare plans */}
+                                <div>
+                                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Comparar planos
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {allPlans.map((p) => {
+                                      const isCurrent =
+                                        p.key === currentPlanKey ||
+                                        (currentPlanKey === "basic" &&
+                                          p.key === "lite") ||
+                                        (currentPlanKey === "starter" &&
+                                          p.key === "start") ||
+                                        (currentPlanKey === "pro" &&
+                                          p.key === "standard") ||
+                                        (currentPlanKey === "gold" &&
+                                          p.key === "growth") ||
+                                        (currentPlanKey === "platinum" &&
+                                          p.key === "enterprise");
+                                      return (
+                                        <div
+                                          key={p.key}
+                                          className={`relative rounded-lg border bg-white p-2.5 transition-all ${
+                                            isCurrent
+                                              ? "border-blue-400 ring-2 ring-blue-200 shadow-sm"
+                                              : "border-slate-200 hover:border-slate-300"
+                                          }`}
+                                        >
+                                          {isCurrent && (
+                                            <span className="absolute -top-1.5 right-2 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                              Vigente
+                                            </span>
+                                          )}
+                                          <div
+                                            className={`h-1 w-8 rounded-full bg-gradient-to-r ${p.color} mb-1.5`}
+                                          />
+                                          <p className="text-xs font-bold text-slate-800 leading-tight">
+                                            {p.name}
+                                          </p>
+                                          <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                                            {p.price}
+                                          </p>
+                                          {p.discount !== "—" && (
+                                            <p className="text-[10px] text-emerald-600 font-semibold">
+                                              {p.discount}
+                                            </p>
+                                          )}
+                                          <ul className="mt-1.5 space-y-0.5">
+                                            {p.features.map((f) => (
+                                              <li
+                                                key={f}
+                                                className="flex items-start gap-1 text-[10px] text-slate-600 leading-tight"
+                                              >
+                                                <Check className="h-2.5 w-2.5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                                <span>{f}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
