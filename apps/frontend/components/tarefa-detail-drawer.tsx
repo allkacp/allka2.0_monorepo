@@ -206,7 +206,8 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   NAO_SEGUIU_ORIENTACOES: "N\u00e3o seguiu orienta\u00e7\u00f5es",
 };
 
-function getStatusLabel(status: string): string {
+function getStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
   return (
     TASK_STATUS_LABELS[status] ??
     status
