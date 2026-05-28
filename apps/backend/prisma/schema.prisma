@@ -139,6 +139,8 @@ model Agency {
   updated_at     DateTime @updatedAt
 
   match_queue_entry MatchQueueEntry?
+  leaderships       AgencyLeadership[]
+  reports           AgencyReport[]
 
   @@map("agencies")
 }
@@ -1038,6 +1040,8 @@ model PartnerProfile {
   updated_at         DateTime @updatedAt
 
   commissions PartnerCommission[]
+  led_agencies AgencyLeadership[]
+  agency_reports AgencyReport[]
 
   @@map("partner_profiles")
 }
@@ -1078,6 +1082,54 @@ model PartnerCommission {
   updated_at   DateTime       @updatedAt
 
   @@map("partner_commissions")
+}
+
+// ─── Agency Leadership & Reports ─────────────────────────────────────────────
+
+model AgencyLeadership {
+  id         String   @id @default(cuid())
+  partner_id String
+  partner    PartnerProfile @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  agency_id  String
+  agency     Agency   @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  status     String   @default("active")
+  // active | paused | ended
+  notes      String?  @db.LongText
+  started_at DateTime @default(now())
+  ended_at   DateTime?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([partner_id, agency_id])
+  @@map("agency_leaderships")
+}
+
+model AgencyReport {
+  id           String   @id @default(cuid())
+  partner_id   String
+  partner      PartnerProfile @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  agency_id    String
+  agency       Agency   @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  title        String   @db.VarChar(255)
+  content      String   @db.LongText
+  period_month Int
+  // 1-12
+  period_year  Int
+  rating       Int?
+  // 1-5 stars
+  highlights   String?  @db.LongText
+  // JSON: string[]
+  improvements String?  @db.LongText
+  // JSON: string[]
+  mrr          Float?
+  projects_count Int?
+  tasks_count  Int?
+  status       String   @default("draft")
+  // draft | published
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("agency_reports")
 }
 
 // ─── Match Queue ──────────────────────────────────────────────────────────────

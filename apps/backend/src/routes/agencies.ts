@@ -116,4 +116,214 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
+// ─── Partner Leadership Routes ────────────────────────────────────────────────
+
+// GET /api/agencies/led — agencies led by the current partner
+router.get("/led/list", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const leaderships = await prisma.agencyLeadership.findMany({
+      where: { partner_id: partner.id, status: "active" },
+      include: {
+        agency: {
+          include: {
+            user: { select: { id: true, email: true, name: true } },
+            reports: {
+              where: { partner_id: partner.id },
+              orderBy: [{ period_year: "desc" }, { period_month: "desc" }],
+              take: 5,
+            },
+          },
+        },
+      },
+      orderBy: { started_at: "desc" },
+    });
+
+    res.json(leaderships);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/agencies/:id/lead — start leading an agency
+router.post("/:id/lead", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const agency = await prisma.agency.findUnique({
+      where: { id: (req.params.id as string) },
+    });
+    if (!agency) {
+      res.status(404).json({ error: "Agência não encontrada" });
+      return;
+    }
+
+    const leadership = await prisma.agencyLeadership.upsert({
+      where: { partner_id_agency_id: { partner_id: partner.id, agency_id: agency.id } },
+      create: { partner_id: partner.id, agency_id: agency.id, status: "active", notes: req.body.notes },
+      update: { status: "active", notes: req.body.notes },
+      include: { agency: true },
+    });
+
+    res.status(201).json(leadership);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/agencies/:id/lead — stop leading an agency
+router.delete("/:id/lead", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    await prisma.agencyLeadership.updateMany({
+      where: { partner_id: partner.id, agency_id: (req.params.id as string) },
+      data: { status: "ended", ended_at: new Date() },
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/agencies/:id/reports — reports for a led agency
+router.get("/:id/reports", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const reports = await prisma.agencyReport.findMany({
+      where: { partner_id: partner.id, agency_id: (req.params.id as string) },
+      orderBy: [{ period_year: "desc" }, { period_month: "desc" }],
+    });
+
+    res.json(reports);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const reportSchema = z.object({
+  title: z.string().min(1),
+  content: z.string().min(1),
+  period_month: z.number().int().min(1).max(12),
+  period_year: z.number().int().min(2020),
+  rating: z.number().int().min(1).max(5).optional(),
+  highlights: z.array(z.string()).optional(),
+  improvements: z.array(z.string()).optional(),
+  mrr: z.number().optional(),
+  projects_count: z.number().int().optional(),
+  tasks_count: z.number().int().optional(),
+  status: z.enum(["draft", "published"]).default("draft"),
+});
+
+// POST /api/agencies/:id/reports — create a report for a led agency
+router.post("/:id/reports", verifyToken, validate(reportSchema), async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const body = req.body;
+    const report = await prisma.agencyReport.create({
+      data: {
+        partner_id: partner.id,
+        agency_id: (req.params.id as string),
+        title: body.title,
+        content: body.content,
+        period_month: body.period_month,
+        period_year: body.period_year,
+        rating: body.rating,
+        highlights: body.highlights ? JSON.stringify(body.highlights) : null,
+        improvements: body.improvements ? JSON.stringify(body.improvements) : null,
+        mrr: body.mrr,
+        projects_count: body.projects_count,
+        tasks_count: body.tasks_count,
+        status: body.status ?? "draft",
+      },
+    });
+
+    res.status(201).json(report);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/agencies/:id/reports/:reportId — update a report
+router.put("/:id/reports/:reportId", verifyToken, validate(reportSchema.partial()), async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const body = req.body;
+    const updateData: Record<string, unknown> = { ...body };
+    if (body.highlights !== undefined) updateData.highlights = JSON.stringify(body.highlights);
+    if (body.improvements !== undefined) updateData.improvements = JSON.stringify(body.improvements);
+
+    const report = await prisma.agencyReport.update({
+      where: { id: (req.params.reportId as string), partner_id: partner.id },
+      data: updateData,
+    });
+
+    res.json(report);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/agencies/:id/reports/:reportId — delete a report
+router.delete("/:id/reports/:reportId", verifyToken, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    await prisma.agencyReport.delete({
+      where: { id: (req.params.reportId as string), partner_id: partner.id },
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

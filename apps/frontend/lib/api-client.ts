@@ -486,6 +486,35 @@ class ApiClient {
     return this.requestWithdrawal(data);
   }
 
+  // ─── Agency Leadership & Reports ─────────────────────────────────────────
+  async getLedAgencies() {
+    return this.get("/agencies/led/list");
+  }
+
+  async startLeadingAgency(agencyId: string, data?: Record<string, any>) {
+    return this.post(`/agencies/${agencyId}/lead`, data);
+  }
+
+  async stopLeadingAgency(agencyId: string) {
+    return this.del(`/agencies/${agencyId}/lead`);
+  }
+
+  async getAgencyReports(agencyId: string) {
+    return this.get(`/agencies/${agencyId}/reports`);
+  }
+
+  async createAgencyReport(agencyId: string, data: Record<string, any>) {
+    return this.post(`/agencies/${agencyId}/reports`, data);
+  }
+
+  async updateAgencyReport(agencyId: string, reportId: string, data: Record<string, any>) {
+    return this.put(`/agencies/${agencyId}/reports/${reportId}`, data);
+  }
+
+  async deleteAgencyReport(agencyId: string, reportId: string) {
+    return this.del(`/agencies/${agencyId}/reports/${reportId}`);
+  }
+
   // ─── Specialties ──────────────────────────────────────────────────────────
   async getSpecialties(filters?: Record<string, any>) {
     return this.get("/specialties", filters);

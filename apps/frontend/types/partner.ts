@@ -100,6 +100,25 @@ export interface PendingWithdrawalAdmin extends PartnerWithdrawal {
 
 // ── Led Agency (Agências Lideradas) ──────────────────────────────────────────
 
+export interface AgencyReport {
+  id: string;
+  partnerId: string;
+  agencyId: string;
+  title: string;
+  content: string;
+  periodMonth: number;
+  periodYear: number;
+  rating?: number;
+  highlights?: string[];
+  improvements?: string[];
+  mrr?: number;
+  projectsCount?: number;
+  tasksCount?: number;
+  status: "draft" | "published";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LedAgency {
   id: string;
   name: string;
@@ -111,4 +130,6 @@ export interface LedAgency {
   lastActiveAt: string;
   totalProjects: number;
   commissionAmount: number;
+  reports?: AgencyReport[];
+  leadershipId?: string;
 }
