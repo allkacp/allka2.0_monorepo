@@ -1,10 +1,14 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #c81a7f 50%, #000000 100%)",
   defaultEmail: "partner@allka.test",
-  defaultPassword: "123456",
-  redirectPath: "/parceiro/dashboard",
+  defaultPassword: "Teste@123456",
+  redirectPath: "/partner/dashboard",
+  accessType: "PARTNER",
   devUser: { email: "bruno.martins@parceiro.com" },
   translations: {
     pt: {
@@ -16,7 +20,8 @@ const config: LoginRoleConfig = {
         { text: "E SEM NENHUM", outlined: true },
         { text: "ESFORÇO.", outlined: true },
       ],
-      subtext: "Indique agências e empresas para a Allka e receba comissões recorrentes enquanto eles usarem a plataforma.",
+      subtext:
+        "Indique agências e empresas para a Allka e receba comissões recorrentes enquanto eles usarem a plataforma.",
       stats: [
         { value: "300+", label: "Parceiros ativos" },
         { value: "R$800k+", label: "Pago em comissões" },
@@ -32,7 +37,8 @@ const config: LoginRoleConfig = {
         { text: "COMPLETELY", outlined: true },
         { text: "EFFORTLESSLY.", outlined: true },
       ],
-      subtext: "Refer agencies and companies to Allka and earn recurring commissions for as long as they use the platform.",
+      subtext:
+        "Refer agencies and companies to Allka and earn recurring commissions for as long as they use the platform.",
       stats: [
         { value: "300+", label: "Active partners" },
         { value: "R$800k+", label: "Paid in commissions" },
@@ -48,7 +54,8 @@ const config: LoginRoleConfig = {
         { text: "Y SIN NINGÚN", outlined: true },
         { text: "ESFUERZO.", outlined: true },
       ],
-      subtext: "Refiere agencias y empresas a Allka y recibe comisiones recurrentes mientras usen la plataforma.",
+      subtext:
+        "Refiere agencias y empresas a Allka y recibe comisiones recurrentes mientras usen la plataforma.",
       stats: [
         { value: "300+", label: "Socios activos" },
         { value: "R$800k+", label: "Pagado en comisiones" },
@@ -64,7 +71,8 @@ const config: LoginRoleConfig = {
         { text: "完全", outlined: true },
         { text: "轻松持续。", outlined: true },
       ],
-      subtext: "将代理机构和公司推荐给 Allka，只要他们使用该平台，您就能持续获得佣金。",
+      subtext:
+        "将代理机构和公司推荐给 Allka，只要他们使用该平台，您就能持续获得佣金。",
       stats: [
         { value: "300+", label: "活跃合作伙伴" },
         { value: "R$800k+", label: "已支付佣金" },
@@ -72,8 +80,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function ParceiroLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }

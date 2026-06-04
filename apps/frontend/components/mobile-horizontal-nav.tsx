@@ -254,19 +254,19 @@ export function MobileHorizontalNav({ onMenuClick }: MobileHorizontalNavProps) {
   return (
     <div
       className={cn(
-        "lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950 border-t border-white/10 shadow-2xl transition-transform duration-300",
+        "lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-linear-to-r from-slate-950 via-blue-950 to-indigo-950 border-t border-white/10 shadow-2xl transition-transform duration-300",
         isVisible ? "translate-y-0" : "translate-y-full",
       )}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-blue-400 to-transparent" />
 
       <div className="relative">
         {showLeftGradient && (
-          <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-slate-950 to-transparent z-10 pointer-events-none" />
+          <div className="absolute left-0 top-0 bottom-0 w-12 bg-linear-to-r from-slate-950 to-transparent z-10 pointer-events-none" />
         )}
 
         {showRightGradient && (
-          <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-indigo-950 to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-12 bg-linear-to-l from-indigo-950 to-transparent z-10 pointer-events-none" />
         )}
 
         <div
@@ -293,7 +293,7 @@ export function MobileHorizontalNav({ onMenuClick }: MobileHorizontalNavProps) {
             variant="ghost"
             size="sm"
             onClick={onMenuClick}
-            className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all duration-200 active:scale-95 min-w-[70px]"
+            className="shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all duration-200 active:scale-95 min-w-17.5"
           >
             <Menu className="h-5 w-5 mb-1" />
             <span className="text-[10px] font-medium">Menu</span>
@@ -313,7 +313,7 @@ export function MobileHorizontalNav({ onMenuClick }: MobileHorizontalNavProps) {
                   }
                 }}
                 className={cn(
-                  "flex-shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 min-w-[70px] relative",
+                  "shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 min-w-17.5 relative",
                   isActive
                     ? "bg-white/20 text-white shadow-lg"
                     : "bg-white/5 hover:bg-white/15 text-white/80",
@@ -339,7 +339,7 @@ export function MobileHorizontalNav({ onMenuClick }: MobileHorizontalNavProps) {
         </div>
       </div>
 
-      <div className="h-safe-area-inset-bottom bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950" />
+      <div className="h-safe-area-inset-bottom bg-linear-to-r from-slate-950 via-blue-950 to-indigo-950" />
     </div>
   );
 }

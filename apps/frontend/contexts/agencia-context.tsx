@@ -145,7 +145,10 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
           setProjects(
             list.map((p: any) => ({
               id: String(p.id),
-              clientName: p.client || p.clientName || "",
+              clientName:
+                (typeof p.client === "object" ? p.client?.name : p.client) ||
+                p.clientName ||
+                "",
               name: p.name || "",
               category: p.type || p.category || "",
               status: p.status || "briefing",

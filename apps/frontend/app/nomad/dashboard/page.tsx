@@ -1,6 +1,11 @@
 ﻿// @ts-nocheck
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
-import { COMPANY_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
+import {
+  NOMAD_PRESETS,
+  buildWidgets,
+  DASHBOARD_STORAGE_KEY,
+  CURRENT_DASHBOARD_KEY,
+} from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
 import { useState, useEffect, useMemo } from "react";
@@ -17,8 +22,8 @@ import {
   TrendingDown,
   Activity,
   Clock,
-  Info,
   CheckCircle2,
+  Gauge,
   AlertCircle,
   XCircle,
   DollarSign,
@@ -43,9 +48,9 @@ import {
   ArrowRightIcon,
   FileDown,
   ExternalLink,
-  Eye,
   ArrowUp,
   ArrowDown,
+  Info,
   Calculator,
   ArrowUpRight,
   CheckSquare,
@@ -56,8 +61,6 @@ import {
   MessageSquare,
   ChevronDown,
   ArrowRight,
-  Link2,
-  History,
   Trophy,
   Save,
   Minus,
@@ -66,18 +69,17 @@ import {
   Share2,
   SlidersHorizontal,
   ImageDown,
+  Copy,
+  Link2,
+  History,
+  Database,
+  Eye,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // AlertTriangle removed to avoid redeclaration
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -113,242 +115,371 @@ import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
-const generateDashboardData = (_from?: any, _to?: any): any => ({
-  revenue: {
-    total: 270800,
-    growth: 18.1,
-    totalGrowth: 18.1,
-    series: [],
-    trendData: [180000, 205000, 215000, 230000, 248000, 270800],
-    creditPlan: 114000,
-    creditPlanGrowth: 18,
-    recurring: 97600,
-    recurringGrowth: 8,
-    oneTime: 59200,
-    oneTimeGrowth: 14,
-  },
-  activeProjects: {
-    total: 127,
-    growth: 5.2,
-    series: [],
-    agencies: 48,
-    agenciesGrowth: 7,
-    leadPremium: 63,
-    leadPremiumGrowth: 9,
-    nomades: 16,
-    nomadesGrowth: 3,
-    newTotal: 22,
-    newAgencies: 9,
-    newLeadPremium: 10,
-    newNomades: 3,
-  },
-  creditPlans: {
-    total: 114000,
-    growth: 18,
-    series: [],
-    basic: { revenue: 38000, newContracts: 12, growth: 8 },
-    partner: { revenue: 45000, newContracts: 9, growth: 22 },
-    premium: { revenue: 31000, newContracts: 5, growth: 14 },
-  },
-  mrr: {
-    total: 97600,
-    growth: 8,
-    series: [],
-    newMrr: 12400,
-    expansion: 5200,
-    contraction: 1800,
-    churnRevenue: 3100,
-    baseMrr: 89600,
-    netChange: 12700,
-    trendData: [72000, 78000, 82000, 86000, 91000, 97600],
-  },
-  churn: {
-    total: 0,
-    growth: 0,
-    series: [],
-    inactiveAccounts: 23,
-    inactiveGrowth: 4,
-    agencies: 8,
-    leadPremium: 5,
-    nomades: 7,
-    free: 3,
-    cancelledProjects: 11,
-    cancelledGrowth: 2,
-    revenueChurn: 9300,
-    revenueChurnRate: 3.2,
-  },
-  averageTicket: {
-    total: 0,
-    growth: 5,
-    series: [],
-    general: 1213,
-    generalGrowth: 5,
-    perProject: 2840,
-    perProjectGrowth: 7,
-    trendData: [980, 1050, 1100, 1180, 1210, 1213],
-  },
-  ltv: {
-    total: 0,
-    growth: 12,
-    series: [],
-    value: 8740,
-    agencies: 14200,
-    agenciesGrowth: 9,
-    leadPremium: 11500,
-    leadPremiumGrowth: 15,
-    nomades: 3800,
-    nomadesGrowth: 6,
-    hist0to1k: 120,
-    hist1kto5k: 280,
-    hist5kto15k: 95,
-    hist15kplus: 30,
-  },
-  accountsReceivable: {
-    total: 187400,
-    growth: 12,
-    series: [],
-    creditPlans: 98200,
-    postPaid: 54700,
-    others: 34500,
-    received: 143600,
-  },
-  platformActivities: {
-    activeAgencies: 34,
-    avgSessionMinutes: 47,
-    mau: 1240,
-    dau: 312,
-    sessions: 8740,
-    actionsExecuted: 52300,
-    trendData: [420, 510, 480, 630, 590, 710, 680],
-  },
-  nomads: {
-    total: 148,
-    growth: 6,
-    active: 112,
-    activeGrowth: 9,
-    inactive: 36,
-    inactiveChange: -3,
-    newInPeriod: 14,
-    churn: 5,
-    retention30d: 82,
-    trendData: [95, 100, 104, 108, 110, 112],
-  },
-  nomadsIndicators: {
-    deliveryRate: 94.3,
-    avgRating: 4.7,
-    avgTimePerTask: 3.2,
-    certified: 68,
-    retention90d: 79,
-  },
-  nomadsRanking: { items: [] },
-  agenciesRanking: [
-    {
-      id: "1",
-      name: "Digital Works",
-      rating: 4.9,
-      projects: 23,
-      contribution: "R$ 48k",
+const generateDashboardData = (from?: Date, to?: Date): any => {
+  const now = new Date();
+  const f =
+    from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const t = to ?? now;
+  const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000));
+  const m = days / 30; // multiplier relative to 30-day base
+  const sc = (base: number) => Math.round(base * m); // scale financial/count
+  const scSoft = (base: number) => Math.round(base * (0.5 + m * 0.5)); // softer scale for counts
+  return {
+    revenue: {
+      total: sc(270800),
+      growth: 18.1,
+      totalGrowth: 18.1,
+      series: [],
+      trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map((v) =>
+        Math.round((v * m) / 1),
+      ),
+      creditPlan: sc(114000),
+      creditPlanGrowth: 18,
+      recurring: sc(97600),
+      recurringGrowth: 8,
+      oneTime: sc(59200),
+      oneTimeGrowth: 14,
     },
-    {
-      id: "2",
-      name: "Criativa Lab",
-      rating: 4.8,
-      projects: 18,
-      contribution: "R$ 37k",
+    activeProjects: {
+      total: scSoft(127),
+      growth: 5.2,
+      series: [],
+      agencies: scSoft(48),
+      agenciesGrowth: 7,
+      leadPremium: scSoft(63),
+      leadPremiumGrowth: 9,
+      nomades: scSoft(16),
+      nomadesGrowth: 3,
+      newTotal: sc(22),
+      newAgencies: sc(9),
+      newLeadPremium: sc(10),
+      newNomades: sc(3),
     },
-    {
-      id: "3",
-      name: "Inovax Agency",
-      rating: 4.7,
-      projects: 15,
-      contribution: "R$ 31k",
+    creditPlans: {
+      total: sc(114000),
+      growth: 18,
+      series: [],
+      basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
+      partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
+      premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
     },
-    {
-      id: "4",
-      name: "PixelForge",
-      rating: 4.6,
-      projects: 12,
-      contribution: "R$ 24k",
+    mrr: {
+      total: sc(97600),
+      growth: 8,
+      series: [],
+      newMrr: sc(12400),
+      expansion: sc(5200),
+      contraction: sc(1800),
+      churnRevenue: sc(3100),
+      baseMrr: sc(89600),
+      netChange: sc(12700),
+      trendGrowth: 12,
+      trendData: [72000, 78000, 82000, 86000, 91000, 97600].map((v) => sc(v)),
     },
-    {
-      id: "5",
-      name: "BluePrint Co.",
-      rating: 4.5,
-      projects: 10,
-      contribution: "R$ 19k",
+    churn: {
+      total: 0,
+      growth: 0,
+      series: [],
+      inactiveAccounts: sc(23),
+      inactiveGrowth: 4,
+      agencies: sc(8),
+      leadPremium: sc(5),
+      nomades: sc(7),
+      free: sc(3),
+      cancelledProjects: sc(11),
+      cancelledGrowth: 2,
+      revenueChurn: sc(9300),
+      revenueChurnRate: 3.2,
     },
-  ],
-  statusOverview: {
-    projects: {
-      ongoing: 42,
-      approved: 18,
-      completed: 156,
-      cancelled: 7,
-      delayed: 11,
+    averageTicket: {
+      total: 0,
+      growth: 5,
+      series: [],
+      general: 1213,
+      generalGrowth: 5,
+      perProject: 2840,
+      perProjectGrowth: 7,
+      trendData: [980, 1050, 1100, 1180, 1210, 1213],
     },
-    tasks: { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
-    leads: { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
-  },
-  tasks: {
-    total: 552,
-    items: [],
-    completed: 412,
-    completedGrowth: 8,
-    inProgress: 57,
-    inProgressGrowth: 4,
-    contracted: 83,
-    contractedGrowth: 12,
-    cancelled: 14,
-    cancelledChange: -2,
-    slaCompliance: 91.4,
-  },
-  activeUsers: {
-    total: 284,
-    empresas: 92,
-    empresasGrowth: 5,
-    agencias: 61,
-    agenciasGrowth: 7,
-    nomades: 112,
-    nomadesGrowth: 9,
-    admins: 19,
-    adminsGrowth: 3,
-    series: [],
-  },
-  partnerProgram: {
-    total: 38,
-    items: [],
-    invitesSent: 124,
-    pending: 47,
-    accepted: 38,
-    diamond: 3,
-    platinum: 6,
-    gold: 11,
-    silver: 12,
-    bronze: 6,
-    mrrGenerated: 22400,
-  },
-  cmv: {
-    totalCosts: 87400,
-    revenue: 270800,
-    cmvPercent: 32.3,
-    prevCmvPercent: 34.1,
-    nomades: { value: 42800, percent: 49 },
-    impostos: { value: 18200, percent: 21 },
-    comissoes: { value: 14900, percent: 17 },
-    outros: { value: 11500, percent: 13 },
-    variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
-  },
-  metrics: {},
-  activity: [],
-  alerts: [],
-  performers: [],
-  userDistribution: [],
-  systemAlerts: [],
-  adminProfiles: [],
-  permissionMatrix: [],
-  managementTools: [],
-});
+    ltv: {
+      total: 0,
+      growth: 12,
+      series: [],
+      value: 8740,
+      agencies: 14200,
+      agenciesGrowth: 9,
+      leadPremium: 11500,
+      leadPremiumGrowth: 15,
+      nomades: 3800,
+      nomadesGrowth: 6,
+      hist0to1k: 120,
+      hist1kto5k: 280,
+      hist5kto15k: 95,
+      hist15kplus: 30,
+    },
+    accountsReceivable: {
+      total: sc(187400),
+      growth: 12,
+      series: [],
+      creditPlans: sc(98200),
+      postPaid: sc(54700),
+      others: sc(34500),
+      received: sc(143600),
+    },
+    platformActivities: {
+      activeAgencies: scSoft(34),
+      avgSessionMinutes: 47,
+      mau: scSoft(1240),
+      dau: scSoft(312),
+      sessions: sc(8740),
+      actionsExecuted: sc(52300),
+      trendData: [420, 510, 480, 630, 590, 710, 680].map((v) => sc(v)),
+    },
+    nomads: {
+      total: scSoft(148),
+      growth: 6,
+      active: scSoft(112),
+      activeGrowth: 9,
+      inactive: scSoft(36),
+      inactiveChange: -3,
+      newInPeriod: sc(14),
+      churn: sc(5),
+      retention30d: 82,
+      trendData: [95, 100, 104, 108, 110, 112].map((v) => scSoft(v)),
+    },
+    nomadsIndicators: {
+      deliveryRate: 94.3,
+      avgRating: 4.7,
+      avgTimePerTask: 3.2,
+      certified: 68,
+      retention90d: 79,
+    },
+    nomadsRanking: { items: [] },
+    agenciesRanking: [
+      {
+        id: "1",
+        name: "Digital Works",
+        avatar: "DW",
+        rating: 4.9,
+        projects: 23,
+        contribution: "R$ 48k",
+        specialty: "Dev & Design",
+        color: "from-blue-500 to-indigo-600",
+      },
+      {
+        id: "2",
+        name: "Criativa Lab",
+        avatar: "CL",
+        rating: 4.8,
+        projects: 18,
+        contribution: "R$ 37k",
+        specialty: "Branding",
+        color: "from-pink-500 to-rose-600",
+      },
+      {
+        id: "3",
+        name: "Inovax Agency",
+        avatar: "IA",
+        rating: 4.7,
+        projects: 15,
+        contribution: "R$ 31k",
+        specialty: "Marketing 360",
+        color: "from-violet-500 to-purple-600",
+      },
+      {
+        id: "4",
+        name: "PixelForge",
+        avatar: "PF",
+        rating: 4.6,
+        projects: 12,
+        contribution: "R$ 24k",
+        specialty: "UX/UI",
+        color: "from-cyan-500 to-teal-600",
+      },
+      {
+        id: "5",
+        name: "BluePrint Co.",
+        avatar: "BP",
+        rating: 4.5,
+        projects: 10,
+        contribution: "R$ 19k",
+        specialty: "Arquitetura",
+        color: "from-amber-500 to-orange-600",
+      },
+    ],
+    tasks: {
+      total: sc(552),
+      items: [],
+      completed: sc(412),
+      completedGrowth: 8,
+      inProgress: scSoft(57),
+      inProgressGrowth: 4,
+      contracted: scSoft(83),
+      contractedGrowth: 12,
+      cancelled: sc(14),
+      cancelledChange: -2,
+      slaCompliance: 91.4,
+    },
+    activeUsers: {
+      total: scSoft(284),
+      empresas: scSoft(92),
+      empresasGrowth: 5,
+      agencias: scSoft(61),
+      agenciasGrowth: 7,
+      nomades: scSoft(112),
+      nomadesGrowth: 9,
+      admins: scSoft(19),
+      adminsGrowth: 3,
+      series: [],
+    },
+    partnerProgram: {
+      total: scSoft(38),
+      items: [],
+      invitesSent: sc(124),
+      pending: scSoft(47),
+      accepted: scSoft(38),
+      diamond: 3,
+      platinum: 6,
+      gold: 11,
+      silver: 12,
+      bronze: 6,
+      mrrGenerated: sc(22400),
+    },
+    cmv: {
+      totalCosts: sc(87400),
+      revenue: sc(270800),
+      cmvPercent: 32.3,
+      prevCmvPercent: 34.1,
+      nomades: { value: sc(42800), percent: 49 },
+      impostos: { value: sc(18200), percent: 21 },
+      comissoes: { value: sc(14900), percent: 17 },
+      outros: { value: sc(11500), percent: 13 },
+      variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
+    },
+    statusOverview: {
+      projects: {
+        ongoing: scSoft(42),
+        approved: scSoft(18),
+        completed: sc(156),
+        cancelled: sc(7),
+        delayed: scSoft(11),
+      },
+      tasks: {
+        contracted: scSoft(83),
+        inProgress: scSoft(57),
+        completed: sc(412),
+        archived: sc(34),
+      },
+      leads: {
+        new: scSoft(29),
+        contacted: scSoft(15),
+        proposal: scSoft(8),
+        won: sc(12),
+        lost: sc(5),
+      },
+    },
+    metrics: {},
+    activity: [],
+    alerts: [],
+    performers: [
+      {
+        id: "1",
+        name: "Carlos Mendonça",
+        avatar: "CM",
+        rating: 4.9,
+        projects: sc(34),
+        badge: "gold",
+        tasks: sc(128),
+        revenue: `R$ ${sc(52)}k`,
+        specialty: "Dev Full Stack",
+      },
+      {
+        id: "2",
+        name: "Ana Beatriz Lima",
+        avatar: "AB",
+        rating: 4.8,
+        projects: sc(29),
+        badge: "gold",
+        tasks: sc(115),
+        revenue: `R$ ${sc(44)}k`,
+        specialty: "UI/UX Design",
+      },
+      {
+        id: "3",
+        name: "Rafael Torres",
+        avatar: "RT",
+        rating: 4.7,
+        projects: sc(26),
+        badge: "gold",
+        tasks: sc(98),
+        revenue: `R$ ${sc(39)}k`,
+        specialty: "Marketing Digital",
+      },
+      {
+        id: "4",
+        name: "Juliana Ferreira",
+        avatar: "JF",
+        rating: 4.6,
+        projects: sc(22),
+        badge: "silver",
+        tasks: sc(84),
+        revenue: `R$ ${sc(31)}k`,
+        specialty: "Copywriting",
+      },
+      {
+        id: "5",
+        name: "Marcos Oliveira",
+        avatar: "MO",
+        rating: 4.6,
+        projects: sc(21),
+        badge: "silver",
+        tasks: sc(79),
+        revenue: `R$ ${sc(28)}k`,
+        specialty: "Dev Backend",
+      },
+      {
+        id: "6",
+        name: "Priscila Santos",
+        avatar: "PS",
+        rating: 4.5,
+        projects: sc(19),
+        badge: "silver",
+        tasks: sc(71),
+        revenue: `R$ ${sc(24)}k`,
+        specialty: "SEO",
+      },
+      {
+        id: "7",
+        name: "Diego Cavalcante",
+        avatar: "DC",
+        rating: 4.4,
+        projects: sc(17),
+        badge: "bronze",
+        tasks: sc(63),
+        revenue: `R$ ${sc(19)}k`,
+        specialty: "Tráfego Pago",
+      },
+      {
+        id: "8",
+        name: "Fernanda Costa",
+        avatar: "FC",
+        rating: 4.3,
+        projects: sc(15),
+        badge: "bronze",
+        tasks: sc(57),
+        revenue: `R$ ${sc(16)}k`,
+        specialty: "Social Media",
+      },
+    ],
+    userDistribution: [],
+    systemAlerts: [],
+    adminProfiles: [],
+    permissionMatrix: [],
+    managementTools: [],
+  };
+};
 import { Switch } from "@/components/ui/switch"; // Added Switch
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
@@ -387,14 +518,16 @@ type WidgetType =
   | "partnerProgram"; // Partner Program metrics widget
 
 type MetricType =
-  | "activeProjects"
-  | "tasksToLaunch"
-  | "tasksInProgress"
-  | "approvalsPending"
-  | "proposalsAwaitingClient"
-  | "contractedValueMonth"
-  | "estimatedMargin"
-  | "pendingPayments";
+  | "availableTasks"
+  | "myTasks"
+  | "inProgressTasks"
+  | "pendingDeliveries"
+  | "awaitingQualification"
+  | "monthlyEarnings"
+  | "paymentsToReceive"
+  | "avgRating"
+  | "pointsLevel"
+  | "levelProgress";
 type WidgetSize = "standard" | "compact";
 
 interface Widget {
@@ -724,7 +857,7 @@ const generatePublicToken = (config: ShareConfig): string => {
 };
 // ───────────────────────────────────────────────────────────────────────────────
 
-const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["COMPANY"]);
+const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["NOMAD"]);
 
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
@@ -951,14 +1084,16 @@ export default function AdminDashboardPage() {
   const [metricCards, setMetricCards] = useState<
     Array<{ id: MetricType; order: number; visible: boolean }>
   >([
-    { id: "activeProjects", order: 0, visible: true },
-    { id: "tasksToLaunch", order: 1, visible: true },
-    { id: "tasksInProgress", order: 2, visible: true },
-    { id: "approvalsPending", order: 3, visible: true },
-    { id: "proposalsAwaitingClient", order: 4, visible: true },
-    { id: "contractedValueMonth", order: 5, visible: true },
-    { id: "estimatedMargin", order: 6, visible: true },
-    { id: "pendingPayments", order: 7, visible: true },
+    { id: "availableTasks", order: 0, visible: true },
+    { id: "myTasks", order: 1, visible: true },
+    { id: "inProgressTasks", order: 2, visible: true },
+    { id: "pendingDeliveries", order: 3, visible: true },
+    { id: "awaitingQualification", order: 4, visible: true },
+    { id: "monthlyEarnings", order: 5, visible: true },
+    { id: "paymentsToReceive", order: 6, visible: true },
+    { id: "avgRating", order: 7, visible: true },
+    { id: "pointsLevel", order: 8, visible: true },
+    { id: "levelProgress", order: 9, visible: true },
   ]);
   const [draggedMetric, setDraggedMetric] = useState<MetricType | null>(null);
   const [dragOverMetric, setDragOverMetric] = useState<MetricType | null>(null);
@@ -1818,7 +1953,10 @@ export default function AdminDashboardPage() {
         : d,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(updatedDashboards),
+    );
     setShowEditDialog(false);
     setEditingDashboardId(null);
     setEditingDashboardName("");
@@ -1852,7 +1990,7 @@ export default function AdminDashboardPage() {
       );
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["NOMAD"],
         JSON.stringify(updatedDashboards),
       );
     }
@@ -1877,13 +2015,13 @@ export default function AdminDashboardPage() {
       const updatedDashboards = [...savedDashboards, newDashboard];
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["NOMAD"],
         JSON.stringify(updatedDashboards),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["NOMAD"], newDashboard.id);
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
       toast({
@@ -1892,7 +2030,7 @@ export default function AdminDashboardPage() {
       });
     } else {
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
           d.id === currentDashboardId
@@ -1906,7 +2044,7 @@ export default function AdminDashboardPage() {
         );
         setSavedDashboards(updatedDashboards);
         localStorage.setItem(
-          DASHBOARD_STORAGE_KEY["COMPANY"],
+          DASHBOARD_STORAGE_KEY["NOMAD"],
           JSON.stringify(updatedDashboards),
         );
       }
@@ -1926,7 +2064,7 @@ export default function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem("dashboard-widget-config-company");
+    const savedConfig = localStorage.getItem("dashboard-widget-config");
     if (savedConfig) {
       try {
         // Ensure the loaded config matches the WidgetState type
@@ -1945,22 +2083,49 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards-company");
+    const savedMetrics = localStorage.getItem("dashboard-metric-cards-nomad");
     if (savedMetrics) {
       try {
-        setMetricCards(JSON.parse(savedMetrics));
+        const parsedMetrics = JSON.parse(savedMetrics);
+        const defaultMetricCards = [
+          { id: "availableTasks", order: 0, visible: true },
+          { id: "myTasks", order: 1, visible: true },
+          { id: "inProgressTasks", order: 2, visible: true },
+          { id: "pendingDeliveries", order: 3, visible: true },
+          { id: "awaitingQualification", order: 4, visible: true },
+          { id: "monthlyEarnings", order: 5, visible: true },
+          { id: "paymentsToReceive", order: 6, visible: true },
+          { id: "avgRating", order: 7, visible: true },
+          { id: "pointsLevel", order: 8, visible: true },
+          { id: "levelProgress", order: 9, visible: true },
+        ];
+        const parsedById = new Map(
+          Array.isArray(parsedMetrics)
+            ? parsedMetrics.map(
+                (item: { id: MetricType; order: number; visible: boolean }) => [
+                  item.id,
+                  item,
+                ],
+              )
+            : [],
+        );
+        setMetricCards(
+          defaultMetricCards.map(
+            (defaultCard) => parsedById.get(defaultCard.id) ?? defaultCard,
+          ),
+        );
       } catch (e) {
         console.error("Failed to parse saved metric cards:", e);
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size-company");
+    const savedSize = localStorage.getItem("dashboard-widget-size");
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods-company");
+    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods");
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -1969,10 +2134,10 @@ export default function AdminDashboardPage() {
       }
     }
 
-    // Load saved dashboards — role-scoped presets (Company)
-    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["COMPANY"];
-    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["COMPANY"];
-    const builtinPresets: SavedDashboard[] = COMPANY_PRESETS.map((p) => ({
+    // Load saved dashboards — role-scoped presets (Nomad)
+    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["NOMAD"];
+    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["NOMAD"];
+    const builtinPresets: SavedDashboard[] = NOMAD_PRESETS.map((p) => ({
       id: p.id,
       name: p.name,
       isDefault: p.isDefault,
@@ -1993,10 +2158,7 @@ export default function AdminDashboardPage() {
     );
     if (missingPresets.length > 0) {
       parsedDashboards = [...missingPresets, ...parsedDashboards];
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(parsedDashboards),
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedDashboards));
     }
     setSavedDashboards(parsedDashboards);
     const storedId = localStorage.getItem(CURRENT_KEY);
@@ -2028,7 +2190,7 @@ export default function AdminDashboardPage() {
 
     // Ensure consistent structure when saving
     localStorage.setItem(
-      "dashboard-widget-config-company",
+      "dashboard-widget-config-nomad",
       JSON.stringify(
         widgets.map((w) => ({
           id: w.id,
@@ -2039,17 +2201,23 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards-company", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size-company", widgetSize);
+    localStorage.setItem(
+      "dashboard-metric-cards-nomad",
+      JSON.stringify(metricCards),
+    );
+    localStorage.setItem("dashboard-widget-size-nomad", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods-company",
+      "dashboard-widget-periods-nomad",
       JSON.stringify(widgetPeriods),
     );
 
     // Save dashboards to localStorage whenever they change
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(savedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], currentDashboardId);
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(savedDashboards),
+    );
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["NOMAD"], currentDashboardId);
   }, [
     widgets,
     metricCards,
@@ -2075,136 +2243,403 @@ export default function AdminDashboardPage() {
     {
       id: "metrics",
       name: "Cards de Métricas",
-      description: "Métricas da agency logada",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "activeProjectsWidget",
-      name: "Projetos da Agency",
-      description: "Projetos ativos e em andamento da agency",
-      icon: Briefcase,
-      color: "indigo",
-    },
-    {
-      id: "tasks",
-      name: "Tarefas dos Projetos",
-      description: "Tarefas contratadas, em execução e concluídas",
-      icon: CheckSquare,
-      color: "green",
-    },
-    {
-      id: "statusOverview",
-      name: "Aprovações Pendentes",
-      description: "Status de projetos, tarefas e leads da agency",
+      description: "Tarefas, entregas, ganhos e avaliação do nômade",
       icon: LayoutGrid,
       color: "blue",
     },
     {
       id: "accountsReceivable",
-      name: "Financeiro da Agency",
-      description: "Valores a receber e saldos pendentes da agency",
+      name: "À Receber",
+      description:
+        "Valores garantidos a receber por tipo (Planos, Pós-pagos, Outros)",
       icon: DollarSign,
       color: "green",
     },
     {
+      id: "platformActivities",
+      name: "Atividades da Plataforma",
+      description: "Agências ativas, tempo de uso, MAU e DAU com crescimento",
+      icon: Activity,
+      color: "blue",
+    },
+    {
+      id: "tasks",
+      name: "Minhas Tarefas",
+      description: "Tarefas atribuídas, em execução e pendentes de entrega",
+      icon: CheckSquare,
+      color: "green",
+    },
+    {
+      id: "nomads",
+      name: "Nômades",
+      description: "Total, ativos e inativos com variações percentuais",
+      icon: Users,
+      color: "indigo",
+    },
+    {
+      id: "nomadsIndicators",
+      name: "Desempenho",
+      description: "Avaliação média, prazo, aprovações e taxa de qualidade",
+      icon: Gauge,
+      color: "purple",
+    },
+    {
+      id: "statusOverview",
+      name: "Visão Geral por Status",
+      description: "Tarefas e entregas da sua operação por status",
+      icon: LayoutGrid,
+      color: "blue",
+    },
+    {
+      id: "cmv",
+      name: "CMV (Custo de Mercadoria Vendida)",
+      description:
+        "Custos diretos (nômades, impostos, comissões) vs faturamento",
+      icon: Calculator,
+      color: "orange",
+    },
+    {
+      id: "ltv",
+      name: "LTV (Lifetime Value)",
+      description:
+        "Valor médio que um cliente gera durante todo o relacionamento",
+      icon: TrendingUp,
+      color: "purple",
+    },
+    {
+      id: "mrr",
+      name: "MRR (Receita Recorrente)",
+      description:
+        "Monthly Recurring Revenue com New, Expansion, Contraction e Churn",
+      icon: TrendingUp,
+      color: "red",
+    },
+    {
+      id: "churn",
+      name: "CHURN",
+      description: "Inativações de contas por tipo e projetos cancelados",
+      icon: TrendingDown,
+      color: "red",
+    },
+    {
+      id: "revenue",
+      name: "Receita",
+      description: "Receita total por tipo (Plano, Recorrente, Avulsa)",
+      icon: DollarSign,
+      color: "emerald",
+    },
+    {
+      id: "averageTicket",
+      name: "Ticket Médio",
+      description: "Ticket médio geral, por tipo de conta e por projeto",
+      icon: DollarSign,
+      color: "teal",
+    },
+    {
+      id: "activeProjectsWidget",
+      name: "Projetos Ativos",
+      description:
+        "Projetos ativos por tipo (Agências e Lead Premium) com novos projetos",
+      icon: Briefcase,
+      color: "indigo",
+    },
+    {
       id: "creditPlans",
-      name: "Catálogo / Produtos Contratados",
-      description: "Planos e produtos contratados pela agency",
+      name: "Planos de Crédito",
+      description:
+        "Entrada de receita por tipo de plano com novas contratações",
       icon: CreditCard,
       color: "slate",
     },
     {
       id: "activity",
-      name: "Atividade Recente da Agency",
-      description: "Últimas ações e eventos da agency",
+      name: "Atividade Recente",
+      description: "Últimas ações e eventos no sistema",
       icon: Activity,
       color: "amber",
     },
     {
       id: "alerts",
-      name: "Alertas da Agency",
-      description: "Alertas relevantes para a agency logada",
+      name: "Alertas Rápidos",
+      description: "Notificações importantes que requerem atenção",
       icon: Bell,
       color: "orange",
     },
     {
+      id: "performers",
+      name: "Melhores Nômades",
+      description: "Top performers baseado em avaliações e projetos",
+      icon: Award,
+      color: "yellow",
+    },
+    {
       id: "quickActions",
-      name: "Ações Rápidas da Agency",
-      description: "Atalhos para ações operacionais da agency",
+      name: "Ações Rápidas",
+      description: "Atalhos para tarefas administrativas comuns",
       icon: Zap,
       color: "sky",
     },
     {
-      id: "averageTicket",
-      name: "Ticket Médio",
-      description: "Ticket médio da operação da agency",
-      icon: DollarSign,
-      color: "teal",
+      id: "userDistribution",
+      name: "Distribuição de Usuários",
+      description: "Breakdown por tipo de conta",
+      icon: Users,
+      color: "blue",
+    },
+    {
+      id: "activeUsers",
+      name: "Usuários Ativos",
+      description: "Usuários ativos por tipo de conta no período",
+      icon: UserCheck,
+      color: "green",
+    },
+    {
+      id: "systemAlerts",
+      name: "Alertas do Sistema",
+      description: "Avisos importantes sobre o sistema",
+      icon: AlertTriangle,
+      color: "red",
+    },
+    {
+      id: "adminProfiles",
+      name: "Perfis Admin",
+      description: "Membros da equipe administrativa",
+      icon: Shield,
+      color: "purple",
+    },
+    {
+      id: "permissionMatrix",
+      name: "Atividade Recente",
+      description: "Ações, entregas e pagamentos do nômade",
+      icon: Activity,
+      color: "orange",
+    },
+    {
+      id: "managementTools",
+      name: "Alertas Rápidos",
+      description: "Prazos, entregas e pagamentos do nômade",
+      icon: Bell,
+      color: "gray",
+    },
+    {
+      id: "partnerProgram",
+      name: "Histórico de Entregas",
+      description: "Linha do tempo das entregas e aprovações do nômade",
+      icon: Award,
+      color: "amber",
     },
   ];
 
-  const getMetricsForPeriod = () => {
-    const activeProjects = dashboardData.activeProjects;
-    const tasks = dashboardData.tasks;
-    const statusOverview = dashboardData.statusOverview;
-    const revenue = dashboardData.revenue;
-    const accountsReceivable = dashboardData.accountsReceivable;
-    const cmv = dashboardData.cmv;
-
-    const pendingPaymentsValue = Math.max(
-      0,
-      accountsReceivable.total - accountsReceivable.received,
-    );
-
-    return {
-      activeProjects: {
-        value: activeProjects.total.toLocaleString("pt-BR"),
-        change: activeProjects.growth,
-        trend: activeProjects.growth >= 0 ? ("up" as const) : ("down" as const),
+  const getMetricsForPeriod = (
+    widgetPeriodKey?: string,
+  ): Record<MetricType, MetricCardData> => {
+    const baseMetrics: Record<string, Record<MetricType, MetricCardData>> = {
+      "7d": {
+        availableTasks: { value: "18", change: 2.4, trend: "up" as const },
+        myTasks: { value: "7", change: 1.2, trend: "up" as const },
+        inProgressTasks: { value: "4", change: 0.8, trend: "up" as const },
+        pendingDeliveries: { value: "3", change: 0.5, trend: "up" as const },
+        awaitingQualification: {
+          value: "2",
+          change: -0.4,
+          trend: "down" as const,
+        },
+        monthlyEarnings: {
+          value: "R$ 3,2k",
+          change: 7.1,
+          trend: "up" as const,
+          breakdown: {
+            fixed: { value: "R$ 1,8k", change: 5.4 },
+            variable: { value: "R$ 1,4k", change: 8.9 },
+          },
+        },
+        paymentsToReceive: {
+          value: "R$ 1,1k",
+          change: 2.9,
+          trend: "up" as const,
+          breakdown: {
+            pending: { value: "R$ 0,7k", change: 2.1 },
+            approved: { value: "R$ 0,4k", change: 0.8 },
+          },
+        },
+        avgRating: {
+          value: 4.8,
+          change: 0.2,
+          trend: "up" as const,
+          breakdown: {
+            delivery: { value: 4.9, change: 0.2, trend: "up" as const },
+            quality: { value: 4.8, change: 0.1, trend: "up" as const },
+          },
+        },
+        pointsLevel: {
+          value: "1.250 pts / Bronze",
+          change: 4.6,
+          trend: "up" as const,
+          breakdown: {
+            points: { value: "1.250 pts", change: 4.6 },
+            level: { value: "Bronze", change: 0 },
+          },
+        },
       },
-      tasksToLaunch: {
-        value: tasks.contracted.toLocaleString("pt-BR"),
-        change: tasks.contractedGrowth,
-        trend: tasks.contractedGrowth >= 0 ? ("up" as const) : ("down" as const),
+      "30d": {
+        availableTasks: { value: "24", change: 3.1, trend: "up" as const },
+        myTasks: { value: "10", change: 1.8, trend: "up" as const },
+        inProgressTasks: { value: "6", change: 1.1, trend: "up" as const },
+        pendingDeliveries: { value: "5", change: 0.9, trend: "up" as const },
+        awaitingQualification: {
+          value: "3",
+          change: -0.2,
+          trend: "down" as const,
+        },
+        monthlyEarnings: {
+          value: "R$ 12,4k",
+          change: 11.8,
+          trend: "up" as const,
+          breakdown: {
+            fixed: { value: "R$ 6,9k", change: 9.2 },
+            variable: { value: "R$ 5,5k", change: 14.4 },
+          },
+        },
+        paymentsToReceive: {
+          value: "R$ 3,9k",
+          change: 5.1,
+          trend: "up" as const,
+          breakdown: {
+            pending: { value: "R$ 2,8k", change: 3.6 },
+            approved: { value: "R$ 1,1k", change: 1.5 },
+          },
+        },
+        avgRating: {
+          value: 4.8,
+          change: 0.1,
+          trend: "up" as const,
+          breakdown: {
+            delivery: { value: 4.9, change: 0.1, trend: "up" as const },
+            quality: { value: 4.8, change: 0.1, trend: "up" as const },
+          },
+        },
+        pointsLevel: {
+          value: "1.250 pts / Bronze",
+          change: 3.8,
+          trend: "up" as const,
+          breakdown: {
+            points: { value: "1.250 pts", change: 3.8 },
+            level: { value: "Bronze", change: 0 },
+          },
+        },
       },
-      tasksInProgress: {
-        value: tasks.inProgress.toLocaleString("pt-BR"),
-        change: tasks.inProgressGrowth,
-        trend: tasks.inProgressGrowth >= 0 ? ("up" as const) : ("down" as const),
+      "90d": {
+        availableTasks: { value: "31", change: 4.9, trend: "up" as const },
+        myTasks: { value: "11", change: 2.3, trend: "up" as const },
+        inProgressTasks: { value: "7", change: 1.5, trend: "up" as const },
+        pendingDeliveries: { value: "6", change: 1.0, trend: "up" as const },
+        awaitingQualification: {
+          value: "4",
+          change: -0.1,
+          trend: "down" as const,
+        },
+        monthlyEarnings: {
+          value: "R$ 35,8k",
+          change: 18.2,
+          trend: "up" as const,
+          breakdown: {
+            fixed: { value: "R$ 19,6k", change: 14.4 },
+            variable: { value: "R$ 16,2k", change: 22.1 },
+          },
+        },
+        paymentsToReceive: {
+          value: "R$ 5,2k",
+          change: 7.4,
+          trend: "up" as const,
+          breakdown: {
+            pending: { value: "R$ 3,4k", change: 5.8 },
+            approved: { value: "R$ 1,8k", change: 1.6 },
+          },
+        },
+        avgRating: {
+          value: 4.9,
+          change: 0.2,
+          trend: "up" as const,
+          breakdown: {
+            delivery: { value: 5.0, change: 0.2, trend: "up" as const },
+            quality: { value: 4.8, change: 0.1, trend: "up" as const },
+          },
+        },
+        pointsLevel: {
+          value: "1.250 pts / Prata",
+          change: 5.9,
+          trend: "up" as const,
+          breakdown: {
+            points: { value: "1.250 pts", change: 5.9 },
+            level: { value: "Prata", change: 0 },
+          },
+        },
       },
-      approvalsPending: {
-        value: statusOverview.projects.delayed.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      proposalsAwaitingClient: {
-        value: statusOverview.leads.proposal.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      contractedValueMonth: {
-        value: `R$ ${(revenue.total / 1000).toFixed(1)}k`,
-        change: revenue.totalGrowth,
-        trend: revenue.totalGrowth >= 0 ? ("up" as const) : ("down" as const),
-      },
-      estimatedMargin: {
-        value: `R$ ${(cmv.comissoes.value / 1000).toFixed(1)}k`,
-        change: cmv.comissoes.percent,
-        trend: "up" as const,
-      },
-      pendingPayments: {
-        value: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k`,
-        change: accountsReceivable.growth,
-        trend: accountsReceivable.growth >= 0 ? ("up" as const) : ("down" as const),
+      custom: {
+        availableTasks: { value: "20", change: 2.0, trend: "up" as const },
+        myTasks: { value: "8", change: 1.0, trend: "up" as const },
+        inProgressTasks: { value: "5", change: 0.7, trend: "up" as const },
+        pendingDeliveries: { value: "4", change: 0.5, trend: "up" as const },
+        awaitingQualification: {
+          value: "2",
+          change: -0.1,
+          trend: "down" as const,
+        },
+        monthlyEarnings: {
+          value: "R$ 14,9k",
+          change: 9.0,
+          trend: "up" as const,
+          breakdown: {
+            fixed: { value: "R$ 8,1k", change: 6.0 },
+            variable: { value: "R$ 6,8k", change: 12.0 },
+          },
+        },
+        paymentsToReceive: {
+          value: "R$ 4,1k",
+          change: 4.5,
+          trend: "up" as const,
+          breakdown: {
+            pending: { value: "R$ 2,9k", change: 3.2 },
+            approved: { value: "R$ 1,2k", change: 1.3 },
+          },
+        },
+        avgRating: {
+          value: 4.7,
+          change: 0.1,
+          trend: "up" as const,
+          breakdown: {
+            delivery: { value: 4.8, change: 0.1, trend: "up" as const },
+            quality: { value: 4.7, change: 0.1, trend: "up" as const },
+          },
+        },
+        pointsLevel: {
+          value: "1.250 pts / Bronze",
+          change: 3.0,
+          trend: "up" as const,
+          breakdown: {
+            points: { value: "1.250 pts", change: 3.0 },
+            level: { value: "Bronze", change: 0 },
+          },
+        },
       },
     };
+
+    const resolvedKey =
+      widgetPeriodKey === "today" || widgetPeriodKey === "7days"
+        ? "7d"
+        : widgetPeriodKey === "90days" || widgetPeriodKey === "365days"
+          ? "90d"
+          : widgetPeriodKey === "custom"
+            ? "custom"
+            : "30d";
+
+    return baseMetrics[resolvedKey];
   };
 
   const metrics = getMetricsForPeriod();
 
   // Recent activities from API (fallback to empty)
-  // Recent activities (company-scoped mock)
+  // Recent activities (nomad-scoped mock)
   const recentActivities =
     apiActivities.length > 0
       ? apiActivities.map((a, i) => ({
@@ -2227,78 +2662,76 @@ export default function AdminDashboardPage() {
       : [
           {
             id: 1,
-            type: "project_created",
-            title: "Projeto criado",
-            description: 'Projeto "Redesign Website" foi iniciado com sucesso',
-            time: "20 minutos atrás",
+            type: "task_assigned",
+            title: "Nova tarefa atribuída",
+            description: 'Tarefa "Redação de artigo SEO" foi atribuída a você',
+            time: "10 minutos atrás",
             icon: Briefcase,
             color: "text-info",
             bgColor: "bg-info/10",
           },
           {
             id: 2,
-            type: "proposal_sent",
-            title: "Proposta enviada",
-            description:
-              'Proposta para "Campanha de Mídia" aguarda sua aprovação',
+            type: "delivery_sent",
+            title: "Entrega enviada",
+            description: 'Você enviou a entrega do projeto "Social Media Pack"',
             time: "1 hora atrás",
-            icon: FileText,
+            icon: CheckCircle2,
             color: "text-primary",
             bgColor: "bg-primary/10",
           },
           {
             id: 3,
-            type: "delivery_available",
-            title: "Entrega disponível",
-            description:
-              'Nova entrega do projeto "Blog Corporativo" pronta para revisão',
+            type: "delivery_approved",
+            title: "Entrega aprovada",
+            description: 'Sua entrega "Copy Blog" foi aprovada pela agency',
             time: "3 horas atrás",
-            icon: CheckCircle2,
+            icon: UserCheck,
             color: "text-success",
             bgColor: "bg-success/10",
           },
           {
             id: 4,
-            type: "payment_approved",
-            title: "Pagamento aprovado",
-            description: "Fatura #198 de R$ 4.800 foi confirmada",
-            time: "6 horas atrás",
+            type: "payment_released",
+            title: "Pagamento liberado",
+            description: "R$ 950 foram liberados para saque",
+            time: "5 horas atrás",
             icon: DollarSign,
             color: "text-chart-4",
             bgColor: "bg-chart-4/10",
           },
         ];
 
-  // Company-scoped alerts
+  // Nomad-scoped alerts
   const systemAlerts = [
     {
       id: 1,
       type: "warning",
-      title: "Proposta aguardando aprovação",
+      title: "Tarefa atrasando",
       description:
-        'Proposta "Campanha de Mídia" está aguardando sua resposta há 2 dias',
+        'Tarefa "Redação artigo SEO" está próxima do prazo (vence amanhã)',
       priority: "high",
     },
     {
       id: 2,
       type: "warning",
-      title: "Entrega aguardando aprovação",
-      description:
-        'Projeto "Blog Corporativo" tem 1 entrega pronta para revisão',
+      title: "Entrega pendente",
+      description: 'Projeto "Blog Corporativo" aguarda sua entrega há 2 dias',
       priority: "high",
     },
     {
       id: 3,
       type: "info",
-      title: "Pagamento pendente",
-      description: "Fatura #201 de R$ 2.600 vence em 3 dias",
+      title: "Ajuste solicitado",
+      description:
+        'Agency pediu revisão na entrega do projeto "Social Media Pack"',
       priority: "medium",
     },
     {
       id: 4,
       type: "info",
-      title: "Tarefa aguardando feedback",
-      description: 'Tarefa "Revisão de layout" aguarda seu feedback há 1 dia',
+      title: "Pagamento disponível",
+      description: "R$ 950 disponíveis para saque na sua conta",
       priority: "medium",
     },
   ];
@@ -2857,34 +3290,15 @@ export default function AdminDashboardPage() {
   ): string => {
     if (customTitle) return customTitle;
     const titles: Record<WidgetType, string> = {
-      metrics: "Métricas Principais",
+      metrics: "Métricas da Operação",
       activity: "Atividade Recente",
       alerts: "Alertas Rápidos",
-      performers: "Melhores Nômades",
       quickActions: "Ações Rápidas",
-      userDistribution: "Distribuição de Usuários",
-      activeUsers: "Usuários Ativos",
-      systemAlerts: "Alertas do Sistema",
-      adminProfiles: "Perfis Administrativos",
-      revenue: "Receita",
-      activeProjectsWidget: "Projetos Ativos",
-      creditPlans: "Planos de Crédito",
-      mrr: "MRR (Receita Recorrente)",
-      permissionMatrix: "Matriz de Permissões",
-      managementTools: "Ferramentas de Gestão",
-      churn: "CHURN",
-      averageTicket: "Ticket Médio",
-      ltv: "LTV (Lifetime Value)",
-      cmv: "CMV (Custo de Mercadoria Vendida)",
-      nomads: "Nômades",
-      nomadsIndicators: "Indicadores dos Nômades",
-      tasks: "Tarefas (Resumo)",
-      platformActivities: "Atividades da Plataforma",
-      nomadsRanking: "Ranking de Nômades",
-      agenciesRanking: "Ranking de Agências",
-      statusOverview: "Visão Geral por Status",
-      accountsReceivable: "À Receber", // Added title for accounts receivable widget
-      partnerProgram: "Programa Partner",
+      nomadsIndicators: "Desempenho",
+      tasks: "Minhas Tarefas",
+      statusOverview: "Status das Entregas",
+      accountsReceivable: "Pagamentos a Receber",
+      partnerProgram: "Histórico de Entregas",
     };
     return titles[widgetType] || widgetType;
   };
@@ -2913,25 +3327,313 @@ export default function AdminDashboardPage() {
 
   // Define mappings for icons and names for metric cards
   const metricIcons: Record<MetricType, React.ElementType> = {
-    activeProjects: Briefcase,
-    tasksToLaunch: CheckSquare,
-    tasksInProgress: Activity,
-    approvalsPending: Clock,
-    proposalsAwaitingClient: FileText,
-    contractedValueMonth: DollarSign,
-    estimatedMargin: Calculator,
-    pendingPayments: DollarSign,
+    availableTasks: CheckSquare,
+    myTasks: Briefcase,
+    inProgressTasks: Activity,
+    pendingDeliveries: FileText,
+    awaitingQualification: Clock,
+    monthlyEarnings: DollarSign,
+    paymentsToReceive: DollarSign,
+    avgRating: Star,
+    pointsLevel: Award,
+    levelProgress: ArrowUpRight,
   };
 
   const metricNames: Record<MetricType, string> = {
-    activeProjects: "Projetos ativos",
-    tasksToLaunch: "Tarefas para lançamento",
-    tasksInProgress: "Tarefas em execução",
-    approvalsPending: "Aprovações pendentes",
-    proposalsAwaitingClient: "Propostas aguardando cliente",
-    contractedValueMonth: "Valor contratado no mês",
-    estimatedMargin: "Comissão / margem estimada",
-    pendingPayments: "Pagamentos pendentes",
+    availableTasks: "Tarefas disponíveis",
+    myTasks: "Minhas tarefas",
+    inProgressTasks: "Em execução",
+    pendingDeliveries: "Entregas pendentes",
+    awaitingQualification: "Aguardando qualificação",
+    monthlyEarnings: "Ganhos no mês",
+    paymentsToReceive: "Pagamentos a receber",
+    avgRating: "Avaliação Média",
+    pointsLevel: "Pontos / Nível",
+    levelProgress: "Próximo nível",
+  };
+
+  const getNomadLevelKey = (value?: string) => {
+    const normalized = String(value ?? "").toLowerCase();
+    if (normalized.includes("diamond") || normalized.includes("diamante"))
+      return "diamond";
+    if (normalized.includes("platinum") || normalized.includes("platina"))
+      return "platinum";
+    if (normalized.includes("gold") || normalized.includes("ouro"))
+      return "gold";
+    if (normalized.includes("silver") || normalized.includes("prata"))
+      return "silver";
+    return "bronze";
+  };
+
+  const parseNomadPoints = (value?: string | number) => {
+    if (typeof value === "number") return value;
+    const match = String(value ?? "").match(/[\d.,]+/)?.[0] ?? "0";
+    const cleaned =
+      match.includes(",") && match.includes(".")
+        ? match.replace(/\./g, "").replace(",", ".")
+        : match.replace(",", ".");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const getNomadLevelTheme = (
+    levelKey: string,
+    variant: "soft" | "base" | "accent" | "strong" | "muted" = "base",
+  ) => {
+    const themes: Record<
+      string,
+      Record<
+        string,
+        {
+          bgColor: string;
+          gradientFrom: string;
+          cardBgGradient: string;
+          borderClass: string;
+          shadowClass: string;
+        }
+      >
+    > = {
+      bronze: {
+        soft: {
+          bgColor: "from-orange-300 to-amber-500",
+          gradientFrom: "from-orange-500/10",
+          cardBgGradient: "from-orange-400 to-amber-600",
+          borderClass:
+            "border-2 border-orange-300/70 dark:border-orange-300/50",
+          shadowClass: "",
+        },
+        base: {
+          bgColor: "from-orange-400 to-amber-600",
+          gradientFrom: "from-amber-600/10",
+          cardBgGradient: "from-orange-500 to-amber-700",
+          borderClass:
+            "border-2 border-orange-300/70 dark:border-orange-300/50",
+          shadowClass: "",
+        },
+        accent: {
+          bgColor: "from-amber-400 to-orange-600",
+          gradientFrom: "from-amber-600/10",
+          cardBgGradient: "from-amber-500 to-orange-700",
+          borderClass: "border-2 border-amber-300/70 dark:border-amber-300/50",
+          shadowClass: "",
+        },
+        strong: {
+          bgColor: "from-amber-500 to-orange-700",
+          gradientFrom: "from-orange-600/10",
+          cardBgGradient: "from-amber-600 to-orange-800",
+          borderClass: "border-2 border-amber-300/70 dark:border-amber-300/50",
+          shadowClass: "",
+        },
+        muted: {
+          bgColor: "from-stone-400 to-orange-500",
+          gradientFrom: "from-stone-500/10",
+          cardBgGradient: "from-stone-500 to-orange-700",
+          borderClass: "border-2 border-stone-300/70 dark:border-stone-300/50",
+          shadowClass: "",
+        },
+      },
+      silver: {
+        soft: {
+          bgColor: "from-slate-300 to-slate-500",
+          gradientFrom: "from-slate-500/10",
+          cardBgGradient: "from-slate-300 to-slate-600",
+          borderClass: "border-2 border-slate-300/70 dark:border-slate-300/50",
+          shadowClass: "",
+        },
+        base: {
+          bgColor: "from-slate-400 to-slate-600",
+          gradientFrom: "from-slate-600/10",
+          cardBgGradient: "from-slate-400 to-slate-700",
+          borderClass: "border-2 border-slate-300/70 dark:border-slate-300/50",
+          shadowClass: "",
+        },
+        accent: {
+          bgColor: "from-zinc-300 to-slate-500",
+          gradientFrom: "from-zinc-500/10",
+          cardBgGradient: "from-zinc-400 to-slate-700",
+          borderClass: "border-2 border-zinc-300/70 dark:border-zinc-300/50",
+          shadowClass: "",
+        },
+        strong: {
+          bgColor: "from-slate-500 to-zinc-700",
+          gradientFrom: "from-slate-600/10",
+          cardBgGradient: "from-slate-500 to-zinc-800",
+          borderClass: "border-2 border-slate-300/70 dark:border-slate-300/50",
+          shadowClass: "",
+        },
+        muted: {
+          bgColor: "from-stone-400 to-slate-600",
+          gradientFrom: "from-stone-500/10",
+          cardBgGradient: "from-stone-500 to-slate-700",
+          borderClass: "border-2 border-stone-300/70 dark:border-stone-300/50",
+          shadowClass: "",
+        },
+      },
+      gold: {
+        soft: {
+          bgColor: "from-amber-300 to-yellow-500",
+          gradientFrom: "from-amber-500/10",
+          cardBgGradient: "from-amber-300 to-yellow-600",
+          borderClass: "border-2 border-amber-300/70 dark:border-amber-300/50",
+          shadowClass: "",
+        },
+        base: {
+          bgColor: "from-amber-400 to-yellow-600",
+          gradientFrom: "from-amber-600/10",
+          cardBgGradient: "from-amber-500 to-yellow-700",
+          borderClass: "border-2 border-amber-300/70 dark:border-amber-300/50",
+          shadowClass: "",
+        },
+        accent: {
+          bgColor: "from-yellow-400 to-orange-500",
+          gradientFrom: "from-yellow-500/10",
+          cardBgGradient: "from-yellow-500 to-orange-600",
+          borderClass:
+            "border-2 border-yellow-300/70 dark:border-yellow-300/50",
+          shadowClass: "",
+        },
+        strong: {
+          bgColor: "from-amber-500 to-orange-600",
+          gradientFrom: "from-amber-600/10",
+          cardBgGradient: "from-amber-600 to-orange-700",
+          borderClass: "border-2 border-amber-300/70 dark:border-amber-300/50",
+          shadowClass: "",
+        },
+        muted: {
+          bgColor: "from-stone-400 to-amber-600",
+          gradientFrom: "from-stone-500/10",
+          cardBgGradient: "from-stone-500 to-amber-700",
+          borderClass: "border-2 border-stone-300/70 dark:border-stone-300/50",
+          shadowClass: "",
+        },
+      },
+      platinum: {
+        soft: {
+          bgColor: "from-cyan-300 to-sky-500",
+          gradientFrom: "from-cyan-500/10",
+          cardBgGradient: "from-cyan-300 to-sky-600",
+          borderClass: "border-2 border-cyan-300/70 dark:border-cyan-300/50",
+          shadowClass: "",
+        },
+        base: {
+          bgColor: "from-cyan-400 to-sky-600",
+          gradientFrom: "from-cyan-600/10",
+          cardBgGradient: "from-cyan-500 to-sky-700",
+          borderClass: "border-2 border-cyan-300/70 dark:border-cyan-300/50",
+          shadowClass: "",
+        },
+        accent: {
+          bgColor: "from-sky-400 to-blue-600",
+          gradientFrom: "from-sky-600/10",
+          cardBgGradient: "from-sky-500 to-blue-700",
+          borderClass: "border-2 border-sky-300/70 dark:border-sky-300/50",
+          shadowClass: "",
+        },
+        strong: {
+          bgColor: "from-blue-500 to-cyan-700",
+          gradientFrom: "from-blue-600/10",
+          cardBgGradient: "from-blue-600 to-cyan-800",
+          borderClass: "border-2 border-blue-300/70 dark:border-blue-300/50",
+          shadowClass: "",
+        },
+        muted: {
+          bgColor: "from-slate-400 to-sky-600",
+          gradientFrom: "from-slate-500/10",
+          cardBgGradient: "from-slate-500 to-sky-700",
+          borderClass: "border-2 border-slate-300/70 dark:border-slate-300/50",
+          shadowClass: "",
+        },
+      },
+      diamond: {
+        soft: {
+          bgColor: "from-violet-300 to-fuchsia-500",
+          gradientFrom: "from-violet-500/10",
+          cardBgGradient: "from-violet-300 to-fuchsia-600",
+          borderClass:
+            "border-2 border-violet-300/70 dark:border-violet-300/50",
+          shadowClass: "",
+        },
+        base: {
+          bgColor: "from-indigo-400 to-violet-600",
+          gradientFrom: "from-indigo-600/10",
+          cardBgGradient: "from-indigo-500 to-violet-700",
+          borderClass:
+            "border-2 border-indigo-300/70 dark:border-indigo-300/50",
+          shadowClass: "",
+        },
+        accent: {
+          bgColor: "from-cyan-400 to-violet-600",
+          gradientFrom: "from-cyan-600/10",
+          cardBgGradient: "from-cyan-500 to-violet-700",
+          borderClass: "border-2 border-cyan-300/70 dark:border-cyan-300/50",
+          shadowClass: "",
+        },
+        strong: {
+          bgColor: "from-fuchsia-500 to-indigo-700",
+          gradientFrom: "from-fuchsia-600/10",
+          cardBgGradient: "from-fuchsia-600 to-indigo-800",
+          borderClass:
+            "border-2 border-fuchsia-300/70 dark:border-fuchsia-300/50",
+          shadowClass: "",
+        },
+        muted: {
+          bgColor: "from-slate-400 to-indigo-600",
+          gradientFrom: "from-slate-500/10",
+          cardBgGradient: "from-slate-500 to-indigo-700",
+          borderClass: "border-2 border-slate-300/70 dark:border-slate-300/50",
+          shadowClass: "",
+        },
+      },
+    };
+    return themes[levelKey]?.[variant] ?? themes.bronze.base;
+  };
+
+  const getNomadLevelJourney = (points: number) => {
+    const levels = [
+      {
+        key: "bronze",
+        label: "Bronze",
+        min: 0,
+        nextLabel: "Prata",
+        nextMin: 1500,
+      },
+      {
+        key: "silver",
+        label: "Prata",
+        min: 1500,
+        nextLabel: "Ouro",
+        nextMin: 2500,
+      },
+      {
+        key: "gold",
+        label: "Ouro",
+        min: 2500,
+        nextLabel: "Platina",
+        nextMin: 3500,
+      },
+      {
+        key: "platinum",
+        label: "Platina",
+        min: 3500,
+        nextLabel: "Diamante",
+        nextMin: 5000,
+      },
+      {
+        key: "diamond",
+        label: "Diamante",
+        min: 5000,
+        nextLabel: null,
+        nextMin: null,
+      },
+    ] as const;
+    let index = 0;
+    levels.forEach((level, levelIndex) => {
+      if (points >= level.min) index = levelIndex;
+    });
+    const current = levels[index];
+    const previous = index > 0 ? levels[index - 1] : null;
+    const next = index < levels.length - 1 ? levels[index + 1] : null;
+    return { current, previous, next };
   };
 
   const renderMetricCard = (
@@ -2958,63 +3660,30 @@ export default function AdminDashboardPage() {
     const isDragging = draggedMetric === metricType;
     const isDragOver = dragOverMetric === metricType;
 
-    let bgColor: string;
-    let gradientFrom: string;
-    let cardBgGradient: string;
-    let borderClass: string;
-    let shadowClass: string;
-
-    switch (metricType) {
-      case "totalUsers":
-        bgColor = "from-blue-400 to-blue-600";
-        gradientFrom = "from-blue-600/10";
-        cardBgGradient = "from-blue-500 to-blue-700";
-        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
-        shadowClass = "";
-        break;
-      case "activeUsers":
-        bgColor = "from-emerald-400 to-emerald-600";
-        gradientFrom = "from-emerald-600/10";
-        cardBgGradient = "from-emerald-500 to-teal-600";
-        borderClass =
-          "border-2 border-emerald-300/70 dark:border-emerald-300/50";
-        shadowClass = "";
-        break;
-      case "companies":
-        bgColor = "from-violet-400 to-violet-600";
-        gradientFrom = "from-violet-600/10";
-        cardBgGradient = "from-violet-500 to-purple-700";
-        borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
-        shadowClass = "";
-        break;
-      case "activeProjects":
-        bgColor = "from-orange-400 to-orange-600";
-        gradientFrom = "from-orange-600/10";
-        cardBgGradient = "from-orange-500 to-rose-600";
-        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
-        shadowClass = "";
-        break;
-      case "revenue":
-        bgColor = "from-green-400 to-green-600";
-        gradientFrom = "from-green-600/10";
-        cardBgGradient = "from-green-500 to-emerald-700";
-        borderClass = "border-2 border-green-300/70 dark:border-green-300/50";
-        shadowClass = "";
-        break;
-      case "avgRating":
-        bgColor = "from-amber-400 to-amber-600";
-        gradientFrom = "from-amber-600/10";
-        cardBgGradient = "from-amber-500 to-orange-600";
-        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
-        shadowClass = "";
-        break;
-      default:
-        bgColor = "from-muted to-muted-foreground";
-        gradientFrom = "from-muted/5";
-        cardBgGradient = "from-slate-500 to-slate-700";
-        borderClass = "border-2 border-slate-400/50 dark:border-slate-300/40";
-        shadowClass = "";
-    }
+    const currentLevel = getNomadLevelKey(
+      String(
+        (metricsData.pointsLevel as any)?.breakdown?.level?.value ??
+          metricsData.pointsLevel?.value ??
+          "Bronze",
+      ),
+    );
+    const themeVariantMap: Record<
+      MetricType,
+      "soft" | "base" | "accent" | "strong" | "muted"
+    > = {
+      availableTasks: "soft",
+      myTasks: "base",
+      inProgressTasks: "muted",
+      pendingDeliveries: "soft",
+      awaitingQualification: "muted",
+      monthlyEarnings: "strong",
+      paymentsToReceive: "accent",
+      avgRating: "soft",
+      pointsLevel: "strong",
+      levelProgress: "accent",
+    };
+    const theme = getNomadLevelTheme(currentLevel, themeVariantMap[metricType]);
+    const { cardBgGradient, borderClass, shadowClass } = theme;
 
     const cardProps = {
       draggable: isEditing,
@@ -3036,7 +3705,22 @@ export default function AdminDashboardPage() {
       ),
     };
 
-    if (metricType === "contractedValueMonth") {
+    if (metricType === "levelProgress") {
+      const points = parseNomadPoints(
+        (metricsData.pointsLevel as any)?.breakdown?.points?.value ??
+          metricsData.pointsLevel?.value,
+      );
+      const journey = getNomadLevelJourney(points);
+      const nextThreshold = journey.next?.min ?? null;
+      const nextLabel = journey.next?.label ?? "nível máximo";
+      const progress = nextThreshold
+        ? Math.min(100, (points / nextThreshold) * 100)
+        : 100;
+      const remaining = nextThreshold ? Math.max(0, nextThreshold - points) : 0;
+      const regressionText = journey.previous
+        ? `Regressão: abaixo de ${journey.current.min} pts volta para ${journey.previous.label}`
+        : "Bronze é o nível inicial";
+
       return (
         <div
           key={metricType}
@@ -3084,25 +3768,28 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {typeof metric.value === "number"
-                ? metric.value.toLocaleString()
-                : metric.value}
+              {nextThreshold
+                ? `${remaining} pts para ${nextLabel}`
+                : "Nível máximo"}
             </p>
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-white/90 rounded-full"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                {metric.trend === "up" ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}
-                {metricType === "avgRating" ? " pts" : "%"}
+                <ArrowUpRight className="h-3 w-3" />
+                {journey.current.label}
               </div>
               <span className="text-[10px] text-white/60">
-                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+                {nextThreshold
+                  ? `${Math.round(progress)}% concluído`
+                  : "Sem próximo nível"}
               </span>
             </div>
+            <p className="text-[10px] text-white/70 mt-1.5">{regressionText}</p>
           </div>
         </div>
       );
@@ -3167,10 +3854,10 @@ export default function AdminDashboardPage() {
               )}
               {metric.trend === "up" ? "+" : "-"}
               {Math.abs(metric.change)}
-              %
+              {metricType === "avgRating" ? " pts" : "%"}
             </div>
             <span className="text-[10px] text-white/60">
-              vs. anterior
+              {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
             </span>
           </div>
         </div>
@@ -3202,43 +3889,91 @@ export default function AdminDashboardPage() {
       {
         metrics: {
           icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Projetos, tarefas, aprovações e financeiro da agency",
+          subtitle: "Tarefas, entregas, ganhos e avaliação",
+        },
+        revenue: {
+          icon: <DollarSign className="h-6 w-6" />,
+          subtitle: "Receita total e breakdown",
+        },
+        platformActivities: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Engajamento e atividades",
         },
         accountsReceivable: {
           icon: <DollarSign className="h-6 w-6" />,
-          subtitle: "Pagamentos pendentes e valores a receber",
+          subtitle: "Contas a receber por categoria",
+        },
+        mrr: {
+          icon: <TrendingUp className="h-6 w-6" />,
+          subtitle: "Receita recorrente mensal",
+        },
+        churn: {
+          icon: <TrendingDown className="h-6 w-6" />,
+          subtitle: "Análise de cancelamentos",
+        },
+        creditPlans: {
+          icon: <CreditCard className="h-6 w-6" />,
+          subtitle: "Planos de crédito ativos",
         },
         activeProjectsWidget: {
           icon: <Briefcase className="h-6 w-6" />,
-          subtitle: "Projetos ativos da agency",
+          subtitle: "Projetos ativos por tipo",
         },
         averageTicket: {
           icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Ticket médio da operação da agency",
+          subtitle: "Ticket médio por cliente",
+        },
+        ltv: {
+          icon: <Star className="h-6 w-6" />,
+          subtitle: "Valor vitalício do cliente",
         },
         cmv: {
           icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Comissão e margem estimada",
+          subtitle: "Custo de mercadoria vendida",
+        },
+        nomads: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "Visão geral dos nômades",
+        },
+        nomadsRanking: {
+          icon: <Trophy className="h-6 w-6" />,
+          subtitle: "Ranking de performance",
+        },
+        agenciesRanking: {
+          icon: <Building2 className="h-6 w-6" />,
+          subtitle: "Ranking das agências da plataforma",
         },
         statusOverview: {
           icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Projetos, tarefas e aprovações da agency",
+          subtitle: "Status de projetos e tarefas",
         },
         tasks: {
           icon: <CheckSquare className="h-6 w-6" />,
-          subtitle: "Tarefas e execuções da agency",
+          subtitle: "Tarefas e execução",
+        },
+        nomadsIndicators: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "KPIs de desempenho e qualidade",
         },
         activity: {
           icon: <Activity className="h-6 w-6" />,
-          subtitle: "Atividades recentes da agency",
+          subtitle: "Atividades recentes",
         },
         alerts: {
           icon: <Bell className="h-6 w-6" />,
-          subtitle: "Alertas relevantes da agency",
+          subtitle: "Alertas e notificações",
+        },
+        performers: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Top performers",
         },
         quickActions: {
           icon: <Zap className="h-6 w-6" />,
-          subtitle: "Ações rápidas da agency",
+          subtitle: "Ações rápidas",
+        },
+        partnerProgram: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Convites e partners por nível",
         },
       };
     const cfg = cfgMap[detailsWidgetId] ?? {
@@ -3249,7 +3984,7 @@ export default function AdminDashboardPage() {
     const renderContent = () => {
       switch (detailsWidgetId) {
         case "metrics": {
-          const mp = getMetricsForPeriod();
+          const mp = getMetricsForPeriod(modalPeriodKey);
           const items: Array<{
             key: string;
             label: string;
@@ -3259,60 +3994,68 @@ export default function AdminDashboardPage() {
             suffix?: string;
           }> = [
             {
-              key: "activeProjects",
-              label: "Projetos ativos",
-              value: mp.activeProjects.value,
-              change: mp.activeProjects.change,
-              trend: mp.activeProjects.trend,
+              key: "availableTasks",
+              label: "Tarefas disponíveis",
+              value: mp.availableTasks.value,
+              change: mp.availableTasks.change,
+              trend: mp.availableTasks.trend,
             },
             {
-              key: "tasksToLaunch",
-              label: "Tarefas para lançamento",
-              value: mp.tasksToLaunch.value,
-              change: mp.tasksToLaunch.change,
-              trend: mp.tasksToLaunch.trend,
+              key: "myTasks",
+              label: "Minhas tarefas",
+              value: mp.myTasks.value,
+              change: mp.myTasks.change,
+              trend: mp.myTasks.trend,
             },
             {
-              key: "tasksInProgress",
-              label: "Tarefas em execução",
-              value: mp.tasksInProgress.value,
-              change: mp.tasksInProgress.change,
-              trend: mp.tasksInProgress.trend,
+              key: "inProgressTasks",
+              label: "Em execução",
+              value: mp.inProgressTasks.value,
+              change: mp.inProgressTasks.change,
+              trend: mp.inProgressTasks.trend,
             },
             {
-              key: "approvalsPending",
-              label: "Aprovações pendentes",
-              value: mp.approvalsPending.value,
-              change: mp.approvalsPending.change,
-              trend: mp.approvalsPending.trend,
+              key: "pendingDeliveries",
+              label: "Entregas pendentes",
+              value: mp.pendingDeliveries.value,
+              change: mp.pendingDeliveries.change,
+              trend: mp.pendingDeliveries.trend,
             },
             {
-              key: "proposalsAwaitingClient",
-              label: "Propostas aguardando cliente",
-              value: mp.proposalsAwaitingClient.value,
-              change: mp.proposalsAwaitingClient.change,
-              trend: mp.proposalsAwaitingClient.trend,
+              key: "awaitingQualification",
+              label: "Aguardando qualificação",
+              value: mp.awaitingQualification.value,
+              change: mp.awaitingQualification.change,
+              trend: mp.awaitingQualification.trend,
             },
             {
-              key: "contractedValueMonth",
-              label: "Valor contratado no mês",
-              value: mp.contractedValueMonth.value,
-              change: mp.contractedValueMonth.change,
-              trend: mp.contractedValueMonth.trend,
+              key: "monthlyEarnings",
+              label: "Ganhos no mês",
+              value: mp.monthlyEarnings.value,
+              change: mp.monthlyEarnings.change,
+              trend: mp.monthlyEarnings.trend,
             },
             {
-              key: "estimatedMargin",
-              label: "Comissão / margem estimada",
-              value: mp.estimatedMargin.value,
-              change: mp.estimatedMargin.change,
-              trend: mp.estimatedMargin.trend,
+              key: "paymentsToReceive",
+              label: "Pagamentos a receber",
+              value: mp.paymentsToReceive.value,
+              change: mp.paymentsToReceive.change,
+              trend: mp.paymentsToReceive.trend,
             },
             {
-              key: "pendingPayments",
-              label: "Pagamentos pendentes",
-              value: mp.pendingPayments.value,
-              change: mp.pendingPayments.change,
-              trend: mp.pendingPayments.trend,
+              key: "avgRating",
+              label: "Avaliação média",
+              value: Number(mp.avgRating.value).toFixed(1),
+              change: mp.avgRating.change,
+              trend: mp.avgRating.trend,
+              suffix: " / 5.0",
+            },
+            {
+              key: "pointsLevel",
+              label: "Pontos / Nível",
+              value: mp.pointsLevel.value,
+              change: mp.pointsLevel.change,
+              trend: mp.pointsLevel.trend,
             },
           ];
           return (
@@ -3346,7 +4089,7 @@ export default function AdminDashboardPage() {
                           )}
                           {it.trend === "up" ? "+" : "-"}
                           {Math.abs(it.change)}
-                          %
+                          {it.key === "avgRating" ? " pts" : "%"}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
                           vs. anterior
@@ -3356,54 +4099,206 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Projetos e tarefas</p>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Projetos ativos</span>
-                        <span className="font-medium">{mData.statusOverview.projects.ongoing}</span>
+              {mp.monthlyEarnings.breakdown && (
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-3">Ganhos por tipo</p>
+                  {["fixed", "variable"].map((segment) => {
+                    const raw =
+                      mp.monthlyEarnings.breakdown?.[
+                        segment as keyof NonNullable<
+                          typeof mp.monthlyEarnings.breakdown
+                        >
+                      ];
+                    const display = (raw as any)?.value ?? raw;
+                    return (
+                      <div key={segment} className="mb-2 last:mb-0">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">
+                            {segment === "fixed" ? "Fixo" : "Variável"}
+                          </span>
+                          <span className="font-medium">{display}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Lançamentos</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.contracted}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Em execução</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.inProgress}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Propostas</span>
-                        <span className="font-medium">{mData.statusOverview.leads.proposal}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Financeiro</p>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Valor contratado</span>
-                        <span className="font-medium">{mp.contractedValueMonth.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Comissão / margem</span>
-                        <span className="font-medium">{mp.estimatedMargin.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Pagamentos pendentes</span>
-                        <span className="font-medium">{mp.pendingPayments.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Recebido</span>
-                        <span className="font-medium">R$ {(mData.accountsReceivable.received / 1000).toFixed(1)}k</span>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
+              )}
+              {mp.pointsLevel.breakdown && (
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-3">Pontos e nível</p>
+                  {[
+                    {
+                      label: "Pontos",
+                      value: String(mp.pointsLevel.breakdown.points.value),
+                    },
+                    {
+                      label: "Nível atual",
+                      value: String(mp.pointsLevel.breakdown.level.value),
+                    },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="text-xs text-muted-foreground truncate">
+                        {s.label}
+                      </span>
+                      <span className="text-xs font-semibold text-right">
+                        {s.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
-
         }
+
+        case "revenue":
+          return (
+            <div className="space-y-4">
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Receita Total
+                    </p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {(rv.total / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      no período selecionado
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">
+                      +{rv.totalGrowth}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
+                </div>
+              </div>
+              {/* 2-per-row plan cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Plano de Crédito",
+                    value: rv.creditPlan,
+                    growth: rv.creditPlanGrowth,
+                    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                    text: "text-sky-700 dark:text-sky-300",
+                    color: "bg-sky-500",
+                  },
+                  {
+                    label: "Compra Recorrente",
+                    value: rv.recurring,
+                    growth: rv.recurringGrowth,
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                    color: "bg-amber-500",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-3 rounded-xl border ${item.bg}`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${item.text} truncate`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      R$ {(item.value / 1000).toFixed(1)}k
+                    </p>
+                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${item.color} rounded-full`}
+                        style={{
+                          width: `${(item.value / Math.max(1, rv.total)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-success mt-1">
+                      +{item.growth}% ·{" "}
+                      {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}%
+                      do total
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {/* Avulso full row */}
+              <div className="p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium">Compra Avulsa</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold">
+                      R$ {(rv.oneTime / 1000).toFixed(1)}k
+                    </span>
+                    <span className="text-xs text-success ml-2">
+                      +{rv.oneTimeGrowth}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">
+                  Composição da Receita
+                </p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  <div
+                    className="bg-sky-500 transition-all"
+                    style={{
+                      width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-amber-500 transition-all"
+                    style={{
+                      width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex gap-4 mt-2">
+                  {[
+                    ["bg-sky-500", "Crédito"],
+                    ["bg-amber-500", "Recorrente"],
+                    ["bg-emerald-500", "Avulso"],
+                  ].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {l}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
 
         case "platformActivities": {
           const engagementRate =
@@ -6395,7 +7290,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Projetos, tarefas, aprovações e financeiro da agency
+                      Métricas da sua operação
                     </p>
                   </div>
                 </div>
@@ -6434,12 +7329,15 @@ export default function AdminDashboardPage() {
                         .filter((m) => !m.visible)
                         .map((metricCard) => {
                           const metricNames: Record<MetricType, string> = {
-                            totalUsers: "Total de Usuários",
-                            activeUsers: "Usuários Ativos",
-                            companies: "Empresas",
-                            activeProjects: "Projetos Ativos",
-                            revenue: "Receita",
-                            avgRating: "Avaliação Média",
+                            availableTasks: "Tarefas disponíveis",
+                            myTasks: "Minhas tarefas",
+                            inProgressTasks: "Em execução",
+                            pendingDeliveries: "Entregas pendentes",
+                            awaitingQualification: "Aguardando qualificação",
+                            monthlyEarnings: "Ganhos no mês",
+                            paymentsToReceive: "Pagamentos a receber",
+                            avgRating: "Avaliação média",
+                            pointsLevel: "Pontos / Nível",
                           };
                           return (
                             <Button
@@ -6463,43 +7361,7 @@ export default function AdminDashboardPage() {
                   {(() => {
                     // Compute widget-specific metrics based on per-widget period override
                     const wp = effectivePeriod as { periodKey?: string };
-                    const widgetBase = getMetricsForPeriod(
-                      undefined,
-                      wp.periodKey,
-                    );
-                    const widgetMetrics = !apiStats
-                      ? widgetBase
-                      : {
-                          ...widgetBase,
-                          totalUsers: {
-                            ...widgetBase.totalUsers,
-                            value: (
-                              apiStats.nomades?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeUsers: {
-                            ...widgetBase.activeUsers,
-                            value: (
-                              apiStats.nomades?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          companies: {
-                            ...widgetBase.companies,
-                            value: (
-                              apiStats.companies?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeProjects: {
-                            ...widgetBase.activeProjects,
-                            value: (
-                              apiStats.projects?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          revenue: {
-                            ...widgetBase.revenue,
-                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
-                          },
-                        };
+                    const widgetMetrics = getMetricsForPeriod(wp.periodKey);
                     return metricCards
                       .filter((m) => m.visible)
                       .sort((a, b) => a.order - b.order)
@@ -7098,10 +7960,10 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atividades recentes da empresa
+                      Atividades recentes do nômade
                     </p>
                   </div>
-                  <Link to="/company/atividades" className="shrink-0">
+                  <Link to="/nomad/atividades" className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -7184,7 +8046,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas da empresa
+                      Alertas do nômade
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs shrink-0">
@@ -7416,7 +8278,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atalhos da empresa
+                      Atalhos do nômade
                     </p>
                   </div>
                 </div>
@@ -7433,41 +8295,33 @@ export default function AdminDashboardPage() {
                   {(
                     [
                       {
-                        to: "/company/projetos",
-                        icon: Briefcase,
-                        label: "Ver Projetos",
+                        to: "/nomad/tarefas",
+                        icon: CheckCircle2,
+                        label: "Minhas Tarefas",
                         border: "border-info/20",
                         bg: "bg-info/5 hover:bg-info/10",
                         text: "text-info",
                       },
                       {
-                        to: "/company/aprovacoes",
-                        icon: UserCheck,
-                        label: "Ver Aprovações",
+                        to: "/nomad/entregas",
+                        icon: Briefcase,
+                        label: "Enviar Entrega",
                         border: "border-success/20",
                         bg: "bg-success/5 hover:bg-success/10",
                         text: "text-success",
                       },
                       {
-                        to: "/company/entregas",
-                        icon: CheckCircle2,
-                        label: "Aprovar Entrega",
+                        to: "/nomad/pagamentos",
+                        icon: DollarSign,
+                        label: "Ver Pagamentos",
                         border: "border-chart-4/20",
                         bg: "bg-chart-4/5 hover:bg-chart-4/10",
                         text: "text-chart-4",
                       },
                       {
-                        to: "/company/propostas",
+                        to: "/nomad/historico",
                         icon: FileText,
-                        label: "Ver Propostas",
-                        border: "border-warning/20",
-                        bg: "bg-warning/5 hover:bg-warning/10",
-                        text: "text-warning",
-                      },
-                      {
-                        to: "/company/financeiro",
-                        icon: DollarSign,
-                        label: "Acessar Financeiro",
+                        label: "Abrir Histórico",
                         border: "border-violet-200 dark:border-violet-800",
                         bg: "bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-950/40",
                         text: "text-violet-600 dark:text-violet-400",
@@ -10630,8 +11484,11 @@ export default function AdminDashboardPage() {
 
     const updatedDashboards = [...savedDashboards, newDashboard];
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(updatedDashboards),
+    );
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["NOMAD"], newDashboard.id);
 
     setCurrentDashboardId(newDashboard.id);
     setNewDashboardName("");
@@ -10670,7 +11527,10 @@ export default function AdminDashboardPage() {
     );
 
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(updatedDashboards),
+    );
 
     setSharingDashboardId(null);
     setShareGlobal(false);
@@ -10693,10 +11553,10 @@ export default function AdminDashboardPage() {
       setWidgets(dashboard.widgets);
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
-        "dashboard-widget-config-company",
+        "dashboard-widget-config",
         JSON.stringify(dashboard.widgets),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], dashboardId);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["NOMAD"], dashboardId);
     }
   };
 
@@ -10705,7 +11565,10 @@ export default function AdminDashboardPage() {
       (d) => d.id !== dashboardId,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(updatedDashboards),
+    );
     if (currentDashboardId === dashboardId) {
       const fallback =
         updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0];
@@ -10722,7 +11585,10 @@ export default function AdminDashboardPage() {
       isDefault: d.id === dashboardId,
     }));
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["NOMAD"],
+      JSON.stringify(updatedDashboards),
+    );
     toast({
       title: "Dashboard padrão definido",
       description: "Este dashboard será carregado automaticamente.",
@@ -10738,58 +11604,63 @@ export default function AdminDashboardPage() {
     });
     return [
       {
-        id: "preset-financeiro",
-        name: "Visão Financeira",
+        id: "preset-minha-operacao",
+        name: "Minha Operação",
         isDefault: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: "system",
         sharedWith: [],
         widgets: [
-          mk("revenue", 0),
-          mk("mrr", 1),
-          mk("averageTicket", 2),
-          mk("ltv", 3),
-          mk("churn", 4),
-          mk("cmv", 5),
-          mk("accountsReceivable", 6),
-          mk("creditPlans", 7),
-        ],
-      },
-      {
-        id: "preset-vendas",
-        name: "Visão de Vendas",
-        isDefault: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: "system",
-        sharedWith: [],
-        widgets: [
           mk("metrics", 0),
-          mk("activeProjectsWidget", 1),
+          mk("tasks", 1),
           mk("statusOverview", 2),
-          mk("agenciesRanking", 3),
-          mk("tasks", 4),
-          mk("platformActivities", 5),
-          mk("alerts", 6),
-          mk("quickActions", 7),
+          mk("alerts", 3),
+          mk("activity", 4),
         ],
       },
       {
-        id: "preset-nomades",
-        name: "Visão de Nômades",
+        id: "preset-entregas",
+        name: "Entregas",
         isDefault: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: "system",
         sharedWith: [],
         widgets: [
-          mk("nomads", 0),
-          mk("nomadsIndicators", 1),
-          mk("nomadsRanking", 2),
-          mk("performers", 3),
-          mk("userDistribution", 4),
-          mk("activeUsers", 5),
+          mk("tasks", 0),
+          mk("statusOverview", 1),
+          mk("activity", 2),
+          mk("alerts", 3),
+        ],
+      },
+      {
+        id: "preset-desempenho",
+        name: "Desempenho",
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system",
+        sharedWith: [],
+        widgets: [
+          mk("nomadsIndicators", 0),
+          mk("activity", 1),
+          mk("alerts", 2),
+        ],
+      },
+      {
+        id: "preset-ganhos",
+        name: "Ganhos",
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system",
+        sharedWith: [],
+        widgets: [
+          mk("accountsReceivable", 0),
+          mk("metrics", 1),
+          mk("quickActions", 2),
+          mk("alerts", 3),
         ],
       },
     ];
@@ -10855,7 +11726,7 @@ export default function AdminDashboardPage() {
                   : "max-h-[24px] opacity-100 mt-0.5",
               )}
             >
-              Resumo dos seus projetos, tarefas, aprovações e contratações.
+              Resumo da sua operação, tarefas, entregas e ganhos.
             </p>
           </div>
 

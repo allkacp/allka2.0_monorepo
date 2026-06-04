@@ -1,10 +1,15 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
-  gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 40%, #c81a7f 75%, #1a2a6f 100%)",
+  gradient:
+    "linear-gradient(135deg, #000000 0%, #1a2a6f 40%, #c81a7f 75%, #1a2a6f 100%)",
   defaultEmail: "agencia@allka.test",
-  defaultPassword: "123456",
-  redirectPath: "/agencia/dashboard",
+  defaultPassword: "Teste@123456",
+  redirectPath: "/agency/dashboard",
+  accessType: "AGENCY",
   devUser: { email: "joao.costa@agenciacriativa.com.br" },
   translations: {
     pt: {
@@ -16,7 +21,8 @@ const config: LoginRoleConfig = {
         { text: "SUA EQUIPE", outlined: true },
         { text: "DE JEITO NENHUM.", outlined: true },
       ],
-      subtext: "Terceirize tarefas especializadas para nômades certificados e entregue mais projetos sem ampliar sua folha.",
+      subtext:
+        "Terceirize tarefas especializadas para nômades certificados e entregue mais projetos sem ampliar sua folha.",
       stats: [
         { value: "100+", label: "Agências parceiras" },
         { value: "8k+", label: "Entregas realizadas" },
@@ -32,7 +38,8 @@ const config: LoginRoleConfig = {
         { text: "YOUR TEAM", outlined: true },
         { text: "AT ALL.", outlined: true },
       ],
-      subtext: "Outsource specialized tasks to certified nomads and ship more projects without expanding your payroll.",
+      subtext:
+        "Outsource specialized tasks to certified nomads and ship more projects without expanding your payroll.",
       stats: [
         { value: "100+", label: "Partner agencies" },
         { value: "8k+", label: "Deliveries completed" },
@@ -48,7 +55,8 @@ const config: LoginRoleConfig = {
         { text: "TU EQUIPO", outlined: true },
         { text: "EN ABSOLUTO.", outlined: true },
       ],
-      subtext: "Externaliza tareas especializadas a nómadas certificados y entrega más proyectos sin ampliar tu nómina.",
+      subtext:
+        "Externaliza tareas especializadas a nómadas certificados y entrega más proyectos sin ampliar tu nómina.",
       stats: [
         { value: "100+", label: "Agencias socias" },
         { value: "8k+", label: "Entregas realizadas" },
@@ -64,7 +72,8 @@ const config: LoginRoleConfig = {
         { text: "扩大团队", outlined: true },
         { text: "规模。", outlined: true },
       ],
-      subtext: "将专业任务外包给经过认证的游牧者，无需扩大编制即可交付更多项目。",
+      subtext:
+        "将专业任务外包给经过认证的游牧者，无需扩大编制即可交付更多项目。",
       stats: [
         { value: "100+", label: "合作机构" },
         { value: "8k+", label: "已完成交付" },
@@ -72,8 +81,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function AgenciaLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }

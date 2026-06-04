@@ -60,7 +60,11 @@ export function Footer() {
   return (
     <footer
       ref={footerRef}
-      className={cn("fixed bottom-0 z-30 footer-positioned", !isGradientOrDefault && bg)}
+      className={cn(
+        /* Oculto em mobile/tablet — o espaço é gerenciado pelo bottom nav */
+        "hidden lg:block fixed bottom-0 z-30 footer-positioned",
+        !isGradientOrDefault && bg,
+      )}
       style={getFooterStyle()}
     >
       <div className="container mx-auto px-4 py-1">

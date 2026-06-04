@@ -30,7 +30,7 @@ import { PricingProvider } from "@/lib/contexts/pricing-context";
 import { ProductProvider } from "@/lib/contexts/product-context";
 import { ChatProvider } from "@/contexts/chat-context";
 import { ChatWidget } from "@/components/chat-widget";
-import { DevRoleSwitcher } from "@/components/dev-role-switcher";
+
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
 import { AgenciaProvider } from "@/contexts/agencia-context";
@@ -123,6 +123,9 @@ const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"));
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
+const NomadDashboardPage = React.lazy(
+  () => import("@/app/nomad/dashboard/page"),
+);
 const NomadesDashboardPage = React.lazy(
   () => import("@/app/nomades/dashboard/page"),
 );
@@ -145,6 +148,9 @@ const NomadesHistoricoPage = React.lazy(
 const NomadesPerfilPage = React.lazy(() => import("@/app/nomades/perfil/page"));
 
 // ─── Parceiro Pages ──────────────────────────────────────────────────────────
+const PartnerDashboardPage = React.lazy(
+  () => import("@/app/partner/dashboard/page"),
+);
 const ParceiroDashboardPage = React.lazy(
   () => import("@/app/parceiro/dashboard/page"),
 );
@@ -162,9 +168,10 @@ const ParceiroSaquesPage = React.lazy(
 );
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
-const EmpresaDashboardPage = React.lazy(
+const CompanyDashboardPage = React.lazy(
   () => import("@/app/company/dashboard/page"),
 );
+const EmpresaDashboardPage = CompanyDashboardPage;
 const EmpresaProjetosPage = React.lazy(
   () => import("@/app/company/projetos/page"),
 );
@@ -179,6 +186,9 @@ const EmpresaProdutosPage = React.lazy(
 );
 
 // ─── Agência Pages ─────────────────────────────────────────────────────────
+const AgencyDashboardPage = React.lazy(
+  () => import("@/app/agency/dashboard/page"),
+);
 const AgenciaDashboardPage = React.lazy(
   () => import("@/app/agencia/dashboard/page"),
 );
@@ -204,6 +214,9 @@ const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
 
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
+const LeaderDashboardPage = React.lazy(
+  () => import("@/app/leader/dashboard/page"),
+);
 const LiderDashboardPage = React.lazy(
   () => import("@/app/lider/dashboard/page"),
 );
@@ -221,33 +234,114 @@ const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  // Preview mode: in development, skip token check entirely so the
-  // DevRoleSwitcher can work without real authentication.
-  if (import.meta.env.DEV) return <>{children}</>;
+  const { pathname } = useLocation();
 
   const token = localStorage.getItem("allka_token");
   if (!token) {
-    return <Navigate to="/login" replace />;
+    const loginPath =
+      pathname.startsWith("/nomad") || pathname.startsWith("/nomades")
+        ? "/nomad/login"
+        : pathname.startsWith("/agency") || pathname.startsWith("/agencia")
+          ? "/agency/login"
+          : pathname.startsWith("/partner") || pathname.startsWith("/parceiro")
+            ? "/partner/login"
+            : pathname.startsWith("/leader") || pathname.startsWith("/lider")
+              ? "/leader/login"
+              : pathname.startsWith("/company") ||
+                  pathname.startsWith("/empresa")
+                ? "/company/login"
+                : "/login";
+    return <Navigate to={loginPath} replace />;
   }
+
+  // Role-based portal guard
+  let authUser: { account_type?: string; role?: string } | null = null;
+  try {
+    authUser = JSON.parse(localStorage.getItem("allka_user") || "null");
+  } catch {}
+
+  if (authUser) {
+    const portalPrefixes = [
+      "/admin",
+      "/nomad",
+      "/nomades",
+      "/agency",
+      "/agencia",
+      "/company",
+      "/empresa",
+      "/partner",
+      "/parceiro",
+      "/leader",
+      "/lider",
+    ];
+    const prefix = portalPrefixes.find((p) => pathname.startsWith(p));
+    if (prefix) {
+      const { account_type, role } = authUser;
+      // Admin can navigate anywhere
+      const allowed =
+        role === "admin" || account_type === "admin"
+          ? true
+          : prefix === "/admin"
+            ? role === "admin"
+            : prefix === "/nomad" || prefix === "/nomades"
+              ? account_type === "nomades" || role === "nomad"
+              : prefix === "/agency" || prefix === "/agencia"
+                ? account_type === "agencias"
+                : prefix === "/company" || prefix === "/empresa"
+                  ? account_type === "empresas"
+                  : prefix === "/partner" || prefix === "/parceiro"
+                    ? account_type === "parceiro" || role === "partner"
+                    : prefix === "/leader" || prefix === "/lider"
+                      ? role === "lider"
+                      : false;
+
+      if (!allowed) {
+        // Redirect to the user's own home
+        const home =
+          role === "admin" || account_type === "admin"
+            ? "/admin/dashboard"
+            : account_type === "nomades"
+              ? "/nomad/dashboard"
+              : account_type === "empresas"
+                ? "/company/dashboard"
+                : account_type === "agencias"
+                  ? "/agency/dashboard"
+                  : account_type === "parceiro"
+                    ? "/partner/dashboard"
+                    : role === "lider"
+                      ? "/leader/dashboard"
+                      : "/login";
+        return <Navigate to={home} replace />;
+      }
+    }
+  }
+
   return <>{children}</>;
 }
 
 // ─── Fallback inteligente por perfil ─────────────────────────────────────
-// Evita que perfis não-admin sejam redirecionados para /admin/dashboard
-// quando acessam uma rota desconhecida.
 function ProfileAwareFallback() {
-  const { accountType } = useAccountType();
-  const destinations: Record<string, string> = {
-    admin: "/admin/dashboard",
-    agencias: "/agencia/dashboard",
-    nomades: "/nomades/dashboard",
-    empresas: "/company/dashboard",
-    parceiro: "/parceiro/dashboard",
-    lider: "/lider/dashboard",
-  };
-  return (
-    <Navigate to={destinations[accountType] ?? "/admin/dashboard"} replace />
-  );
+  let authUser: { account_type?: string; role?: string } | null = null;
+  try {
+    authUser = JSON.parse(localStorage.getItem("allka_user") || "null");
+  } catch {}
+  if (!authUser) return <Navigate to="/login" replace />;
+  const { account_type, role } = authUser;
+  const home =
+    role === "admin" || account_type === "admin"
+      ? "/admin/dashboard"
+      : account_type === "nomades"
+        ? "/nomad/dashboard"
+        : account_type === "empresas"
+          ? "/company/dashboard"
+          : account_type === "agencias"
+            ? "/agency/dashboard"
+            : account_type === "parceiro"
+              ? "/partner/dashboard"
+              : role === "lider"
+                ? "/leader/dashboard"
+                : "/login";
+  return <Navigate to={home} replace />;
 }
 
 const PageLoader = () => <BrandPageLoader text="Carregando…" />;
@@ -373,9 +467,16 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 </div>
                                 <div className="flex-1 flex flex-col overflow-visible min-w-0">
                                   <PageErrorBoundary>
-                                    <Header />
+                                    {/* Header visível apenas em desktop (lg+); mobile usa bottom nav */}
+                                    <div className="hidden lg:block">
+                                      <Header />
+                                    </div>
+                                    {/* Header mobile: compacto, sem sidebar toggle */}
+                                    <div className="lg:hidden">
+                                      <Header />
+                                    </div>
                                   </PageErrorBoundary>
-                                  <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-12 px-14 pb-mobile-nav">
+                                  <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-4 px-4 sm:px-6 lg:px-14 lg:py-12 pb-mobile-nav">
                                     <PageErrorBoundary>
                                       <Suspense fallback={<PageLoader />}>
                                         {children}
@@ -422,17 +523,18 @@ export default function App() {
   useEffect(() => {
     const handler = () => {
       const path = window.location.pathname;
-      const loginPath = path.startsWith("/nomades")
-        ? "/nomades/login"
-        : path.startsWith("/agencia")
-          ? "/agencia/login"
-          : path.startsWith("/parceiro")
-            ? "/parceiro/login"
-            : path.startsWith("/lider")
-              ? "/lider/login"
-              : path.startsWith("/company") || path.startsWith("/empresa")
-                ? "/company/login"
-                : "/login";
+      const loginPath =
+        path.startsWith("/nomad") || path.startsWith("/nomades")
+          ? "/nomad/login"
+          : path.startsWith("/agency") || path.startsWith("/agencia")
+            ? "/agency/login"
+            : path.startsWith("/partner") || path.startsWith("/parceiro")
+              ? "/partner/login"
+              : path.startsWith("/leader") || path.startsWith("/lider")
+                ? "/leader/login"
+                : path.startsWith("/company") || path.startsWith("/empresa")
+                  ? "/company/login"
+                  : "/login";
       if (!path.includes("/login")) navigate(loginPath, { replace: true });
     };
     window.addEventListener("allka:unauthorized", handler);
@@ -452,12 +554,28 @@ export default function App() {
           }
         />
         <Route
-          path="/nomades/login"
+          path="/nomad/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <NomadeLoginPage />
             </Suspense>
           }
+        />
+        <Route
+          path="/nomades/login"
+          element={<Navigate to="/nomad/login" replace />}
+        />
+        <Route
+          path="/agency/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <AgenciaLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/agencia/login"
+          element={<Navigate to="/agency/login" replace />}
         />
         <Route
           path="/company/login"
@@ -468,15 +586,7 @@ export default function App() {
           }
         />
         <Route
-          path="/agencia/login"
-          element={
-            <Suspense fallback={<PageLoader />}>
-              <AgenciaLoginPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/parceiro/login"
+          path="/partner/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <ParceiroLoginPage />
@@ -484,12 +594,20 @@ export default function App() {
           }
         />
         <Route
-          path="/lider/login"
+          path="/parceiro/login"
+          element={<Navigate to="/partner/login" replace />}
+        />
+        <Route
+          path="/leader/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <LiderLoginPage />
             </Suspense>
           }
+        />
+        <Route
+          path="/lider/login"
+          element={<Navigate to="/leader/login" replace />}
         />
 
         {/* ─── Rota pública de share de dashboard/widget ─────────────────── */}
@@ -663,7 +781,11 @@ export default function App() {
                   />
                   <Route path="/admin/sistema" element={<AdminSistemaPage />} />
                   <Route path="/admin/alertas" element={<AdminAlertasPage />} />
-
+                  {/* ─── Nômade dashboard (replica do admin) ────────────── */}
+                  <Route
+                    path="/nomad/dashboard"
+                    element={<NomadDashboardPage />}
+                  />
                   {/* ─── Nômades ──────────────────────────────────────────────── */}
                   <Route
                     path="/nomades/dashboard"
@@ -698,6 +820,12 @@ export default function App() {
                     element={<NomadesPerfilPage />}
                   />
 
+                  {/* ─── Partner (novo) ──────────────────────────────────── */}
+                  <Route
+                    path="/partner/dashboard"
+                    element={<PartnerDashboardPage />}
+                  />
+
                   {/* ─── Parceiro ─────────────────────────────────────────── */}
                   <Route
                     path="/parceiro/dashboard"
@@ -723,7 +851,7 @@ export default function App() {
                   {/* ─── Empresa ──────────────────────────────────────────── */}
                   <Route
                     path="/company/dashboard"
-                    element={<EmpresaDashboardPage />}
+                    element={<CompanyDashboardPage />}
                   />
                   <Route
                     path="/company/projetos"
@@ -740,6 +868,12 @@ export default function App() {
                   <Route
                     path="/company/produtos"
                     element={<EmpresaProdutosPage />}
+                  />
+
+                  {/* ─── Agency (novo) ────────────────────────────────────── */}
+                  <Route
+                    path="/agency/dashboard"
+                    element={<AgencyDashboardPage />}
                   />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
@@ -762,6 +896,12 @@ export default function App() {
                   <Route
                     path="/agencia/financeiro"
                     element={<AgenciaFinanceiroPage />}
+                  />
+
+                  {/* ─── Leader (novo) ────────────────────────────────────── */}
+                  <Route
+                    path="/leader/dashboard"
+                    element={<LeaderDashboardPage />}
                   />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
@@ -793,8 +933,6 @@ export default function App() {
         />
       </Routes>
       <CookieConsentBanner />
-      {/* DevRoleSwitcher só aparece em desenvolvimento — nunca em produção */}
-      {import.meta.env.DEV && <DevRoleSwitcher />}
     </AccountTypeProvider>
   );
 }

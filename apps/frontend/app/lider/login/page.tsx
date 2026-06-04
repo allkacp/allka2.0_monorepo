@@ -1,10 +1,14 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #0f766e 0%, #0e7490 50%, #1d4ed8 100%)",
   defaultEmail: "lider.performance@allka.test",
-  defaultPassword: "123456",
-  redirectPath: "/lider/dashboard",
+  defaultPassword: "Teste@123456",
+  redirectPath: "/leader/dashboard",
+  accessType: "LEADER",
   translations: {
     pt: {
       tag: "Allka Líder",
@@ -75,8 +79,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function LiderLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }

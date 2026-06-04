@@ -1,10 +1,14 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 50%, #c81a7f 100%)",
   defaultEmail: "admin@allka.test",
-  defaultPassword: "123456",
+  defaultPassword: "Teste@123456",
   redirectPath: "/admin/dashboard",
+  accessType: "ADMIN",
   devUser: { email: "cp@lamego.com.vc" },
   translations: {
     pt: {
@@ -16,7 +20,8 @@ const config: LoginRoleConfig = {
         { text: "ESCALABILIDADE", outlined: true },
         { text: "EM SUAS MÃOS.", outlined: true },
       ],
-      subtext: "Plataforma que permite agências e departamentos de marketing contratar centenas de tarefas especializadas com prazo, preço e processos garantidos.",
+      subtext:
+        "Plataforma que permite agências e departamentos de marketing contratar centenas de tarefas especializadas com prazo, preço e processos garantidos.",
       stats: [
         { value: "500+", label: "Profissionais" },
         { value: "12k+", label: "Tarefas entregues" },
@@ -32,7 +37,8 @@ const config: LoginRoleConfig = {
         { text: "SCALABILITY", outlined: true },
         { text: "IN YOUR HANDS.", outlined: true },
       ],
-      subtext: "The platform that lets agencies and marketing teams hire hundreds of specialized tasks with guaranteed deadlines, pricing, and processes.",
+      subtext:
+        "The platform that lets agencies and marketing teams hire hundreds of specialized tasks with guaranteed deadlines, pricing, and processes.",
       stats: [
         { value: "500+", label: "Professionals" },
         { value: "12k+", label: "Tasks delivered" },
@@ -48,7 +54,8 @@ const config: LoginRoleConfig = {
         { text: "ESCALABILIDAD", outlined: true },
         { text: "EN TUS MANOS.", outlined: true },
       ],
-      subtext: "Plataforma que permite a agencias y equipos de marketing contratar cientos de tareas especializadas con plazos, precios y procesos garantizados.",
+      subtext:
+        "Plataforma que permite a agencias y equipos de marketing contratar cientos de tareas especializadas con plazos, precios y procesos garantizados.",
       stats: [
         { value: "500+", label: "Profesionales" },
         { value: "12k+", label: "Tareas entregadas" },
@@ -64,7 +71,8 @@ const config: LoginRoleConfig = {
         { text: "尽在", outlined: true },
         { text: "您手中。", outlined: true },
       ],
-      subtext: "让代理机构和营销团队以保证的截止日期、定价和流程雇用数百项专业任务的平台。",
+      subtext:
+        "让代理机构和营销团队以保证的截止日期、定价和流程雇用数百项专业任务的平台。",
       stats: [
         { value: "500+", label: "专业人士" },
         { value: "12k+", label: "已交付任务" },
@@ -72,9 +80,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function AdminLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }
-

@@ -125,6 +125,9 @@ export function DevRoleSwitcher() {
   const [open, setOpen] = useState(false);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Hide on all login pages — the inline TestLoginSelector handles test logins there
+  if (isOnLoginPage(pathname)) return null;
+
   const active = getActiveRole(pathname);
 
   const handleMouseEnter = () => {

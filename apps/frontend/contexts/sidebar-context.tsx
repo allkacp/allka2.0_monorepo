@@ -151,12 +151,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   });
 
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: "Vinicius Guardia",
-    role: "Admin",
-    job_title: "Coordenador de Processos",
-    email: "cp@lamego.com.vc",
+    name: "Admin Test",
+    role: "Administrador",
+    job_title: "Master",
+    email: "admin@allka.test",
     phone: "",
-    avatar: "VG",
+    avatar: "AT",
     department: "Administração",
     joinDate: "2023-01-01",
   });

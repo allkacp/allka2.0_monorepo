@@ -1,6 +1,6 @@
 ﻿// @ts-nocheck
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
-import { COMPANY_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
+import { LEADER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
 import { useState, useEffect, useMemo } from "react";
@@ -17,7 +17,6 @@ import {
   TrendingDown,
   Activity,
   Clock,
-  Info,
   CheckCircle2,
   AlertCircle,
   XCircle,
@@ -43,9 +42,9 @@ import {
   ArrowRightIcon,
   FileDown,
   ExternalLink,
-  Eye,
   ArrowUp,
   ArrowDown,
+  Info,
   Calculator,
   ArrowUpRight,
   CheckSquare,
@@ -56,8 +55,6 @@ import {
   MessageSquare,
   ChevronDown,
   ArrowRight,
-  Link2,
-  History,
   Trophy,
   Save,
   Minus,
@@ -66,18 +63,17 @@ import {
   Share2,
   SlidersHorizontal,
   ImageDown,
+  Copy,
+  Link2,
+  History,
+  Database,
+  Eye,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // AlertTriangle removed to avoid redeclaration
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -113,242 +109,371 @@ import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
-const generateDashboardData = (_from?: any, _to?: any): any => ({
-  revenue: {
-    total: 270800,
-    growth: 18.1,
-    totalGrowth: 18.1,
-    series: [],
-    trendData: [180000, 205000, 215000, 230000, 248000, 270800],
-    creditPlan: 114000,
-    creditPlanGrowth: 18,
-    recurring: 97600,
-    recurringGrowth: 8,
-    oneTime: 59200,
-    oneTimeGrowth: 14,
-  },
-  activeProjects: {
-    total: 127,
-    growth: 5.2,
-    series: [],
-    agencies: 48,
-    agenciesGrowth: 7,
-    leadPremium: 63,
-    leadPremiumGrowth: 9,
-    nomades: 16,
-    nomadesGrowth: 3,
-    newTotal: 22,
-    newAgencies: 9,
-    newLeadPremium: 10,
-    newNomades: 3,
-  },
-  creditPlans: {
-    total: 114000,
-    growth: 18,
-    series: [],
-    basic: { revenue: 38000, newContracts: 12, growth: 8 },
-    partner: { revenue: 45000, newContracts: 9, growth: 22 },
-    premium: { revenue: 31000, newContracts: 5, growth: 14 },
-  },
-  mrr: {
-    total: 97600,
-    growth: 8,
-    series: [],
-    newMrr: 12400,
-    expansion: 5200,
-    contraction: 1800,
-    churnRevenue: 3100,
-    baseMrr: 89600,
-    netChange: 12700,
-    trendData: [72000, 78000, 82000, 86000, 91000, 97600],
-  },
-  churn: {
-    total: 0,
-    growth: 0,
-    series: [],
-    inactiveAccounts: 23,
-    inactiveGrowth: 4,
-    agencies: 8,
-    leadPremium: 5,
-    nomades: 7,
-    free: 3,
-    cancelledProjects: 11,
-    cancelledGrowth: 2,
-    revenueChurn: 9300,
-    revenueChurnRate: 3.2,
-  },
-  averageTicket: {
-    total: 0,
-    growth: 5,
-    series: [],
-    general: 1213,
-    generalGrowth: 5,
-    perProject: 2840,
-    perProjectGrowth: 7,
-    trendData: [980, 1050, 1100, 1180, 1210, 1213],
-  },
-  ltv: {
-    total: 0,
-    growth: 12,
-    series: [],
-    value: 8740,
-    agencies: 14200,
-    agenciesGrowth: 9,
-    leadPremium: 11500,
-    leadPremiumGrowth: 15,
-    nomades: 3800,
-    nomadesGrowth: 6,
-    hist0to1k: 120,
-    hist1kto5k: 280,
-    hist5kto15k: 95,
-    hist15kplus: 30,
-  },
-  accountsReceivable: {
-    total: 187400,
-    growth: 12,
-    series: [],
-    creditPlans: 98200,
-    postPaid: 54700,
-    others: 34500,
-    received: 143600,
-  },
-  platformActivities: {
-    activeAgencies: 34,
-    avgSessionMinutes: 47,
-    mau: 1240,
-    dau: 312,
-    sessions: 8740,
-    actionsExecuted: 52300,
-    trendData: [420, 510, 480, 630, 590, 710, 680],
-  },
-  nomads: {
-    total: 148,
-    growth: 6,
-    active: 112,
-    activeGrowth: 9,
-    inactive: 36,
-    inactiveChange: -3,
-    newInPeriod: 14,
-    churn: 5,
-    retention30d: 82,
-    trendData: [95, 100, 104, 108, 110, 112],
-  },
-  nomadsIndicators: {
-    deliveryRate: 94.3,
-    avgRating: 4.7,
-    avgTimePerTask: 3.2,
-    certified: 68,
-    retention90d: 79,
-  },
-  nomadsRanking: { items: [] },
-  agenciesRanking: [
-    {
-      id: "1",
-      name: "Digital Works",
-      rating: 4.9,
-      projects: 23,
-      contribution: "R$ 48k",
+const generateDashboardData = (from?: Date, to?: Date): any => {
+  const now = new Date();
+  const f =
+    from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const t = to ?? now;
+  const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000));
+  const m = days / 30; // multiplier relative to 30-day base
+  const sc = (base: number) => Math.round(base * m); // scale financial/count
+  const scSoft = (base: number) => Math.round(base * (0.5 + m * 0.5)); // softer scale for counts
+  return {
+    revenue: {
+      total: sc(270800),
+      growth: 18.1,
+      totalGrowth: 18.1,
+      series: [],
+      trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map((v) =>
+        Math.round((v * m) / 1),
+      ),
+      creditPlan: sc(114000),
+      creditPlanGrowth: 18,
+      recurring: sc(97600),
+      recurringGrowth: 8,
+      oneTime: sc(59200),
+      oneTimeGrowth: 14,
     },
-    {
-      id: "2",
-      name: "Criativa Lab",
-      rating: 4.8,
-      projects: 18,
-      contribution: "R$ 37k",
+    activeProjects: {
+      total: scSoft(127),
+      growth: 5.2,
+      series: [],
+      agencies: scSoft(48),
+      agenciesGrowth: 7,
+      leadPremium: scSoft(63),
+      leadPremiumGrowth: 9,
+      nomades: scSoft(16),
+      nomadesGrowth: 3,
+      newTotal: sc(22),
+      newAgencies: sc(9),
+      newLeadPremium: sc(10),
+      newNomades: sc(3),
     },
-    {
-      id: "3",
-      name: "Inovax Agency",
-      rating: 4.7,
-      projects: 15,
-      contribution: "R$ 31k",
+    creditPlans: {
+      total: sc(114000),
+      growth: 18,
+      series: [],
+      basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
+      partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
+      premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
     },
-    {
-      id: "4",
-      name: "PixelForge",
-      rating: 4.6,
-      projects: 12,
-      contribution: "R$ 24k",
+    mrr: {
+      total: sc(97600),
+      growth: 8,
+      series: [],
+      newMrr: sc(12400),
+      expansion: sc(5200),
+      contraction: sc(1800),
+      churnRevenue: sc(3100),
+      baseMrr: sc(89600),
+      netChange: sc(12700),
+      trendGrowth: 12,
+      trendData: [72000, 78000, 82000, 86000, 91000, 97600].map((v) => sc(v)),
     },
-    {
-      id: "5",
-      name: "BluePrint Co.",
-      rating: 4.5,
-      projects: 10,
-      contribution: "R$ 19k",
+    churn: {
+      total: 0,
+      growth: 0,
+      series: [],
+      inactiveAccounts: sc(23),
+      inactiveGrowth: 4,
+      agencies: sc(8),
+      leadPremium: sc(5),
+      nomades: sc(7),
+      free: sc(3),
+      cancelledProjects: sc(11),
+      cancelledGrowth: 2,
+      revenueChurn: sc(9300),
+      revenueChurnRate: 3.2,
     },
-  ],
-  statusOverview: {
-    projects: {
-      ongoing: 42,
-      approved: 18,
-      completed: 156,
-      cancelled: 7,
-      delayed: 11,
+    averageTicket: {
+      total: 0,
+      growth: 5,
+      series: [],
+      general: 1213,
+      generalGrowth: 5,
+      perProject: 2840,
+      perProjectGrowth: 7,
+      trendData: [980, 1050, 1100, 1180, 1210, 1213],
     },
-    tasks: { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
-    leads: { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
-  },
-  tasks: {
-    total: 552,
-    items: [],
-    completed: 412,
-    completedGrowth: 8,
-    inProgress: 57,
-    inProgressGrowth: 4,
-    contracted: 83,
-    contractedGrowth: 12,
-    cancelled: 14,
-    cancelledChange: -2,
-    slaCompliance: 91.4,
-  },
-  activeUsers: {
-    total: 284,
-    empresas: 92,
-    empresasGrowth: 5,
-    agencias: 61,
-    agenciasGrowth: 7,
-    nomades: 112,
-    nomadesGrowth: 9,
-    admins: 19,
-    adminsGrowth: 3,
-    series: [],
-  },
-  partnerProgram: {
-    total: 38,
-    items: [],
-    invitesSent: 124,
-    pending: 47,
-    accepted: 38,
-    diamond: 3,
-    platinum: 6,
-    gold: 11,
-    silver: 12,
-    bronze: 6,
-    mrrGenerated: 22400,
-  },
-  cmv: {
-    totalCosts: 87400,
-    revenue: 270800,
-    cmvPercent: 32.3,
-    prevCmvPercent: 34.1,
-    nomades: { value: 42800, percent: 49 },
-    impostos: { value: 18200, percent: 21 },
-    comissoes: { value: 14900, percent: 17 },
-    outros: { value: 11500, percent: 13 },
-    variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
-  },
-  metrics: {},
-  activity: [],
-  alerts: [],
-  performers: [],
-  userDistribution: [],
-  systemAlerts: [],
-  adminProfiles: [],
-  permissionMatrix: [],
-  managementTools: [],
-});
+    ltv: {
+      total: 0,
+      growth: 12,
+      series: [],
+      value: 8740,
+      agencies: 14200,
+      agenciesGrowth: 9,
+      leadPremium: 11500,
+      leadPremiumGrowth: 15,
+      nomades: 3800,
+      nomadesGrowth: 6,
+      hist0to1k: 120,
+      hist1kto5k: 280,
+      hist5kto15k: 95,
+      hist15kplus: 30,
+    },
+    accountsReceivable: {
+      total: sc(187400),
+      growth: 12,
+      series: [],
+      creditPlans: sc(98200),
+      postPaid: sc(54700),
+      others: sc(34500),
+      received: sc(143600),
+    },
+    platformActivities: {
+      activeAgencies: scSoft(34),
+      avgSessionMinutes: 47,
+      mau: scSoft(1240),
+      dau: scSoft(312),
+      sessions: sc(8740),
+      actionsExecuted: sc(52300),
+      trendData: [420, 510, 480, 630, 590, 710, 680].map((v) => sc(v)),
+    },
+    nomads: {
+      total: scSoft(148),
+      growth: 6,
+      active: scSoft(112),
+      activeGrowth: 9,
+      inactive: scSoft(36),
+      inactiveChange: -3,
+      newInPeriod: sc(14),
+      churn: sc(5),
+      retention30d: 82,
+      trendData: [95, 100, 104, 108, 110, 112].map((v) => scSoft(v)),
+    },
+    nomadsIndicators: {
+      deliveryRate: 94.3,
+      avgRating: 4.7,
+      avgTimePerTask: 3.2,
+      certified: 68,
+      retention90d: 79,
+    },
+    nomadsRanking: { items: [] },
+    agenciesRanking: [
+      {
+        id: "1",
+        name: "Digital Works",
+        avatar: "DW",
+        rating: 4.9,
+        projects: 23,
+        contribution: "R$ 48k",
+        specialty: "Dev & Design",
+        color: "from-blue-500 to-indigo-600",
+      },
+      {
+        id: "2",
+        name: "Criativa Lab",
+        avatar: "CL",
+        rating: 4.8,
+        projects: 18,
+        contribution: "R$ 37k",
+        specialty: "Branding",
+        color: "from-pink-500 to-rose-600",
+      },
+      {
+        id: "3",
+        name: "Inovax Agency",
+        avatar: "IA",
+        rating: 4.7,
+        projects: 15,
+        contribution: "R$ 31k",
+        specialty: "Marketing 360",
+        color: "from-violet-500 to-purple-600",
+      },
+      {
+        id: "4",
+        name: "PixelForge",
+        avatar: "PF",
+        rating: 4.6,
+        projects: 12,
+        contribution: "R$ 24k",
+        specialty: "UX/UI",
+        color: "from-cyan-500 to-teal-600",
+      },
+      {
+        id: "5",
+        name: "BluePrint Co.",
+        avatar: "BP",
+        rating: 4.5,
+        projects: 10,
+        contribution: "R$ 19k",
+        specialty: "Arquitetura",
+        color: "from-amber-500 to-orange-600",
+      },
+    ],
+    tasks: {
+      total: sc(552),
+      items: [],
+      completed: sc(412),
+      completedGrowth: 8,
+      inProgress: scSoft(57),
+      inProgressGrowth: 4,
+      contracted: scSoft(83),
+      contractedGrowth: 12,
+      cancelled: sc(14),
+      cancelledChange: -2,
+      slaCompliance: 91.4,
+    },
+    activeUsers: {
+      total: scSoft(284),
+      empresas: scSoft(92),
+      empresasGrowth: 5,
+      agencias: scSoft(61),
+      agenciasGrowth: 7,
+      nomades: scSoft(112),
+      nomadesGrowth: 9,
+      admins: scSoft(19),
+      adminsGrowth: 3,
+      series: [],
+    },
+    partnerProgram: {
+      total: scSoft(38),
+      items: [],
+      invitesSent: sc(124),
+      pending: scSoft(47),
+      accepted: scSoft(38),
+      diamond: 3,
+      platinum: 6,
+      gold: 11,
+      silver: 12,
+      bronze: 6,
+      mrrGenerated: sc(22400),
+    },
+    cmv: {
+      totalCosts: sc(87400),
+      revenue: sc(270800),
+      cmvPercent: 32.3,
+      prevCmvPercent: 34.1,
+      nomades: { value: sc(42800), percent: 49 },
+      impostos: { value: sc(18200), percent: 21 },
+      comissoes: { value: sc(14900), percent: 17 },
+      outros: { value: sc(11500), percent: 13 },
+      variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
+    },
+    statusOverview: {
+      projects: {
+        ongoing: scSoft(42),
+        approved: scSoft(18),
+        completed: sc(156),
+        cancelled: sc(7),
+        delayed: scSoft(11),
+      },
+      tasks: {
+        contracted: scSoft(83),
+        inProgress: scSoft(57),
+        completed: sc(412),
+        archived: sc(34),
+      },
+      leads: {
+        new: scSoft(29),
+        contacted: scSoft(15),
+        proposal: scSoft(8),
+        won: sc(12),
+        lost: sc(5),
+      },
+    },
+    metrics: {},
+    activity: [],
+    alerts: [],
+    performers: [
+      {
+        id: "1",
+        name: "Carlos Mendonça",
+        avatar: "CM",
+        rating: 4.9,
+        projects: sc(34),
+        badge: "gold",
+        tasks: sc(128),
+        revenue: `R$ ${sc(52)}k`,
+        specialty: "Dev Full Stack",
+      },
+      {
+        id: "2",
+        name: "Ana Beatriz Lima",
+        avatar: "AB",
+        rating: 4.8,
+        projects: sc(29),
+        badge: "gold",
+        tasks: sc(115),
+        revenue: `R$ ${sc(44)}k`,
+        specialty: "UI/UX Design",
+      },
+      {
+        id: "3",
+        name: "Rafael Torres",
+        avatar: "RT",
+        rating: 4.7,
+        projects: sc(26),
+        badge: "gold",
+        tasks: sc(98),
+        revenue: `R$ ${sc(39)}k`,
+        specialty: "Marketing Digital",
+      },
+      {
+        id: "4",
+        name: "Juliana Ferreira",
+        avatar: "JF",
+        rating: 4.6,
+        projects: sc(22),
+        badge: "silver",
+        tasks: sc(84),
+        revenue: `R$ ${sc(31)}k`,
+        specialty: "Copywriting",
+      },
+      {
+        id: "5",
+        name: "Marcos Oliveira",
+        avatar: "MO",
+        rating: 4.6,
+        projects: sc(21),
+        badge: "silver",
+        tasks: sc(79),
+        revenue: `R$ ${sc(28)}k`,
+        specialty: "Dev Backend",
+      },
+      {
+        id: "6",
+        name: "Priscila Santos",
+        avatar: "PS",
+        rating: 4.5,
+        projects: sc(19),
+        badge: "silver",
+        tasks: sc(71),
+        revenue: `R$ ${sc(24)}k`,
+        specialty: "SEO",
+      },
+      {
+        id: "7",
+        name: "Diego Cavalcante",
+        avatar: "DC",
+        rating: 4.4,
+        projects: sc(17),
+        badge: "bronze",
+        tasks: sc(63),
+        revenue: `R$ ${sc(19)}k`,
+        specialty: "Tráfego Pago",
+      },
+      {
+        id: "8",
+        name: "Fernanda Costa",
+        avatar: "FC",
+        rating: 4.3,
+        projects: sc(15),
+        badge: "bronze",
+        tasks: sc(57),
+        revenue: `R$ ${sc(16)}k`,
+        specialty: "Social Media",
+      },
+    ],
+    userDistribution: [],
+    systemAlerts: [],
+    adminProfiles: [],
+    permissionMatrix: [],
+    managementTools: [],
+  };
+};
 import { Switch } from "@/components/ui/switch"; // Added Switch
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
@@ -387,14 +512,12 @@ type WidgetType =
   | "partnerProgram"; // Partner Program metrics widget
 
 type MetricType =
+  | "totalUsers"
+  | "activeUsers"
+  | "companies"
   | "activeProjects"
-  | "tasksToLaunch"
-  | "tasksInProgress"
-  | "approvalsPending"
-  | "proposalsAwaitingClient"
-  | "contractedValueMonth"
-  | "estimatedMargin"
-  | "pendingPayments";
+  | "revenue"
+  | "avgRating";
 type WidgetSize = "standard" | "compact";
 
 interface Widget {
@@ -724,7 +847,7 @@ const generatePublicToken = (config: ShareConfig): string => {
 };
 // ───────────────────────────────────────────────────────────────────────────────
 
-const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["COMPANY"]);
+const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["LEADER"]);
 
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
@@ -951,14 +1074,14 @@ export default function AdminDashboardPage() {
   const [metricCards, setMetricCards] = useState<
     Array<{ id: MetricType; order: number; visible: boolean }>
   >([
-    { id: "activeProjects", order: 0, visible: true },
-    { id: "tasksToLaunch", order: 1, visible: true },
-    { id: "tasksInProgress", order: 2, visible: true },
-    { id: "approvalsPending", order: 3, visible: true },
-    { id: "proposalsAwaitingClient", order: 4, visible: true },
-    { id: "contractedValueMonth", order: 5, visible: true },
-    { id: "estimatedMargin", order: 6, visible: true },
-    { id: "pendingPayments", order: 7, visible: true },
+    { id: "qualificationTasks", order: 0, visible: true },
+    { id: "briefingsToReview", order: 1, visible: true },
+    { id: "deliveriesAwaitingAnalysis", order: 2, visible: true },
+    { id: "tasksInExecution", order: 3, visible: true },
+    { id: "tasksReturned", order: 4, visible: true },
+    { id: "tasksOverdue", order: 5, visible: true },
+    { id: "approvalsToday", order: 6, visible: true },
+    { id: "activeNomadsArea", order: 7, visible: true },
   ]);
   const [draggedMetric, setDraggedMetric] = useState<MetricType | null>(null);
   const [dragOverMetric, setDragOverMetric] = useState<MetricType | null>(null);
@@ -1341,7 +1464,7 @@ export default function AdminDashboardPage() {
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
     const widgetPeriod = widgetPeriods.find((wp) => wp.widgetId === widgetId);
     const isCustom = widgetPeriod?.mode === "custom";
-    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : "Global";
+    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : "Área";
 
     return (
       <DropdownMenu>
@@ -1818,7 +1941,7 @@ export default function AdminDashboardPage() {
         : d,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(updatedDashboards));
     setShowEditDialog(false);
     setEditingDashboardId(null);
     setEditingDashboardName("");
@@ -1852,7 +1975,7 @@ export default function AdminDashboardPage() {
       );
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["LEADER"],
         JSON.stringify(updatedDashboards),
       );
     }
@@ -1877,13 +2000,13 @@ export default function AdminDashboardPage() {
       const updatedDashboards = [...savedDashboards, newDashboard];
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["LEADER"],
         JSON.stringify(updatedDashboards),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["LEADER"], newDashboard.id);
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
       toast({
@@ -1892,7 +2015,7 @@ export default function AdminDashboardPage() {
       });
     } else {
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
           d.id === currentDashboardId
@@ -1906,7 +2029,7 @@ export default function AdminDashboardPage() {
         );
         setSavedDashboards(updatedDashboards);
         localStorage.setItem(
-          DASHBOARD_STORAGE_KEY["COMPANY"],
+          DASHBOARD_STORAGE_KEY["LEADER"],
           JSON.stringify(updatedDashboards),
         );
       }
@@ -1926,7 +2049,7 @@ export default function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem("dashboard-widget-config-company");
+    const savedConfig = localStorage.getItem("dashboard-widget-config");
     if (savedConfig) {
       try {
         // Ensure the loaded config matches the WidgetState type
@@ -1945,7 +2068,7 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards-company");
+    const savedMetrics = localStorage.getItem("dashboard-metric-cards");
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -1954,13 +2077,13 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size-company");
+    const savedSize = localStorage.getItem("dashboard-widget-size");
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods-company");
+    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods");
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -1969,10 +2092,10 @@ export default function AdminDashboardPage() {
       }
     }
 
-    // Load saved dashboards — role-scoped presets (Company)
-    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["COMPANY"];
-    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["COMPANY"];
-    const builtinPresets: SavedDashboard[] = COMPANY_PRESETS.map((p) => ({
+    // Load saved dashboards — role-scoped presets (Leader)
+    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["LEADER"];
+    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["LEADER"];
+    const builtinPresets: SavedDashboard[] = LEADER_PRESETS.map((p) => ({
       id: p.id,
       name: p.name,
       isDefault: p.isDefault,
@@ -2028,7 +2151,7 @@ export default function AdminDashboardPage() {
 
     // Ensure consistent structure when saving
     localStorage.setItem(
-      "dashboard-widget-config-company",
+      "dashboard-widget-config",
       JSON.stringify(
         widgets.map((w) => ({
           id: w.id,
@@ -2039,17 +2162,17 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards-company", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size-company", widgetSize);
+    localStorage.setItem("dashboard-metric-cards", JSON.stringify(metricCards));
+    localStorage.setItem("dashboard-widget-size", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods-company",
+      "dashboard-widget-periods",
       JSON.stringify(widgetPeriods),
     );
 
     // Save dashboards to localStorage whenever they change
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(savedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], currentDashboardId);
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(savedDashboards));
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["LEADER"], currentDashboardId);
   }, [
     widgets,
     metricCards,
@@ -2075,136 +2198,417 @@ export default function AdminDashboardPage() {
     {
       id: "metrics",
       name: "Cards de Métricas",
-      description: "Métricas da agency logada",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "activeProjectsWidget",
-      name: "Projetos da Agency",
-      description: "Projetos ativos e em andamento da agency",
-      icon: Briefcase,
-      color: "indigo",
-    },
-    {
-      id: "tasks",
-      name: "Tarefas dos Projetos",
-      description: "Tarefas contratadas, em execução e concluídas",
-      icon: CheckSquare,
-      color: "green",
-    },
-    {
-      id: "statusOverview",
-      name: "Aprovações Pendentes",
-      description: "Status de projetos, tarefas e leads da agency",
+      description: "Principais métricas (Usuários, Empresas, Projetos, etc.)",
       icon: LayoutGrid,
       color: "blue",
     },
     {
       id: "accountsReceivable",
-      name: "Financeiro da Agency",
-      description: "Valores a receber e saldos pendentes da agency",
+      name: "À Receber",
+      description:
+        "Valores garantidos a receber por tipo (Planos, Pós-pagos, Outros)",
       icon: DollarSign,
       color: "green",
     },
     {
+      id: "platformActivities",
+      name: "Atividades da Plataforma",
+      description: "Agências ativas, tempo de uso, MAU e DAU com crescimento",
+      icon: Activity,
+      color: "blue",
+    },
+    {
+      id: "tasks",
+      name: "Tarefas (Resumo)",
+      description: "Tarefas executadas, em execução e contratadas com SLA",
+      icon: CheckSquare,
+      color: "green",
+    },
+    {
+      id: "nomads",
+      name: "Nômades",
+      description: "Total, ativos e inativos com variações percentuais",
+      icon: Users,
+      color: "indigo",
+    },
+    {
+      id: "nomadsIndicators",
+      name: "Indicadores dos Nômades",
+      description: "KPIs de desempenho, atividade e qualidade dos nômades",
+      icon: Users,
+      color: "purple",
+    },
+    {
+      id: "nomadsRanking",
+      name: "Ranking de Nômades",
+      description: "Top 10 nômades por avaliação e projetos concluídos",
+      icon: Trophy,
+      color: "yellow",
+    },
+    {
+      id: "agenciesRanking",
+      name: "Ranking de Agências",
+      description: "Top 10 agências por projetos e contribuição",
+      icon: Building2,
+      color: "cyan",
+    },
+    {
+      id: "statusOverview",
+      name: "Visão Geral por Status",
+      description: "Quantidade de Projetos, Tarefas e Leads por status",
+      icon: LayoutGrid,
+      color: "blue",
+    },
+    {
+      id: "cmv",
+      name: "CMV (Custo de Mercadoria Vendida)",
+      description:
+        "Custos diretos (nômades, impostos, comissões) vs faturamento",
+      icon: Calculator,
+      color: "orange",
+    },
+    {
+      id: "ltv",
+      name: "LTV (Lifetime Value)",
+      description:
+        "Valor médio que um cliente gera durante todo o relacionamento",
+      icon: TrendingUp,
+      color: "purple",
+    },
+    {
+      id: "mrr",
+      name: "MRR (Receita Recorrente)",
+      description:
+        "Monthly Recurring Revenue com New, Expansion, Contraction e Churn",
+      icon: TrendingUp,
+      color: "red",
+    },
+    {
+      id: "churn",
+      name: "CHURN",
+      description: "Inativações de contas por tipo e projetos cancelados",
+      icon: TrendingDown,
+      color: "red",
+    },
+    {
+      id: "revenue",
+      name: "Receita",
+      description: "Receita total por tipo (Plano, Recorrente, Avulsa)",
+      icon: DollarSign,
+      color: "emerald",
+    },
+    {
+      id: "averageTicket",
+      name: "Ticket Médio",
+      description: "Ticket médio geral, por tipo de conta e por projeto",
+      icon: DollarSign,
+      color: "teal",
+    },
+    {
+      id: "activeProjectsWidget",
+      name: "Projetos Ativos",
+      description:
+        "Projetos ativos por tipo (Agências e Lead Premium) com novos projetos",
+      icon: Briefcase,
+      color: "indigo",
+    },
+    {
       id: "creditPlans",
-      name: "Catálogo / Produtos Contratados",
-      description: "Planos e produtos contratados pela agency",
+      name: "Planos de Crédito",
+      description:
+        "Entrada de receita por tipo de plano com novas contratações",
       icon: CreditCard,
       color: "slate",
     },
     {
       id: "activity",
-      name: "Atividade Recente da Agency",
-      description: "Últimas ações e eventos da agency",
+      name: "Atividade Recente",
+      description: "Últimas ações e eventos no sistema",
       icon: Activity,
       color: "amber",
     },
     {
       id: "alerts",
-      name: "Alertas da Agency",
-      description: "Alertas relevantes para a agency logada",
+      name: "Alertas Rápidos",
+      description: "Notificações importantes que requerem atenção",
       icon: Bell,
       color: "orange",
     },
     {
+      id: "performers",
+      name: "Melhores Nômades",
+      description: "Top performers baseado em avaliações e projetos",
+      icon: Award,
+      color: "yellow",
+    },
+    {
       id: "quickActions",
-      name: "Ações Rápidas da Agency",
-      description: "Atalhos para ações operacionais da agency",
+      name: "Ações Rápidas",
+      description: "Atalhos para tarefas administrativas comuns",
       icon: Zap,
       color: "sky",
     },
     {
-      id: "averageTicket",
-      name: "Ticket Médio",
-      description: "Ticket médio da operação da agency",
-      icon: DollarSign,
-      color: "teal",
+      id: "userDistribution",
+      name: "Distribuição de Usuários",
+      description: "Breakdown por tipo de conta",
+      icon: Users,
+      color: "blue",
+    },
+    {
+      id: "activeUsers",
+      name: "Usuários Ativos",
+      description: "Usuários ativos por tipo de conta no período",
+      icon: UserCheck,
+      color: "green",
+    },
+    {
+      id: "systemAlerts",
+      name: "Alertas do Sistema",
+      description: "Avisos importantes sobre o sistema",
+      icon: AlertTriangle,
+      color: "red",
+    },
+    {
+      id: "adminProfiles",
+      name: "Perfis Admin",
+      description: "Membros da equipe administrativa",
+      icon: Shield,
+      color: "purple",
+    },
+    {
+      id: "permissionMatrix",
+      name: "Matriz de Permissões",
+      description: "Visualização das permissões por módulo e perfil",
+      icon: Lock,
+      color: "orange",
+    },
+    {
+      id: "managementTools",
+      name: "Ferramentas de Gestão",
+      description: "Acesso rápido a ferramentas administrativas essenciais",
+      icon: Settings,
+      color: "gray",
+    },
+    {
+      id: "partnerProgram",
+      name: "Programa Partner",
+      description:
+        "Convites enviados, partners ativos e distribuição por nível",
+      icon: Award,
+      color: "amber",
     },
   ];
 
-  const getMetricsForPeriod = () => {
-    const activeProjects = dashboardData.activeProjects;
+  const getMetricsForPeriod = (
+    periodTypeOverride?: string,
+    widgetPeriodKey?: string,
+  ) => {
     const tasks = dashboardData.tasks;
+    const nomads = dashboardData.nomads;
     const statusOverview = dashboardData.statusOverview;
-    const revenue = dashboardData.revenue;
-    const accountsReceivable = dashboardData.accountsReceivable;
-    const cmv = dashboardData.cmv;
-
-    const pendingPaymentsValue = Math.max(
-      0,
-      accountsReceivable.total - accountsReceivable.received,
-    );
-
-    return {
-      activeProjects: {
-        value: activeProjects.total.toLocaleString("pt-BR"),
-        change: activeProjects.growth,
-        trend: activeProjects.growth >= 0 ? ("up" as const) : ("down" as const),
+    const baseMetrics = {
+      "7d": {
+        qualificationTasks: {
+          value: String(Math.max(tasks.total - tasks.completed - tasks.inProgress - tasks.contracted - tasks.cancelled, 0)),
+          change: 4.2,
+          trend: "up" as const,
+        },
+        briefingsToReview: {
+          value: String(tasks.contracted),
+          change: 3.1,
+          trend: "up" as const,
+        },
+        deliveriesAwaitingAnalysis: {
+          value: String(tasks.inProgress),
+          change: -1.4,
+          trend: "down" as const,
+        },
+        tasksInExecution: {
+          value: String(tasks.inProgress),
+          change: 2.6,
+          trend: "up" as const,
+        },
+        tasksReturned: {
+          value: String(tasks.cancelled),
+          change: 0.8,
+          trend: "up" as const,
+        },
+        tasksOverdue: {
+          value: String(statusOverview.projects.delayed),
+          change: -0.6,
+          trend: "down" as const,
+        },
+        approvalsToday: {
+          value: String(statusOverview.projects.approved),
+          change: 1.2,
+          trend: "up" as const,
+        },
+        activeNomadsArea: {
+          value: String(nomads.active),
+          change: 2.4,
+          trend: "up" as const,
+        },
       },
-      tasksToLaunch: {
-        value: tasks.contracted.toLocaleString("pt-BR"),
-        change: tasks.contractedGrowth,
-        trend: tasks.contractedGrowth >= 0 ? ("up" as const) : ("down" as const),
+      "30d": {
+        qualificationTasks: {
+          value: String(Math.max(tasks.total - tasks.completed - tasks.inProgress - tasks.contracted - tasks.cancelled, 0)),
+          change: 6.8,
+          trend: "up" as const,
+        },
+        briefingsToReview: {
+          value: String(tasks.contracted),
+          change: 4.7,
+          trend: "up" as const,
+        },
+        deliveriesAwaitingAnalysis: {
+          value: String(tasks.inProgress),
+          change: -0.9,
+          trend: "down" as const,
+        },
+        tasksInExecution: {
+          value: String(tasks.inProgress),
+          change: 3.4,
+          trend: "up" as const,
+        },
+        tasksReturned: {
+          value: String(tasks.cancelled),
+          change: 1.1,
+          trend: "up" as const,
+        },
+        tasksOverdue: {
+          value: String(statusOverview.projects.delayed),
+          change: -0.3,
+          trend: "down" as const,
+        },
+        approvalsToday: {
+          value: String(statusOverview.projects.approved),
+          change: 2.0,
+          trend: "up" as const,
+        },
+        activeNomadsArea: {
+          value: String(nomads.active),
+          change: 3.1,
+          trend: "up" as const,
+        },
       },
-      tasksInProgress: {
-        value: tasks.inProgress.toLocaleString("pt-BR"),
-        change: tasks.inProgressGrowth,
-        trend: tasks.inProgressGrowth >= 0 ? ("up" as const) : ("down" as const),
+      "90d": {
+        qualificationTasks: {
+          value: String(Math.max(tasks.total - tasks.completed - tasks.inProgress - tasks.contracted - tasks.cancelled, 0)),
+          change: 9.4,
+          trend: "up" as const,
+        },
+        briefingsToReview: {
+          value: String(tasks.contracted),
+          change: 6.5,
+          trend: "up" as const,
+        },
+        deliveriesAwaitingAnalysis: {
+          value: String(tasks.inProgress),
+          change: -0.2,
+          trend: "down" as const,
+        },
+        tasksInExecution: {
+          value: String(tasks.inProgress),
+          change: 4.1,
+          trend: "up" as const,
+        },
+        tasksReturned: {
+          value: String(tasks.cancelled),
+          change: 1.8,
+          trend: "up" as const,
+        },
+        tasksOverdue: {
+          value: String(statusOverview.projects.delayed),
+          change: -0.1,
+          trend: "down" as const,
+        },
+        approvalsToday: {
+          value: String(statusOverview.projects.approved),
+          change: 3.2,
+          trend: "up" as const,
+        },
+        activeNomadsArea: {
+          value: String(nomads.active),
+          change: 4.0,
+          trend: "up" as const,
+        },
       },
-      approvalsPending: {
-        value: statusOverview.projects.delayed.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      proposalsAwaitingClient: {
-        value: statusOverview.leads.proposal.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      contractedValueMonth: {
-        value: `R$ ${(revenue.total / 1000).toFixed(1)}k`,
-        change: revenue.totalGrowth,
-        trend: revenue.totalGrowth >= 0 ? ("up" as const) : ("down" as const),
-      },
-      estimatedMargin: {
-        value: `R$ ${(cmv.comissoes.value / 1000).toFixed(1)}k`,
-        change: cmv.comissoes.percent,
-        trend: "up" as const,
-      },
-      pendingPayments: {
-        value: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k`,
-        change: accountsReceivable.growth,
-        trend: accountsReceivable.growth >= 0 ? ("up" as const) : ("down" as const),
+      custom: {
+        qualificationTasks: {
+          value: String(Math.max(tasks.total - tasks.completed - tasks.inProgress - tasks.contracted - tasks.cancelled, 0)),
+          change: 5.0,
+          trend: "up" as const,
+        },
+        briefingsToReview: {
+          value: String(tasks.contracted),
+          change: 3.5,
+          trend: "up" as const,
+        },
+        deliveriesAwaitingAnalysis: {
+          value: String(tasks.inProgress),
+          change: -0.5,
+          trend: "down" as const,
+        },
+        tasksInExecution: {
+          value: String(tasks.inProgress),
+          change: 2.2,
+          trend: "up" as const,
+        },
+        tasksReturned: {
+          value: String(tasks.cancelled),
+          change: 1.0,
+          trend: "up" as const,
+        },
+        tasksOverdue: {
+          value: String(statusOverview.projects.delayed),
+          change: -0.4,
+          trend: "down" as const,
+        },
+        approvalsToday: {
+          value: String(statusOverview.projects.approved),
+          change: 2.4,
+          trend: "up" as const,
+        },
+        activeNomadsArea: {
+          value: String(nomads.active),
+          change: 3.0,
+          trend: "up" as const,
+        },
       },
     };
+    // @ts-ignore
+    // Widget period keys ("7days", "30days", etc.) take priority, then global period type
+    let key: string;
+    if (widgetPeriodKey) {
+      key =
+        widgetPeriodKey === "today" || widgetPeriodKey === "7days"
+          ? "7d"
+          : widgetPeriodKey === "90days" || widgetPeriodKey === "365days"
+            ? "90d"
+            : "30d";
+    } else {
+      const resolvedType = periodTypeOverride ?? globalPeriod.type;
+      key =
+        resolvedType === "last_7_days" ||
+        resolvedType === "today" ||
+        resolvedType === "yesterday"
+          ? "7d"
+          : resolvedType === "this_quarter"
+            ? "90d"
+            : resolvedType === "custom"
+              ? "custom"
+              : "30d";
+    }
+    return baseMetrics[key as keyof typeof baseMetrics];
   };
 
-  const metrics = getMetricsForPeriod();
+  const metrics = (() => {
+    return getMetricsForPeriod();
+  })();
 
   // Recent activities from API (fallback to empty)
-  // Recent activities (company-scoped mock)
+  // Recent activities (leader area-scoped mock)
   const recentActivities =
     apiActivities.length > 0
       ? apiActivities.map((a, i) => ({
@@ -2227,78 +2631,76 @@ export default function AdminDashboardPage() {
       : [
           {
             id: 1,
-            type: "project_created",
-            title: "Projeto criado",
-            description: 'Projeto "Redesign Website" foi iniciado com sucesso',
-            time: "20 minutos atrás",
-            icon: Briefcase,
+            type: "briefing_received",
+            title: "Briefing enviado para análise",
+            description: 'Tarefa "Copy Landing Page" aguarda sua revisão',
+            time: "15 minutos atrás",
+            icon: FileText,
             color: "text-info",
             bgColor: "bg-info/10",
           },
           {
             id: 2,
-            type: "proposal_sent",
-            title: "Proposta enviada",
-            description:
-              'Proposta para "Campanha de Mídia" aguarda sua aprovação',
+            type: "delivery_received",
+            title: "Entrega recebida",
+            description: 'Nômade Rafael Lima entregou "Artigo SEO Performance"',
             time: "1 hora atrás",
-            icon: FileText,
-            color: "text-primary",
-            bgColor: "bg-primary/10",
-          },
-          {
-            id: 3,
-            type: "delivery_available",
-            title: "Entrega disponível",
-            description:
-              'Nova entrega do projeto "Blog Corporativo" pronta para revisão',
-            time: "3 horas atrás",
             icon: CheckCircle2,
             color: "text-success",
             bgColor: "bg-success/10",
           },
           {
+            id: 3,
+            type: "task_approved",
+            title: "Tarefa aprovada",
+            description:
+              'Você aprovou a entrega "Script de Anuncio" com nota 9',
+            time: "2 horas atrás",
+            icon: UserCheck,
+            color: "text-primary",
+            bgColor: "bg-primary/10",
+          },
+          {
             id: 4,
-            type: "payment_approved",
-            title: "Pagamento aprovado",
-            description: "Fatura #198 de R$ 4.800 foi confirmada",
-            time: "6 horas atrás",
-            icon: DollarSign,
-            color: "text-chart-4",
-            bgColor: "bg-chart-4/10",
+            type: "task_returned",
+            title: "Tarefa devolvida",
+            description:
+              'Tarefa "Post Institucional" devolvida para ajuste ao nômade',
+            time: "4 horas atrás",
+            icon: AlertCircle,
+            color: "text-warning",
+            bgColor: "bg-warning/10",
           },
         ];
 
-  // Company-scoped alerts
+  // Leader area-scoped alerts
   const systemAlerts = [
     {
       id: 1,
       type: "warning",
-      title: "Proposta aguardando aprovação",
-      description:
-        'Proposta "Campanha de Mídia" está aguardando sua resposta há 2 dias',
+      title: "Briefing aguardando revisão",
+      description: "3 briefings da área ainda não foram revisados",
       priority: "high",
     },
     {
       id: 2,
       type: "warning",
-      title: "Entrega aguardando aprovação",
-      description:
-        'Projeto "Blog Corporativo" tem 1 entrega pronta para revisão',
+      title: "Entrega aguardando qualificação",
+      description: "2 entregas recebidas aguardam sua avaliação",
       priority: "high",
     },
     {
       id: 3,
-      type: "info",
-      title: "Pagamento pendente",
-      description: "Fatura #201 de R$ 2.600 vence em 3 dias",
+      type: "warning",
+      title: "Tarefa atrasada",
+      description: 'Tarefa "Roteiro de vídeo" está 1 dia atrasada',
       priority: "medium",
     },
     {
       id: 4,
       type: "info",
-      title: "Tarefa aguardando feedback",
-      description: 'Tarefa "Revisão de layout" aguarda seu feedback há 1 dia',
+      title: "Nômade sem entrega",
+      description: "Nômade Carla Mendes não enviou entrega nas últimas 48h",
       priority: "medium",
     },
   ];
@@ -2857,18 +3259,18 @@ export default function AdminDashboardPage() {
   ): string => {
     if (customTitle) return customTitle;
     const titles: Record<WidgetType, string> = {
-      metrics: "Métricas Principais",
-      activity: "Atividade Recente",
-      alerts: "Alertas Rápidos",
-      performers: "Melhores Nômades",
-      quickActions: "Ações Rápidas",
-      userDistribution: "Distribuição de Usuários",
+      metrics: "Métricas da Área",
+      activity: "Atividade Recente da Área",
+      alerts: "Alertas do Leader",
+      performers: "Nômades em Destaque",
+      quickActions: "Ações Rápidas do Leader",
+      userDistribution: "Distribuição da Área",
       activeUsers: "Usuários Ativos",
-      systemAlerts: "Alertas do Sistema",
+      systemAlerts: "Alertas da Área",
       adminProfiles: "Perfis Administrativos",
       revenue: "Receita",
-      activeProjectsWidget: "Projetos Ativos",
-      creditPlans: "Planos de Crédito",
+      activeProjectsWidget: "Tarefas da Área",
+      creditPlans: "Briefings e Entregas",
       mrr: "MRR (Receita Recorrente)",
       permissionMatrix: "Matriz de Permissões",
       managementTools: "Ferramentas de Gestão",
@@ -2876,14 +3278,14 @@ export default function AdminDashboardPage() {
       averageTicket: "Ticket Médio",
       ltv: "LTV (Lifetime Value)",
       cmv: "CMV (Custo de Mercadoria Vendida)",
-      nomads: "Nômades",
-      nomadsIndicators: "Indicadores dos Nômades",
-      tasks: "Tarefas (Resumo)",
-      platformActivities: "Atividades da Plataforma",
-      nomadsRanking: "Ranking de Nômades",
-      agenciesRanking: "Ranking de Agências",
-      statusOverview: "Visão Geral por Status",
-      accountsReceivable: "À Receber", // Added title for accounts receivable widget
+      nomads: "Nômades da Área",
+      nomadsIndicators: "Indicadores dos Nômades da Área",
+      tasks: "Tarefas da Área",
+      platformActivities: "Atividades da Área",
+      nomadsRanking: "Ranking de Nômades da Área",
+      agenciesRanking: "Ranking da Área",
+      statusOverview: "Entregas e Aprovações",
+      accountsReceivable: "À Receber",
       partnerProgram: "Programa Partner",
     };
     return titles[widgetType] || widgetType;
@@ -2913,25 +3315,25 @@ export default function AdminDashboardPage() {
 
   // Define mappings for icons and names for metric cards
   const metricIcons: Record<MetricType, React.ElementType> = {
-    activeProjects: Briefcase,
-    tasksToLaunch: CheckSquare,
-    tasksInProgress: Activity,
-    approvalsPending: Clock,
-    proposalsAwaitingClient: FileText,
-    contractedValueMonth: DollarSign,
-    estimatedMargin: Calculator,
-    pendingPayments: DollarSign,
+    qualificationTasks: CheckSquare,
+    briefingsToReview: FileText,
+    deliveriesAwaitingAnalysis: Eye,
+    tasksInExecution: Activity,
+    tasksReturned: XCircle,
+    tasksOverdue: AlertCircle,
+    approvalsToday: CheckCircle2,
+    activeNomadsArea: Users,
   };
 
   const metricNames: Record<MetricType, string> = {
-    activeProjects: "Projetos ativos",
-    tasksToLaunch: "Tarefas para lançamento",
-    tasksInProgress: "Tarefas em execução",
-    approvalsPending: "Aprovações pendentes",
-    proposalsAwaitingClient: "Propostas aguardando cliente",
-    contractedValueMonth: "Valor contratado no mês",
-    estimatedMargin: "Comissão / margem estimada",
-    pendingPayments: "Pagamentos pendentes",
+    qualificationTasks: "Tarefas para qualificação",
+    briefingsToReview: "Briefings para revisar",
+    deliveriesAwaitingAnalysis: "Entregas aguardando análise",
+    tasksInExecution: "Tarefas em execução da área",
+    tasksReturned: "Tarefas devolvidas",
+    tasksOverdue: "Tarefas atrasadas",
+    approvalsToday: "Aprovações feitas hoje",
+    activeNomadsArea: "Nômades ativos da área",
   };
 
   const renderMetricCard = (
@@ -2965,47 +3367,61 @@ export default function AdminDashboardPage() {
     let shadowClass: string;
 
     switch (metricType) {
-      case "totalUsers":
+      case "qualificationTasks":
         bgColor = "from-blue-400 to-blue-600";
         gradientFrom = "from-blue-600/10";
         cardBgGradient = "from-blue-500 to-blue-700";
         borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
         shadowClass = "";
         break;
-      case "activeUsers":
-        bgColor = "from-emerald-400 to-emerald-600";
-        gradientFrom = "from-emerald-600/10";
-        cardBgGradient = "from-emerald-500 to-teal-600";
-        borderClass =
-          "border-2 border-emerald-300/70 dark:border-emerald-300/50";
-        shadowClass = "";
-        break;
-      case "companies":
+      case "briefingsToReview":
         bgColor = "from-violet-400 to-violet-600";
         gradientFrom = "from-violet-600/10";
         cardBgGradient = "from-violet-500 to-purple-700";
-        borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
+        borderClass =
+          "border-2 border-violet-300/70 dark:border-violet-300/50";
         shadowClass = "";
         break;
-      case "activeProjects":
+      case "deliveriesAwaitingAnalysis":
+        bgColor = "from-amber-400 to-amber-600";
+        gradientFrom = "from-amber-600/10";
+        cardBgGradient = "from-amber-500 to-orange-600";
+        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+        shadowClass = "";
+        break;
+      case "tasksInExecution":
+        bgColor = "from-emerald-400 to-emerald-600";
+        gradientFrom = "from-emerald-600/10";
+        cardBgGradient = "from-emerald-500 to-teal-600";
+        borderClass = "border-2 border-emerald-300/70 dark:border-emerald-300/50";
+        shadowClass = "";
+        break;
+      case "tasksReturned":
+        bgColor = "from-red-400 to-rose-600";
+        gradientFrom = "from-red-600/10";
+        cardBgGradient = "from-red-500 to-rose-700";
+        borderClass = "border-2 border-red-300/70 dark:border-red-300/50";
+        shadowClass = "";
+        break;
+      case "tasksOverdue":
         bgColor = "from-orange-400 to-orange-600";
         gradientFrom = "from-orange-600/10";
         cardBgGradient = "from-orange-500 to-rose-600";
         borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
         shadowClass = "";
         break;
-      case "revenue":
-        bgColor = "from-green-400 to-green-600";
-        gradientFrom = "from-green-600/10";
-        cardBgGradient = "from-green-500 to-emerald-700";
-        borderClass = "border-2 border-green-300/70 dark:border-green-300/50";
+      case "approvalsToday":
+        bgColor = "from-cyan-400 to-cyan-600";
+        gradientFrom = "from-cyan-600/10";
+        cardBgGradient = "from-cyan-500 to-sky-700";
+        borderClass = "border-2 border-cyan-300/70 dark:border-cyan-300/50";
         shadowClass = "";
         break;
-      case "avgRating":
-        bgColor = "from-amber-400 to-amber-600";
-        gradientFrom = "from-amber-600/10";
-        cardBgGradient = "from-amber-500 to-orange-600";
-        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+      case "activeNomadsArea":
+        bgColor = "from-purple-400 to-purple-600";
+        gradientFrom = "from-purple-600/10";
+        cardBgGradient = "from-purple-500 to-fuchsia-700";
+        borderClass = "border-2 border-purple-300/70 dark:border-purple-300/50";
         shadowClass = "";
         break;
       default:
@@ -3036,7 +3452,7 @@ export default function AdminDashboardPage() {
       ),
     };
 
-    if (metricType === "contractedValueMonth") {
+    if (metricType === "activeNomadsArea") {
       return (
         <div
           key={metricType}
@@ -3084,9 +3500,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {typeof metric.value === "number"
-                ? metric.value.toLocaleString()
-                : metric.value}
+              {metric.value}
             </p>
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
@@ -3096,11 +3510,10 @@ export default function AdminDashboardPage() {
                   <TrendingDown className="h-3 w-3" />
                 )}
                 {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}
-                {metricType === "avgRating" ? " pts" : "%"}
+                {Math.abs(metric.change)}%
               </div>
               <span className="text-[10px] text-white/60">
-                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+                {metricType === "activeNomadsArea" ? "nômades da área" : "vs. anterior"}
               </span>
             </div>
           </div>
@@ -3167,10 +3580,10 @@ export default function AdminDashboardPage() {
               )}
               {metric.trend === "up" ? "+" : "-"}
               {Math.abs(metric.change)}
-              %
+              {metricType === "activeNomadsArea" ? "" : "%"}
             </div>
             <span className="text-[10px] text-white/60">
-              vs. anterior
+              {metricType === "activeNomadsArea" ? "da área" : "vs. anterior"}
             </span>
           </div>
         </div>
@@ -3202,43 +3615,71 @@ export default function AdminDashboardPage() {
       {
         metrics: {
           icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Projetos, tarefas, aprovações e financeiro da agency",
-        },
-        accountsReceivable: {
-          icon: <DollarSign className="h-6 w-6" />,
-          subtitle: "Pagamentos pendentes e valores a receber",
-        },
-        activeProjectsWidget: {
-          icon: <Briefcase className="h-6 w-6" />,
-          subtitle: "Projetos ativos da agency",
-        },
-        averageTicket: {
-          icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Ticket médio da operação da agency",
-        },
-        cmv: {
-          icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Comissão e margem estimada",
-        },
-        statusOverview: {
-          icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Projetos, tarefas e aprovações da agency",
+          subtitle: "Resumo das tarefas, entregas e nômades da área",
         },
         tasks: {
           icon: <CheckSquare className="h-6 w-6" />,
-          subtitle: "Tarefas e execuções da agency",
+          subtitle: "Tarefas da área com status e execução",
+        },
+        statusOverview: {
+          icon: <LayoutGrid className="h-6 w-6" />,
+          subtitle: "Visão geral das entregas e aprovações da área",
+        },
+        nomadsIndicators: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "Indicadores de desempenho dos nômades da área",
+        },
+        nomadsRanking: {
+          icon: <Trophy className="h-6 w-6" />,
+          subtitle: "Ranking dos nômades da área",
         },
         activity: {
           icon: <Activity className="h-6 w-6" />,
-          subtitle: "Atividades recentes da agency",
+          subtitle: "Atividade recente da área",
         },
         alerts: {
           icon: <Bell className="h-6 w-6" />,
-          subtitle: "Alertas relevantes da agency",
+          subtitle: "Alertas que pedem ação do Leader",
         },
         quickActions: {
           icon: <Zap className="h-6 w-6" />,
-          subtitle: "Ações rápidas da agency",
+          subtitle: "Ações rápidas do Leader",
+        },
+        platformActivities: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Engajamento e atividades da área",
+        },
+        statusOverview: {
+          icon: <LayoutGrid className="h-6 w-6" />,
+          subtitle: "Status de projetos e tarefas",
+        },
+        tasks: {
+          icon: <CheckSquare className="h-6 w-6" />,
+          subtitle: "Tarefas e execução",
+        },
+        nomadsIndicators: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "KPIs de desempenho e qualidade",
+        },
+        activity: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Atividades recentes",
+        },
+        alerts: {
+          icon: <Bell className="h-6 w-6" />,
+          subtitle: "Alertas e notificações",
+        },
+        performers: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Top performers",
+        },
+        quickActions: {
+          icon: <Zap className="h-6 w-6" />,
+          subtitle: "Ações rápidas",
+        },
+        partnerProgram: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Convites e partners por nível",
         },
       };
     const cfg = cfgMap[detailsWidgetId] ?? {
@@ -3249,7 +3690,7 @@ export default function AdminDashboardPage() {
     const renderContent = () => {
       switch (detailsWidgetId) {
         case "metrics": {
-          const mp = getMetricsForPeriod();
+          const mp = getMetricsForPeriod(undefined, modalPeriodKey);
           const items: Array<{
             key: string;
             label: string;
@@ -3259,60 +3700,60 @@ export default function AdminDashboardPage() {
             suffix?: string;
           }> = [
             {
-              key: "activeProjects",
-              label: "Projetos ativos",
-              value: mp.activeProjects.value,
-              change: mp.activeProjects.change,
-              trend: mp.activeProjects.trend,
+              key: "qualificationTasks",
+              label: "Tarefas para qualificação",
+              value: mp.qualificationTasks.value,
+              change: mp.qualificationTasks.change,
+              trend: mp.qualificationTasks.trend,
             },
             {
-              key: "tasksToLaunch",
-              label: "Tarefas para lançamento",
-              value: mp.tasksToLaunch.value,
-              change: mp.tasksToLaunch.change,
-              trend: mp.tasksToLaunch.trend,
+              key: "briefingsToReview",
+              label: "Briefings para revisar",
+              value: mp.briefingsToReview.value,
+              change: mp.briefingsToReview.change,
+              trend: mp.briefingsToReview.trend,
             },
             {
-              key: "tasksInProgress",
+              key: "deliveriesAwaitingAnalysis",
+              label: "Entregas aguardando análise",
+              value: mp.deliveriesAwaitingAnalysis.value,
+              change: mp.deliveriesAwaitingAnalysis.change,
+              trend: mp.deliveriesAwaitingAnalysis.trend,
+            },
+            {
+              key: "tasksInExecution",
               label: "Tarefas em execução",
-              value: mp.tasksInProgress.value,
-              change: mp.tasksInProgress.change,
-              trend: mp.tasksInProgress.trend,
+              value: mp.tasksInExecution.value,
+              change: mp.tasksInExecution.change,
+              trend: mp.tasksInExecution.trend,
             },
             {
-              key: "approvalsPending",
-              label: "Aprovações pendentes",
-              value: mp.approvalsPending.value,
-              change: mp.approvalsPending.change,
-              trend: mp.approvalsPending.trend,
+              key: "tasksReturned",
+              label: "Tarefas devolvidas",
+              value: mp.tasksReturned.value,
+              change: mp.tasksReturned.change,
+              trend: mp.tasksReturned.trend,
             },
             {
-              key: "proposalsAwaitingClient",
-              label: "Propostas aguardando cliente",
-              value: mp.proposalsAwaitingClient.value,
-              change: mp.proposalsAwaitingClient.change,
-              trend: mp.proposalsAwaitingClient.trend,
+              key: "tasksOverdue",
+              label: "Tarefas atrasadas",
+              value: mp.tasksOverdue.value,
+              change: mp.tasksOverdue.change,
+              trend: mp.tasksOverdue.trend,
             },
             {
-              key: "contractedValueMonth",
-              label: "Valor contratado no mês",
-              value: mp.contractedValueMonth.value,
-              change: mp.contractedValueMonth.change,
-              trend: mp.contractedValueMonth.trend,
+              key: "approvalsToday",
+              label: "Aprovações hoje",
+              value: mp.approvalsToday.value,
+              change: mp.approvalsToday.change,
+              trend: mp.approvalsToday.trend,
             },
             {
-              key: "estimatedMargin",
-              label: "Comissão / margem estimada",
-              value: mp.estimatedMargin.value,
-              change: mp.estimatedMargin.change,
-              trend: mp.estimatedMargin.trend,
-            },
-            {
-              key: "pendingPayments",
-              label: "Pagamentos pendentes",
-              value: mp.pendingPayments.value,
-              change: mp.pendingPayments.change,
-              trend: mp.pendingPayments.trend,
+              key: "activeNomadsArea",
+              label: "Nômades ativos",
+              value: mp.activeNomadsArea.value,
+              change: mp.activeNomadsArea.change,
+              trend: mp.activeNomadsArea.trend,
             },
           ];
           return (
@@ -3346,64 +3787,201 @@ export default function AdminDashboardPage() {
                           )}
                           {it.trend === "up" ? "+" : "-"}
                           {Math.abs(it.change)}
-                          %
+                            {it.key === "activeNomadsArea" ? "" : "%"}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
-                          vs. anterior
+                            {it.key === "activeNomadsArea" ? "da área" : "vs. anterior"}
                         </span>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Projetos e tarefas</p>
+                    <p className="text-sm font-semibold mb-2">Tarefas da área</p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Projetos ativos</span>
-                        <span className="font-medium">{mData.statusOverview.projects.ongoing}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Lançamentos</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.contracted}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
                         <span className="text-muted-foreground">Em execução</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.inProgress}</span>
+                        <span className="font-medium">{mData.tasks.inProgress.toLocaleString("pt-BR")}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Propostas</span>
-                        <span className="font-medium">{mData.statusOverview.leads.proposal}</span>
+                        <span className="text-muted-foreground">Concluídas</span>
+                        <span className="font-medium">{mData.tasks.completed.toLocaleString("pt-BR")}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-muted-foreground">Contratadas</span>
+                        <span className="font-medium">{mData.tasks.contracted.toLocaleString("pt-BR")}</span>
                       </div>
                     </div>
                   </div>
                   <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Financeiro</p>
+                    <p className="text-sm font-semibold mb-2">Nômades da área</p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Valor contratado</span>
-                        <span className="font-medium">{mp.contractedValueMonth.value}</span>
+                        <span className="text-muted-foreground">Ativos</span>
+                        <span className="font-medium">{mData.nomads.active.toLocaleString("pt-BR")}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Comissão / margem</span>
-                        <span className="font-medium">{mp.estimatedMargin.value}</span>
+                        <span className="text-muted-foreground">Certificados</span>
+                        <span className="font-medium">{mData.nomadsIndicators.certified.toLocaleString("pt-BR")}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Pagamentos pendentes</span>
-                        <span className="font-medium">{mp.pendingPayments.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Recebido</span>
-                        <span className="font-medium">R$ {(mData.accountsReceivable.received / 1000).toFixed(1)}k</span>
+                        <span className="text-muted-foreground">Retenção 30d</span>
+                        <span className="font-medium">{mData.nomads.retention30d}%</span>
                       </div>
                     </div>
                   </div>
                 </div>
             </div>
           );
-
         }
+
+        case "revenue":
+          return (
+            <div className="space-y-4">
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Receita Total
+                    </p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {(rv.total / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      no período selecionado
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">
+                      +{rv.totalGrowth}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
+                </div>
+              </div>
+              {/* 2-per-row plan cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Plano de Crédito",
+                    value: rv.creditPlan,
+                    growth: rv.creditPlanGrowth,
+                    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                    text: "text-sky-700 dark:text-sky-300",
+                    color: "bg-sky-500",
+                  },
+                  {
+                    label: "Compra Recorrente",
+                    value: rv.recurring,
+                    growth: rv.recurringGrowth,
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                    color: "bg-amber-500",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-3 rounded-xl border ${item.bg}`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${item.text} truncate`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      R$ {(item.value / 1000).toFixed(1)}k
+                    </p>
+                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${item.color} rounded-full`}
+                        style={{
+                          width: `${(item.value / Math.max(1, rv.total)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-success mt-1">
+                      +{item.growth}% ·{" "}
+                      {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}%
+                      do total
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {/* Avulso full row */}
+              <div className="p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium">Compra Avulsa</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold">
+                      R$ {(rv.oneTime / 1000).toFixed(1)}k
+                    </span>
+                    <span className="text-xs text-success ml-2">
+                      +{rv.oneTimeGrowth}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">
+                  Composição da Receita
+                </p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  <div
+                    className="bg-sky-500 transition-all"
+                    style={{
+                      width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-amber-500 transition-all"
+                    style={{
+                      width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex gap-4 mt-2">
+                  {[
+                    ["bg-sky-500", "Crédito"],
+                    ["bg-amber-500", "Recorrente"],
+                    ["bg-emerald-500", "Avulso"],
+                  ].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {l}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
 
         case "platformActivities": {
           const engagementRate =
@@ -6395,7 +6973,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Projetos, tarefas, aprovações e financeiro da agency
+                      Métricas da área
                     </p>
                   </div>
                 </div>
@@ -6434,12 +7012,14 @@ export default function AdminDashboardPage() {
                         .filter((m) => !m.visible)
                         .map((metricCard) => {
                           const metricNames: Record<MetricType, string> = {
-                            totalUsers: "Total de Usuários",
-                            activeUsers: "Usuários Ativos",
-                            companies: "Empresas",
-                            activeProjects: "Projetos Ativos",
-                            revenue: "Receita",
-                            avgRating: "Avaliação Média",
+                            qualificationTasks: "Tarefas para qualificação",
+                            briefingsToReview: "Briefings para revisar",
+                            deliveriesAwaitingAnalysis: "Entregas aguardando análise",
+                            tasksInExecution: "Tarefas em execução da área",
+                            tasksReturned: "Tarefas devolvidas",
+                            tasksOverdue: "Tarefas atrasadas",
+                            approvalsToday: "Aprovações feitas hoje",
+                            activeNomadsArea: "Nômades ativos da área",
                           };
                           return (
                             <Button
@@ -6467,183 +7047,93 @@ export default function AdminDashboardPage() {
                       undefined,
                       wp.periodKey,
                     );
-                    const widgetMetrics = !apiStats
-                      ? widgetBase
-                      : {
-                          ...widgetBase,
-                          totalUsers: {
-                            ...widgetBase.totalUsers,
-                            value: (
-                              apiStats.nomades?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeUsers: {
-                            ...widgetBase.activeUsers,
-                            value: (
-                              apiStats.nomades?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          companies: {
-                            ...widgetBase.companies,
-                            value: (
-                              apiStats.companies?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeProjects: {
-                            ...widgetBase.activeProjects,
-                            value: (
-                              apiStats.projects?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          revenue: {
-                            ...widgetBase.revenue,
-                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
-                          },
-                        };
-                    return metricCards
-                      .filter((m) => m.visible)
-                      .sort((a, b) => a.order - b.order)
-                      .map((metricCard) =>
-                        renderMetricCard(metricCard.id, widgetMetrics),
-                      );
+                    const widgetMetrics = widgetBase;
+                    return (
+                      <>
+                        {metricCards
+                          .filter((m) => m.visible)
+                          .sort((a, b) => a.order - b.order)
+                          .map((metricCard) =>
+                            renderMetricCard(metricCard.id, widgetMetrics),
+                          )}
+
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {[
+                            {
+                              type: "Agências",
+                              count: auW.agencias,
+                              growth: `+${auW.agenciasGrowth}%`,
+                              percentage: Math.round((auW.agencias / auW.total) * 100),
+                              bg: "bg-success/5 border-success/20",
+                              text: "text-success",
+                              bar: "bg-success",
+                            },
+                            {
+                              type: "Nômades",
+                              count: auW.nomades,
+                              growth: `+${auW.nomadesGrowth}%`,
+                              percentage: Math.round((auW.nomades / auW.total) * 100),
+                              bg: "bg-chart-4/5 border-chart-4/20",
+                              text: "text-chart-4",
+                              bar: "bg-chart-4",
+                            },
+                            {
+                              type: "Admins",
+                              count: auW.admins,
+                              growth: `+${auW.adminsGrowth}%`,
+                              percentage: Math.round((auW.admins / auW.total) * 100),
+                              bg: "bg-warning/5 border-warning/20",
+                              text: "text-warning",
+                              bar: "bg-warning",
+                            },
+                          ].map((ut) => (
+                            <div
+                              key={ut.type}
+                              className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className={`text-xs font-semibold ${ut.text}`}>
+                                  {ut.type}
+                                </p>
+                                <span className="text-[10px] font-medium text-success">
+                                  {ut.growth}
+                                </span>
+                              </div>
+                              <p className={`text-xl font-bold ${ut.text}`}>
+                                {ut.count.toLocaleString()}
+                              </p>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-1">
+                                  {ut.percentage}% do total
+                                </p>
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${ut.bar}`}
+                                    style={{ width: `${ut.percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            Total registrado
+                          </p>
+                          <p className="text-sm font-bold">
+                            {auW.total.toLocaleString("pt-BR")}
+                          </p>
+                        </div>
+                      </>
+                    );
                   })()}
                 </div>
               </CardContent>
             </Card>
           </div>
         );
-      }
 
-      case "userDistribution":
-        return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
-            onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
-          >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-chart-2/10 rounded-lg shrink-0">
-                    <Users className="h-4 w-4 text-chart-2" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Distribuição por tipo de conta
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    {auW.total.toLocaleString("pt-BR")}
-                  </Badge>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    {
-                      type: "Empresas",
-                      count: auW.empresas,
-                      growth: `+${auW.empresasGrowth}%`,
-                      percentage: Math.round((auW.empresas / auW.total) * 100),
-                      bg: "bg-info/5 border-info/20",
-                      text: "text-info",
-                      bar: "bg-info",
-                    },
-                    {
-                      type: "Agências",
-                      count: auW.agencias,
-                      growth: `+${auW.agenciasGrowth}%`,
-                      percentage: Math.round((auW.agencias / auW.total) * 100),
-                      bg: "bg-success/5 border-success/20",
-                      text: "text-success",
-                      bar: "bg-success",
-                    },
-                    {
-                      type: "Nômades",
-                      count: auW.nomades,
-                      growth: `+${auW.nomadesGrowth}%`,
-                      percentage: Math.round((auW.nomades / auW.total) * 100),
-                      bg: "bg-chart-4/5 border-chart-4/20",
-                      text: "text-chart-4",
-                      bar: "bg-chart-4",
-                    },
-                    {
-                      type: "Admins",
-                      count: auW.admins,
-                      growth: `+${auW.adminsGrowth}%`,
-                      percentage: Math.round((auW.admins / auW.total) * 100),
-                      bg: "bg-warning/5 border-warning/20",
-                      text: "text-warning",
-                      bar: "bg-warning",
-                    },
-                  ].map((ut) => (
-                    <div
-                      key={ut.type}
-                      className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className={`text-xs font-semibold ${ut.text}`}>
-                          {ut.type}
-                        </p>
-                        <span className="text-[10px] font-medium text-success">
-                          {ut.growth}
-                        </span>
-                      </div>
-                      <p className={`text-xl font-bold ${ut.text}`}>
-                        {ut.count.toLocaleString()}
-                      </p>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground mb-1">
-                          {ut.percentage}% do total
-                        </p>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${ut.bar}`}
-                            style={{ width: `${ut.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Total registrado
-                  </p>
-                  <p className="text-sm font-bold">
-                    {auW.total.toLocaleString("pt-BR")}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
+        }
 
       case "systemAlerts":
         return (
@@ -7098,10 +7588,10 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atividades recentes da empresa
+                      Atividades recentes da área
                     </p>
                   </div>
-                  <Link to="/company/atividades" className="shrink-0">
+                  <Link to="/leader/atividades" className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -7184,7 +7674,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas da empresa
+                      Alertas da área
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs shrink-0">
@@ -7416,7 +7906,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atalhos da empresa
+                      Atalhos do leader
                     </p>
                   </div>
                 </div>
@@ -7433,44 +7923,36 @@ export default function AdminDashboardPage() {
                   {(
                     [
                       {
-                        to: "/company/projetos",
-                        icon: Briefcase,
-                        label: "Ver Projetos",
+                        to: "/leader/qualificar",
+                        icon: CheckCircle2,
+                        label: "Qualificar Tarefa",
                         border: "border-info/20",
                         bg: "bg-info/5 hover:bg-info/10",
                         text: "text-info",
                       },
                       {
-                        to: "/company/aprovacoes",
-                        icon: UserCheck,
-                        label: "Ver Aprovações",
+                        to: "/leader/tarefas",
+                        icon: Briefcase,
+                        label: "Ver Tarefas da Área",
                         border: "border-success/20",
                         bg: "bg-success/5 hover:bg-success/10",
                         text: "text-success",
                       },
                       {
-                        to: "/company/entregas",
-                        icon: CheckCircle2,
-                        label: "Aprovar Entrega",
-                        border: "border-chart-4/20",
-                        bg: "bg-chart-4/5 hover:bg-chart-4/10",
-                        text: "text-chart-4",
-                      },
-                      {
-                        to: "/company/propostas",
-                        icon: FileText,
-                        label: "Ver Propostas",
+                        to: "/leader/devolvidas",
+                        icon: AlertCircle,
+                        label: "Tarefas Devolvidas",
                         border: "border-warning/20",
                         bg: "bg-warning/5 hover:bg-warning/10",
                         text: "text-warning",
                       },
                       {
-                        to: "/company/financeiro",
-                        icon: DollarSign,
-                        label: "Acessar Financeiro",
-                        border: "border-violet-200 dark:border-violet-800",
-                        bg: "bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-950/40",
-                        text: "text-violet-600 dark:text-violet-400",
+                        to: "/leader/nomades",
+                        icon: Users,
+                        label: "Nômades da Área",
+                        border: "border-chart-4/20",
+                        bg: "bg-chart-4/5 hover:bg-chart-4/10",
+                        text: "text-chart-4",
                       },
                     ] as const
                   ).map((action) => {
@@ -10298,7 +10780,7 @@ export default function AdminDashboardPage() {
                   color: "text-success",
                 },
                 {
-                  label: "Avaliação Média",
+                  label: "Qualidade Média",
                   value: `${wNiW.avgRating.toFixed(1).replace(".", ",")} ★`,
                   icon: Star,
                   color: "text-warning",
@@ -10630,8 +11112,8 @@ export default function AdminDashboardPage() {
 
     const updatedDashboards = [...savedDashboards, newDashboard];
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["LEADER"], newDashboard.id);
 
     setCurrentDashboardId(newDashboard.id);
     setNewDashboardName("");
@@ -10670,7 +11152,7 @@ export default function AdminDashboardPage() {
     );
 
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(updatedDashboards));
 
     setSharingDashboardId(null);
     setShareGlobal(false);
@@ -10693,10 +11175,10 @@ export default function AdminDashboardPage() {
       setWidgets(dashboard.widgets);
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
-        "dashboard-widget-config-company",
+        "dashboard-widget-config",
         JSON.stringify(dashboard.widgets),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], dashboardId);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["LEADER"], dashboardId);
     }
   };
 
@@ -10705,7 +11187,7 @@ export default function AdminDashboardPage() {
       (d) => d.id !== dashboardId,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(updatedDashboards));
     if (currentDashboardId === dashboardId) {
       const fallback =
         updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0];
@@ -10722,7 +11204,7 @@ export default function AdminDashboardPage() {
       isDefault: d.id === dashboardId,
     }));
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(DASHBOARD_STORAGE_KEY["LEADER"], JSON.stringify(updatedDashboards));
     toast({
       title: "Dashboard padrão definido",
       description: "Este dashboard será carregado automaticamente.",
@@ -10855,7 +11337,7 @@ export default function AdminDashboardPage() {
                   : "max-h-[24px] opacity-100 mt-0.5",
               )}
             >
-              Resumo dos seus projetos, tarefas, aprovações e contratações.
+              Acompanhe as tarefas, qualificações e entregas da sua área.
             </p>
           </div>
 

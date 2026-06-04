@@ -12,12 +12,35 @@ const router = Router();
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  /** Optional access-type selected by the user on the login screen.
+   *  When provided, the backend validates that the user's role/account_type
+   *  grants access to that panel. */
+  accessType: z
+    .enum(["ADMIN", "AGENCY", "NOMAD", "COMPANY", "PARTNER", "LEADER"])
+    .optional(),
 });
+
+/** Maps an accessType value to a permission check function. */
+const ACCESS_TYPE_RULES: Record<
+  string,
+  (user: { role: string; account_type: string }) => boolean
+> = {
+  ADMIN: (u) => u.role === "admin",
+  AGENCY: (u) => u.account_type === "agencias",
+  NOMAD: (u) => u.account_type === "nomades" || u.role === "nomad",
+  COMPANY: (u) => u.account_type === "empresas",
+  PARTNER: (u) => u.account_type === "parceiro" || u.role === "partner",
+  LEADER: (u) => u.role === "lider",
+};
 
 // POST /api/auth/login
 router.post("/login", validate(loginSchema), async (req, res, next) => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    const { email, password, accessType } = req.body as {
+      email: string;
+      password: string;
+      accessType?: string;
+    };
 
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -32,6 +55,15 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
       return;
     }
 
+    // ── Access-type permission check ───────────────────────────────────────
+    if (accessType) {
+      const rule = ACCESS_TYPE_RULES[accessType];
+      if (rule && !rule(user)) {
+        res.status(403).json({ error: "ACCESS_FORBIDDEN" });
+        return;
+      }
+    }
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -40,7 +72,7 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
         account_type: user.account_type,
       },
       config.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     const { password_hash: _pw, ...safeUser } = user;

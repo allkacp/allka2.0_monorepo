@@ -37,6 +37,7 @@ import {
   Rocket,
   Package,
   LogOut,
+  Home,
 } from "lucide-react"
 
 const navigationConfig = {
@@ -131,6 +132,21 @@ const navigationConfig = {
     { name: "Perfil", href: "/nomades/perfil", icon: UserCheck, color: "from-cyan-500 to-cyan-600" },
     { name: "Allkademy", href: "/allkademy", icon: BookOpen, color: "from-indigo-500 to-indigo-600" },
   ],
+  parceiro: [
+    { name: "Dashboard", href: "/parceiro/dashboard", icon: Home, color: "from-blue-500 to-blue-600" },
+    { name: "Agências", href: "/parceiro/agencias", icon: Building2, color: "from-purple-500 to-purple-600" },
+    { name: "Projetos", href: "/parceiro/projetos", icon: FolderOpen, color: "from-green-500 to-green-600" },
+    { name: "Comissões", href: "/parceiro/comissoes", icon: TrendingUp, color: "from-amber-500 to-amber-600" },
+    { name: "Saques", href: "/parceiro/saques", icon: Wallet, color: "from-emerald-500 to-emerald-600" },
+  ],
+  lider: [
+    { name: "Dashboard", href: "/lider/dashboard", icon: Home, color: "from-blue-500 to-blue-600" },
+    { name: "Qualificação", href: "/lider/qualificacao", icon: Award, color: "from-amber-500 to-amber-600" },
+    { name: "Tarefas", href: "/lider/tarefas", icon: CheckSquare, color: "from-purple-500 to-purple-600" },
+    { name: "Devolvidas", href: "/lider/devolvidas", icon: History, color: "from-orange-500 to-orange-600" },
+    { name: "Histórico", href: "/lider/historico", icon: BarChart3, color: "from-slate-500 to-slate-600" },
+    { name: "Perfil", href: "/lider/perfil", icon: UserCheck, color: "from-cyan-500 to-cyan-600" },
+  ],
   admin: [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, color: "from-blue-500 to-blue-600" },
     {
@@ -194,13 +210,13 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   const getNavigationItems = () => {
-    if (accountType === "admin") {
-      return navigationConfig.admin
-    }
+    if (accountType === "admin") return navigationConfig.admin
     if (accountType === "empresas") {
-      return navigationConfig.empresas[accountSubType || "company"]
+      return navigationConfig.empresas[accountSubType || "company"] ?? navigationConfig.empresas.company
     }
-    return navigationConfig[accountType] || []
+    if (accountType === "parceiro") return navigationConfig.parceiro
+    if (accountType === "lider") return navigationConfig.lider
+    return (navigationConfig as any)[accountType] || []
   }
 
   const navigation = getNavigationItems()
@@ -232,9 +248,9 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
       />
 
       <div className="xl:hidden fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
-        <div className="pointer-events-auto w-full h-[95vh] bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-hidden flex flex-col">
+        <div className="pointer-events-auto w-full h-[95vh] bg-linear-to-br from-slate-950 via-blue-950 to-indigo-950 rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-hidden flex flex-col">
           {/* Header - Banking app style */}
-          <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 p-6 pb-8">
+          <div className="relative bg-linear-to-r from-blue-600 to-indigo-600 p-6 pb-8">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12 ring-4 ring-white/20">
@@ -284,7 +300,7 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                         className={cn(
                           "w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 active:scale-95",
                           hasActiveSubitem
-                            ? `bg-gradient-to-br ${item.color} shadow-lg`
+                            ? `bg-linear-to-br ${item.color} shadow-lg`
                             : "bg-white/5 hover:bg-white/10",
                         )}
                       >
@@ -316,7 +332,7 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                                 className={cn(
                                   "relative flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-300 active:scale-95",
                                   isActive
-                                    ? "bg-gradient-to-br from-white/20 to-white/10 shadow-lg"
+                                    ? "bg-linear-to-br from-white/20 to-white/10 shadow-lg"
                                     : "bg-white/5 hover:bg-white/10",
                                 )}
                               >
@@ -348,7 +364,7 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                     onClick={onClose}
                     className={cn(
                       "relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300 active:scale-95",
-                      isActive ? `bg-gradient-to-br ${item.color} shadow-lg scale-105` : "bg-white/5 hover:bg-white/10",
+                      isActive ? `bg-linear-to-br ${item.color} shadow-lg scale-105` : "bg-white/5 hover:bg-white/10",
                     )}
                   >
                     <Icon className="h-6 w-6 text-white mb-2" />

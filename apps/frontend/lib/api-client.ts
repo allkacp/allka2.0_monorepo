@@ -111,8 +111,10 @@ class ApiClient {
   }
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
-  async login(email: string, password: string) {
-    const res = await this.post("/auth/login", { email, password });
+  async login(email: string, password: string, accessType?: string) {
+    const body: Record<string, string> = { email, password };
+    if (accessType) body.accessType = accessType;
+    const res = await this.post("/auth/login", body);
     if (res?.token) this.setToken(res.token);
     return res;
   }
@@ -174,12 +176,18 @@ class ApiClient {
     return this.get(`/clients/${companyId}/payment-methods`);
   }
 
-  async addPaymentMethod(companyId: string | number, data: Record<string, any>) {
+  async addPaymentMethod(
+    companyId: string | number,
+    data: Record<string, any>,
+  ) {
     return this.post(`/clients/${companyId}/payment-methods`, data);
   }
 
   async setDefaultPaymentMethod(companyId: string | number, pmId: string) {
-    return this.patch(`/clients/${companyId}/payment-methods/${pmId}/default`, {});
+    return this.patch(
+      `/clients/${companyId}/payment-methods/${pmId}/default`,
+      {},
+    );
   }
 
   async deletePaymentMethod(companyId: string | number, pmId: string) {
@@ -507,7 +515,11 @@ class ApiClient {
     return this.post(`/agencies/${agencyId}/reports`, data);
   }
 
-  async updateAgencyReport(agencyId: string, reportId: string, data: Record<string, any>) {
+  async updateAgencyReport(
+    agencyId: string,
+    reportId: string,
+    data: Record<string, any>,
+  ) {
     return this.put(`/agencies/${agencyId}/reports/${reportId}`, data);
   }
 

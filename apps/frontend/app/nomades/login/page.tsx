@@ -1,10 +1,14 @@
-import { LoginPageTemplate, type LoginRoleConfig } from "@/components/login-page-template"
+import {
+  LoginPageTemplate,
+  type LoginRoleConfig,
+} from "@/components/login-page-template";
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #c81a7f 60%, #1a2a6f 100%)",
   defaultEmail: "nomade@allka.test",
-  defaultPassword: "123456",
-  redirectPath: "/nomades/dashboard",
+  defaultPassword: "Teste@123456",
+  redirectPath: "/nomad/dashboard",
+  accessType: "NOMAD",
   devUser: { email: "ana.santos@allka.com" },
   translations: {
     pt: {
@@ -16,7 +20,8 @@ const config: LoginRoleConfig = {
         { text: "LIMITE", outlined: true },
         { text: "DE RENDA.", outlined: true },
       ],
-      subtext: "Execute tarefas de marketing para agências e empresas de todo o Brasil. Ganhe por entrega, evolua por desempenho.",
+      subtext:
+        "Execute tarefas de marketing para agências e empresas de todo o Brasil. Ganhe por entrega, evolua por desempenho.",
       stats: [
         { value: "500+", label: "Nômades ativos" },
         { value: "12k+", label: "Tarefas entregues" },
@@ -32,7 +37,8 @@ const config: LoginRoleConfig = {
         { text: "INCOME", outlined: true },
         { text: "LIMITS.", outlined: true },
       ],
-      subtext: "Execute marketing tasks for agencies and companies. Get paid per delivery, level up through performance.",
+      subtext:
+        "Execute marketing tasks for agencies and companies. Get paid per delivery, level up through performance.",
       stats: [
         { value: "500+", label: "Active nomads" },
         { value: "12k+", label: "Tasks delivered" },
@@ -48,7 +54,8 @@ const config: LoginRoleConfig = {
         { text: "LÍMITE", outlined: true },
         { text: "DE INGRESOS.", outlined: true },
       ],
-      subtext: "Ejecuta tareas de marketing para agencias y empresas. Cobra por entrega, evoluciona por desempeño.",
+      subtext:
+        "Ejecuta tareas de marketing para agencias y empresas. Cobra por entrega, evoluciona por desempeño.",
       stats: [
         { value: "500+", label: "Nómadas activos" },
         { value: "12k+", label: "Tareas entregadas" },
@@ -72,8 +79,8 @@ const config: LoginRoleConfig = {
       ],
     },
   },
-}
+};
 
 export default function NomadeLoginPage() {
-  return <LoginPageTemplate config={config} />
+  return <LoginPageTemplate config={config} />;
 }

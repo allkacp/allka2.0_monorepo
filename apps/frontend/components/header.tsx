@@ -162,6 +162,7 @@ export function Header() {
 
   // Fetch authenticated user to show real name in greeting
   useEffect(() => {
+    if (accountType === "admin") return;
     apiClient
       .getCurrentUser()
       .then((u: any) => {
@@ -595,7 +596,7 @@ export function Header() {
 
   // In dev preview mode, override name/email/initials so the header always
   // shows the selected preview profile — not the real authenticated user.
-  if (import.meta.env.DEV && previewUserName) {
+  if (import.meta.env.DEV && previewUserName && accountType !== "admin") {
     ctx = {
       ...ctx,
       name: previewUserName,
@@ -621,7 +622,7 @@ export function Header() {
     <>
       {/* Global search overlay */}
       {searchOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
           <div
             ref={searchRef}
             className="w-full max-w-2xl bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-2xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden"
@@ -771,7 +772,7 @@ export function Header() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-[220px]"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-55"
             >
               <Search className="h-4 w-4 shrink-0" />
               <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
@@ -784,11 +785,11 @@ export function Header() {
 
             <AlertsHeaderIcon />
 
-            {/* Dark mode toggle */}
+            {/* Dark mode toggle — oculto em mobile para economizar espaço */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               title={theme === "dark" ? "Modo claro" : "Modo escuro"}
-              className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all"
+              className="hidden sm:flex items-center justify-center h-9 w-9 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all"
             >
               {theme === "dark" ? (
                 <Sun className="h-4 w-4" />
@@ -797,8 +798,10 @@ export function Header() {
               )}
             </button>
 
-            {/* Controle de tamanho de fonte */}
-            <FontScaleControl />
+            {/* Controle de tamanho de fonte — apenas desktop */}
+            <div className="hidden lg:flex">
+              <FontScaleControl />
+            </div>
 
             {/* ── Cesta de projeto ──────────────────────────────────── */}
             {(() => {
@@ -900,7 +903,7 @@ export function Header() {
                   </Avatar>
                   <div className="hidden sm:block text-left">
                     {accountType === "admin" && (
-                      <p className="text-sm font-bold leading-tight text-white truncate max-w-[130px]">
+                      <p className="text-sm font-bold leading-tight text-white truncate max-w-32.5">
                         {ctx.name}
                       </p>
                     )}

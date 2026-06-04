@@ -1,6 +1,11 @@
 ﻿// @ts-nocheck
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
-import { COMPANY_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
+import {
+  AGENCY_PRESETS,
+  buildWidgets,
+  DASHBOARD_STORAGE_KEY,
+  CURRENT_DASHBOARD_KEY,
+} from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
 import { useState, useEffect, useMemo } from "react";
@@ -17,7 +22,6 @@ import {
   TrendingDown,
   Activity,
   Clock,
-  Info,
   CheckCircle2,
   AlertCircle,
   XCircle,
@@ -43,9 +47,9 @@ import {
   ArrowRightIcon,
   FileDown,
   ExternalLink,
-  Eye,
   ArrowUp,
   ArrowDown,
+  Info,
   Calculator,
   ArrowUpRight,
   CheckSquare,
@@ -56,8 +60,6 @@ import {
   MessageSquare,
   ChevronDown,
   ArrowRight,
-  Link2,
-  History,
   Trophy,
   Save,
   Minus,
@@ -66,18 +68,17 @@ import {
   Share2,
   SlidersHorizontal,
   ImageDown,
+  Copy,
+  Link2,
+  History,
+  Database,
+  Eye,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // AlertTriangle removed to avoid redeclaration
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -113,242 +114,371 @@ import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
-const generateDashboardData = (_from?: any, _to?: any): any => ({
-  revenue: {
-    total: 270800,
-    growth: 18.1,
-    totalGrowth: 18.1,
-    series: [],
-    trendData: [180000, 205000, 215000, 230000, 248000, 270800],
-    creditPlan: 114000,
-    creditPlanGrowth: 18,
-    recurring: 97600,
-    recurringGrowth: 8,
-    oneTime: 59200,
-    oneTimeGrowth: 14,
-  },
-  activeProjects: {
-    total: 127,
-    growth: 5.2,
-    series: [],
-    agencies: 48,
-    agenciesGrowth: 7,
-    leadPremium: 63,
-    leadPremiumGrowth: 9,
-    nomades: 16,
-    nomadesGrowth: 3,
-    newTotal: 22,
-    newAgencies: 9,
-    newLeadPremium: 10,
-    newNomades: 3,
-  },
-  creditPlans: {
-    total: 114000,
-    growth: 18,
-    series: [],
-    basic: { revenue: 38000, newContracts: 12, growth: 8 },
-    partner: { revenue: 45000, newContracts: 9, growth: 22 },
-    premium: { revenue: 31000, newContracts: 5, growth: 14 },
-  },
-  mrr: {
-    total: 97600,
-    growth: 8,
-    series: [],
-    newMrr: 12400,
-    expansion: 5200,
-    contraction: 1800,
-    churnRevenue: 3100,
-    baseMrr: 89600,
-    netChange: 12700,
-    trendData: [72000, 78000, 82000, 86000, 91000, 97600],
-  },
-  churn: {
-    total: 0,
-    growth: 0,
-    series: [],
-    inactiveAccounts: 23,
-    inactiveGrowth: 4,
-    agencies: 8,
-    leadPremium: 5,
-    nomades: 7,
-    free: 3,
-    cancelledProjects: 11,
-    cancelledGrowth: 2,
-    revenueChurn: 9300,
-    revenueChurnRate: 3.2,
-  },
-  averageTicket: {
-    total: 0,
-    growth: 5,
-    series: [],
-    general: 1213,
-    generalGrowth: 5,
-    perProject: 2840,
-    perProjectGrowth: 7,
-    trendData: [980, 1050, 1100, 1180, 1210, 1213],
-  },
-  ltv: {
-    total: 0,
-    growth: 12,
-    series: [],
-    value: 8740,
-    agencies: 14200,
-    agenciesGrowth: 9,
-    leadPremium: 11500,
-    leadPremiumGrowth: 15,
-    nomades: 3800,
-    nomadesGrowth: 6,
-    hist0to1k: 120,
-    hist1kto5k: 280,
-    hist5kto15k: 95,
-    hist15kplus: 30,
-  },
-  accountsReceivable: {
-    total: 187400,
-    growth: 12,
-    series: [],
-    creditPlans: 98200,
-    postPaid: 54700,
-    others: 34500,
-    received: 143600,
-  },
-  platformActivities: {
-    activeAgencies: 34,
-    avgSessionMinutes: 47,
-    mau: 1240,
-    dau: 312,
-    sessions: 8740,
-    actionsExecuted: 52300,
-    trendData: [420, 510, 480, 630, 590, 710, 680],
-  },
-  nomads: {
-    total: 148,
-    growth: 6,
-    active: 112,
-    activeGrowth: 9,
-    inactive: 36,
-    inactiveChange: -3,
-    newInPeriod: 14,
-    churn: 5,
-    retention30d: 82,
-    trendData: [95, 100, 104, 108, 110, 112],
-  },
-  nomadsIndicators: {
-    deliveryRate: 94.3,
-    avgRating: 4.7,
-    avgTimePerTask: 3.2,
-    certified: 68,
-    retention90d: 79,
-  },
-  nomadsRanking: { items: [] },
-  agenciesRanking: [
-    {
-      id: "1",
-      name: "Digital Works",
-      rating: 4.9,
-      projects: 23,
-      contribution: "R$ 48k",
+const generateDashboardData = (from?: Date, to?: Date): any => {
+  const now = new Date();
+  const f =
+    from ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const t = to ?? now;
+  const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000));
+  const m = days / 30; // multiplier relative to 30-day base
+  const sc = (base: number) => Math.round(base * m); // scale financial/count
+  const scSoft = (base: number) => Math.round(base * (0.5 + m * 0.5)); // softer scale for counts
+  return {
+    revenue: {
+      total: sc(270800),
+      growth: 18.1,
+      totalGrowth: 18.1,
+      series: [],
+      trendData: [180000, 205000, 215000, 230000, 248000, sc(270800)].map((v) =>
+        Math.round((v * m) / 1),
+      ),
+      creditPlan: sc(114000),
+      creditPlanGrowth: 18,
+      recurring: sc(97600),
+      recurringGrowth: 8,
+      oneTime: sc(59200),
+      oneTimeGrowth: 14,
     },
-    {
-      id: "2",
-      name: "Criativa Lab",
-      rating: 4.8,
-      projects: 18,
-      contribution: "R$ 37k",
+    activeProjects: {
+      total: scSoft(127),
+      growth: 5.2,
+      series: [],
+      agencies: scSoft(48),
+      agenciesGrowth: 7,
+      leadPremium: scSoft(63),
+      leadPremiumGrowth: 9,
+      nomades: scSoft(16),
+      nomadesGrowth: 3,
+      newTotal: sc(22),
+      newAgencies: sc(9),
+      newLeadPremium: sc(10),
+      newNomades: sc(3),
     },
-    {
-      id: "3",
-      name: "Inovax Agency",
-      rating: 4.7,
-      projects: 15,
-      contribution: "R$ 31k",
+    creditPlans: {
+      total: sc(114000),
+      growth: 18,
+      series: [],
+      basic: { revenue: sc(38000), newContracts: sc(12), growth: 8 },
+      partner: { revenue: sc(45000), newContracts: sc(9), growth: 22 },
+      premium: { revenue: sc(31000), newContracts: sc(5), growth: 14 },
     },
-    {
-      id: "4",
-      name: "PixelForge",
-      rating: 4.6,
-      projects: 12,
-      contribution: "R$ 24k",
+    mrr: {
+      total: sc(97600),
+      growth: 8,
+      series: [],
+      newMrr: sc(12400),
+      expansion: sc(5200),
+      contraction: sc(1800),
+      churnRevenue: sc(3100),
+      baseMrr: sc(89600),
+      netChange: sc(12700),
+      trendGrowth: 12,
+      trendData: [72000, 78000, 82000, 86000, 91000, 97600].map((v) => sc(v)),
     },
-    {
-      id: "5",
-      name: "BluePrint Co.",
-      rating: 4.5,
-      projects: 10,
-      contribution: "R$ 19k",
+    churn: {
+      total: 0,
+      growth: 0,
+      series: [],
+      inactiveAccounts: sc(23),
+      inactiveGrowth: 4,
+      agencies: sc(8),
+      leadPremium: sc(5),
+      nomades: sc(7),
+      free: sc(3),
+      cancelledProjects: sc(11),
+      cancelledGrowth: 2,
+      revenueChurn: sc(9300),
+      revenueChurnRate: 3.2,
     },
-  ],
-  statusOverview: {
-    projects: {
-      ongoing: 42,
-      approved: 18,
-      completed: 156,
-      cancelled: 7,
-      delayed: 11,
+    averageTicket: {
+      total: 0,
+      growth: 5,
+      series: [],
+      general: 1213,
+      generalGrowth: 5,
+      perProject: 2840,
+      perProjectGrowth: 7,
+      trendData: [980, 1050, 1100, 1180, 1210, 1213],
     },
-    tasks: { contracted: 83, inProgress: 57, completed: 412, archived: 34 },
-    leads: { new: 29, contacted: 15, proposal: 8, won: 12, lost: 5 },
-  },
-  tasks: {
-    total: 552,
-    items: [],
-    completed: 412,
-    completedGrowth: 8,
-    inProgress: 57,
-    inProgressGrowth: 4,
-    contracted: 83,
-    contractedGrowth: 12,
-    cancelled: 14,
-    cancelledChange: -2,
-    slaCompliance: 91.4,
-  },
-  activeUsers: {
-    total: 284,
-    empresas: 92,
-    empresasGrowth: 5,
-    agencias: 61,
-    agenciasGrowth: 7,
-    nomades: 112,
-    nomadesGrowth: 9,
-    admins: 19,
-    adminsGrowth: 3,
-    series: [],
-  },
-  partnerProgram: {
-    total: 38,
-    items: [],
-    invitesSent: 124,
-    pending: 47,
-    accepted: 38,
-    diamond: 3,
-    platinum: 6,
-    gold: 11,
-    silver: 12,
-    bronze: 6,
-    mrrGenerated: 22400,
-  },
-  cmv: {
-    totalCosts: 87400,
-    revenue: 270800,
-    cmvPercent: 32.3,
-    prevCmvPercent: 34.1,
-    nomades: { value: 42800, percent: 49 },
-    impostos: { value: 18200, percent: 21 },
-    comissoes: { value: 14900, percent: 17 },
-    outros: { value: 11500, percent: 13 },
-    variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
-  },
-  metrics: {},
-  activity: [],
-  alerts: [],
-  performers: [],
-  userDistribution: [],
-  systemAlerts: [],
-  adminProfiles: [],
-  permissionMatrix: [],
-  managementTools: [],
-});
+    ltv: {
+      total: 0,
+      growth: 12,
+      series: [],
+      value: 8740,
+      agencies: 14200,
+      agenciesGrowth: 9,
+      leadPremium: 11500,
+      leadPremiumGrowth: 15,
+      nomades: 3800,
+      nomadesGrowth: 6,
+      hist0to1k: 120,
+      hist1kto5k: 280,
+      hist5kto15k: 95,
+      hist15kplus: 30,
+    },
+    accountsReceivable: {
+      total: sc(187400),
+      growth: 12,
+      series: [],
+      creditPlans: sc(98200),
+      postPaid: sc(54700),
+      others: sc(34500),
+      received: sc(143600),
+    },
+    platformActivities: {
+      activeAgencies: scSoft(34),
+      avgSessionMinutes: 47,
+      mau: scSoft(1240),
+      dau: scSoft(312),
+      sessions: sc(8740),
+      actionsExecuted: sc(52300),
+      trendData: [420, 510, 480, 630, 590, 710, 680].map((v) => sc(v)),
+    },
+    nomads: {
+      total: scSoft(148),
+      growth: 6,
+      active: scSoft(112),
+      activeGrowth: 9,
+      inactive: scSoft(36),
+      inactiveChange: -3,
+      newInPeriod: sc(14),
+      churn: sc(5),
+      retention30d: 82,
+      trendData: [95, 100, 104, 108, 110, 112].map((v) => scSoft(v)),
+    },
+    nomadsIndicators: {
+      deliveryRate: 94.3,
+      avgRating: 4.7,
+      avgTimePerTask: 3.2,
+      certified: 68,
+      retention90d: 79,
+    },
+    nomadsRanking: { items: [] },
+    agenciesRanking: [
+      {
+        id: "1",
+        name: "Digital Works",
+        avatar: "DW",
+        rating: 4.9,
+        projects: 23,
+        contribution: "R$ 48k",
+        specialty: "Dev & Design",
+        color: "from-blue-500 to-indigo-600",
+      },
+      {
+        id: "2",
+        name: "Criativa Lab",
+        avatar: "CL",
+        rating: 4.8,
+        projects: 18,
+        contribution: "R$ 37k",
+        specialty: "Branding",
+        color: "from-pink-500 to-rose-600",
+      },
+      {
+        id: "3",
+        name: "Inovax Agency",
+        avatar: "IA",
+        rating: 4.7,
+        projects: 15,
+        contribution: "R$ 31k",
+        specialty: "Marketing 360",
+        color: "from-violet-500 to-purple-600",
+      },
+      {
+        id: "4",
+        name: "PixelForge",
+        avatar: "PF",
+        rating: 4.6,
+        projects: 12,
+        contribution: "R$ 24k",
+        specialty: "UX/UI",
+        color: "from-cyan-500 to-teal-600",
+      },
+      {
+        id: "5",
+        name: "BluePrint Co.",
+        avatar: "BP",
+        rating: 4.5,
+        projects: 10,
+        contribution: "R$ 19k",
+        specialty: "Arquitetura",
+        color: "from-amber-500 to-orange-600",
+      },
+    ],
+    tasks: {
+      total: sc(552),
+      items: [],
+      completed: sc(412),
+      completedGrowth: 8,
+      inProgress: scSoft(57),
+      inProgressGrowth: 4,
+      contracted: scSoft(83),
+      contractedGrowth: 12,
+      cancelled: sc(14),
+      cancelledChange: -2,
+      slaCompliance: 91.4,
+    },
+    activeUsers: {
+      total: scSoft(284),
+      empresas: scSoft(92),
+      empresasGrowth: 5,
+      agencias: scSoft(61),
+      agenciasGrowth: 7,
+      nomades: scSoft(112),
+      nomadesGrowth: 9,
+      admins: scSoft(19),
+      adminsGrowth: 3,
+      series: [],
+    },
+    partnerProgram: {
+      total: scSoft(38),
+      items: [],
+      invitesSent: sc(124),
+      pending: scSoft(47),
+      accepted: scSoft(38),
+      diamond: 3,
+      platinum: 6,
+      gold: 11,
+      silver: 12,
+      bronze: 6,
+      mrrGenerated: sc(22400),
+    },
+    cmv: {
+      totalCosts: sc(87400),
+      revenue: sc(270800),
+      cmvPercent: 32.3,
+      prevCmvPercent: 34.1,
+      nomades: { value: sc(42800), percent: 49 },
+      impostos: { value: sc(18200), percent: 21 },
+      comissoes: { value: sc(14900), percent: 17 },
+      outros: { value: sc(11500), percent: 13 },
+      variation: { cmvPercent: -1.8, totalCosts: -2.4, revenue: 5.6 },
+    },
+    statusOverview: {
+      projects: {
+        ongoing: scSoft(42),
+        approved: scSoft(18),
+        completed: sc(156),
+        cancelled: sc(7),
+        delayed: scSoft(11),
+      },
+      tasks: {
+        contracted: scSoft(83),
+        inProgress: scSoft(57),
+        completed: sc(412),
+        archived: sc(34),
+      },
+      leads: {
+        new: scSoft(29),
+        contacted: scSoft(15),
+        proposal: scSoft(8),
+        won: sc(12),
+        lost: sc(5),
+      },
+    },
+    metrics: {},
+    activity: [],
+    alerts: [],
+    performers: [
+      {
+        id: "1",
+        name: "Carlos Mendonça",
+        avatar: "CM",
+        rating: 4.9,
+        projects: sc(34),
+        badge: "gold",
+        tasks: sc(128),
+        revenue: `R$ ${sc(52)}k`,
+        specialty: "Dev Full Stack",
+      },
+      {
+        id: "2",
+        name: "Ana Beatriz Lima",
+        avatar: "AB",
+        rating: 4.8,
+        projects: sc(29),
+        badge: "gold",
+        tasks: sc(115),
+        revenue: `R$ ${sc(44)}k`,
+        specialty: "UI/UX Design",
+      },
+      {
+        id: "3",
+        name: "Rafael Torres",
+        avatar: "RT",
+        rating: 4.7,
+        projects: sc(26),
+        badge: "gold",
+        tasks: sc(98),
+        revenue: `R$ ${sc(39)}k`,
+        specialty: "Marketing Digital",
+      },
+      {
+        id: "4",
+        name: "Juliana Ferreira",
+        avatar: "JF",
+        rating: 4.6,
+        projects: sc(22),
+        badge: "silver",
+        tasks: sc(84),
+        revenue: `R$ ${sc(31)}k`,
+        specialty: "Copywriting",
+      },
+      {
+        id: "5",
+        name: "Marcos Oliveira",
+        avatar: "MO",
+        rating: 4.6,
+        projects: sc(21),
+        badge: "silver",
+        tasks: sc(79),
+        revenue: `R$ ${sc(28)}k`,
+        specialty: "Dev Backend",
+      },
+      {
+        id: "6",
+        name: "Priscila Santos",
+        avatar: "PS",
+        rating: 4.5,
+        projects: sc(19),
+        badge: "silver",
+        tasks: sc(71),
+        revenue: `R$ ${sc(24)}k`,
+        specialty: "SEO",
+      },
+      {
+        id: "7",
+        name: "Diego Cavalcante",
+        avatar: "DC",
+        rating: 4.4,
+        projects: sc(17),
+        badge: "bronze",
+        tasks: sc(63),
+        revenue: `R$ ${sc(19)}k`,
+        specialty: "Tráfego Pago",
+      },
+      {
+        id: "8",
+        name: "Fernanda Costa",
+        avatar: "FC",
+        rating: 4.3,
+        projects: sc(15),
+        badge: "bronze",
+        tasks: sc(57),
+        revenue: `R$ ${sc(16)}k`,
+        specialty: "Social Media",
+      },
+    ],
+    userDistribution: [],
+    systemAlerts: [],
+    adminProfiles: [],
+    permissionMatrix: [],
+    managementTools: [],
+  };
+};
 import { Switch } from "@/components/ui/switch"; // Added Switch
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
@@ -724,7 +854,7 @@ const generatePublicToken = (config: ShareConfig): string => {
 };
 // ───────────────────────────────────────────────────────────────────────────────
 
-const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["COMPANY"]);
+const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["AGENCY"]);
 
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
@@ -1818,7 +1948,10 @@ export default function AdminDashboardPage() {
         : d,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(updatedDashboards),
+    );
     setShowEditDialog(false);
     setEditingDashboardId(null);
     setEditingDashboardName("");
@@ -1852,7 +1985,7 @@ export default function AdminDashboardPage() {
       );
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["AGENCY"],
         JSON.stringify(updatedDashboards),
       );
     }
@@ -1877,13 +2010,16 @@ export default function AdminDashboardPage() {
       const updatedDashboards = [...savedDashboards, newDashboard];
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        DASHBOARD_STORAGE_KEY["COMPANY"],
+        DASHBOARD_STORAGE_KEY["AGENCY"],
         JSON.stringify(updatedDashboards),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["AGENCY"], newDashboard.id);
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem(
+        "dashboard-widget-config-agency",
+        JSON.stringify(updated),
+      );
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
       toast({
@@ -1892,7 +2028,10 @@ export default function AdminDashboardPage() {
       });
     } else {
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem(
+        "dashboard-widget-config-agency",
+        JSON.stringify(updated),
+      );
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
           d.id === currentDashboardId
@@ -1906,7 +2045,7 @@ export default function AdminDashboardPage() {
         );
         setSavedDashboards(updatedDashboards);
         localStorage.setItem(
-          DASHBOARD_STORAGE_KEY["COMPANY"],
+          DASHBOARD_STORAGE_KEY["AGENCY"],
           JSON.stringify(updatedDashboards),
         );
       }
@@ -1926,7 +2065,7 @@ export default function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem("dashboard-widget-config-company");
+    const savedConfig = localStorage.getItem("dashboard-widget-config-agency");
     if (savedConfig) {
       try {
         // Ensure the loaded config matches the WidgetState type
@@ -1945,7 +2084,7 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards-company");
+    const savedMetrics = localStorage.getItem("dashboard-metric-cards-agency");
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -1954,13 +2093,15 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size-company");
+    const savedSize = localStorage.getItem("dashboard-widget-size-agency");
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods-company");
+    const savedWidgetPeriods = localStorage.getItem(
+      "dashboard-widget-periods-agency",
+    );
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -1969,10 +2110,10 @@ export default function AdminDashboardPage() {
       }
     }
 
-    // Load saved dashboards — role-scoped presets (Company)
-    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["COMPANY"];
-    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["COMPANY"];
-    const builtinPresets: SavedDashboard[] = COMPANY_PRESETS.map((p) => ({
+    // Load saved dashboards — role-scoped presets (Agency)
+    const STORAGE_KEY = DASHBOARD_STORAGE_KEY["AGENCY"];
+    const CURRENT_KEY = CURRENT_DASHBOARD_KEY["AGENCY"];
+    const builtinPresets: SavedDashboard[] = AGENCY_PRESETS.map((p) => ({
       id: p.id,
       name: p.name,
       isDefault: p.isDefault,
@@ -1993,10 +2134,7 @@ export default function AdminDashboardPage() {
     );
     if (missingPresets.length > 0) {
       parsedDashboards = [...missingPresets, ...parsedDashboards];
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(parsedDashboards),
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedDashboards));
     }
     setSavedDashboards(parsedDashboards);
     const storedId = localStorage.getItem(CURRENT_KEY);
@@ -2028,7 +2166,7 @@ export default function AdminDashboardPage() {
 
     // Ensure consistent structure when saving
     localStorage.setItem(
-      "dashboard-widget-config-company",
+      "dashboard-widget-config-agency",
       JSON.stringify(
         widgets.map((w) => ({
           id: w.id,
@@ -2039,17 +2177,23 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards-company", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size-company", widgetSize);
+    localStorage.setItem(
+      "dashboard-metric-cards-agency",
+      JSON.stringify(metricCards),
+    );
+    localStorage.setItem("dashboard-widget-size-agency", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods-company",
+      "dashboard-widget-periods-agency",
       JSON.stringify(widgetPeriods),
     );
 
     // Save dashboards to localStorage whenever they change
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(savedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], currentDashboardId);
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(savedDashboards),
+    );
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["AGENCY"], currentDashboardId);
   }, [
     widgets,
     metricCards,
@@ -2075,72 +2219,65 @@ export default function AdminDashboardPage() {
     {
       id: "metrics",
       name: "Cards de Métricas",
-      description: "Métricas da agency logada",
+      description: "Projetos, tarefas, aprovações e financeiro da agency",
       icon: LayoutGrid,
       color: "blue",
     },
     {
-      id: "activeProjectsWidget",
-      name: "Projetos da Agency",
-      description: "Projetos ativos e em andamento da agency",
-      icon: Briefcase,
-      color: "indigo",
-    },
-    {
       id: "tasks",
       name: "Tarefas dos Projetos",
-      description: "Tarefas contratadas, em execução e concluídas",
+      description: "Tarefas para lançamento, em execução e contratadas",
       icon: CheckSquare,
       color: "green",
     },
     {
       id: "statusOverview",
       name: "Aprovações Pendentes",
-      description: "Status de projetos, tarefas e leads da agency",
+      description: "Projetos, tarefas e propostas aguardando ação",
       icon: LayoutGrid,
       color: "blue",
     },
     {
-      id: "accountsReceivable",
+      id: "averageTicket",
       name: "Financeiro da Agency",
-      description: "Valores a receber e saldos pendentes da agency",
+      description: "Valor contratado, recebíveis, ticket e margem estimada",
       icon: DollarSign,
-      color: "green",
+      color: "teal",
+    },
+    {
+      id: "activeProjectsWidget",
+      name: "Projetos da Agency",
+      description: "Projetos ativos, entregas e lançamentos vinculados",
+      icon: Briefcase,
+      color: "indigo",
     },
     {
       id: "creditPlans",
       name: "Catálogo / Produtos Contratados",
-      description: "Planos e produtos contratados pela agency",
+      description: "Produtos contratados e ofertas ativas da agency",
       icon: CreditCard,
       color: "slate",
     },
     {
       id: "activity",
       name: "Atividade Recente da Agency",
-      description: "Últimas ações e eventos da agency",
+      description: "Últimas ações, entregas e aprovações da agency",
       icon: Activity,
       color: "amber",
     },
     {
       id: "alerts",
       name: "Alertas da Agency",
-      description: "Alertas relevantes para a agency logada",
+      description: "Prazos, pendências e alertas relevantes da agency",
       icon: Bell,
       color: "orange",
     },
     {
       id: "quickActions",
       name: "Ações Rápidas da Agency",
-      description: "Atalhos para ações operacionais da agency",
+      description: "Atalhos para aprovações, projetos e financeiro",
       icon: Zap,
       color: "sky",
-    },
-    {
-      id: "averageTicket",
-      name: "Ticket Médio",
-      description: "Ticket médio da operação da agency",
-      icon: DollarSign,
-      color: "teal",
     },
   ];
 
@@ -2166,12 +2303,14 @@ export default function AdminDashboardPage() {
       tasksToLaunch: {
         value: tasks.contracted.toLocaleString("pt-BR"),
         change: tasks.contractedGrowth,
-        trend: tasks.contractedGrowth >= 0 ? ("up" as const) : ("down" as const),
+        trend:
+          tasks.contractedGrowth >= 0 ? ("up" as const) : ("down" as const),
       },
       tasksInProgress: {
         value: tasks.inProgress.toLocaleString("pt-BR"),
         change: tasks.inProgressGrowth,
-        trend: tasks.inProgressGrowth >= 0 ? ("up" as const) : ("down" as const),
+        trend:
+          tasks.inProgressGrowth >= 0 ? ("up" as const) : ("down" as const),
       },
       approvalsPending: {
         value: statusOverview.projects.delayed.toLocaleString("pt-BR"),
@@ -2196,15 +2335,15 @@ export default function AdminDashboardPage() {
       pendingPayments: {
         value: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k`,
         change: accountsReceivable.growth,
-        trend: accountsReceivable.growth >= 0 ? ("up" as const) : ("down" as const),
+        trend:
+          accountsReceivable.growth >= 0 ? ("up" as const) : ("down" as const),
       },
     };
   };
 
   const metrics = getMetricsForPeriod();
 
-  // Recent activities from API (fallback to empty)
-  // Recent activities (company-scoped mock)
+  // Recent activities from API (fallback to agency-scoped mock)
   const recentActivities =
     apiActivities.length > 0
       ? apiActivities.map((a, i) => ({
@@ -2229,76 +2368,77 @@ export default function AdminDashboardPage() {
             id: 1,
             type: "project_created",
             title: "Projeto criado",
-            description: 'Projeto "Redesign Website" foi iniciado com sucesso',
-            time: "20 minutos atrás",
+            description: 'Novo projeto "Campanha Digital Q3" foi iniciado',
+            time: "10 minutos atrás",
             icon: Briefcase,
             color: "text-info",
             bgColor: "bg-info/10",
           },
           {
             id: 2,
-            type: "proposal_sent",
-            title: "Proposta enviada",
+            type: "briefing_sent",
+            title: "Briefing enviado",
             description:
-              'Proposta para "Campanha de Mídia" aguarda sua aprovação',
-            time: "1 hora atrás",
+              'Briefing do projeto "Social Media Pack" enviado ao nômade',
+            time: "35 minutos atrás",
             icon: FileText,
             color: "text-primary",
             bgColor: "bg-primary/10",
           },
           {
             id: 3,
-            type: "delivery_available",
-            title: "Entrega disponível",
+            type: "task_approved",
+            title: "Tarefa aprovada",
             description:
-              'Nova entrega do projeto "Blog Corporativo" pronta para revisão',
-            time: "3 horas atrás",
+              'Entrega de copy aprovada no projeto "Blog Corporativo"',
+            time: "2 horas atrás",
             icon: CheckCircle2,
             color: "text-success",
             bgColor: "bg-success/10",
           },
           {
             id: 4,
-            type: "payment_approved",
-            title: "Pagamento aprovado",
-            description: "Fatura #198 de R$ 4.800 foi confirmada",
-            time: "6 horas atrás",
+            type: "payment_made",
+            title: "Pagamento realizado",
+            description: "Pagamento de R$ 1.200 enviado ao nômade Rafael Lima",
+            time: "5 horas atrás",
             icon: DollarSign,
             color: "text-chart-4",
             bgColor: "bg-chart-4/10",
           },
         ];
 
-  // Company-scoped alerts
+  // Agency-scoped alerts
   const systemAlerts = [
     {
       id: 1,
       type: "warning",
-      title: "Proposta aguardando aprovação",
+      title: "Entrega aguardando aprovação",
       description:
-        'Proposta "Campanha de Mídia" está aguardando sua resposta há 2 dias',
+        'Projeto "Social Media Pack" tem 2 entregas pendentes de revisão',
       priority: "high",
     },
     {
       id: 2,
-      type: "warning",
-      title: "Entrega aguardando aprovação",
+      type: "info",
+      title: "Briefing devolvido",
       description:
-        'Projeto "Blog Corporativo" tem 1 entrega pronta para revisão',
-      priority: "high",
+        'Nômade solicitou esclarecimentos no projeto "Blog Corporativo"',
+      priority: "medium",
     },
     {
       id: 3,
-      type: "info",
+      type: "warning",
       title: "Pagamento pendente",
-      description: "Fatura #201 de R$ 2.600 vence em 3 dias",
-      priority: "medium",
+      description: "Fatura #247 de R$ 3.500 vence em 2 dias",
+      priority: "high",
     },
     {
       id: 4,
       type: "info",
-      title: "Tarefa aguardando feedback",
-      description: 'Tarefa "Revisão de layout" aguarda seu feedback há 1 dia',
+      title: "Proposta aguardando cliente",
+      description:
+        'Proposta "Redesign Website" aguarda aprovação do cliente há 3 dias',
       priority: "medium",
     },
   ];
@@ -2857,34 +2997,16 @@ export default function AdminDashboardPage() {
   ): string => {
     if (customTitle) return customTitle;
     const titles: Record<WidgetType, string> = {
-      metrics: "Métricas Principais",
-      activity: "Atividade Recente",
-      alerts: "Alertas Rápidos",
-      performers: "Melhores Nômades",
-      quickActions: "Ações Rápidas",
-      userDistribution: "Distribuição de Usuários",
-      activeUsers: "Usuários Ativos",
-      systemAlerts: "Alertas do Sistema",
-      adminProfiles: "Perfis Administrativos",
-      revenue: "Receita",
-      activeProjectsWidget: "Projetos Ativos",
-      creditPlans: "Planos de Crédito",
-      mrr: "MRR (Receita Recorrente)",
-      permissionMatrix: "Matriz de Permissões",
-      managementTools: "Ferramentas de Gestão",
-      churn: "CHURN",
-      averageTicket: "Ticket Médio",
-      ltv: "LTV (Lifetime Value)",
-      cmv: "CMV (Custo de Mercadoria Vendida)",
-      nomads: "Nômades",
-      nomadsIndicators: "Indicadores dos Nômades",
-      tasks: "Tarefas (Resumo)",
-      platformActivities: "Atividades da Plataforma",
-      nomadsRanking: "Ranking de Nômades",
-      agenciesRanking: "Ranking de Agências",
-      statusOverview: "Visão Geral por Status",
-      accountsReceivable: "À Receber", // Added title for accounts receivable widget
-      partnerProgram: "Programa Partner",
+      metrics: "Métricas da Agency",
+      activity: "Atividade Recente da Agency",
+      alerts: "Alertas da Agency",
+      quickActions: "Ações Rápidas da Agency",
+      tasks: "Tarefas dos Projetos",
+      statusOverview: "Aprovações Pendentes",
+      averageTicket: "Financeiro da Agency",
+      activeProjectsWidget: "Projetos da Agency",
+      creditPlans: "Catálogo / Produtos Contratados",
+      accountsReceivable: "Pagamentos Pendentes",
     };
     return titles[widgetType] || widgetType;
   };
@@ -2965,14 +3087,14 @@ export default function AdminDashboardPage() {
     let shadowClass: string;
 
     switch (metricType) {
-      case "totalUsers":
-        bgColor = "from-blue-400 to-blue-600";
-        gradientFrom = "from-blue-600/10";
-        cardBgGradient = "from-blue-500 to-blue-700";
-        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
+      case "activeProjects":
+        bgColor = "from-indigo-400 to-indigo-600";
+        gradientFrom = "from-indigo-600/10";
+        cardBgGradient = "from-indigo-500 to-blue-700";
+        borderClass = "border-2 border-indigo-300/70 dark:border-indigo-300/50";
         shadowClass = "";
         break;
-      case "activeUsers":
+      case "tasksToLaunch":
         bgColor = "from-emerald-400 to-emerald-600";
         gradientFrom = "from-emerald-600/10";
         cardBgGradient = "from-emerald-500 to-teal-600";
@@ -2980,32 +3102,46 @@ export default function AdminDashboardPage() {
           "border-2 border-emerald-300/70 dark:border-emerald-300/50";
         shadowClass = "";
         break;
-      case "companies":
+      case "tasksInProgress":
+        bgColor = "from-cyan-400 to-cyan-600";
+        gradientFrom = "from-cyan-600/10";
+        cardBgGradient = "from-cyan-500 to-sky-700";
+        borderClass = "border-2 border-cyan-300/70 dark:border-cyan-300/50";
+        shadowClass = "";
+        break;
+      case "approvalsPending":
+        bgColor = "from-amber-400 to-amber-600";
+        gradientFrom = "from-amber-600/10";
+        cardBgGradient = "from-amber-500 to-orange-600";
+        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+        shadowClass = "";
+        break;
+      case "proposalsAwaitingClient":
         bgColor = "from-violet-400 to-violet-600";
         gradientFrom = "from-violet-600/10";
         cardBgGradient = "from-violet-500 to-purple-700";
         borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
         shadowClass = "";
         break;
-      case "activeProjects":
-        bgColor = "from-orange-400 to-orange-600";
-        gradientFrom = "from-orange-600/10";
-        cardBgGradient = "from-orange-500 to-rose-600";
-        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
+      case "contractedValueMonth":
+        bgColor = "from-blue-400 to-blue-600";
+        gradientFrom = "from-blue-600/10";
+        cardBgGradient = "from-blue-500 to-indigo-700";
+        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
         shadowClass = "";
         break;
-      case "revenue":
-        bgColor = "from-green-400 to-green-600";
-        gradientFrom = "from-green-600/10";
-        cardBgGradient = "from-green-500 to-emerald-700";
-        borderClass = "border-2 border-green-300/70 dark:border-green-300/50";
+      case "estimatedMargin":
+        bgColor = "from-teal-400 to-teal-600";
+        gradientFrom = "from-teal-600/10";
+        cardBgGradient = "from-teal-500 to-emerald-700";
+        borderClass = "border-2 border-teal-300/70 dark:border-teal-300/50";
         shadowClass = "";
         break;
-      case "avgRating":
-        bgColor = "from-amber-400 to-amber-600";
-        gradientFrom = "from-amber-600/10";
-        cardBgGradient = "from-amber-500 to-orange-600";
-        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+      case "pendingPayments":
+        bgColor = "from-rose-400 to-rose-600";
+        gradientFrom = "from-rose-600/10";
+        cardBgGradient = "from-rose-500 to-pink-700";
+        borderClass = "border-2 border-rose-300/70 dark:border-rose-300/50";
         shadowClass = "";
         break;
       default:
@@ -3084,9 +3220,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {typeof metric.value === "number"
-                ? metric.value.toLocaleString()
-                : metric.value}
+              {metric.value}
             </p>
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
@@ -3096,12 +3230,9 @@ export default function AdminDashboardPage() {
                   <TrendingDown className="h-3 w-3" />
                 )}
                 {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}
-                {metricType === "avgRating" ? " pts" : "%"}
+                {Math.abs(metric.change)}%
               </div>
-              <span className="text-[10px] text-white/60">
-                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
-              </span>
+              <span className="text-[10px] text-white/60">vs. anterior</span>
             </div>
           </div>
         </div>
@@ -3167,10 +3298,10 @@ export default function AdminDashboardPage() {
               )}
               {metric.trend === "up" ? "+" : "-"}
               {Math.abs(metric.change)}
-              %
+              {metricType === "avgRating" ? " pts" : "%"}
             </div>
             <span className="text-[10px] text-white/60">
-              vs. anterior
+              {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
             </span>
           </div>
         </div>
@@ -3204,41 +3335,89 @@ export default function AdminDashboardPage() {
           icon: <LayoutGrid className="h-6 w-6" />,
           subtitle: "Projetos, tarefas, aprovações e financeiro da agency",
         },
+        revenue: {
+          icon: <DollarSign className="h-6 w-6" />,
+          subtitle: "Receita total e breakdown",
+        },
+        platformActivities: {
+          icon: <Activity className="h-6 w-6" />,
+          subtitle: "Engajamento e atividades",
+        },
         accountsReceivable: {
           icon: <DollarSign className="h-6 w-6" />,
-          subtitle: "Pagamentos pendentes e valores a receber",
+          subtitle: "Contas a receber por categoria",
+        },
+        mrr: {
+          icon: <TrendingUp className="h-6 w-6" />,
+          subtitle: "Receita recorrente mensal",
+        },
+        churn: {
+          icon: <TrendingDown className="h-6 w-6" />,
+          subtitle: "Análise de cancelamentos",
+        },
+        creditPlans: {
+          icon: <CreditCard className="h-6 w-6" />,
+          subtitle: "Planos de crédito ativos",
         },
         activeProjectsWidget: {
           icon: <Briefcase className="h-6 w-6" />,
-          subtitle: "Projetos ativos da agency",
+          subtitle: "Projetos ativos por tipo",
         },
         averageTicket: {
           icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Ticket médio da operação da agency",
+          subtitle: "Ticket médio por cliente",
+        },
+        ltv: {
+          icon: <Star className="h-6 w-6" />,
+          subtitle: "Valor vitalício do cliente",
         },
         cmv: {
           icon: <Calculator className="h-6 w-6" />,
-          subtitle: "Comissão e margem estimada",
+          subtitle: "Custo de mercadoria vendida",
+        },
+        nomads: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "Visão geral dos nômades",
+        },
+        nomadsRanking: {
+          icon: <Trophy className="h-6 w-6" />,
+          subtitle: "Ranking de performance",
+        },
+        agenciesRanking: {
+          icon: <Building2 className="h-6 w-6" />,
+          subtitle: "Ranking das agências da plataforma",
         },
         statusOverview: {
           icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Projetos, tarefas e aprovações da agency",
+          subtitle: "Status de projetos e tarefas",
         },
         tasks: {
           icon: <CheckSquare className="h-6 w-6" />,
-          subtitle: "Tarefas e execuções da agency",
+          subtitle: "Tarefas e execução",
+        },
+        nomadsIndicators: {
+          icon: <Users className="h-6 w-6" />,
+          subtitle: "KPIs de desempenho e qualidade",
         },
         activity: {
           icon: <Activity className="h-6 w-6" />,
-          subtitle: "Atividades recentes da agency",
+          subtitle: "Atividades recentes",
         },
         alerts: {
           icon: <Bell className="h-6 w-6" />,
-          subtitle: "Alertas relevantes da agency",
+          subtitle: "Alertas e notificações",
+        },
+        performers: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Top performers",
         },
         quickActions: {
           icon: <Zap className="h-6 w-6" />,
-          subtitle: "Ações rápidas da agency",
+          subtitle: "Ações rápidas",
+        },
+        partnerProgram: {
+          icon: <Award className="h-6 w-6" />,
+          subtitle: "Convites e partners por nível",
         },
       };
     const cfg = cfgMap[detailsWidgetId] ?? {
@@ -3345,8 +3524,7 @@ export default function AdminDashboardPage() {
                             <TrendingDown className="h-3 w-3" />
                           )}
                           {it.trend === "up" ? "+" : "-"}
-                          {Math.abs(it.change)}
-                          %
+                          {Math.abs(it.change)}%
                         </span>
                         <span className="text-[10px] text-muted-foreground">
                           vs. anterior
@@ -3357,53 +3535,225 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Projetos e tarefas</p>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Projetos ativos</span>
-                        <span className="font-medium">{mData.statusOverview.projects.ongoing}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Lançamentos</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.contracted}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Em execução</span>
-                        <span className="font-medium">{mData.statusOverview.tasks.inProgress}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Propostas</span>
-                        <span className="font-medium">{mData.statusOverview.leads.proposal}</span>
-                      </div>
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-2">
+                    Projetos e tarefas
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        Projetos ativos
+                      </span>
+                      <span className="font-medium">
+                        {mData.statusOverview.projects.ongoing}
+                      </span>
                     </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm font-semibold mb-2">Financeiro</p>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Valor contratado</span>
-                        <span className="font-medium">{mp.contractedValueMonth.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Comissão / margem</span>
-                        <span className="font-medium">{mp.estimatedMargin.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Pagamentos pendentes</span>
-                        <span className="font-medium">{mp.pendingPayments.value}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Recebido</span>
-                        <span className="font-medium">R$ {(mData.accountsReceivable.received / 1000).toFixed(1)}k</span>
-                      </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Lançamentos</span>
+                      <span className="font-medium">
+                        {mData.statusOverview.tasks.contracted}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Em execução</span>
+                      <span className="font-medium">
+                        {mData.statusOverview.tasks.inProgress}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Propostas</span>
+                      <span className="font-medium">
+                        {mData.statusOverview.leads.proposal}
+                      </span>
                     </div>
                   </div>
                 </div>
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <p className="text-sm font-semibold mb-2">Financeiro</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        Valor contratado
+                      </span>
+                      <span className="font-medium">
+                        {mp.contractedValueMonth.value}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        Comissão / margem
+                      </span>
+                      <span className="font-medium">
+                        {mp.estimatedMargin.value}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        Pagamentos pendentes
+                      </span>
+                      <span className="font-medium">
+                        {mp.pendingPayments.value}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Recebido</span>
+                      <span className="font-medium">
+                        R${" "}
+                        {(mData.accountsReceivable.received / 1000).toFixed(1)}k
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           );
-
         }
+
+        case "revenue":
+          return (
+            <div className="space-y-4">
+              {/* Hero */}
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Receita Total
+                    </p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      R$ {(rv.total / 1000).toFixed(1)}k
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      no período selecionado
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-success">
+                      +{rv.totalGrowth}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
+                  </div>
+                </div>
+              </div>
+              {/* 2-per-row plan cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Plano de Crédito",
+                    value: rv.creditPlan,
+                    growth: rv.creditPlanGrowth,
+                    bg: "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800",
+                    text: "text-sky-700 dark:text-sky-300",
+                    color: "bg-sky-500",
+                  },
+                  {
+                    label: "Compra Recorrente",
+                    value: rv.recurring,
+                    growth: rv.recurringGrowth,
+                    bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+                    text: "text-amber-700 dark:text-amber-300",
+                    color: "bg-amber-500",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`p-3 rounded-xl border ${item.bg}`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${item.color} shrink-0`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${item.text} truncate`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      R$ {(item.value / 1000).toFixed(1)}k
+                    </p>
+                    <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${item.color} rounded-full`}
+                        style={{
+                          width: `${(item.value / Math.max(1, rv.total)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-success mt-1">
+                      +{item.growth}% ·{" "}
+                      {((item.value / Math.max(1, rv.total)) * 100).toFixed(0)}%
+                      do total
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {/* Avulso full row */}
+              <div className="p-3 rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium">Compra Avulsa</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold">
+                      R$ {(rv.oneTime / 1000).toFixed(1)}k
+                    </span>
+                    <span className="text-xs text-success ml-2">
+                      +{rv.oneTimeGrowth}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 bg-emerald-100 dark:bg-emerald-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Composition bar */}
+              <div>
+                <p className="text-sm font-semibold mb-2">
+                  Composição da Receita
+                </p>
+                <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-px">
+                  <div
+                    className="bg-sky-500 transition-all"
+                    style={{
+                      width: `${(rv.creditPlan / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-amber-500 transition-all"
+                    style={{
+                      width: `${(rv.recurring / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all"
+                    style={{
+                      width: `${(rv.oneTime / Math.max(1, rv.total)) * 100}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex gap-4 mt-2">
+                  {[
+                    ["bg-sky-500", "Crédito"],
+                    ["bg-amber-500", "Recorrente"],
+                    ["bg-emerald-500", "Avulso"],
+                  ].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                      <span className="text-[10px] text-muted-foreground">
+                        {l}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
 
         case "platformActivities": {
           const engagementRate =
@@ -6434,12 +6784,15 @@ export default function AdminDashboardPage() {
                         .filter((m) => !m.visible)
                         .map((metricCard) => {
                           const metricNames: Record<MetricType, string> = {
-                            totalUsers: "Total de Usuários",
-                            activeUsers: "Usuários Ativos",
-                            companies: "Empresas",
-                            activeProjects: "Projetos Ativos",
-                            revenue: "Receita",
-                            avgRating: "Avaliação Média",
+                            activeProjects: "Projetos ativos",
+                            tasksToLaunch: "Tarefas para lançamento",
+                            tasksInProgress: "Tarefas em execução",
+                            approvalsPending: "Aprovações pendentes",
+                            proposalsAwaitingClient:
+                              "Propostas aguardando cliente",
+                            contractedValueMonth: "Valor contratado no mês",
+                            estimatedMargin: "Comissão / margem estimada",
+                            pendingPayments: "Pagamentos pendentes",
                           };
                           return (
                             <Button
@@ -6461,45 +6814,7 @@ export default function AdminDashboardPage() {
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
-                    // Compute widget-specific metrics based on per-widget period override
-                    const wp = effectivePeriod as { periodKey?: string };
-                    const widgetBase = getMetricsForPeriod(
-                      undefined,
-                      wp.periodKey,
-                    );
-                    const widgetMetrics = !apiStats
-                      ? widgetBase
-                      : {
-                          ...widgetBase,
-                          totalUsers: {
-                            ...widgetBase.totalUsers,
-                            value: (
-                              apiStats.nomades?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeUsers: {
-                            ...widgetBase.activeUsers,
-                            value: (
-                              apiStats.nomades?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          companies: {
-                            ...widgetBase.companies,
-                            value: (
-                              apiStats.companies?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeProjects: {
-                            ...widgetBase.activeProjects,
-                            value: (
-                              apiStats.projects?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          revenue: {
-                            ...widgetBase.revenue,
-                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
-                          },
-                        };
+                    const widgetMetrics = getMetricsForPeriod();
                     return metricCards
                       .filter((m) => m.visible)
                       .sort((a, b) => a.order - b.order)
@@ -7098,10 +7413,10 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atividades recentes da empresa
+                      Atividades recentes da sua agency
                     </p>
                   </div>
-                  <Link to="/company/atividades" className="shrink-0">
+                  <Link to="/agency/atividades" className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -7184,7 +7499,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas da empresa
+                      Alertas da sua agency
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs shrink-0">
@@ -7416,7 +7731,7 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Atalhos da empresa
+                      Atalhos da agency
                     </p>
                   </div>
                 </div>
@@ -7433,41 +7748,41 @@ export default function AdminDashboardPage() {
                   {(
                     [
                       {
-                        to: "/company/projetos",
+                        to: "/agency/projetos",
                         icon: Briefcase,
-                        label: "Ver Projetos",
+                        label: "Criar Projeto",
                         border: "border-info/20",
                         bg: "bg-info/5 hover:bg-info/10",
                         text: "text-info",
                       },
                       {
-                        to: "/company/aprovacoes",
-                        icon: UserCheck,
-                        label: "Ver Aprovações",
-                        border: "border-success/20",
-                        bg: "bg-success/5 hover:bg-success/10",
-                        text: "text-success",
-                      },
-                      {
-                        to: "/company/entregas",
-                        icon: CheckCircle2,
-                        label: "Aprovar Entrega",
+                        to: "/agency/catalogo",
+                        icon: LayoutGrid,
+                        label: "Abrir Catálogo",
                         border: "border-chart-4/20",
                         bg: "bg-chart-4/5 hover:bg-chart-4/10",
                         text: "text-chart-4",
                       },
                       {
-                        to: "/company/propostas",
-                        icon: FileText,
-                        label: "Ver Propostas",
+                        to: "/agency/tarefas",
+                        icon: CheckCircle2,
+                        label: "Minhas Tarefas",
+                        border: "border-success/20",
+                        bg: "bg-success/5 hover:bg-success/10",
+                        text: "text-success",
+                      },
+                      {
+                        to: "/agency/aprovacoes",
+                        icon: UserCheck,
+                        label: "Aprovar Entregas",
                         border: "border-warning/20",
                         bg: "bg-warning/5 hover:bg-warning/10",
                         text: "text-warning",
                       },
                       {
-                        to: "/company/financeiro",
-                        icon: DollarSign,
-                        label: "Acessar Financeiro",
+                        to: "/agency/propostas",
+                        icon: FileText,
+                        label: "Ver Propostas",
                         border: "border-violet-200 dark:border-violet-800",
                         bg: "bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-950/40",
                         text: "text-violet-600 dark:text-violet-400",
@@ -7874,25 +8189,6 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                   </div>
-                </div>
-                {/* Actions */}
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs bg-transparent"
-                  >
-                    <FileText className="h-3.5 w-3.5 mr-1" />
-                    Ver detalhes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs bg-transparent"
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Exportar gráfico
-                  </Button>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
                   Comparado ao mesmo período anterior
@@ -10630,8 +10926,11 @@ export default function AdminDashboardPage() {
 
     const updatedDashboards = [...savedDashboards, newDashboard];
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
-    localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(updatedDashboards),
+    );
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["AGENCY"], newDashboard.id);
 
     setCurrentDashboardId(newDashboard.id);
     setNewDashboardName("");
@@ -10670,7 +10969,10 @@ export default function AdminDashboardPage() {
     );
 
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(updatedDashboards),
+    );
 
     setSharingDashboardId(null);
     setShareGlobal(false);
@@ -10693,10 +10995,10 @@ export default function AdminDashboardPage() {
       setWidgets(dashboard.widgets);
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
-        "dashboard-widget-config-company",
+        "dashboard-widget-config-agency",
         JSON.stringify(dashboard.widgets),
       );
-      localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], dashboardId);
+      localStorage.setItem(CURRENT_DASHBOARD_KEY["AGENCY"], dashboardId);
     }
   };
 
@@ -10705,7 +11007,10 @@ export default function AdminDashboardPage() {
       (d) => d.id !== dashboardId,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(updatedDashboards),
+    );
     if (currentDashboardId === dashboardId) {
       const fallback =
         updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0];
@@ -10722,7 +11027,10 @@ export default function AdminDashboardPage() {
       isDefault: d.id === dashboardId,
     }));
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem(DASHBOARD_STORAGE_KEY["COMPANY"], JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      DASHBOARD_STORAGE_KEY["AGENCY"],
+      JSON.stringify(updatedDashboards),
+    );
     toast({
       title: "Dashboard padrão definido",
       description: "Este dashboard será carregado automaticamente.",
@@ -10845,7 +11153,7 @@ export default function AdminDashboardPage() {
                 isHeaderCompact ? "text-base" : "text-3xl",
               )}
             >
-              Dashboard
+              Dashboard da Agency
             </h1>
             <p
               className={cn(
@@ -12744,3 +13052,5 @@ export default function AdminDashboardPage() {
     // </CHANGE>
   );
 }
+
+// </CHANGE>
