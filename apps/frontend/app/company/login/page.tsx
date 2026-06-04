@@ -6,7 +6,7 @@ import {
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 55%, #c81a7f 100%)",
   defaultEmail: "company@allka.test",
-  defaultPassword: "Teste@123456",
+  defaultPassword: "123456",
   redirectPath: "/company/dashboard",
   accessType: "COMPANY",
   devUser: { email: "empresa@allka.com" },
