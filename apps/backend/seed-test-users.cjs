@@ -1,6 +1,6 @@
 // seed-test-users.cjs
 // Cria 8 usuários de teste idempotentemente para desenvolvimento.
-// Senha padrão: 123456
+// Senha padrão: Teste@123456
 
 "use strict";
 
@@ -10,7 +10,7 @@ const bcrypt = require("bcryptjs");
 const prisma = new PrismaClient();
 
 const SALT_ROUNDS = 10;
-const DEFAULT_PASSWORD = "123456";
+const DEFAULT_PASSWORD = "Teste@123456";
 
 async function hashPassword(plain) {
   return bcrypt.hash(plain, SALT_ROUNDS);
@@ -224,14 +224,14 @@ async function main() {
 
   console.log("\n✅ Seed de usuários de teste concluído.");
   console.log("   Logins disponíveis:");
-  console.log("   admin@allka.test         / 123456  →  /login");
-  console.log("   agencia@allka.test       / 123456  →  /agencia/login");
-  console.log("   nomade@allka.test        / 123456  →  /nomades/login");
-  console.log("   company@allka.test       / 123456  →  /company/login");
-  console.log("   partner@allka.test       / 123456  →  /parceiro/login");
-  console.log("   lider.performance@allka.test / 123456  →  /lider/login");
-  console.log("   lider.design@allka.test      / 123456  →  /lider/login");
-  console.log("   lider.conteudo@allka.test    / 123456  →  /lider/login");
+  console.log("   admin@allka.test         / Teste@123456  →  /login");
+  console.log("   agencia@allka.test       / Teste@123456  →  /agencia/login");
+  console.log("   nomade@allka.test        / Teste@123456  →  /nomades/login");
+  console.log("   company@allka.test       / Teste@123456  →  /company/login");
+  console.log("   partner@allka.test       / Teste@123456  →  /parceiro/login");
+  console.log("   lider.performance@allka.test / Teste@123456  →  /lider/login");
+  console.log("   lider.design@allka.test      / Teste@123456  →  /lider/login");
+  console.log("   lider.conteudo@allka.test    / Teste@123456  →  /lider/login");
 }
 
 main()

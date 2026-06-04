@@ -30,16 +30,14 @@ async function main() {
   });
 
   // ─── Users (10 total) ─────────────────────────────────────────────────────
-  const adminPassword = await bcrypt.hash("admin123", 10);
-  const userPassword = await bcrypt.hash("senha123", 10);
-  const viniciusPassword = await bcrypt.hash("123456", 10);
+  const sharedPassword = await bcrypt.hash("Teste@123456", 10);
 
   const adminUser = await prisma.user.upsert({
     where: { email: "admin@allka.com" },
     update: { is_active: false },
     create: {
       email: "admin@allka.com",
-      password_hash: adminPassword,
+      password_hash: sharedPassword,
       name: "Admin Allka",
       role: "admin",
       account_type: "admin",
@@ -53,7 +51,7 @@ async function main() {
     update: { is_active: false },
     create: {
       email: "suporte@allka.com",
-      password_hash: adminPassword,
+      password_hash: sharedPassword,
       name: "Suporte Allka",
       role: "admin",
       account_type: "admin",
@@ -67,7 +65,7 @@ async function main() {
     where: { email: "cp@lamego.com.vc" },
     update: {
       name: "Vinicius Guardia",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       is_active: true,
       admin_profile_id: masterProfile.id,
     },
@@ -82,13 +80,13 @@ async function main() {
     },
   });
 
-  // ─── Usuários dev por tipo de conta (senha: 123456) ───────────────────────
+  // ─── Usuários dev por tipo de conta (senha: Teste@123456) ────────────────
   await prisma.user.upsert({
     where: { email: "nomade@allka.com.vc" },
-    update: { password_hash: viniciusPassword, is_active: true },
+    update: { password_hash: sharedPassword, is_active: true },
     create: {
       email: "nomade@allka.com.vc",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       name: "Nômade Dev",
       role: "nomad",
       account_type: "nomades",
@@ -98,10 +96,10 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "empresa@allka.com.vc" },
-    update: { password_hash: viniciusPassword, is_active: true },
+    update: { password_hash: sharedPassword, is_active: true },
     create: {
       email: "empresa@allka.com.vc",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       name: "Empresa Dev",
       role: "company_admin",
       account_type: "empresas",
@@ -111,10 +109,10 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "agencia@allka.com.vc" },
-    update: { password_hash: viniciusPassword, is_active: true },
+    update: { password_hash: sharedPassword, is_active: true },
     create: {
       email: "agencia@allka.com.vc",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       name: "Agência Dev",
       role: "agency_admin",
       account_type: "agencias",
@@ -124,10 +122,10 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "parceiro@allka.com.vc" },
-    update: { password_hash: viniciusPassword, is_active: true },
+    update: { password_hash: sharedPassword, is_active: true },
     create: {
       email: "parceiro@allka.com.vc",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       name: "Parceiro Dev",
       role: "partner",
       account_type: "parceiro",

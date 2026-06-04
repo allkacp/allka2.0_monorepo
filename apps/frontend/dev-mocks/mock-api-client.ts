@@ -115,10 +115,10 @@ class MockApiClient {
       (u) => u.email.toLowerCase() === email.toLowerCase(),
     );
     if (!found) throw new Error("Usuário não encontrado.");
-    // Accept the dev master password, the user password or the auto-login token
+    // Accept the dev master password or the auto-login token
     if (
       _password !== "123@321" &&
-      _password !== "123456" &&
+      _password !== "Teste@123456" &&
       !_password.startsWith("dev-")
     ) {
       throw new Error("Email ou senha incorretos.");
