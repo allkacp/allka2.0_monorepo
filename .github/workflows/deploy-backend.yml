@@ -30,6 +30,7 @@ env:
   VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
   MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
+  RUN_RESET_USERS_PASSWORD: ${{ vars.RUN_RESET_USERS_PASSWORD || 'false' }}
 
 jobs:
   deploy:
@@ -191,3 +192,15 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
              docker image prune -f"
+
+      - name: Reset users password on VPS
+        if: ${{ env.RUN_RESET_USERS_PASSWORD == 'true' }}
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          ssh "${SSH_OPTS[@]}" "$remote" \
+            "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml run --rm --no-deps backend npm run reset:users-password"

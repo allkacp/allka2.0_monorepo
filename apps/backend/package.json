@@ -11,6 +11,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:test-users": "tsx seed-test-users.ts",
+    "reset:users-password": "node reset-users-password.cjs",
     "db:seed:products": "tsx seed-all-products.ts",
     "db:seed:tasks": "tsx migrate-tasks.ts",
     "db:seed:project-tasks": "node seed-in-progress.cjs",

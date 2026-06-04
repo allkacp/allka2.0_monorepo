@@ -35,6 +35,7 @@ COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma/client /app/node_modules/@prisma/client
 COPY --from=build /app/apps/backend/dist /app/apps/backend/dist
 COPY --from=build /app/apps/backend/prisma /app/apps/backend/prisma
+COPY apps/backend/reset-users-password.cjs /app/apps/backend/reset-users-password.cjs
 
 WORKDIR /app/apps/backend
 EXPOSE 3001
