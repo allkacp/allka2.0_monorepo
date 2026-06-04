@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocation } from "react-router-dom";
 
 export type AccountType =
   | "empresas"
@@ -40,15 +47,15 @@ function inferFromPath(path: string): {
   accountType: AccountType;
   accountSubType: AccountSubType;
 } {
-  if (path.startsWith("/nomades"))
+  if (path.startsWith("/nomad") || path.startsWith("/nomades"))
     return { accountType: "nomades", accountSubType: null };
-  if (path.startsWith("/lider"))
+  if (path.startsWith("/leader") || path.startsWith("/lider"))
     return { accountType: "lider", accountSubType: null };
-  if (path.startsWith("/company"))
+  if (path.startsWith("/company") || path.startsWith("/empresa"))
     return { accountType: "empresas", accountSubType: "company" };
-  if (path.startsWith("/agencia"))
+  if (path.startsWith("/agency") || path.startsWith("/agencia"))
     return { accountType: "agencias", accountSubType: null };
-  if (path.startsWith("/parceiro"))
+  if (path.startsWith("/partner") || path.startsWith("/parceiro"))
     return { accountType: "parceiro", accountSubType: null };
   return { accountType: "admin", accountSubType: null };
 }
@@ -60,12 +67,19 @@ function inferFromPath(path: string): {
  *   2. Legacy simulatedUser (backward compat)
  *   3. URL-based inference (handles first load with no storage)
  */
-function loadStoredProfile(): {
+function loadStoredProfile(pathname: string): {
   accountType: AccountType;
   accountSubType: AccountSubType;
   previewUserName: string | null;
   previewUserEmail: string | null;
 } {
+  const hasToken = Boolean(localStorage.getItem("allka_token"));
+
+  if (!hasToken) {
+    const inferred = inferFromPath(pathname);
+    return { ...inferred, previewUserName: null, previewUserEmail: null };
+  }
+
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (raw) {
@@ -92,14 +106,15 @@ function loadStoredProfile(): {
         };
     }
   } catch {}
-  const inferred = inferFromPath(window.location.pathname);
+  const inferred = inferFromPath(pathname);
   return { ...inferred, previewUserName: null, previewUserEmail: null };
 }
 
 export function AccountTypeProvider({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   // Lazy initializer: reads localStorage synchronously on first render.
   // This means the FIRST render already has the correct profile — no flash.
-  const stored = loadStoredProfile();
+  const stored = loadStoredProfile(pathname);
   const [accountType, setAccountTypeState] = useState<AccountType>(
     () => stored.accountType,
   );
@@ -107,12 +122,33 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
     () => stored.accountSubType,
   );
   const [previewUserName, setPreviewUserName] = useState<string | null>(
-    () => loadStoredProfile().previewUserName,
+    () => loadStoredProfile(pathname).previewUserName,
   );
   const [previewUserEmail, setPreviewUserEmail] = useState<string | null>(
-    () => loadStoredProfile().previewUserEmail,
+    () => loadStoredProfile(pathname).previewUserEmail,
   );
   const [isLocked, setIsLocked] = useState(false);
+
+  useEffect(() => {
+    const syncFromStorage = () => {
+      const next = loadStoredProfile(pathname);
+      setAccountTypeState(next.accountType);
+      setAccountSubType(next.accountSubType);
+      setPreviewUserName(next.previewUserName);
+      setPreviewUserEmail(next.previewUserEmail);
+    };
+
+    syncFromStorage();
+    window.addEventListener("storage", syncFromStorage);
+    window.addEventListener("allka:profile-changed", syncFromStorage as EventListener);
+    return () => {
+      window.removeEventListener("storage", syncFromStorage);
+      window.removeEventListener(
+        "allka:profile-changed",
+        syncFromStorage as EventListener,
+      );
+    };
+  }, [pathname]);
 
   const setAccountType = (
     type: AccountType,

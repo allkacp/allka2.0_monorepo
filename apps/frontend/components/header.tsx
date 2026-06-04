@@ -369,10 +369,12 @@ export function Header() {
 
   const handleLogout = () => {
     localStorage.removeItem("simulatedUser");
+    localStorage.removeItem("dev_active_profile");
     localStorage.removeItem("allka_token");
     localStorage.setItem("allka_logged_out", "true");
     unlockAccountType();
     apiClient.clearToken();
+    window.dispatchEvent(new Event("allka:profile-changed"));
     window.location.href = "/login";
   };
 

@@ -387,9 +387,11 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
               className="w-full justify-start text-white hover:bg-white/10 rounded-xl p-4"
               onClick={() => {
                 localStorage.removeItem("simulatedUser")
+                localStorage.removeItem("dev_active_profile")
                 localStorage.removeItem("allka_token")
                 localStorage.setItem("allka_logged_out", "true")
                 onClose()
+                window.dispatchEvent(new Event("allka:profile-changed"))
                 window.location.href = "/login"
               }}
             >

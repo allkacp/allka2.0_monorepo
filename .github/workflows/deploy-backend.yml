@@ -144,15 +144,16 @@ jobs:
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          SCP_OPTS=(-i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           if ! ssh "${SSH_OPTS[@]}" "$remote" "true"; then
             echo "::error::SSH inacessível em ${VPS_HOST}:${VPS_SSH_PORT}. Verifique VPS_HOST, VPS_SSH_PORT, firewall e se o serviço SSH está ativo no VPS."
             exit 1
           fi
           ssh "${SSH_OPTS[@]}" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
-          scp "${SSH_OPTS[@]}" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
-          scp "${SSH_OPTS[@]}" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
-          scp "${SSH_OPTS[@]}" .deploy/.env.backend        "$remote:${VPS_DEPLOY_PATH}/.env.backend"
-          scp "${SSH_OPTS[@]}" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
+          scp "${SCP_OPTS[@]}" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
+          scp "${SCP_OPTS[@]}" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
+          scp "${SCP_OPTS[@]}" .deploy/.env.backend        "$remote:${VPS_DEPLOY_PATH}/.env.backend"
+          scp "${SCP_OPTS[@]}" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
 
       - name: Deploy backend on VPS
         shell: bash
@@ -164,6 +165,7 @@ jobs:
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          SCP_OPTS=(-i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           printf '%s' "$GHCR_TOKEN" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
           ssh "${SSH_OPTS[@]}" "$remote" \
