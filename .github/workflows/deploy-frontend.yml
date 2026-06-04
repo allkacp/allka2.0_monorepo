@@ -122,23 +122,16 @@ jobs:
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Debug SSH target
-        shell: bash
-        run: |
-          echo "Testando acesso SSH direto na VPS..."
-          echo "Porta configurada: ${VPS_SSH_PORT}"
-          timeout 20 bash -c '</dev/tcp/2.24.203.121/22' && echo "Porta 22 acessível pelo GitHub runner" || (echo "Porta 22 NÃO acessível pelo GitHub runner" && exit 1)
-
       - name: Upload compose files
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          remote="root@2.24.203.121"
+          remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
-            -p "22"
+            -p "$VPS_SSH_PORT"
             -o ConnectTimeout=15
             -o ConnectionAttempts=2
             -o BatchMode=yes
@@ -147,7 +140,7 @@ jobs:
           )
           SCP_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
-            -P "22"
+            -P "$VPS_SSH_PORT"
             -o ConnectTimeout=15
             -o ConnectionAttempts=2
             -o BatchMode=yes
