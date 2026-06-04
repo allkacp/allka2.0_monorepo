@@ -130,9 +130,11 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          install -m 600 /dev/null ~/.ssh/allka_deploy_key
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
-          ssh-keyscan -p "$VPS_SSH_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Upload compose files
         shell: bash
@@ -141,11 +143,12 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
-          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/.env.backend        "$remote:${VPS_DEPLOY_PATH}/.env.backend"
-          scp -i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
+          SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          ssh "${SSH_OPTS[@]}" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
+          scp "${SSH_OPTS[@]}" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
+          scp "${SSH_OPTS[@]}" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
+          scp "${SSH_OPTS[@]}" .deploy/.env.backend        "$remote:${VPS_DEPLOY_PATH}/.env.backend"
+          scp "${SSH_OPTS[@]}" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
 
       - name: Deploy backend on VPS
         shell: bash
@@ -156,9 +159,10 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" \
+          SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          printf '%s' "$GHCR_TOKEN" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
-          ssh -i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" "$remote" \
+          ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
              docker compose --env-file .env -f docker-compose.yml pull backend && \
              docker compose --env-file .env -f docker-compose.yml up -d mysql && \
