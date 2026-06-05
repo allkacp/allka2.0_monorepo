@@ -6,12 +6,12 @@ const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
-const TEMPORARY_PASSWORD = "Teste@123456";
+const TEMPORARY_PASSWORD = "123456";
 const SALT_ROUNDS = 10;
 
 async function main() {
   console.log("🔐 Iniciando reset de senha dos usuários...");
-  console.log("   Senha temporária: Teste@123456");
+  console.log("   Senha temporária: 123456");
 
   const passwordHash = await bcrypt.hash(TEMPORARY_PASSWORD, SALT_ROUNDS);
 
