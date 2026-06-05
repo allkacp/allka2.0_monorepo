@@ -2049,6 +2049,10 @@ export default function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
+    const METRIC_CARDS_KEY = "dashboard-metric-cards-leader";
+    const WIDGET_SIZE_KEY = "dashboard-widget-size-leader";
+    const WIDGET_PERIODS_KEY = "dashboard-widget-periods-leader";
+
     const savedConfig = localStorage.getItem("dashboard-widget-config");
     if (savedConfig) {
       try {
@@ -2068,7 +2072,7 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards");
+    const savedMetrics = localStorage.getItem(METRIC_CARDS_KEY);
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -2077,13 +2081,13 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size");
+    const savedSize = localStorage.getItem(WIDGET_SIZE_KEY);
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods");
+    const savedWidgetPeriods = localStorage.getItem(WIDGET_PERIODS_KEY);
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -2162,11 +2166,11 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size", widgetSize);
+    localStorage.setItem("dashboard-metric-cards-leader", JSON.stringify(metricCards));
+    localStorage.setItem("dashboard-widget-size-leader", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods",
+      "dashboard-widget-periods-leader",
       JSON.stringify(widgetPeriods),
     );
 
