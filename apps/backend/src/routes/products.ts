@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { assertProductContractable, getProductContractability } from "../lib/product-contractability";
 
 const router = Router();
 
@@ -35,7 +36,7 @@ const createSchema = z.object({
   demonstrations: z.string().optional(),
   completion_time: z.string().optional(),
   metadata: z.string().optional(),
-  is_active: z.boolean().default(true),
+  is_active: z.boolean().default(false),
   variations: z.array(variationSchema).optional(),
   addons: z.array(addonSchema).optional(),
 });
@@ -69,6 +70,11 @@ router.get("/", verifyToken, async (req, res, next) => {
         include: {
           variations: true,
           addons: true,
+          task_links: {
+            where: { catalog_task: { is_active: true } },
+            include: { catalog_task: true },
+            orderBy: { sort_order: "asc" },
+          },
           _count: { select: { variations: true, addons: true } },
         },
         skip,
@@ -77,7 +83,17 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    res.json({ data, total, page, limit });
+    const dataWithContractability = await Promise.all(
+      data.map(async (product) => {
+        const contractability = await getProductContractability(product.id);
+        return {
+          ...product,
+          contractability,
+        };
+      }),
+    );
+
+    res.json({ data: dataWithContractability, total, page, limit });
   } catch (err) {
     next(err);
   }
@@ -88,7 +104,15 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const product = await prisma.product.findUnique({
       where: { id: req.params.id as string as string as string },
-      include: { variations: true, addons: true },
+      include: {
+        variations: true,
+        addons: true,
+        task_links: {
+          where: { catalog_task: { is_active: true } },
+          include: { catalog_task: true },
+          orderBy: { sort_order: "asc" },
+        },
+      },
     });
 
     if (!product) {
@@ -96,7 +120,10 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    res.json(product);
+    res.json({
+      ...product,
+      contractability: await getProductContractability(product.id),
+    });
   } catch (err) {
     next(err);
   }
@@ -125,16 +152,35 @@ router.post(
         [key: string]: unknown;
       };
 
+      if (rest.is_active === true) {
+        throw Object.assign(
+          new Error(
+            "Este produto não pode ser criado como ativo porque ainda não possui tarefas operacionais vinculadas. Cadastre pelo menos uma tarefa antes de ativá-lo.",
+          ),
+          { statusCode: 400, code: "PRODUCT_WITHOUT_TASKS" },
+        );
+      }
+
       const product = await prisma.product.create({
         data: {
           ...(rest as Parameters<typeof prisma.product.create>[0]["data"]),
           variations: variations ? { create: variations } : undefined,
           addons: addons ? { create: addons } : undefined,
         },
-        include: { variations: true, addons: true },
+        include: {
+          variations: true,
+          addons: true,
+          task_links: {
+            where: { catalog_task: { is_active: true } },
+            include: { catalog_task: true },
+          },
+        },
       });
 
-      res.status(201).json(product);
+      res.status(201).json({
+        ...product,
+        contractability: await getProductContractability(product.id),
+      });
     } catch (err) {
       next(err);
     }
@@ -154,12 +200,26 @@ router.put(
         ...rest
       } = req.body as Record<string, unknown>;
 
+      if (rest.is_active === true) {
+        await assertProductContractable(req.params.id as string);
+      }
+
       const product = await prisma.product.update({
         where: { id: req.params.id as string as string as string },
         data: rest as Parameters<typeof prisma.product.update>[0]["data"],
-        include: { variations: true, addons: true },
+        include: {
+          variations: true,
+          addons: true,
+          task_links: {
+            where: { catalog_task: { is_active: true } },
+            include: { catalog_task: true },
+          },
+        },
       });
-      res.json(product);
+      res.json({
+        ...product,
+        contractability: await getProductContractability(product.id),
+      });
     } catch (err) {
       next(err);
     }

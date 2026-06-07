@@ -31,13 +31,17 @@ import { useProjects } from "@/hooks/useProjects";
 import type { FrontendProject } from "@/lib/project-adapter";
 
 interface ProjectsManagementTabProps {
-  company: {
+  company?: {
     id: string | number;
     name: string;
   };
+  agencyName?: string;
 }
 
-export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
+export function ProjectsManagementTab({
+  company,
+  agencyName,
+}: ProjectsManagementTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -65,27 +69,40 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
   );
 
   const {
-    projects: companyProjects,
+    projects,
     loading: projectsLoading,
     refetch: refetchProjects,
     setProjects: setCompanyProjects,
-  } = useProjects({ companyId: company.id });
+  } = useProjects(
+    company
+      ? { companyId: company.id }
+      : agencyName
+        ? { agencyName }
+        : {},
+  );
+
+  const scopeLabel = company?.name || agencyName || "Projetos";
+  const scopeId = company?.id ?? agencyName ?? "";
 
   const handleProjectCreated = (project: any) => {
-    const withCompany = { ...project, companyId: parseInt(String(company.id)) };
-    setCompanyProjects((prev) => [...prev, withCompany]);
+    const withScope = {
+      ...project,
+      companyId: scopeId,
+      agency: agencyName || project.agency || "",
+    };
+    setCompanyProjects((prev) => [...prev, withScope]);
     refetchProjects();
   };
 
   const filteredProjects = useMemo(() => {
-    return companyProjects.filter((p) => {
+    return projects.filter((p) => {
       const matchesSearch =
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.client.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesQuick = !quickStatusFilter || p.status === quickStatusFilter;
       return matchesSearch && matchesQuick;
     });
-  }, [companyProjects, searchTerm, quickStatusFilter]);
+  }, [projects, searchTerm, quickStatusFilter]);
 
   const totalProjects = filteredProjects.length;
   const totalPages = Math.ceil(totalProjects / itemsPerPage);
@@ -242,13 +259,13 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
           >
             <Briefcase className="h-3 w-3" />
             <span>Total</span>
-            <span className="font-bold">{companyProjects.length}</span>
+            <span className="font-bold">{projects.length}</span>
           </button>
           <div className="h-5 w-px bg-slate-200" />
           {Object.entries(STATUS_MAP)
             .filter(([k]) => k !== "negotiation")
             .map(([statusKey, { label, dot }]) => {
-              const count = companyProjects.filter(
+              const count = projects.filter(
                 (p) => p.status === statusKey,
               ).length;
               const isActive = quickStatusFilter === statusKey;
@@ -266,7 +283,7 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
                   }`}
                 >
                   <div
-                    className={`h-2 w-2 rounded-full flex-shrink-0 ${dot}`}
+                    className={`h-2 w-2 rounded-full shrink-0 ${dot}`}
                   />
                   <span>{label}</span>
                   <span
@@ -529,8 +546,8 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
       <ProjectCreateNewPanel
         open={createPanelOpen}
         onOpenChange={setCreatePanelOpen}
-        companyId={company.id}
-        companyName={company.name}
+        companyId={company?.id}
+        companyName={scopeLabel}
         onCreate={handleProjectCreated}
       />
 
@@ -544,8 +561,8 @@ export function ProjectsManagementTab({ company }: ProjectsManagementTabProps) {
           }}
           initialData={cloneInitialData}
           cloneMode
-          companyId={company.id}
-          companyName={company.name}
+          companyId={company?.id}
+          companyName={scopeLabel}
           onCreate={handleProjectCreated}
         />
       )}

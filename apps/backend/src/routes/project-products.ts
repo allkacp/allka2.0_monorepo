@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { getNextTaskCode } from "../lib/task-code";
+import { assertProductContractable } from "../lib/product-contractability";
 
 const router = Router();
 
@@ -172,6 +173,8 @@ router.post(
         return;
       }
 
+      await assertProductContractable(product.id);
+
       // 3. Compute price snapshot
       let priceSnapshot = product.base_price;
       if (variation_id && product.variations.length > 0) {
@@ -217,12 +220,7 @@ router.post(
       // Only generate if project is in a paid/contracted state.
       // For earlier statuses (draft, negotiation), tasks will be generated
       // automatically when the project transitions to "planning" via gerarTarefasDoProjeto.
-      const TASK_GENERATION_STATUSES = [
-        "awaiting-payment",
-        "planning",
-        "in-progress",
-        "paused",
-      ];
+      const TASK_GENERATION_STATUSES = ["planning", "in-progress", "paused"];
       const taskLinks = product.task_links;
       let generatedCount = 0;
       let skippedCount = 0;

@@ -32,10 +32,13 @@ export interface MockApiProject {
   teamMembers?: { name: string; role: string }[];
   products?: {
     id: string;
+    product_id?: string;
     name: string;
     price: number;
     quantity: number;
     category: string;
+    project_id?: string;
+    recurrence_snapshot?: string | null;
   }[];
 }
 

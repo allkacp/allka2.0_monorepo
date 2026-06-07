@@ -113,6 +113,7 @@ export default function EmpresaProdutos() {
         mode="page"
         selectedProducts={selectedProducts}
         productQuantities={productQuantities}
+        contractableOnly={true}
         onAdd={handleAdd}
         onRemove={handleRemove}
         onIncrease={handleIncrease}

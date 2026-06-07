@@ -59,6 +59,7 @@ let nextPartnerLevelId = 100;
 const campaigns: MockCampaign[] = JSON.parse(JSON.stringify(mockCampaigns));
 const products: MockProduct[] = JSON.parse(JSON.stringify(mockProducts));
 const invoices: MockInvoice[] = JSON.parse(JSON.stringify(mockInvoices));
+const payments: any[] = [];
 const withdrawals: MockWithdrawal[] = JSON.parse(
   JSON.stringify(mockWithdrawals),
 );
@@ -80,6 +81,7 @@ let nextNomadeId = 100;
 let nextCampaignId = 100;
 let nextProductId = 100;
 let nextInvoiceId = 100;
+let nextPaymentId = 100;
 let nextWithdrawalId = 100;
 let nextTermId = 100;
 let nextCourseId = 100;
@@ -93,9 +95,201 @@ function now() {
   return new Date().toISOString();
 }
 
+function initialsFromName(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
+function asProjectProductSnapshot(product: any, projectId: string) {
+  return {
+    id: `pp-${projectId}-${product.id}`,
+    project_id: projectId,
+    product_id: product.id,
+    name: product.name,
+    price: Number(product.base_price ?? product.price ?? 0),
+    quantity: Number(product.quantity ?? 1),
+    category: product.category || "outros",
+    recurrence_snapshot: product.recurrence ?? null,
+  };
+}
+
+function getProductTaskTemplates(product: any) {
+  return Array.isArray(product?.tasks) ? product.tasks : [];
+}
+
+function buildMockProjectProduct(project: any, product: any, linkedAt?: string) {
+  const taskTemplates = getProductTaskTemplates(product);
+  const taskLinks = taskTemplates.map((template: any, index: number) => ({
+    id: `tpl-${product.id}-${index + 1}`,
+    product_id: product.id,
+    sort_order: template.sort_order ?? index + 1,
+    phase: template.phase ?? null,
+    is_mandatory: true,
+    catalog_task: {
+      id: template.id ?? `${product.id}-T${String(index + 1).padStart(2, "0")}`,
+      code: template.code ?? `${product.id}-T${String(index + 1).padStart(2, "0")}`,
+      name: template.name ?? template.title ?? `Etapa ${index + 1}`,
+      description: template.description || null,
+      category: template.taskCategory || product.category || "Geral",
+      checklist: template.checklist ?? null,
+      steps: template.steps ?? null,
+      briefing_questions: template.briefing_questions ?? null,
+      default_priority: template.priority ?? "medium",
+    },
+  }));
+
+  const linkedTasks = tasks.filter(
+    (task) =>
+      task.project_id === String(project.id) &&
+      String(task.product_id || "") === String(product.id),
+  );
+
+  const tasksForProduct = linkedTasks.length
+    ? linkedTasks.map((task, index) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status:
+          task.status === "completed"
+            ? "CONCLUIDA"
+            : task.status === "in_progress"
+              ? "EM_EXECUCAO"
+              : task.status === "review"
+                ? "EM_REVISAO"
+                : "PARA_LANCAMENTO",
+        due_date: task.due_date,
+        lancamento_expires_at: null,
+        task_code: task.task_code || `T-${task.id}`,
+        stages: [],
+        sort_order: index + 1,
+      }))
+    : taskLinks.map((link, index) => ({
+        id: `task-${project.id}-${product.id}-${index + 1}`,
+        title: link.catalog_task.name,
+        description: link.catalog_task.description,
+        status: index === 0 ? "EM_EXECUCAO" : "PARA_LANCAMENTO",
+        due_date: linkedAt || null,
+        lancamento_expires_at: null,
+        task_code: link.catalog_task.code,
+        stages: [],
+        sort_order: index + 1,
+      }));
+
+  return {
+    id: `pp-${project.id}-${product.id}`,
+    project_id: String(project.id),
+    product_id: String(product.id),
+    created_at: linkedAt || now(),
+    due_date: project.end_date || null,
+    status: project.status || "draft",
+    product: {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      task_links: taskLinks,
+    },
+    tasks: tasksForProduct,
+  };
+}
+
 class MockApiClient {
   // ─── Auth ───────────────────────────────────────────────────────────────
   private _currentUser: any = null;
+
+  private mapOperationalTask(task: MockApiTask) {
+    const project = projects.find((p) => p.id === task.project_id) || null;
+    const client = project
+      ? clients.find((c) => c.id === String(project.client_id)) || null
+      : null;
+    const agencyUser = users.find((u) => u.role === "agency_admin") || null;
+    const nomadeUser = task.assigned_to
+      ? users.find((u) => u.id === task.assigned_to) || null
+      : null;
+
+    return {
+      id: task.id,
+      project_id: task.project_id,
+      project_product_id: `pp-${task.id}`,
+      product_id: `prod-${task.id}`,
+      catalog_task_id: null,
+      task_code: `T-${task.id}`,
+      code_snapshot: `T-${task.id}`,
+      name_snapshot: task.title,
+      category_snapshot: project?.type || "Geral",
+      title: task.title,
+      description: task.description || null,
+      status:
+        task.status === "completed"
+          ? "CONCLUIDA"
+          : task.status === "in_progress"
+            ? "EM_EXECUCAO"
+            : task.status === "cancelled"
+              ? "CANCELADA"
+              : task.status === "review"
+                ? "EM_REVISAO"
+                : "PARA_LANCAMENTO",
+      priority:
+        task.priority === "urgent"
+          ? "urgent"
+          : task.priority === "high"
+            ? "high"
+            : task.priority === "low"
+              ? "low"
+              : "medium",
+      assignee_id: task.assigned_to,
+      responsavel_agencia_id: agencyUser?.id || null,
+      nomade_responsavel_id: nomadeUser?.id || null,
+      due_date: task.due_date,
+      start_date: task.created_at?.split("T")[0] || null,
+      completed_at: task.status === "completed" ? task.updated_at : null,
+      data_lancamento: null,
+      data_liberacao_execucao: null,
+      data_inicio_execucao: null,
+      data_conclusao: task.status === "completed" ? task.updated_at : null,
+      sort_order: Number(task.id),
+      fase: project?.status || null,
+      observations: task.description || null,
+      checklist_snapshot: [],
+      steps_snapshot: [],
+      briefing_snapshot: [],
+      created_at: task.created_at,
+      updated_at: task.updated_at,
+      responsavel_agencia: agencyUser
+        ? { id: agencyUser.id, name: agencyUser.name, email: agencyUser.email }
+        : null,
+      nomade_responsavel: nomadeUser
+        ? { id: nomadeUser.id, name: nomadeUser.name, email: nomadeUser.email }
+        : null,
+      project: {
+        id: project?.id || task.project_id,
+        title: project?.title || "Projeto",
+        status: project?.status || "draft",
+        type: project?.type || "",
+        consultant: project?.consultant || null,
+        client: client
+          ? {
+              id: client.id,
+              name: client.name,
+              logo: client.logo || undefined,
+              cnpj: client.cnpj || undefined,
+            }
+          : null,
+      },
+      project_product: {
+        id: `pp-${task.id}`,
+        product_name_snapshot: task.title,
+        product_code_snapshot: `T-${task.id}`,
+        product_category_snapshot: project?.type || "Geral",
+        status: task.status,
+      },
+      catalog_task: null,
+      _count: { stages: 0, briefing_answers: 0, attachments: 0 },
+    };
+  }
 
   setToken(token: string) {
     try {
@@ -118,7 +312,7 @@ class MockApiClient {
     // Accept the dev master password or the auto-login token
     if (
       _password !== "123@321" &&
-      _password !== "Teste@123456" &&
+      _password !== "123456" &&
       !_password.startsWith("dev-")
     ) {
       throw new Error("Email ou senha incorretos.");
@@ -152,6 +346,44 @@ class MockApiClient {
     } catch {}
     // Last resort
     return users[0];
+  }
+
+  async getPartnerMe() {
+    await delay();
+    const user = (await this.getCurrentUser()) as any;
+    return {
+      profile: {
+        id: `partner-${user.id}`,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        avatarInitials: initialsFromName(user.name || "P"),
+        balance: 0,
+        totalEarned: 0,
+        totalWithdrawn: 0,
+        status: "active",
+        createdAt: now(),
+        level: "bronze",
+      },
+      stats: {
+        clicks: 0,
+        conversions: 0,
+        abandonment: 0,
+        conversionRate: 0,
+        contractedProjects: 0,
+        commissionsEarned: 0,
+        period: "Atual",
+      },
+      commissions: [],
+      withdrawals: [],
+      projects: [],
+      ledAgencies: [],
+    };
+  }
+
+  async getPartnerCommissions() {
+    await delay();
+    return [];
   }
 
   // ─── Companies (clients) ───────────────────────────────────────────────
@@ -218,6 +450,12 @@ class MockApiClient {
   }
   async updateClient(id: number, data: any) {
     return this.updateCompany(String(id), data);
+  }
+
+  // ─── Chat ───────────────────────────────────────────────────────────────
+  async getConversations() {
+    await delay();
+    return [];
   }
   async deleteClient(id: number) {
     return this.deleteCompany(String(id));
@@ -304,6 +542,9 @@ class MockApiClient {
 
   async createProject(data: any) {
     await delay();
+    const currentUser = (await this.getCurrentUser()) as any;
+    const agencyName =
+      currentUser?.agency_name || currentUser?.agency?.name || null;
     const project: MockApiProject = {
       id: String(nextProjectId++),
       title: data.title || data.name || "",
@@ -313,7 +554,7 @@ class MockApiClient {
         name: data.client_name || "Nova Empresa",
         cnpj: data.client_cnpj || "",
       },
-      agency: data.agency || "",
+      agency: agencyName || data.agency || "",
       company_type: data.company_type || "company",
       consultant: data.consultant || "",
       consultant_email: data.consultant_email || "",
@@ -335,11 +576,37 @@ class MockApiClient {
       billing_day: data.billing_day || null,
       billing_start_date: data.billing_start_date || null,
       _count: { task_executions: 0 },
+      products: [],
       created_at: now(),
       updated_at: now(),
     };
     projects.push(project);
     return project;
+  }
+
+  async getProjectProducts(filters?: Record<string, any>) {
+    await delay();
+
+    let result = projects.flatMap((project) => {
+      const projectProducts = project.products || [];
+      return projectProducts.map((product) =>
+        buildMockProjectProduct(project, product, (product as any).created_at),
+      );
+    });
+
+    if (filters?.project_id) {
+      result = result.filter(
+        (item) => String(item.project_id) === String(filters.project_id),
+      );
+    }
+
+    if (filters?.product_id) {
+      result = result.filter(
+        (item) => String(item.product_id) === String(filters.product_id),
+      );
+    }
+
+    return { data: result, total: result.length, page: 1, limit: 1000 };
   }
 
   async updateProject(id: string | number, data: any) {
@@ -357,9 +624,128 @@ class MockApiClient {
     return { message: "Deleted" };
   }
 
+  async linkProductToProject(data: {
+    project_id: string;
+    product_id: string;
+    variation_id?: string;
+    recurrence_snapshot?: "avulso" | "mensal";
+    preco_final_cliente_snapshot?: number;
+    comissao_snapshot?: number;
+    pagador_snapshot?: "AGENCIA" | "CLIENTE";
+    start_date?: string;
+    expected_end_date?: string;
+  }) {
+    await delay();
+
+    const project = projects.find((p) => p.id === String(data.project_id));
+    if (!project) throw new Error("Project not found");
+
+    const product = products.find((p) => p.id === String(data.product_id));
+    if (!product) throw new Error("Product not found");
+
+    const projectProducts = (project as any).products || [];
+    const existing = projectProducts.find(
+      (item: any) =>
+        String(item.product_id || item.id) === String(data.product_id),
+    );
+
+    const projectProduct =
+      existing || {
+        ...asProjectProductSnapshot(product, String(project.id)),
+        price: Number(
+          data.preco_final_cliente_snapshot ?? product.base_price ?? 0,
+        ),
+        created_at: now(),
+        due_date: data.expected_end_date || null,
+      };
+
+    if (!existing) {
+      (project as any).products = [
+        ...projectProducts,
+        {
+          ...projectProduct,
+          product_id: product.id,
+        },
+      ];
+    }
+
+    const taskTemplates = getProductTaskTemplates(product);
+    const templatesToCreate =
+      taskTemplates.length > 0
+        ? taskTemplates
+        : [
+            {
+              id: `${product.id}-T01`,
+              name: `${product.name} - Etapa 1`,
+              description:
+                product.short_description || product.description || "",
+              sort_order: 1,
+            },
+          ];
+
+    templatesToCreate.forEach((template: any, index: number) => {
+      const taskTitle =
+        template.name || template.title || `${product.name} - Etapa ${index + 1}`;
+      const existingTask = tasks.find(
+        (task) =>
+          task.project_id === String(data.project_id) &&
+          task.title === taskTitle,
+      );
+
+      if (existingTask) return;
+
+      tasks.push({
+        id: String(nextTaskId++),
+        title: taskTitle,
+        description:
+          template.description ||
+          product.short_description ||
+          product.description ||
+          "",
+        project_id: String(data.project_id),
+        product_id: product.id,
+        project_product_id: projectProduct.id,
+        task_code: template.id || `${product.id}-T${String(index + 1).padStart(2, "0")}`,
+        assigned_to: null,
+        status: index === 0 ? "in_progress" : "pending",
+        priority: template.priority || "medium",
+        due_date: data.expected_end_date || null,
+        created_by: "1",
+        created_at: now(),
+        updated_at: now(),
+      });
+    });
+
+    project.status = project.status === "draft" ? "planning" : project.status;
+    project.updated_at = now();
+
+    return {
+      id: projectProduct.id,
+      project_product: projectProduct,
+      project_id: String(data.project_id),
+      product_id: String(data.product_id),
+    };
+  }
+
   async getProjectTasks(projectId: string | number) {
     await delay();
-    return tasks.filter((t) => t.project_id === String(projectId));
+    return tasks
+      .filter((t) => t.project_id === String(projectId))
+      .map((t) => this.mapOperationalTask(t));
+  }
+
+  async getOperationalTasks(filters?: Record<string, any>) {
+    await delay();
+    let result = [...tasks];
+    if (filters?.project_id) {
+      result = result.filter(
+        (t) => t.project_id === String(filters.project_id),
+      );
+    }
+    if (filters?.status) {
+      result = result.filter((t) => t.status === filters.status);
+    }
+    return { data: result.map((t) => this.mapOperationalTask(t)), total: result.length, page: 1, limit: 1000 };
   }
 
   // ─── Tasks ─────────────────────────────────────────────────────────────
@@ -407,6 +793,18 @@ class MockApiClient {
     if (idx === -1) throw new Error("Task not found");
     tasks[idx] = { ...tasks[idx], ...data, updated_at: now() };
     return tasks[idx];
+  }
+
+  async updateProjectTask(id: string | number, data: any) {
+    return this.updateTask(id, data);
+  }
+
+  async launchProjectTask(id: string | number) {
+    return this.updateTask(id, { status: "in_progress" });
+  }
+
+  async releaseProjectTask(id: string | number) {
+    return this.updateTask(id, { status: "in_progress" });
   }
 
   async deleteTask(id: string | number) {
@@ -823,6 +1221,97 @@ class MockApiClient {
         (i) => String(i.company_id) === String(filters.company_id),
       );
     return { data: result, total: result.length, page: 1, limit: 1000 };
+  }
+
+  async fakeSandboxCheckout(data: {
+    project_id: string;
+    amount: number;
+    card_last_digits?: string;
+    card_holder?: string;
+    notes?: string;
+  }) {
+    await delay();
+
+    if (!data?.project_id || data.amount == null || Number.isNaN(Number(data.amount))) {
+      throw new Error("project_id e amount são obrigatórios");
+    }
+
+    const project = projects.find((p) => p.id === String(data.project_id));
+    if (!project) throw new Error("Projeto não encontrado");
+
+    const payment = {
+      id: String(nextPaymentId++),
+      project_id: String(data.project_id),
+      amount: Number(data.amount),
+      payment_method: "CARTAO_TESTE",
+      status: "PAGO",
+      gateway: "FAKE_SANDBOX",
+      fake_transaction_id: `FAKE_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)
+        .toUpperCase()}`,
+      card_last_digits: data.card_last_digits ?? "4242",
+      card_holder: data.card_holder ?? "Vinicius Guardia",
+      notes: data.notes ?? "Pagamento de teste simulado — ambiente sandbox",
+      paid_at: now(),
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    payments.push(payment);
+
+    const projectIndex = projects.findIndex((p) => p.id === project.id);
+    if (projectIndex !== -1) {
+      projects[projectIndex] = {
+        ...projects[projectIndex],
+        status: "in-progress",
+        updated_at: now(),
+      };
+    }
+
+    const projectTaskList = tasks.filter((task) => task.project_id === String(data.project_id));
+
+    return {
+      success: true,
+      payment,
+      project: projects.find((p) => p.id === String(data.project_id)) || project,
+      projectId: String(data.project_id),
+      paymentId: payment.id,
+      checkoutId: payment.id,
+      paymentStatus: payment.status,
+      project_status: "in-progress",
+      produtosProcessadosNaCompra: projectTaskList.length,
+      tarefasCriadasAgora: 0,
+      tarefasIgnoradasAgora: projectTaskList.length,
+      totalTarefasProjeto: projectTaskList.length,
+      produtosSemModelo: [],
+      message: projectTaskList.length > 0
+        ? "Pagamento aprovado. Tarefas já existentes para este projeto."
+        : "Pagamento aprovado. Nenhuma tarefa foi gerada no ambiente mock.",
+    };
+  }
+
+  async getPayments(filters?: Record<string, any>) {
+    await delay();
+    let result = [...payments];
+    if (filters?.project_id) {
+      result = result.filter((p) => String(p.project_id) === String(filters.project_id));
+    }
+    return { data: result, total: result.length, page: 1, limit: 1000 };
+  }
+
+  async getPayment(id: string | number) {
+    await delay();
+    const payment = payments.find((p) => String(p.id) === String(id)) || null;
+    if (!payment) {
+      throw new Error("Pagamento não encontrado");
+    }
+    const project = projects.find((p) => String(p.id) === String(payment.project_id)) || null;
+    return {
+      ...payment,
+      project,
+      project_id: payment.project_id,
+    };
   }
 
   async getInvoice(id: string) {

@@ -111,7 +111,7 @@ const PRODUCT_STATUS_CFG: Record<string, { label: string; cls: string }> = {
     cls: "bg-amber-100 text-amber-700 border-amber-200",
   },
   EM_EXECUCAO: {
-    label: "Em Execução",
+    label: "Contratado/Pago",
     cls: "bg-blue-100 text-blue-700 border-blue-200",
   },
   CONCLUIDO: {

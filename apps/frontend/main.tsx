@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { Toaster } from "@/components/ui/toaster";
+import { mockApiClient } from "./dev-mocks/mock-api-client";
 import "./app/globals.css";
 
 // ─── Dev preview: garante token válido sem login manual ───────────────────────
@@ -13,17 +14,21 @@ if (import.meta.env.DEV) {
   const TOKEN_KEY = "allka_token";
   const hasToken = !!localStorage.getItem(TOKEN_KEY);
   const wasLoggedOut = localStorage.getItem("allka_logged_out") === "true";
+  const useMocks = import.meta.env.MODE === "mock" || import.meta.env.VITE_USE_MOCKS === "true";
 
   if (!hasToken && !wasLoggedOut) {
-    fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "admin@allka.test",
-        password: "Teste@123456",
-      }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+    const login = useMocks
+      ? mockApiClient.login("admin@allka.test", "123456")
+      : fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: "admin@allka.test",
+            password: "123456",
+          }),
+        }).then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)));
+
+    login
       .then((data) => {
         if (data?.token) {
           localStorage.setItem(TOKEN_KEY, data.token);

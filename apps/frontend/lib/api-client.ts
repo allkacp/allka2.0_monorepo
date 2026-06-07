@@ -841,6 +841,9 @@ class ApiClient {
   }) {
     return this.post("/payments/fake-checkout", data);
   }
+    async getPayment(id: string | number) {
+      return this.get(`/payments/${id}`);
+    }
 
   async getPayments(filters?: Record<string, any>) {
     return this.get("/payments", filters);

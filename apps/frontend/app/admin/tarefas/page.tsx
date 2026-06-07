@@ -799,7 +799,13 @@ function AssignNomadeDialog({
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
-export default function AdminTarefasPage() {
+interface AdminTarefasPageProps {
+  routeBase?: string;
+}
+
+export default function AdminTarefasPage({
+  routeBase = "/admin/tarefas",
+}: AdminTarefasPageProps = {}) {
   const [tarefas, setTarefas] = useState<TarefaOperacional[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1855,8 +1861,8 @@ export default function AdminTarefasPage() {
                         className={cn(
                           "border-b border-slate-100 dark:border-slate-700/50 transition-colors group",
                           rowIdx % 2 === 0
-                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]",
+                            ? "bg-table-row hover:bg-table-row-hover"
+                            : "bg-table-row-alt hover:bg-table-row-hover",
                           overdue && "bg-red-50/50 dark:bg-red-950/10",
                         )}
                       >
@@ -1876,7 +1882,7 @@ export default function AdminTarefasPage() {
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
                                       setDrawerOpen(true);
-                                      navigate(`/admin/tarefas/${tarefa.id}`, {
+                                      navigate(`${routeBase}/${tarefa.id}`, {
                                         replace: true,
                                       });
                                     }}
@@ -1903,7 +1909,7 @@ export default function AdminTarefasPage() {
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
                                       setDrawerOpen(true);
-                                      navigate(`/admin/tarefas/${tarefa.id}`, {
+                                      navigate(`${routeBase}/${tarefa.id}`, {
                                         replace: true,
                                       });
                                     }}
@@ -2066,7 +2072,7 @@ export default function AdminTarefasPage() {
                               onClick={() => {
                                 setSelectedTarefa(tarefa);
                                 setDrawerOpen(true);
-                                navigate(`/admin/tarefas/${tarefa.id}`, {
+                                navigate(`${routeBase}/${tarefa.id}`, {
                                   replace: true,
                                 });
                               }}
@@ -2457,7 +2463,7 @@ export default function AdminTarefasPage() {
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false);
-          navigate("/admin/tarefas", { replace: true });
+          navigate(routeBase, { replace: true });
         }}
         onStatusChange={handleStatusChange}
         updatingId={updatingId}

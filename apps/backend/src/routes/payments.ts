@@ -35,6 +35,7 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
 
     const project = await prisma.project.findUnique({
       where: { id: project_id },
+      select: { id: true, status: true, lifecycle: true },
     });
 
     if (!project) {
@@ -73,6 +74,29 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       data: { status: "in-progress" },
     });
 
+    const projectProducts = await prisma.projectProduct.findMany({
+      where: { project_id },
+      select: { id: true, product_id: true, recurrence_snapshot: true },
+    });
+
+    if (projectProducts.length > 0) {
+      const paymentDate = payment.paid_at ?? new Date();
+      const productUpdateData: Record<string, unknown> = {
+        status: "EM_EXECUCAO",
+        start_date: paymentDate,
+      };
+      if (project.lifecycle === "mensal") {
+        productUpdateData.expected_end_date = new Date(
+          paymentDate.getTime() + 30 * 24 * 60 * 60 * 1000,
+        );
+      }
+
+      await prisma.projectProduct.updateMany({
+        where: { project_id },
+        data: productUpdateData,
+      });
+    }
+
     // Gera tarefas operacionais — AWAITED para garantir que estejam no banco antes
     // de retornar ao cliente. Erros são capturados e reportados, não engolidos.
     let tarefasResult = {
@@ -88,7 +112,22 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
     };
 
     try {
-      tarefasResult = await gerarTarefasDoProjeto(project_id);
+      const selectedProductIds =
+        project.lifecycle === "mensal"
+          ? projectProducts
+              .filter((item) => item.recurrence_snapshot === "mensal")
+              .map((item) => item.product_id)
+          : projectProducts.map((item) => item.product_id);
+      const productIds =
+        selectedProductIds.length > 0
+          ? selectedProductIds
+          : projectProducts.map((item) => item.product_id);
+
+      tarefasResult = await gerarTarefasDoProjeto(project_id, {
+        paymentId: payment.id,
+        paidAt: payment.paid_at ?? new Date(),
+        productIds,
+      });
     } catch (taskErr: any) {
       console.error(`[payments] Erro ao gerar tarefas para ${project_id}:`, taskErr);
       const errMsg = taskErr?.message ?? "Erro desconhecido ao gerar tarefas";
@@ -127,11 +166,22 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       payment,
       project: updatedProject,
       project_status: "in-progress",
+      paymentId: payment.id,
+      projectId: project_id,
+      checkoutId: payment.fake_transaction_id || payment.id,
+      paymentStatus: payment.status,
+      projectProducts: projectProducts.length,
       produtosProcessadosNaCompra: tarefasResult.produtos_processados,
       tarefasCriadasAgora: tarefasResult.generated,
       tarefasIgnoradasAgora: tarefasResult.skipped,
       totalTarefasProjeto: tarefasResult.total_tarefas,
+      tarefasGeradas: tarefasResult.generated,
+      tarefasIgnoradas: tarefasResult.skipped,
+      etapasGeradas: tarefasResult.stages_generated,
+      produtosProcessados: tarefasResult.produtos_processados,
       produtosSemModelo: tarefasResult.produtos_sem_modelo,
+      errosDeGeracao: tarefasResult.erros_de_geracao,
+      warnings: tarefasResult.warnings,
       message,
     });
   } catch (err) {

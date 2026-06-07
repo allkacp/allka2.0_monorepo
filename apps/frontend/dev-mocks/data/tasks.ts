@@ -4,6 +4,9 @@ export interface MockApiTask {
   title: string;
   description: string;
   project_id: string;
+  product_id?: string;
+  project_product_id?: string;
+  task_code?: string;
   assigned_to: string | null;
   status: string;
   priority: string;

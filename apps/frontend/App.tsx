@@ -886,11 +886,23 @@ export default function App() {
                     element={<AgenciaProjetosPage />}
                   />
                   <Route
+                    path="/agencia/projetos/:projectId"
+                    element={<AgenciaProjetosPage />}
+                  />
+                  <Route
                     path="/agencia/tarefas"
                     element={<AgenciaTarefasPage />}
                   />
                   <Route
+                    path="/agencia/tarefas/:tarefaId"
+                    element={<AgenciaTarefasPage />}
+                  />
+                  <Route
                     path="/agencia/catalogo"
+                    element={<AgenciaCatalogoPage />}
+                  />
+                  <Route
+                    path="/agency/catalogo"
                     element={<AgenciaCatalogoPage />}
                   />
                   <Route

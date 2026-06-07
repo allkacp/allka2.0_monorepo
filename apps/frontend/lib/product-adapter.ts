@@ -51,6 +51,13 @@ export interface BackendProduct {
     price: number;
     category: string | null;
   }>;
+  task_links?: Array<any>;
+  contractability?: {
+    productId: string;
+    activeTaskTemplates: number;
+    hasActiveTaskTemplates: boolean;
+    isContractable: boolean;
+  };
 }
 
 interface ProductMetadata {
@@ -162,6 +169,8 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     variationsInternal: meta.variationsInternal ?? {},
     demonstrations: safeParseJSON<string[]>(b.demonstrations, []),
     portfolioImages: meta.portfolioImages ?? [],
+    contractable: b.contractability?.isContractable ?? ((b.task_links?.length ?? 0) > 0),
+    activeTaskTemplates: b.contractability?.activeTaskTemplates ?? (b.task_links?.length ?? 0),
   } as Product;
 }
 

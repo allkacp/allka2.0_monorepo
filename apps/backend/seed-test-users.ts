@@ -15,7 +15,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const PASSWORD = "Teste@123456";
+const PASSWORD = "123456";
 
 async function main() {
   if (process.env.NODE_ENV === "production") {

@@ -1434,9 +1434,29 @@ export function ProjectCreateNewPanel({
       description: "Pagamento aprovado. Projeto contratado com sucesso.",
       variant: "success",
     });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("allka:project-paid", {
+          detail: {
+            projectId: preCreatedProjectId,
+            paymentId: checkoutData.paymentId,
+            checkoutId: checkoutData.checkoutId,
+            paymentStatus: checkoutData.paymentStatus,
+          },
+        }),
+      );
+    }
     onCreate({
       id: preCreatedProjectId,
       status: "in-progress",
+      paymentId: checkoutData.paymentId,
+      checkoutId: checkoutData.checkoutId,
+      paymentStatus: checkoutData.paymentStatus,
+      products: selectedProducts.map((product) => ({
+        id: product.id,
+        name: product.name,
+        quantity: product.quantity,
+      })),
       openTab: checkoutData.openTab,
     });
     handleClose();

@@ -75,6 +75,7 @@ interface ProductCatalogViewProps {
   onRemove?: (productId: string) => void;
   onIncrease?: (productId: string) => void;
   onDecrease?: (productId: string) => void;
+  contractableOnly?: boolean;
   /** Called when user clicks "Ver Carrinho" sticky footer (panel mode only) */
   onConfirm?: () => void;
   /** Show a different title in panel mode */
@@ -282,6 +283,7 @@ export function ProductCatalogView({
   onRemove,
   onIncrease,
   onDecrease,
+  contractableOnly = true,
   onConfirm,
   panelTitle = "Selecionar Produtos",
   initialProductId,
@@ -334,7 +336,15 @@ export function ProductCatalogView({
   ]);
 
   const activeProducts = useMemo(
-    () => products.filter((p) => p.isActive),
+    () =>
+      products.filter(
+        (p) => p.isActive && (!contractableOnly || p.contractable !== false),
+      ),
+    [products, contractableOnly],
+  );
+
+  const hasBlockedActiveProducts = useMemo(
+    () => products.some((p) => p.isActive && p.contractable === false),
     [products],
   );
 
@@ -913,7 +923,11 @@ export function ProductCatalogView({
           <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400">
             <Package className="h-12 w-12 mb-3 opacity-30" />
             <p className="text-sm font-medium">Nenhum produto encontrado</p>
-            <p className="text-xs mt-1 opacity-70">Tente ajustar os filtros</p>
+            <p className="text-xs mt-1 opacity-70">
+              {hasBlockedActiveProducts && contractableOnly
+                ? "Alguns produtos ativos ainda não podem ser contratados porque faltam tarefas operacionais vinculadas."
+                : "Tente ajustar os filtros"}
+            </p>
           </div>
         ) : gridMode === "list" ? (
           /* ── LIST MODE ──────────────────────────────────────── */

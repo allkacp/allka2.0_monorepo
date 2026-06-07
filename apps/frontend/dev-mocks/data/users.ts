@@ -12,6 +12,7 @@ export interface MockUser {
   updated_at: string;
   last_login?: string | null;
   company_id?: string | null;
+  agency_name?: string | null;
 }
 
 export const mockUsers: MockUser[] = [
@@ -27,6 +28,85 @@ export const mockUsers: MockUser[] = [
     created_at: "2025-01-01T00:00:00Z",
     updated_at: "2026-04-20T00:00:00Z",
     last_login: "2026-04-20T09:00:00Z",
+  },
+  {
+    id: "1001",
+    name: "Admin Allka",
+    email: "admin@allka.test",
+    role: "admin",
+    account_type: "admin",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
+  },
+  {
+    id: "1002",
+    name: "Agência Allka",
+    email: "agencia@allka.test",
+    role: "agency_admin",
+    account_type: "agencias",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
+    agency_name: "Agência Criativa SP",
+  },
+  {
+    id: "1003",
+    name: "Nômade Allka",
+    email: "nomade@allka.test",
+    role: "nomad",
+    account_type: "nomades",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
+  },
+  {
+    id: "1004",
+    name: "Empresa Allka",
+    email: "company@allka.test",
+    role: "company_admin",
+    account_type: "empresas",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
+  },
+  {
+    id: "1005",
+    name: "Partner Allka",
+    email: "partner@allka.test",
+    role: "partner",
+    account_type: "parceiro",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
+  },
+  {
+    id: "1006",
+    name: "Líder Performance Allka",
+    email: "lider.performance@allka.test",
+    role: "lider",
+    account_type: "lider",
+    is_active: true,
+    avatar: null,
+    phone: null,
+    created_at: "2026-06-06T00:00:00Z",
+    updated_at: "2026-06-06T00:00:00Z",
+    last_login: "2026-06-06T00:00:00Z",
   },
   {
     id: "2",
@@ -53,6 +133,7 @@ export const mockUsers: MockUser[] = [
     created_at: "2025-10-15T12:00:00Z",
     updated_at: "2026-03-20T11:00:00Z",
     last_login: "2026-04-04T11:00:00Z", // 15 dias (30days)
+    agency_name: "Agência Criativa SP",
   },
   {
     id: "4",
@@ -118,6 +199,7 @@ export const mockUsers: MockUser[] = [
     created_at: "2025-10-20T16:00:00Z",
     updated_at: "2026-04-05T13:00:00Z",
     last_login: "2026-04-17T10:00:00Z", // 2 dias (7days)
+    agency_name: "Studio DG",
   },
   {
     id: "9",

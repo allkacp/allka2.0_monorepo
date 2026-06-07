@@ -133,14 +133,22 @@ import {
   PROJECT_STATUS_VARIANT,
 } from "@/components/allka-badge";
 
-export default function AdminProjetosPage() {
+interface ProjectsPageViewProps {
+  scope?: "admin" | "agency";
+  agencyName?: string;
+}
+
+export default function AdminProjetosPage({
+  scope = "admin",
+  agencyName,
+}: ProjectsPageViewProps = {}) {
   const {
     projects: apiProjects,
     loading: projectsLoading,
     error: projectsError,
     refetch: refetchProjects,
     setProjects: setApiProjects,
-  } = useProjects();
+  } = useProjects(scope === "agency" && agencyName ? { agencyName } : {});
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -292,6 +300,8 @@ export default function AdminProjetosPage() {
 
   const { toast } = useToast();
   const pageRef = useRef<HTMLDivElement>(null);
+  const projectRouteBase =
+    scope === "agency" ? "/agencia/projetos" : "/admin/projetos";
 
   const [kanbanColumns, setKanbanColumns] = useState([
     { id: "draft", label: "Rascunho", color: "bg-gray-800", count: 0 },
@@ -1198,7 +1208,7 @@ export default function AdminProjetosPage() {
     setSelectedProject(project);
     setModalMode("edit");
     setModalOpen(true);
-    navigate(`/admin/projetos/${project.id}`, { replace: true });
+    navigate(`${projectRouteBase}/${project.id}`, { replace: true });
   };
 
   const handleViewProject = (project: FrontendProject) => {
@@ -1206,7 +1216,7 @@ export default function AdminProjetosPage() {
     setModalMode("view");
     setModalOpen(true);
     if (project.id)
-      navigate(`/admin/projetos/${project.id}`, { replace: true });
+      navigate(`${projectRouteBase}/${project.id}`, { replace: true });
   };
 
   // ── Deep-link: open project from URL param or legacy location.state ────────
@@ -1252,13 +1262,13 @@ export default function AdminProjetosPage() {
         setInitialProjectTab(tab);
         handleViewProject(full);
         navigate(
-          `/admin/projetos/${projectId}${tab !== "dashboard" ? `?tab=${tab}` : ""}`,
+          `${projectRouteBase}/${projectId}${tab !== "dashboard" ? `?tab=${tab}` : ""}`,
           { replace: true },
         );
       })
       .catch(() => {
         handleViewProject({ id: projectId } as FrontendProject);
-        navigate(`/admin/projetos/${projectId}`, { replace: true });
+        navigate(`${projectRouteBase}/${projectId}`, { replace: true });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlProjectId, location.state]);
@@ -4673,7 +4683,7 @@ export default function AdminProjetosPage() {
           open={modalOpen}
           onOpenChange={(open) => {
             setModalOpen(open);
-            if (!open) navigate("/admin/projetos", { replace: true });
+            if (!open) navigate(projectRouteBase, { replace: true });
           }}
           mode={modalMode}
           initialTab={initialProjectTab}
@@ -4748,7 +4758,7 @@ export default function AdminProjetosPage() {
                 setSelectedProject(full);
                 setModalMode("view");
                 setModalOpen(true);
-                navigate(`/admin/projetos/${project.id}${tabParam}`, {
+                navigate(`${projectRouteBase}/${project.id}${tabParam}`, {
                   replace: true,
                 });
               } catch {
@@ -4756,7 +4766,7 @@ export default function AdminProjetosPage() {
                 setSelectedProject(project as FrontendProject);
                 setModalMode("view");
                 setModalOpen(true);
-                navigate(`/admin/projetos/${project.id}${tabParam}`, {
+                navigate(`${projectRouteBase}/${project.id}${tabParam}`, {
                   replace: true,
                 });
               }

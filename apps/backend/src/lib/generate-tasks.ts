@@ -14,22 +14,29 @@ export interface GerarTarefasResult {
   warnings: string[];
 }
 
+export interface GerarTarefasOptions {
+  paymentId?: string;
+  paidAt?: Date;
+  productIds?: string[];
+}
+
 /**
  * Gera tarefas operacionais (ProjectTask + ProjectTaskStage) para todos os
  * produtos vinculados a um projeto.
  *
- * Idempotente: não cria duplicatas se executada mais de uma vez.
- * Modelos inativos (is_active = false) são ignorados.
+ * Idempotente: nï¿½o cria duplicatas se executada mais de uma vez.
+ * Modelos inativos (is_active = false) sï¿½o ignorados.
  * Disparada automaticamente quando o projeto muda para status "planning".
  */
 export async function gerarTarefasDoProjeto(
   projectId: string,
+  options: GerarTarefasOptions = {},
 ): Promise<GerarTarefasResult> {
   const warnings: string[] = [];
   const produtos_sem_modelo: string[] = [];
   const erros_de_geracao: string[] = [];
 
-  console.log(`[generate-tasks] Iniciando geração de tarefas para projeto: ${projectId}`);
+  console.log(`[generate-tasks] Iniciando geraï¿½ï¿½o de tarefas para projeto: ${projectId}`);
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -37,13 +44,18 @@ export async function gerarTarefasDoProjeto(
   });
 
   if (!project) {
-    throw new Error(`Projeto não encontrado: ${projectId}`);
+    throw new Error(`Projeto nï¿½o encontrado: ${projectId}`);
   }
 
   console.log(`[generate-tasks] Projeto encontrado: "${project.title}" (status=${project.status})`);
 
   const projectProducts = await prisma.projectProduct.findMany({
-    where: { project_id: projectId },
+    where: {
+      project_id: projectId,
+      ...(options.productIds?.length
+        ? { product_id: { in: options.productIds } }
+        : {}),
+    },
     include: {
       product: {
         include: {
@@ -60,7 +72,7 @@ export async function gerarTarefasDoProjeto(
   console.log(`[generate-tasks] Produtos encontrados no projeto: ${projectProducts.length}`);
 
   if (projectProducts.length === 0) {
-    const msg = `Projeto "${project.title}" (${projectId}) não possui produtos vinculados.`;
+    const msg = `Projeto "${project.title}" (${projectId}) nï¿½o possui produtos vinculados.`;
     console.warn(`[generate-tasks] AVISO: ${msg}`);
     warnings.push(msg);
   }
@@ -72,11 +84,14 @@ export async function gerarTarefasDoProjeto(
   for (const pp of projectProducts) {
     const productName = pp.product_name_snapshot || pp.product.name;
     const activeLinks = pp.product.task_links;
+    const paymentMarker = options.paymentId
+      ? `"paymentId":"${options.paymentId}"`
+      : null;
 
     console.log(`[generate-tasks] Produto: "${productName}" | modelos ativos: ${activeLinks.length}`);
 
     if (activeLinks.length === 0) {
-      const msg = `Produto "${productName}" não possui modelos de tarefas ativos vinculados.`;
+      const msg = `Produto "${productName}" nï¿½o possui modelos de tarefas ativos vinculados.`;
       console.warn(`[generate-tasks] AVISO: ${msg}`);
       warnings.push(msg);
       produtos_sem_modelo.push(productName);
@@ -85,7 +100,12 @@ export async function gerarTarefasDoProjeto(
 
     // Idempotency: check if a task already exists for this project_product
     const existingTask = await prisma.projectTask.findFirst({
-      where: { project_product_id: pp.id },
+      where: options.paymentId
+        ? {
+            project_product_id: pp.id,
+            observations: { contains: paymentMarker ?? "" },
+          }
+        : { project_product_id: pp.id },
       include: { stages: { select: { catalog_step_ref: true } } },
     });
 
@@ -98,7 +118,7 @@ export async function gerarTarefasDoProjeto(
     if (existingTask) {
       taskId = existingTask.id;
       skipped++;
-      console.log(`[generate-tasks]   Pulando tarefa (já existe): "${existingTask.title}"`);
+      console.log(`[generate-tasks]   Pulando tarefa (jï¿½ existe): "${existingTask.title}"`);
     } else {
       const taskCode = await getNextTaskCode();
       const newTask = await prisma.projectTask.create({
@@ -120,7 +140,17 @@ export async function gerarTarefasDoProjeto(
           priority: primaryCt?.default_priority ?? "medium",
           sort_order: 0,
           // 30-day window to launch the task before it expires
-          lancamento_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          lancamento_expires_at: new Date(
+            (options.paidAt ?? new Date()).getTime() + 30 * 24 * 60 * 60 * 1000,
+          ),
+          observations: JSON.stringify({
+            source: "payment-approved",
+            paymentId: options.paymentId ?? null,
+            projectId,
+            projectProductId: pp.id,
+            productId: pp.product_id,
+            paidAt: (options.paidAt ?? new Date()).toISOString(),
+          }),
         },
       });
       taskId = newTask.id;
@@ -163,7 +193,7 @@ export async function gerarTarefasDoProjeto(
           const raw = JSON.parse(ct.steps);
           if (Array.isArray(raw)) parsedSteps = raw;
         } catch {
-          // ignore JSON parse errors — fall through to single-stage fallback
+          // ignore JSON parse errors ï¿½ fall through to single-stage fallback
         }
       }
 
@@ -212,7 +242,7 @@ export async function gerarTarefasDoProjeto(
   }
 
   console.log(
-    `[generate-tasks] Concluído: geradas=${generated} tarefas, ${stages_generated} etapas, ignoradas=${skipped}, sem_modelo=${produtos_sem_modelo.length}`,
+    `[generate-tasks] Concluï¿½do: geradas=${generated} tarefas, ${stages_generated} etapas, ignoradas=${skipped}, sem_modelo=${produtos_sem_modelo.length}`,
   );
 
   if (generated === 0 && skipped === 0 && projectProducts.length > 0) {

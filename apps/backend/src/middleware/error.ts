@@ -19,6 +19,15 @@ export function errorHandler(
   if (err instanceof Error) {
     console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
 
+    const statusCode = Number(
+      (err as Error & { statusCode?: number; status?: number }).statusCode ??
+        (err as Error & { statusCode?: number; status?: number }).status,
+    );
+    if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600) {
+      res.status(statusCode).json({ error: err.message });
+      return;
+    }
+
     // Prisma unique constraint
     if ((err as NodeJS.ErrnoException & { code?: string }).code === "P2002") {
       res.status(409).json({ error: "Registro já existe (campo único duplicado)" });

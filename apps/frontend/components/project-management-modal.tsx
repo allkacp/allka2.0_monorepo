@@ -484,7 +484,7 @@ export function ProjectManagementModal({
         EM_LANCAMENTO: "Para lançamento",
         AGUARDANDO_INFORMACOES: "Para lançamento",
         LIBERADA_PARA_EXECUCAO: "Em Execução",
-        EM_EXECUCAO: "Em Execução",
+        EM_EXECUCAO: "Contratado/Pago",
         AGUARDANDO_APROVACAO: "Para Aprovação",
         CONCLUIDA: "Aprovada",
         ENTREGUE: "Entregue",

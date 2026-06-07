@@ -43,6 +43,12 @@ const INVOICE_STATUS_CONFIG = {
   },
 } as const;
 
+const FALLBACK_INVOICE_STATUS = {
+  label: "Desconhecido",
+  bg: "bg-slate-100 text-slate-600",
+  icon: AlertCircle,
+};
+
 const PLAN_DISCOUNTS: Record<
   string,
   { label: string; discount: number; color: string }
@@ -301,7 +307,10 @@ export default function AgenciaFinanceiro() {
                   </tr>
                 ) : (
                   sorted.map((invoice) => {
-                    const cfg = INVOICE_STATUS_CONFIG[invoice.status];
+                    const cfg =
+                      INVOICE_STATUS_CONFIG[
+                        invoice.status as keyof typeof INVOICE_STATUS_CONFIG
+                      ] ?? FALLBACK_INVOICE_STATUS;
                     const StatusIcon = cfg.icon;
                     return (
                       <tr

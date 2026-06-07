@@ -297,6 +297,8 @@ export interface Product {
   demonstrations?: string[];
   // portfólio com metadados ricos (título, descrição, ordem, principal)
   portfolioImages?: PortfolioImage[];
+  contractable?: boolean;
+  activeTaskTemplates?: number;
 }
 
 interface ProductContextType {

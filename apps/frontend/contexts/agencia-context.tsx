@@ -113,20 +113,30 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const [agenciesRes, projectsRes, invoicesRes] =
+        const [currentUserRes, agenciesRes, projectsRes, invoicesRes] =
           await Promise.allSettled([
+            apiClient.getCurrentUser(),
             apiClient.getAgencies({ limit: "1" }),
             apiClient.getProjects({ limit: "100" }),
             apiClient.getInvoices({ limit: "100" }),
           ]);
         if (cancelled) return;
+        const currentUser =
+          currentUserRes.status === "fulfilled"
+            ? (currentUserRes.value as any)
+            : null;
+        const activeAgencyName =
+          currentUser?.agency_name ||
+          currentUser?.agency?.name ||
+          currentUser?.active_agency_name ||
+          "";
         if (agenciesRes.status === "fulfilled") {
           const data: any = agenciesRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
           if (list[0])
             setProfile({
-              id: String(list[0].id),
-              name: list[0].name || "",
+              id: String(currentUser?.agency_id || currentUser?.active_agency_id || list[0].id || list[0].name || ""),
+              name: activeAgencyName || list[0].name || "",
               cnpj: list[0].document || "",
               email: list[0].email || "",
               plan: list[0].plan || "",
@@ -142,8 +152,23 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
         if (projectsRes.status === "fulfilled") {
           const data: any = projectsRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
+          const scopedList = activeAgencyName
+            ? list.filter((p: any) => {
+                const normalizedProjectAgency = String(p.agency || "")
+                  .trim()
+                  .toLowerCase();
+                const normalizedAgencyName = activeAgencyName
+                  .trim()
+                  .toLowerCase();
+                return (
+                  normalizedProjectAgency === normalizedAgencyName ||
+                  normalizedProjectAgency.includes(normalizedAgencyName) ||
+                  normalizedAgencyName.includes(normalizedProjectAgency)
+                );
+              })
+            : list;
           setProjects(
-            list.map((p: any) => ({
+            scopedList.map((p: any) => ({
               id: String(p.id),
               clientName:
                 (typeof p.client === "object" ? p.client?.name : p.client) ||
@@ -173,8 +198,17 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
       }
     }
     load();
+
+    const handleProjectPaid = () => {
+      load();
+    };
+    window.addEventListener("allka:project-paid", handleProjectPaid as EventListener);
     return () => {
       cancelled = true;
+      window.removeEventListener(
+        "allka:project-paid",
+        handleProjectPaid as EventListener,
+      );
     };
   }, []);
 

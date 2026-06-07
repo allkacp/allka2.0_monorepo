@@ -1714,6 +1714,22 @@ export default function AdminProdutosPage() {
     if (!toggleConfirmation.product) return;
 
     try {
+      if (toggleConfirmation.newStatus) {
+        const catalogTasks = await apiClient.getCatalogTasksByProduct(
+          toggleConfirmation.product.id,
+        );
+
+        if (!Array.isArray(catalogTasks) || catalogTasks.length === 0) {
+          toast({
+            title: "Produto sem tarefas",
+            description:
+              "Cadastre pelo menos 1 modelo de tarefa operacional ativo antes de ativar este produto.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       // Call updateProduct with (id, product) signature
       await updateProduct(toggleConfirmation.product.id, {
         ...toggleConfirmation.product,

@@ -16,6 +16,7 @@ export interface MockClient {
   city: string | null;
   state: string | null;
   notes: string | null;
+  logo?: string | null;
   created_at: string;
   updated_at: string;
 }

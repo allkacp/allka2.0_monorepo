@@ -4,6 +4,7 @@ import { adaptApiProject, type FrontendProject } from "@/lib/project-adapter"
 
 interface UseProjectsOptions {
   companyId?: string | number
+  agencyName?: string
 }
 
 interface UseProjectsReturn {
@@ -15,7 +16,7 @@ interface UseProjectsReturn {
 }
 
 export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn {
-  const { companyId } = options
+  const { companyId, agencyName } = options
   const [projects, setProjects] = useState<FrontendProject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +32,25 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
 
       const response: any = await apiClient.getProjects(filters)
       const adapted = (response.data || []).map(adaptApiProject)
-      setProjects(adapted)
+      const sorted = [...adapted].sort((left, right) => {
+        const leftTime = new Date(left.createdAt || left.createdDate || 0).getTime()
+        const rightTime = new Date(right.createdAt || right.createdDate || 0).getTime()
+        return rightTime - leftTime
+      })
+      const scoped = agencyName
+        ? sorted.filter((project) => {
+            const normalizedProjectAgency = (project.agency || "")
+              .trim()
+              .toLowerCase()
+            const normalizedAgencyName = agencyName.trim().toLowerCase()
+            return (
+              normalizedProjectAgency === normalizedAgencyName ||
+              normalizedProjectAgency.includes(normalizedAgencyName) ||
+              normalizedAgencyName.includes(normalizedProjectAgency)
+            )
+          })
+        : sorted
+      setProjects(scoped)
     } catch (err: any) {
       console.error("[useProjects] API error:", err.message)
       setError(err.message)
@@ -39,7 +58,7 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
     } finally {
       setLoading(false)
     }
-  }, [companyId])
+  }, [companyId, agencyName])
 
   useEffect(() => {
     fetchProjects()

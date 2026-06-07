@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,6 +79,10 @@ export interface CheckoutData {
   commissionRate: number;
   clientTotal: number;
   checkoutLinks: { self: string; client: string };
+  projectId?: string;
+  paymentId?: string;
+  checkoutId?: string;
+  paymentStatus?: string;
   /** If set, the parent should open the project on this tab */
   openTab?: string;
 }
@@ -135,6 +139,7 @@ export function CheckoutFlow({
   checkoutMode,
   clientTotalRef,
 }: CheckoutFlowProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
@@ -150,6 +155,36 @@ export function CheckoutFlow({
   const [sandboxResult, setSandboxResult] = useState<any | null>(null);
   const [pendingCheckoutData, setPendingCheckoutData] =
     useState<CheckoutData | null>(null);
+
+  const projectRouteBase = /^\/(agencia|agency)(\/|$)/.test(location.pathname)
+    ? "/agencia/projetos"
+    : "/admin/projetos";
+
+  const resolveProjectIdForNavigation = async () => {
+    const directProjectId =
+      sandboxResult?.project?.id ||
+      sandboxResult?.project?.project_id ||
+      sandboxResult?.payment?.project_id ||
+      projectId ||
+      (pendingCheckoutData?.project as any)?.id;
+
+    if (directProjectId) {
+      return String(directProjectId);
+    }
+
+    const paymentId = sandboxResult?.payment?.id;
+    if (!paymentId) {
+      return null;
+    }
+
+    try {
+      const payment: any = await apiClient.getPayment(paymentId);
+      return String(payment?.project?.id || payment?.project_id || "");
+    } catch (err) {
+      console.warn("[checkout] failed to resolve project from payment:", err);
+      return null;
+    }
+  };
 
   // Client data
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -440,6 +475,15 @@ export function CheckoutFlow({
   };
 
   const handleComplete = async () => {
+    const invalidItems = items.filter((item: any) => item?.product?.contractable === false);
+    if (invalidItems.length > 0) {
+      setPayingState("error");
+      setPayingError(
+        "Há produtos no carrinho que ainda não podem ser contratados. Ative pelo menos 1 modelo de tarefa operacional no produto antes de seguir.",
+      );
+      return;
+    }
+
     const selfLink = `https://checkout.allka.com.vc/c/${checkoutSlug}`;
     const clientLink = `https://checkout.allka.com.vc/cl/${checkoutSlug}`;
     const paymentData: PaymentData = {
@@ -524,8 +568,24 @@ export function CheckoutFlow({
           console.warn("[checkout] fallback task count failed:", fetchErr);
         }
 
-        setSandboxResult(result);
-        setPendingCheckoutData(checkoutData);
+        const resolvedProjectId =
+          result?.project?.id || result?.project?.project_id || projectId;
+        const resolvedPaymentId = result?.payment?.id || null;
+
+        setSandboxResult({
+          ...result,
+          projectId: resolvedProjectId,
+          paymentId: resolvedPaymentId,
+          checkoutId: resolvedPaymentId,
+          paymentStatus: result?.payment?.status || "PAGO",
+        });
+        setPendingCheckoutData({
+          ...checkoutData,
+          projectId: resolvedProjectId ? String(resolvedProjectId) : undefined,
+          paymentId: resolvedPaymentId ? String(resolvedPaymentId) : undefined,
+          checkoutId: resolvedPaymentId ? String(resolvedPaymentId) : undefined,
+          paymentStatus: result?.payment?.status || "PAGO",
+        });
         setPayingState("success");
       } catch (err: any) {
         setPayingState("error");
@@ -2421,10 +2481,24 @@ export function CheckoutFlow({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (pendingCheckoutData) onComplete(pendingCheckoutData);
-                      const pid = sandboxResult?.project?.id;
-                      if (pid) navigate(`/admin/projetos/${pid}`);
+                    onClick={async () => {
+                      const pid = await resolveProjectIdForNavigation();
+                      if (pendingCheckoutData) {
+                        onComplete({
+                          ...pendingCheckoutData,
+                          projectId: pid || pendingCheckoutData.projectId,
+                          paymentId:
+                            sandboxResult?.paymentId ||
+                            pendingCheckoutData.paymentId,
+                          checkoutId:
+                            sandboxResult?.checkoutId ||
+                            pendingCheckoutData.checkoutId,
+                          paymentStatus:
+                            sandboxResult?.paymentStatus ||
+                            pendingCheckoutData.paymentStatus,
+                        });
+                      }
+                      if (pid) navigate(`${projectRouteBase}/${pid}`);
                     }}
                     className="flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
                     style={{
@@ -2438,14 +2512,24 @@ export function CheckoutFlow({
                   </button>
                   <Button
                     variant="outline"
-                    onClick={() => {
+                    onClick={async () => {
+                      const pid = await resolveProjectIdForNavigation();
                       if (pendingCheckoutData)
                         onComplete({
                           ...pendingCheckoutData,
+                          projectId: pid || pendingCheckoutData.projectId,
+                          paymentId:
+                            sandboxResult?.paymentId ||
+                            pendingCheckoutData.paymentId,
+                          checkoutId:
+                            sandboxResult?.checkoutId ||
+                            pendingCheckoutData.checkoutId,
+                          paymentStatus:
+                            sandboxResult?.paymentStatus ||
+                            pendingCheckoutData.paymentStatus,
                           openTab: "tarefas",
                         });
-                      const pid = sandboxResult?.project?.id;
-                      if (pid) navigate(`/admin/projetos/${pid}?tab=tarefas`);
+                      if (pid) navigate(`${projectRouteBase}/${pid}?tab=tarefas`);
                     }}
                   >
                     Ver tarefas
