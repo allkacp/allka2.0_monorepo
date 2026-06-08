@@ -10,6 +10,7 @@
  * - Upsert por `code` (chave única no schema)
  * - Ativa DC0006-T01 (Template para Criativos) que estava inativo
  * - Corrige etapas sem título em PA0005-T01
+ * - Cria uma estrutura provisória para produtos ativos sem modelos ativos
  * - Garante vínculo product ↔ CatalogTask via ProductCatalogTask
  */
 
@@ -30,6 +31,33 @@ function step(
     mandatory: opts.mandatory ?? true,
     requires_briefing: opts.requires_briefing ?? false,
   };
+}
+
+function buildProvisionalSteps(productName: string) {
+  return [
+    step(`Receber briefing de ${productName}`, "Validar escopo, objetivo e prazo do produto.", {
+      requires_briefing: true,
+    }),
+    step("Organizar materiais e acessos", "Reunir arquivos, permissões e referências necessárias."),
+    step("Executar a produção principal", "Criar ou executar a entrega principal do produto."),
+    step("Revisar internamente", "Fazer revisão de qualidade, consistência e ajustes técnicos."),
+    step("Enviar para aprovação", "Apresentar a entrega provisória ao cliente ou à agência."),
+    step("Ajustar e finalizar", "Aplicar ajustes finais e registrar a entrega concluída."),
+  ];
+}
+
+function buildProvisionalTaskDef(product: { id: string; name: string; category: string }) {
+  return {
+    code: `TMP-${product.id}-T01`,
+    name: `Estrutura provisória — ${product.name}`,
+    category: product.category || "Geral",
+    description:
+      `Modelo automático provisório para o produto ${product.name}. Edite este modelo depois com o fluxo real.`,
+    steps: buildProvisionalSteps(product.name),
+    default_priority: "medium",
+    default_deadline_days: 5,
+    requires_briefing: true,
+  } satisfies TaskDef;
 }
 
 // ─── Catalog task definitions ─────────────────────────────────────────────────
@@ -438,7 +466,7 @@ const SEED_ENTRIES: SeedEntry[] = [
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
   console.log("═══════════════════════════════════════════════════════════");
   console.log("  SEED: Garantindo Modelos de Tarefas por Produto");
   console.log("═══════════════════════════════════════════════════════════\n");
@@ -448,6 +476,9 @@ async function main() {
   let activated = 0;
   let linked = 0;
   let skipped = 0;
+  let provisionalCreated = 0;
+  let provisionalUpdated = 0;
+  let provisionalLinked = 0;
 
   for (const entry of SEED_ENTRIES) {
     const { productId, sortOrder, phase, taskDef, forceActivate } = entry;
@@ -555,12 +586,122 @@ async function main() {
     }
   }
 
+  // 4. Fallback provisório: products ativos sem qualquer modelo ativo
+  const productsWithoutStructure = await prisma.product.findMany({
+    where: { is_active: true },
+    orderBy: { id: "asc" },
+    include: {
+      task_links: {
+        include: {
+          catalog_task: {
+            select: { id: true, code: true, name: true, is_active: true, steps: true },
+          },
+        },
+        orderBy: { sort_order: "asc" },
+      },
+    },
+  });
+
+  for (const product of productsWithoutStructure) {
+    const activeLinks = product.task_links.filter((l) => l.catalog_task.is_active);
+    if (activeLinks.length > 0) continue;
+
+    const taskDef = buildProvisionalTaskDef(product);
+    const stepsJson = JSON.stringify(taskDef.steps);
+    const existing = await prisma.catalogTask.findUnique({
+      where: { code: taskDef.code },
+    });
+
+    let catalogTaskId: string;
+
+    if (!existing) {
+      const createdTask = await prisma.catalogTask.create({
+        data: {
+          code: taskDef.code,
+          name: taskDef.name,
+          category: taskDef.category,
+          description: taskDef.description,
+          steps: stepsJson,
+          requires_briefing: taskDef.requires_briefing ?? false,
+          default_deadline_days: taskDef.default_deadline_days ?? null,
+          default_priority: taskDef.default_priority ?? "medium",
+          is_active: true,
+          status: "ativa",
+          notes: "Estrutura provisória criada automaticamente para completar o catálogo.",
+        },
+      });
+      catalogTaskId = createdTask.id;
+      provisionalCreated++;
+      console.log(`  ✅ PROVISÓRIO [${product.id}] ${product.name} → ${taskDef.code}`);
+    } else {
+      catalogTaskId = existing.id;
+      const shouldRefreshSteps = !existing.steps || (() => {
+        try {
+          const parsed = JSON.parse(existing.steps);
+          return !Array.isArray(parsed) || parsed.length === 0;
+        } catch {
+          return true;
+        }
+      })();
+
+      if (shouldRefreshSteps) {
+        await prisma.catalogTask.update({
+          where: { id: existing.id },
+          data: {
+            name: existing.name || taskDef.name,
+            category: existing.category || taskDef.category,
+            description: existing.description || taskDef.description,
+            steps: stepsJson,
+            requires_briefing: existing.requires_briefing ?? taskDef.requires_briefing ?? false,
+            default_deadline_days: existing.default_deadline_days ?? taskDef.default_deadline_days ?? null,
+            default_priority: existing.default_priority || taskDef.default_priority || "medium",
+            is_active: true,
+            status: "ativa",
+            notes:
+              existing.notes ||
+              "Estrutura provisória criada automaticamente para completar o catálogo.",
+          },
+        });
+        provisionalUpdated++;
+        console.log(`  🔧 PROVISÓRIO ATUALIZADO [${product.id}] ${product.name} → ${taskDef.code}`);
+      } else {
+        console.log(`  ✓ PROVISÓRIO JÁ EXISTE [${product.id}] ${product.name} → ${taskDef.code}`);
+      }
+    }
+
+    const existingLink = await prisma.productCatalogTask.findUnique({
+      where: {
+        product_id_catalog_task_id: {
+          product_id: product.id,
+          catalog_task_id: catalogTaskId,
+        },
+      },
+    });
+
+    if (!existingLink) {
+      await prisma.productCatalogTask.create({
+        data: {
+          product_id: product.id,
+          catalog_task_id: catalogTaskId,
+          sort_order: 0,
+          is_mandatory: true,
+          phase: null,
+        },
+      });
+      provisionalLinked++;
+      console.log(`     ↳ Vínculo provisório criado: ${product.id} → ${taskDef.code}`);
+    }
+  }
+
   console.log("\n─── Resumo ─────────────────────────────────────────────────");
   console.log(`  Modelos criados    : ${created}`);
   console.log(`  Modelos ativados   : ${activated}`);
   console.log(`  Etapas corrigidas  : ${updated} modelos`);
   console.log(`  Vínculos criados   : ${linked}`);
   console.log(`  Já OK (ignorados)  : ${skipped}`);
+  console.log(`  Provisórios criados: ${provisionalCreated}`);
+  console.log(`  Provisórios atualiz: ${provisionalUpdated}`);
+  console.log(`  Provisórios víncul. : ${provisionalLinked}`);
 
   // ─── Final audit ───────────────────────────────────────────────────────────
   console.log("\n─── Auditoria final ────────────────────────────────────────");
@@ -607,6 +748,11 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════\n");
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+if (require.main === module) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

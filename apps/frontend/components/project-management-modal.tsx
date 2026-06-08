@@ -2,12 +2,10 @@
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
-
 import { Label } from "@/components/ui/label";
-
 import React from "react";
+import { useToast } from "@/components/ui/use-toast";
 import { createPortal } from "react-dom";
-
 import { useState, useRef } from "react";
 import {
   Accordion,
@@ -41,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   User,
   Copy,
@@ -102,17 +101,6 @@ import {
   ArrowRight,
   History,
   ScrollText,
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast"; // Import useToast
-import { DialogFooter } from "@/components/ui/dialog";
-import {
   ChevronLeft,
   ChevronRight,
   Search,
@@ -129,6 +117,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import {
@@ -227,17 +222,6 @@ export function ProjectManagementModal({
   const { accountType } = useAccountType();
   const canSeeNomadNames = accountType === "admin";
 
-  // Gate tabs for projects that haven't been paid yet
-  const isUnpaid =
-    project?.status === "draft" || project?.status === "awaiting-payment";
-
-  // ── Proposal export state ──────────────────────────────────────────────────
-  const [showCustomDocDialog, setShowCustomDocDialog] = useState(false);
-  const [customDocFile, setCustomDocFile] = useState<File | null>(null);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [isExportingDocx, setIsExportingDocx] = useState(false);
-  const [customDocDragOver, setCustomDocDragOver] = useState(false);
-
   // Avatar / crop state
   const [avatar, setAvatar] = useState<string | null>(null);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
@@ -248,11 +232,9 @@ export function ProjectManagementModal({
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cropImgRef = useRef<HTMLImageElement>(null);
+  const cropImgRef = React.useRef<HTMLImageElement>(null);
   const CROP_SIZE = 192;
 
-  // Avatar handlers
   const handleAvatarClick = () => {
     if (avatar) {
       setShowAvatarMenu((p) => !p);
@@ -260,21 +242,7 @@ export function ProjectManagementModal({
       fileInputRef.current?.click();
     }
   };
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const src = ev.target?.result as string;
-      setRawImageSrc(src);
-      setOriginalRawSrc(src);
-      setCropZoom(1);
-      setCropOffset({ x: 0, y: 0 });
-      setCropOpen(true);
-    };
-    reader.readAsDataURL(file);
-  };
+
   const handleCropConfirm = () => {
     const img = cropImgRef.current;
     if (!img) return;
@@ -306,107 +274,23 @@ export function ProjectManagementModal({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [customHeaderColor, setCustomHeaderColor] = useState("#1e293b");
 
-  const HEADER_PRESETS: {
-    label: string;
-    value: string | null;
-    preview: string;
-  }[] = [
+  const HEADER_PRESETS = [
     {
       label: "Padrão",
       value: null,
       preview: "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)",
     },
     {
-      label: "Oceano",
-      value: "linear-gradient(135deg,#0f172a 0%,#0e4d8c 50%,#0891b2 100%)",
-      preview: "linear-gradient(135deg,#0f172a 0%,#0e4d8c 50%,#0891b2 100%)",
+      label: "Azul",
+      value: "#1e3a8a",
+      preview: "linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%)",
     },
     {
-      label: "Pôr do Sol",
-      value: "linear-gradient(135deg,#1c0533 0%,#7c1d6f 50%,#f97316 100%)",
-      preview: "linear-gradient(135deg,#1c0533 0%,#7c1d6f 50%,#f97316 100%)",
-    },
-    {
-      label: "Natureza",
-      value: "linear-gradient(135deg,#052e16 0%,#166534 50%,#4ade80 100%)",
-      preview: "linear-gradient(135deg,#052e16 0%,#166534 50%,#4ade80 100%)",
-    },
-    {
-      label: "Fogo",
-      value: "linear-gradient(135deg,#450a0a 0%,#b91c1c 50%,#f97316 100%)",
-      preview: "linear-gradient(135deg,#450a0a 0%,#b91c1c 50%,#f97316 100%)",
-    },
-    {
-      label: "Noite",
-      value: "linear-gradient(135deg,#0f0f0f 0%,#1e1e3f 50%,#312e81 100%)",
-      preview: "linear-gradient(135deg,#0f0f0f 0%,#1e1e3f 50%,#312e81 100%)",
-    },
-    {
-      label: "Aurora",
-      value: "linear-gradient(135deg,#0f172a 0%,#4f46e5 45%,#06b6d4 100%)",
-      preview: "linear-gradient(135deg,#0f172a 0%,#4f46e5 45%,#06b6d4 100%)",
-    },
-    {
-      label: "Rubi",
-      value: "linear-gradient(135deg,#1c0533 0%,#be123c 50%,#f43f5e 100%)",
-      preview: "linear-gradient(135deg,#1c0533 0%,#be123c 50%,#f43f5e 100%)",
-    },
-    {
-      label: "Carvão",
-      value: "linear-gradient(135deg,#111827 0%,#374151 50%,#6b7280 100%)",
-      preview: "linear-gradient(135deg,#111827 0%,#374151 50%,#6b7280 100%)",
-    },
-    {
-      label: "Esmeralda",
-      value: "linear-gradient(135deg,#022c22 0%,#065f46 50%,#10b981 100%)",
-      preview: "linear-gradient(135deg,#022c22 0%,#065f46 50%,#10b981 100%)",
-    },
-    {
-      label: "Índigo",
-      value: "linear-gradient(135deg,#1e1b4b 0%,#4338ca 50%,#818cf8 100%)",
-      preview: "linear-gradient(135deg,#1e1b4b 0%,#4338ca 50%,#818cf8 100%)",
-    },
-    {
-      label: "Âmbar",
-      value: "linear-gradient(135deg,#451a03 0%,#b45309 50%,#fbbf24 100%)",
-      preview: "linear-gradient(135deg,#451a03 0%,#b45309 50%,#fbbf24 100%)",
+      label: "Roxo",
+      value: "#6d28d9",
+      preview: "linear-gradient(135deg,#6d28d9 0%,#a855f7 100%)",
     },
   ];
-
-  const getHeaderStyle = (): React.CSSProperties | undefined => {
-    if (!headerBg) return undefined;
-    return { background: headerBg };
-  };
-  const [showFileDetails, setShowFileDetails] = useState(false);
-  const [fileTypeFilter, setFileTypeFilter] = useState<string>("all");
-  const [fileProductFilter, setFileProductFilter] = useState<string>("all");
-  const [fileDateFilter, setFileDateFilter] = useState<string>("");
-  const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
-  const [productStatusFilter, setProductStatusFilter] = useState<string>("all");
-  const [productDateFilter, setProductDateFilter] = useState<string>("");
-  const [productTaskStatusFilter, setProductTaskStatusFilter] =
-    useState<string>("all");
-  const [taskFontSize, setTaskFontSize] = useState<"sm" | "base" | "lg">("sm");
-  const [selectedCredential, setSelectedCredential] = useState<any>(null);
-  const [showCredentialDetails, setShowCredentialDetails] = useState(false); // Corrected state name
-  const [visiblePasswords, setVisiblePasswords] = useState<{
-    [key: number]: boolean;
-  }>({});
-  const [defaultPaymentMethod, setDefaultPaymentMethod] =
-    useState<string>("carteira");
-  const [savedCards, setSavedCards] = useState<any[]>([]);
-  const [walletBalance] = useState(0);
-  const [allkoinBalance] = useState(0);
-  const [allkoinExchangeRate] = useState(1.0);
-  const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [faturamentoSubTab, setFaturamentoSubTab] = useState<
-    "faturas" | "formas-pagamento"
-  >("faturas");
-  const [showReativarDialog, setShowReativarDialog] = useState(false);
-  const [showAvulsoReativarAlert, setShowAvulsoReativarAlert] = useState(false);
-
-  const [productSortBy, setProductSortBy] = useState<string>("nome");
 
   // Dados do Projeto tab
   const [dadosProjOpenAccordions, setDadosProjOpenAccordions] = useState<
@@ -439,13 +323,22 @@ export function ProjectManagementModal({
       "Projeto de hospedagem e cuidados para idosos da empresa Florescer. Inclui desenvolvimento de website institucional, sistema de gestão de pacientes, e materiais de marketing digital para divulgação dos serviços.",
   });
 
-  // Dynamic accordion list - computed after dadosProjForm is declared
   const DADOS_PROJECT_ACCORDIONS = [
     "info",
     "descricao",
     ...(dadosProjForm.lifecycle === "Mensal" ? ["ciclo"] : []),
   ];
 
+  // ── Proposal export state ──────────────────────────────────────────────────
+  const [showCustomDocDialog, setShowCustomDocDialog] = useState(false);
+  const [customDocFile, setCustomDocFile] = useState<File | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingDocx, setIsExportingDocx] = useState(false);
+  const [customDocDragOver, setCustomDocDragOver] = useState(false);
+
+  // Gate tabs for projects that haven't been paid yet
+  const isUnpaid =
+    project?.status === "draft" || project?.status === "awaiting-payment";
   React.useEffect(() => {
     if (project) {
       setDadosProjForm({
@@ -478,6 +371,12 @@ export function ProjectManagementModal({
         project_id: String(project.id),
       });
       const items: any[] = res?.data ?? [];
+      const paymentsRes = await apiClient.getPayments({
+        project_id: String(project.id),
+      });
+      const paymentRows: any[] = Array.isArray(paymentsRes?.data)
+        ? paymentsRes.data
+        : [];
 
       const statusMap: Record<string, string> = {
         PARA_LANCAMENTO: "Para lançamento",
@@ -592,8 +491,40 @@ export function ProjectManagementModal({
       });
 
       setMockData((prev: any) => ({ ...prev, produtos }));
+      setMockInvoices(
+        paymentRows.map((payment: any, index: number) => ({
+          id: payment.id || String(index + 1),
+          status: payment.status || "PAGO",
+          month: payment.paid_at
+            ? new Date(payment.paid_at).toLocaleDateString("pt-BR", {
+                month: "long",
+                year: "numeric",
+              })
+            : "—",
+          descricao: payment.notes || "Pagamento do projeto",
+          valor: Number(payment.amount ?? 0),
+          valorOriginal: Number(payment.amount ?? 0),
+          desconto: 0,
+          descontoPercentual: 0,
+          agencia: project.agency || "—",
+          agenciaId: project.agency_id || null,
+          cliente: project.client?.name || project.client || "—",
+          clienteId: project.client_id || null,
+          formaPagamento: payment.payment_method || "CARTAO_TESTE",
+          competencia: payment.paid_at
+            ? new Date(payment.paid_at).toLocaleDateString("pt-BR", {
+                month: "2-digit",
+                year: "numeric",
+              })
+            : "—",
+          dataCobran: payment.paid_at || null,
+          dataPagamento: payment.paid_at || null,
+          produtos: [],
+        })),
+      );
     } catch (err) {
       console.error("[ProjectManagementModal] fetchModalData error:", err);
+      setMockInvoices([]);
     } finally {
       setLoadingModalData(false);
     }
@@ -603,6 +534,7 @@ export function ProjectManagementModal({
     if (open && project?.id) fetchModalData();
     if (!open)
       setMockData({ produtos: [], tarefas: [], timeline: [], kanban: {} });
+    if (!open) setMockInvoices([]);
   }, [open, project?.id]);
 
   const handleDadosProjSave = async () => {
@@ -612,9 +544,12 @@ export function ProjectManagementModal({
     setIsDadosProjEditMode(false);
     setShowDadosProjSaveConfirm(false);
   };
+  const [productSortBy, setProductSortBy] = useState<string>("nome");
   const [productSortOrder, setProductSortOrder] = useState<"asc" | "desc">(
     "asc",
   );
+  const [productStatusFilter, setProductStatusFilter] = useState<string>("all");
+  const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
   const [productPercentageFilter, setProductPercentageFilter] =
     useState<string>("all");
   const [showProductFilters, setShowProductFilters] = useState(false);
@@ -624,6 +559,7 @@ export function ProjectManagementModal({
   const [approvedFileTypeFilter, setApprovedFileTypeFilter] = useState("all");
   const [approvedFileSortOrder, setApprovedFileSortOrder] = useState("recent");
   const [showAddFileDialog, setShowAddFileDialog] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [activeFileTab, setActiveFileTab] = useState<"iniciais" | "aprovados">(
     "iniciais",
   );
@@ -743,7 +679,26 @@ export function ProjectManagementModal({
 
   const mockVaultCredentials: any[] = [];
 
-  const mockInvoices: any[] = [];
+  const [selectedCredential, setSelectedCredential] = useState<any>(null);
+  const [visiblePasswords, setVisiblePasswords] = useState<{
+    [key: number]: boolean;
+  }>({});
+
+  const [defaultPaymentMethod, setDefaultPaymentMethod] =
+    useState<string>("carteira");
+  const [savedCards, setSavedCards] = useState<any[]>([]);
+  const [walletBalance] = useState(0);
+  const [allkoinBalance] = useState(0);
+  const [allkoinExchangeRate] = useState(1.0);
+  const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [showReativarDialog, setShowReativarDialog] = useState(false);
+  const [showAvulsoReativarAlert, setShowAvulsoReativarAlert] = useState(false);
+
+  const [mockInvoices, setMockInvoices] = useState<any[]>([]);
+  const [faturamentoSubTab, setFaturamentoSubTab] = useState<
+    "faturas" | "formas-pagamento"
+  >("faturas");
 
   const handleDownloadInvoicePDF = (invoice: any) => {
     toast({
@@ -832,6 +787,22 @@ export function ProjectManagementModal({
       setNewFileName("");
       setShowAddFileDialog(false);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      setRawImageSrc(src);
+      setOriginalRawSrc(src);
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
+      setCropOpen(true);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddUserAccess = () => {
@@ -1025,6 +996,11 @@ export function ProjectManagementModal({
       default:
         return "bg-slate-400";
     }
+  };
+
+  const getHeaderStyle = () => {
+    if (!headerBg) return undefined;
+    return { background: headerBg };
   };
 
   const openTaskDrawer = (tarefa: any) => {
@@ -1266,7 +1242,7 @@ export function ProjectManagementModal({
                                       agencyProfile.logo ||
                                       "/images/logob.png",
                                     agencyName:
-                                      agencyProfile.name || "Allka Digital",
+                                      agencyProfile.name || "Lamego Teste Agency",
                                   };
                                   const proposalData = buildProposalData(
                                     mockData,
@@ -1749,8 +1725,8 @@ export function ProjectManagementModal({
                           Status do Projeto
                         </p>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          75% das tarefas concluídas · 3 aguardando aprovação ·
-                          desempenho acima da média
+                          0% das tarefas concluídas · 0 aguardando aprovação ·
+                          sem atividade registrada ainda
                         </p>
                       </div>
                     </div>
@@ -1766,11 +1742,11 @@ export function ProjectManagementModal({
                           <Clock className="w-3.5 h-3.5 opacity-70" />
                         </div>
                         <p className="text-2xl font-bold leading-tight">
-                          247.5h
+                          0h
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1">
                           <TrendingUp className="w-3 h-3" />
-                          +12.5h esta semana
+                          sem horas registradas
                         </p>
                       </div>
                       {/* Tarefas */}
@@ -1782,14 +1758,12 @@ export function ProjectManagementModal({
                           <CheckCircle2 className="w-3.5 h-3.5 opacity-70" />
                         </div>
                         <p className="text-2xl font-bold leading-tight">
-                          45
-                          <span className="text-base font-semibold opacity-70">
-                            /60
-                          </span>
+                          0
+                          <span className="text-base font-semibold opacity-70">/0</span>
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1">
                           <TrendingUp className="w-3 h-3" />
-                          +5 esta semana
+                          sem tarefas executadas
                         </p>
                       </div>
                       {/* Nota */}
@@ -1801,13 +1775,11 @@ export function ProjectManagementModal({
                           <Star className="w-3.5 h-3.5 opacity-70" />
                         </div>
                         <p className="text-2xl font-bold leading-tight">
-                          4.8
-                          <span className="text-base font-semibold opacity-70">
-                            /5
-                          </span>
+                          0.0
+                          <span className="text-base font-semibold opacity-70">/5</span>
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5">
-                          Excelente avaliação
+                          sem avaliação ainda
                         </p>
                       </div>
                       {/* Atenção */}
@@ -1818,9 +1790,9 @@ export function ProjectManagementModal({
                           </span>
                           <AlertTriangle className="w-3.5 h-3.5 opacity-70" />
                         </div>
-                        <p className="text-2xl font-bold leading-tight">3</p>
+                        <p className="text-2xl font-bold leading-tight">0</p>
                         <p className="text-[10px] opacity-75 mt-0.5">
-                          Tarefas críticas
+                          nenhuma tarefa crítica
                         </p>
                       </div>
                     </div>
@@ -1839,29 +1811,29 @@ export function ProjectManagementModal({
                           {[
                             {
                               label: "Concluídas",
-                              value: 45,
-                              total: 60,
+                              value: 0,
+                              total: 1,
                               color: "bg-emerald-500",
                               text: "text-emerald-600",
                             },
                             {
                               label: "Em Andamento",
-                              value: 8,
-                              total: 60,
+                              value: 0,
+                              total: 1,
                               color: "bg-blue-500",
                               text: "text-blue-600",
                             },
                             {
                               label: "Aguardando",
-                              value: 3,
-                              total: 60,
+                              value: 0,
+                              total: 1,
                               color: "bg-amber-400",
                               text: "text-amber-600",
                             },
                             {
                               label: "Bloqueadas",
-                              value: 2,
-                              total: 60,
+                              value: 0,
+                              total: 1,
                               color: "bg-red-500",
                               text: "text-red-500",
                             },
@@ -1881,7 +1853,10 @@ export function ProjectManagementModal({
                                 <div
                                   className={`${s.color} h-1.5 rounded-full`}
                                   style={{
-                                    width: `${(s.value / s.total) * 100}%`,
+                                    width:
+                                      s.total > 0
+                                        ? `${(s.value / s.total) * 100}%`
+                                        : "0%",
                                   }}
                                 />
                               </div>
@@ -1900,16 +1875,16 @@ export function ProjectManagementModal({
                         </div>
                         <div className="flex items-end gap-3 mb-3">
                           <span className="text-3xl font-bold text-slate-800">
-                            8.5%
+                            0.0%
                           </span>
                           <span className="text-xs text-emerald-600 font-medium mb-1">
-                            Abaixo da média
+                            Sem reprovações registradas
                           </span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-2">
                           <div
                             className="bg-emerald-500 h-2 rounded-full transition-all"
-                            style={{ width: "8.5%" }}
+                            style={{ width: "0%" }}
                           />
                         </div>
                         <div className="flex justify-between mt-1.5">
@@ -1929,44 +1904,8 @@ export function ProjectManagementModal({
                       <p className="text-xs font-semibold text-slate-700 mb-3">
                         Atividades Recentes
                       </p>
-                      <div className="space-y-1">
-                        {[
-                          {
-                            action: "Tarefa #45 concluída",
-                            time: "2h atrás",
-                            type: "success",
-                          },
-                          {
-                            action: "Nova revisão solicitada na tarefa #38",
-                            time: "5h atrás",
-                            type: "warning",
-                          },
-                          {
-                            action: "3 novas tarefas adicionadas",
-                            time: "1 dia atrás",
-                            type: "info",
-                          },
-                          {
-                            action: "Aprovação pendente - Tarefa #42",
-                            time: "2 dias atrás",
-                            type: "warning",
-                          },
-                        ].map((activity, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors"
-                          >
-                            <div
-                              className={`w-2 h-2 rounded-full shrink-0 ${activity.type === "success" ? "bg-emerald-500" : activity.type === "warning" ? "bg-amber-400" : "bg-blue-500"}`}
-                            />
-                            <p className="flex-1 text-xs text-slate-700">
-                              {activity.action}
-                            </p>
-                            <p className="text-[10px] text-slate-400 whitespace-nowrap">
-                              {activity.time}
-                            </p>
-                          </div>
-                        ))}
+                      <div className="px-2 py-8 text-center text-slate-400 text-xs">
+                        Nenhuma atividade registrada ainda.
                       </div>
                     </div>
                   </div>
@@ -2916,7 +2855,6 @@ export function ProjectManagementModal({
                   className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200"
                 >
                   <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
-                    {/* Header */}
                     <div className="flex items-center justify-between pb-1">
                       <div>
                         <h3 className="text-sm font-semibold text-slate-900">
@@ -2926,283 +2864,36 @@ export function ProjectManagementModal({
                           Gerencie os arquivos e entregáveis deste projeto
                         </p>
                       </div>
-                      {activeFileTab === "iniciais" && (
-                        <button
-                          onClick={() => setShowAddFileDialog(true)}
-                          className="flex items-center gap-2 h-8 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-semibold shadow-sm shadow-blue-200 transition-all"
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                          Adicionar Arquivo
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setShowAddFileDialog(true)}
+                        className="flex items-center gap-2 h-8 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-semibold shadow-sm shadow-blue-200 transition-all"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Adicionar Arquivo
+                      </button>
                     </div>
 
-                    {/* Single card with tab toggle */}
                     <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white">
-                      {/* Tab toggle bar */}
                       <div className="flex border-b border-slate-200 bg-slate-50">
-                        <button
-                          onClick={() => setActiveFileTab("iniciais")}
-                          className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold transition-all ${
-                            activeFileTab === "iniciais"
-                              ? "text-blue-600 border-b-2 border-blue-500 bg-white"
-                              : "text-slate-400 hover:text-slate-600 border-b-2 border-transparent"
-                          }`}
-                        >
+                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 border-blue-500 bg-white text-blue-600">
                           <FolderOpen className="h-3.5 w-3.5" />
                           Arquivos Iniciais
-                          <span
-                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              activeFileTab === "iniciais"
-                                ? "bg-blue-100 text-blue-600"
-                                : "bg-slate-200 text-slate-500"
-                            }`}
-                          >
-                            3
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-600">
+                            0
                           </span>
                         </button>
-                        <button
-                          onClick={() => setActiveFileTab("aprovados")}
-                          className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold transition-all ${
-                            activeFileTab === "aprovados"
-                              ? "text-emerald-600 border-b-2 border-emerald-500 bg-white"
-                              : "text-slate-400 hover:text-slate-600 border-b-2 border-transparent"
-                          }`}
-                        >
+                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-600">
                           <CheckCircle className="h-3.5 w-3.5" />
                           Arquivos Aprovados
-                          <span
-                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              activeFileTab === "aprovados"
-                                ? "bg-emerald-100 text-emerald-600"
-                                : "bg-slate-200 text-slate-500"
-                            }`}
-                          >
-                            3
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-500">
+                            0
                           </span>
                         </button>
                       </div>
 
-                      {/* ── INICIAIS CONTENT ── */}
-                      {activeFileTab === "iniciais" && (
-                        <>
-                          {/* Toolbar */}
-                          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-white">
-                            <Select
-                              value={fileTypeFilter}
-                              onValueChange={setFileTypeFilter}
-                            >
-                              <SelectTrigger className="h-7 w-[140px] text-xs border-slate-200 bg-slate-50">
-                                <SelectValue placeholder="Todos os Tipos" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">
-                                  Todos os Tipos
-                                </SelectItem>
-                                <SelectItem value="pdf">PDF</SelectItem>
-                                <SelectItem value="image">Imagem</SelectItem>
-                                <SelectItem value="video">Vídeo</SelectItem>
-                                <SelectItem value="document">
-                                  Documento
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={fileSortOrder}
-                              onValueChange={setFileSortOrder}
-                            >
-                              <SelectTrigger className="h-7 w-[130px] text-xs border-slate-200 bg-slate-50">
-                                <SelectValue placeholder="Mais Recente" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="recent">
-                                  Mais Recente
-                                </SelectItem>
-                                <SelectItem value="oldest">
-                                  Mais Antigo
-                                </SelectItem>
-                                <SelectItem value="name">Nome A-Z</SelectItem>
-                                <SelectItem value="size">Tamanho</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="ml-auto text-[11px] text-slate-400 italic">
-                              Logotipos, briefings e anexos da agência
-                            </p>
-                          </div>
-                          {/* File list */}
-                          <div className="divide-y divide-slate-100">
-                            {[
-                              {
-                                name: "Briefing_Florescer.pdf",
-                                date: "19/02/2025",
-                                size: "2.5 MB",
-                                iconBg: "bg-blue-50",
-                                iconColor: "text-blue-500",
-                              },
-                              {
-                                name: "Logo_Atual_Florescer.ai",
-                                date: "19/02/2025",
-                                size: "8.3 MB",
-                                iconBg: "bg-purple-50",
-                                iconColor: "text-purple-500",
-                              },
-                              {
-                                name: "Referencias_Visuais.zip",
-                                date: "20/02/2025",
-                                size: "15.7 MB",
-                                iconBg: "bg-emerald-50",
-                                iconColor: "text-emerald-500",
-                              },
-                            ].map((file, idx) => (
-                              <div
-                                key={file.name}
-                                className={`flex items-center gap-3 px-4 py-3 transition-colors ${idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/70 hover:bg-slate-100/70"}`}
-                              >
-                                <div
-                                  className={`h-9 w-9 rounded-xl ${file.iconBg} flex items-center justify-center shrink-0`}
-                                >
-                                  <File
-                                    className={`h-4 w-4 ${file.iconColor}`}
-                                  />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-slate-800 truncate">
-                                    {file.name}
-                                  </p>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
-                                    Adicionado em {file.date} · {file.size}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <button
-                                    className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-slate-400 hover:text-blue-600 transition-all"
-                                    title="Baixar"
-                                  >
-                                    <Download className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 text-slate-400 hover:text-red-500 transition-all"
-                                    title="Excluir"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {/* ── APROVADOS CONTENT ── */}
-                      {activeFileTab === "aprovados" && (
-                        <>
-                          {/* Toolbar */}
-                          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-white">
-                            <Select
-                              value={approvedFileTypeFilter}
-                              onValueChange={setApprovedFileTypeFilter}
-                            >
-                              <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200 bg-slate-50">
-                                <SelectValue placeholder="Todos os Produtos" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">
-                                  Todos os Produtos
-                                </SelectItem>
-                                <SelectItem value="product1">
-                                  Produto 1
-                                </SelectItem>
-                                <SelectItem value="product2">
-                                  Produto 2
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={approvedFileSortOrder}
-                              onValueChange={setApprovedFileSortOrder}
-                            >
-                              <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200 bg-slate-50">
-                                <SelectValue placeholder="Data de Conclusão" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="recent">
-                                  Data de Conclusão
-                                </SelectItem>
-                                <SelectItem value="task">
-                                  Número da Tarefa
-                                </SelectItem>
-                                <SelectItem value="name">Nome A-Z</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="ml-auto text-[11px] text-slate-400 italic">
-                              Gerados automaticamente ao aprovar tarefas
-                            </p>
-                          </div>
-                          {/* Approved file list */}
-                          <div className="divide-y divide-slate-100">
-                            {[
-                              {
-                                name: "Design_Homepage_Final.fig",
-                                task: "Design Homepage",
-                                product: "Website Institucional",
-                                date: "15/02/2025",
-                                size: "4.2 MB",
-                              },
-                              {
-                                name: "Backend_API_Documentation.pdf",
-                                task: "Desenvolvimento Backend",
-                                product: "Website Institucional",
-                                date: "25/02/2025",
-                                size: "1.8 MB",
-                              },
-                              {
-                                name: "Hospedagem_Configuracao.txt",
-                                task: "Configuração Hospedagem",
-                                product: "Website Institucional",
-                                date: "18/02/2025",
-                                size: "0.1 MB",
-                              },
-                            ].map((file, idx) => (
-                              <div
-                                key={file.name}
-                                className={`flex items-center gap-3 px-4 py-3 transition-colors ${idx % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/70 hover:bg-slate-100/70"}`}
-                              >
-                                <div className="relative shrink-0">
-                                  <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center">
-                                    <File className="h-4 w-4 text-emerald-500" />
-                                  </div>
-                                  <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
-                                    <CheckCircle className="h-2 w-2 text-white" />
-                                  </div>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-slate-800 truncate">
-                                    {file.name}
-                                  </p>
-                                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                                    <span className="font-medium text-slate-500">
-                                      {file.task}
-                                    </span>
-                                    <span className="mx-1 text-slate-300">
-                                      ·
-                                    </span>
-                                    {file.product}
-                                  </p>
-                                  <p className="text-[10px] text-emerald-500 font-medium">
-                                    ✓ Aprovado em {file.date} · {file.size}
-                                  </p>
-                                </div>
-                                <button
-                                  className="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-slate-400 hover:text-blue-600 transition-all shrink-0"
-                                  title="Baixar"
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
+                      <div className="px-4 py-10 text-center text-slate-400 text-xs">
+                        Nenhum arquivo enviado neste projeto.
+                      </div>
                     </div>
                   </div>
                 </TabsContent>

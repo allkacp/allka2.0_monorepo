@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
+import { getProductContractability } from "../lib/product-contractability";
 
-async function main() {
+export async function main() {
   console.log("═══════════════════════════════════════════════════════════");
   console.log("  AUDITORIA: Produtos × Modelos de Tarefas × Etapas");
   console.log("═══════════════════════════════════════════════════════════\n");
@@ -27,19 +28,18 @@ async function main() {
   let problemCount = 0;
 
   for (const p of products) {
+    const contractability = await getProductContractability(p.id);
     const activeLinks = p.task_links.filter((l) => l.catalog_task.is_active);
     const inactiveLinks = p.task_links.filter((l) => !l.catalog_task.is_active);
     const totalLinks = p.task_links.length;
+    const productCode = p.metadata ? JSON.parse(p.metadata)?.code ?? "?" : "?";
 
-    const hasProblems =
-      !p.is_active === false
-        ? false
-        : activeLinks.length === 0;
-
-    console.log(`─── ${p.name} (code=${p.metadata ? JSON.parse(p.metadata)?.code ?? "?" : "?"}, active=${p.is_active})`);
+    console.log(
+      `─── ${p.name} (code=${productCode}, active=${p.is_active}, contractable=${contractability.isContractable})`,
+    );
     console.log(`    id=${p.id}`);
     console.log(
-      `    Vínculos totais: ${totalLinks} | ativos: ${activeLinks.length} | inativos: ${inactiveLinks.length}`,
+      `    Vínculos totais: ${totalLinks} | ativos: ${activeLinks.length} | inativos: ${inactiveLinks.length} | modelos ativos: ${contractability.activeTaskTemplates}`,
     );
 
     if (activeLinks.length === 0 && p.is_active) {
@@ -71,6 +71,11 @@ async function main() {
         problemCount++;
       }
     }
+
+    if (p.is_active && !contractability.isContractable) {
+      console.log(`    ⚠️  PROBLEMA: produto ativo não contratável segundo a regra central.`);
+      problemCount++;
+    }
     console.log("");
   }
 
@@ -94,4 +99,6 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch(console.error);
+if (require.main === module) {
+  main().catch(console.error);
+}

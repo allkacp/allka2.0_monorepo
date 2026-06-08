@@ -102,6 +102,19 @@ router.get("/me", verifyToken, async (req, res, next) => {
         phone: true,
         is_active: true,
         created_at: true,
+        agency: {
+          select: {
+            id: true,
+            name: true,
+            cnpj: true,
+            email: true,
+            phone: true,
+            partner_level: true,
+            status: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
       },
     });
 

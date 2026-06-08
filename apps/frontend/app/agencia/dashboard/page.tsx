@@ -931,7 +931,7 @@ export default function AgenciaDashboard() {
           colSpan={w.colSpan}
           action={
             <Link
-              to="/agencia/projetos"
+              to="/agency/projetos"
               className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
             >
               Ver todos <ArrowUpRight className="h-3 w-3" />
@@ -998,7 +998,7 @@ export default function AgenciaDashboard() {
           colSpan={w.colSpan}
           action={
             <Link
-              to="/agencia/tarefas"
+              to="/agency/tarefas"
               className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
             >
               Ver todas <ArrowUpRight className="h-3 w-3" />
@@ -1168,7 +1168,7 @@ export default function AgenciaDashboard() {
           colSpan={w.colSpan}
           action={
             <Link
-              to="/agencia/financeiro"
+              to="/agency/financeiro"
               className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
             >
               Ver todas <ArrowUpRight className="h-3 w-3" />

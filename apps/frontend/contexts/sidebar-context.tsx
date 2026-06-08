@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useEffect,
 } from "react";
+import { apiClient } from "@/lib/api-client";
 
 interface SidebarSettings {
   backgroundColor: string;
@@ -140,14 +141,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [previewEnabled, setPreviewEnabled] = useState(false);
 
   const [agencyProfile, setAgencyProfile] = useState<AgencyProfile>({
-    name: "Allka Digital",
+    name: "Lamego Teste Agency",
     logo: "/images/logob.png",
     planType: "Premium",
-    cnpj: "12.345.678/0001-90",
-    email: "contato@allka.digital",
-    phone: "(11) 99999-9999",
-    address: "São Paulo, SP",
-    description: "Agência especializada em marketing digital e desenvolvimento",
+    cnpj: "98.765.432/0001-10",
+    email: "agencia@allka.test",
+    phone: "(11) 99999-0001",
+    address: "Av. Paulista, 1000 - São Paulo, SP",
+    description: "Agency preview account used for local development.",
   });
 
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -215,6 +216,87 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [sidebarSettings, isMounted]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const normalize = (value: string) =>
+      value.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+    async function loadAgencyProfile() {
+      try {
+        const [currentUserRes, agenciesRes] = await Promise.allSettled([
+          apiClient.getCurrentUser(),
+          apiClient.getAgencies({ limit: "20" }),
+        ]);
+
+        if (cancelled) return;
+
+        const currentUser =
+          currentUserRes.status === "fulfilled"
+            ? (currentUserRes.value as any)
+            : null;
+        const activeAgencyName =
+          currentUser?.agency_name ||
+          currentUser?.agency?.name ||
+          currentUser?.active_agency_name ||
+          "";
+
+        const agencyList =
+          agenciesRes.status === "fulfilled"
+            ? ((agenciesRes.value as any)?.data ||
+                (Array.isArray(agenciesRes.value) ? agenciesRes.value : []))
+            : [];
+
+        const matchedAgency = activeAgencyName
+          ? agencyList.find((agency: any) => {
+              const agencyName = String(agency?.name || "");
+              return (
+                normalize(agencyName) === normalize(activeAgencyName) ||
+                normalize(agencyName).includes(normalize(activeAgencyName)) ||
+                normalize(activeAgencyName).includes(normalize(agencyName))
+              );
+            })
+          : agencyList[0];
+
+        const source = matchedAgency || agencyList[0];
+        if (!source) return;
+
+        setAgencyProfile((prev) => ({
+          ...prev,
+          id: String(currentUser?.agency_id || currentUser?.active_agency_id || source.id || source.name || prev.name),
+          name: activeAgencyName || source.name || prev.name,
+          logo: source.logo || prev.logo,
+          planType: source.plan || source.planType || prev.planType,
+          cnpj: source.document || source.cnpj || prev.cnpj,
+          email: source.email || prev.email,
+          phone: source.phone || prev.phone,
+          address: source.address || prev.address,
+          description: source.description || prev.description,
+        }));
+      } catch {
+        // keep the local fallback values when the API is unavailable
+      }
+    }
+
+    loadAgencyProfile();
+
+    const handleStorage = () => {
+      loadAgencyProfile();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("allka:profile-changed", handleStorage as EventListener);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        "allka:profile-changed",
+        handleStorage as EventListener,
+      );
+    };
+  }, []);
 
   // Aplicar tema como CSS variables globais
   useEffect(() => {

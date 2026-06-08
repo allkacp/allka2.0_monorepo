@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,8 +303,20 @@ function InfoCell({
 
 // ─── ProductStatusBadge ───────────────────────────────────────────────────────
 
-function ProductStatusBadge({ status }: { status: string }) {
-  const cfg = PRODUCT_STATUS_CFG[status] ?? PRODUCT_STATUS_CFG.PENDENTE;
+function ProductStatusBadge({
+  status,
+  projectStatus,
+}: {
+  status: string;
+  projectStatus?: string;
+}) {
+  const cfg =
+    status === "PENDENTE" && projectStatus === "awaiting-payment"
+      ? {
+          label: "Aguardando pagamento",
+          cls: "bg-amber-100 text-amber-800 border-amber-200",
+        }
+      : PRODUCT_STATUS_CFG[status] ?? PRODUCT_STATUS_CFG.PENDENTE;
   return (
     <span
       className={cn(
@@ -979,6 +991,7 @@ export function ProjectViewSlidePanel({
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
   const [launchDrawerTask, setLaunchDrawerTask] = useState<any>(null);
+  const repairedDraftRef = useRef<string | null>(null);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
   const fetchProducts = useCallback(async () => {
@@ -988,7 +1001,14 @@ export function ProjectViewSlidePanel({
       const res = await apiClient.getProjectProducts({
         project_id: String(project.id),
       });
-      setProjectProducts(res?.data ?? []);
+      const data = res?.data ?? [];
+      if (Array.isArray(data) && data.length > 0) {
+        setProjectProducts(data);
+      } else if (Array.isArray(project?.products) && project.products.length > 0) {
+        setProjectProducts(project.products);
+      } else {
+        setProjectProducts([]);
+      }
     } catch (_) {
     } finally {
       setLoadingProducts(false);
@@ -1022,6 +1042,66 @@ export function ProjectViewSlidePanel({
       setProjectTasks([]);
     }
   }, [open, project?.id]);
+
+  useEffect(() => {
+    if (!open || !project?.id) return;
+    if (project.status !== "awaiting-payment") return;
+    if (loadingProducts || projectProducts.length > 0) return;
+    if (repairedDraftRef.current === String(project.id)) return;
+
+    repairedDraftRef.current = String(project.id);
+
+    const restoreDraftProducts = async () => {
+      try {
+        const raw = localStorage.getItem(`allka-draft-${project.id}`);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        const selectedProducts = Array.isArray(parsed?.selectedProducts)
+          ? parsed.selectedProducts
+          : [];
+        if (selectedProducts.length === 0) return;
+
+        const productQuantities = parsed?.productQuantities ?? {};
+        const productCommissions = parsed?.productCommissions ?? {};
+        const productCommissionData = parsed?.productCommissionData ?? {};
+
+        for (const product of selectedProducts) {
+          const pid = String(product.id);
+          const qty = Number(productQuantities[pid] ?? product.quantity ?? 1) || 1;
+          const commissionPct = Number(productCommissions[pid] ?? 0) || 0;
+          const commissionData = productCommissionData[pid] ?? {};
+          const basePrice = Number(product.finalPrice ?? 0);
+          const pagador = commissionData.pagador === "CLIENTE" ? "CLIENTE" : "AGENCIA";
+          const commissionValue = (basePrice * commissionPct * qty) / 100;
+          const clientUnitPrice =
+            pagador === "CLIENTE" ? basePrice + commissionValue / qty : basePrice;
+
+          try {
+            await apiClient.linkProductToProject({
+              project_id: String(project.id),
+              product_id: pid,
+              recurrence_snapshot: "avulso",
+              preco_final_cliente_snapshot: clientUnitPrice * qty,
+              comissao_snapshot: commissionPct,
+              pagador_snapshot: pagador,
+            });
+          } catch (linkErr: any) {
+            if (linkErr?.status !== 409) {
+              console.warn("[project-view] Falha ao restaurar produto do draft:", linkErr);
+            }
+          }
+        }
+
+        await fetchProducts();
+        await fetchTasks();
+      } catch (err) {
+        console.warn("[project-view] Falha ao restaurar draft do projeto:", err);
+      }
+    };
+
+    void restoreDraftProducts();
+  }, [open, project?.id, project?.status, loadingProducts, projectProducts.length, fetchProducts, fetchTasks]);
 
   // ── Task status change ────────────────────────────────────────────────────
   async function handleTaskStatusChange(task: any, newStatus: string) {
@@ -1101,6 +1181,8 @@ export function ProjectViewSlidePanel({
   }
 
   if (!project) return null;
+
+  const awaitingPayment = project.status === "awaiting-payment";
 
   const spent = project.spent ?? 0;
   const budget = project.budget ?? project.value ?? 0;
@@ -1544,28 +1626,44 @@ export function ProjectViewSlidePanel({
                         <span className="text-sm">Carregando produtos...</span>
                       </div>
                     ) : projectProducts.length === 0 ? (
-                      <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 flex flex-col items-center justify-center gap-4 text-center">
-                        <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                          <Package className="h-7 w-7 text-slate-400" />
+                      project.status === "awaiting-payment" ? (
+                        <div className="bg-amber-50 rounded-xl border border-amber-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
+                          <div className="h-14 w-14 rounded-2xl bg-amber-100 flex items-center justify-center">
+                            <Lock className="h-7 w-7 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-base font-semibold text-amber-900">
+                              Projeto aguardando pagamento
+                            </p>
+                            <p className="text-sm text-amber-700 mt-1 max-w-sm mx-auto leading-relaxed">
+                              Este projeto está aguardando pagamento, mas os produtos não foram encontrados. Verifique o checkout/orçamento vinculado.
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-base font-semibold text-slate-600">
-                            Nenhum produto vinculado
-                          </p>
-                          <p className="text-sm text-slate-400 mt-1 max-w-xs mx-auto">
-                            Vincule produtos ao projeto para gerar tarefas de
-                            execução automaticamente.
-                          </p>
+                      ) : (
+                        <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 flex flex-col items-center justify-center gap-4 text-center">
+                          <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+                            <Package className="h-7 w-7 text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="text-base font-semibold text-slate-600">
+                              Nenhum produto vinculado
+                            </p>
+                            <p className="text-sm text-slate-400 mt-1 max-w-xs mx-auto">
+                              Vincule produtos ao projeto para gerar tarefas de
+                              execução automaticamente.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => setAddProductOpen(true)}
+                            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Vincular Primeiro
+                            Produto
+                          </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => setAddProductOpen(true)}
-                          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          <Plus className="h-3.5 w-3.5" /> Vincular Primeiro
-                          Produto
-                        </Button>
-                      </div>
+                      )
                     ) : (
                       <div className="space-y-3">
                         {projectProducts.map((pp: any) => {
@@ -1602,6 +1700,7 @@ export function ProjectViewSlidePanel({
                                       <div className="flex items-center gap-2 shrink-0">
                                         <ProductStatusBadge
                                           status={pp.status}
+                                          projectStatus={project.status}
                                         />
                                         <Tooltip>
                                           <TooltipTrigger asChild>
@@ -1625,6 +1724,14 @@ export function ProjectViewSlidePanel({
                                     <p className="text-xs text-slate-400 mt-0.5">
                                       {pp.product_category_snapshot}
                                     </p>
+                                    {project.status === "awaiting-payment" && (
+                                      <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        <Lock className="h-3.5 w-3.5" />
+                                        <span>
+                                          Este produto será liberado após a confirmação do pagamento.
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
@@ -1888,19 +1995,42 @@ export function ProjectViewSlidePanel({
                         "awaiting-payment",
                       ].includes(project.status) ? (
                       /* Empty state A — project not yet contracted */
-                      <div className="bg-white rounded-xl border-2 border-dashed border-amber-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
-                        <div className="h-14 w-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-                          <Clock className="h-7 w-7 text-amber-500" />
+                      <div className="space-y-4">
+                        <div className="bg-white rounded-xl border-2 border-dashed border-amber-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
+                          <div className="h-14 w-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                            <Clock className="h-7 w-7 text-amber-500" />
+                          </div>
+                          <div>
+                            <p className="text-base font-semibold text-slate-700">
+                              Tarefas ainda não geradas
+                            </p>
+                            <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                              As tarefas deste projeto serão criadas automaticamente após a confirmação do pagamento.
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-base font-semibold text-slate-700">
-                            Tarefas ainda não geradas
-                          </p>
-                          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-                            As tarefas serão geradas após a contratação ou
-                            pagamento do projeto.
-                          </p>
-                        </div>
+                        {projectProducts.length > 0 && (
+                          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                              Produtos aguardando pagamento
+                            </p>
+                            <div className="space-y-2">
+                              {projectProducts.slice(0, 4).map((pp: any) => (
+                                <div
+                                  key={pp.id}
+                                  className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                                >
+                                  <span className="font-medium text-slate-700">
+                                    {pp.product_name_snapshot ?? pp.product?.name}
+                                  </span>
+                                  <span className="text-amber-700 text-xs font-semibold">
+                                    Aguardando pagamento
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : taskStats.total === 0 ? (
                       /* Empty state B — paid/contracted but no tasks generated */
@@ -2006,8 +2136,14 @@ export function ProjectViewSlidePanel({
                                     <Button
                                       size="sm"
                                       className="h-7 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-                                      disabled={isLaunching || lancamentoExpired}
-                                      title={lancamentoExpired ? "Prazo de lançamento expirado" : undefined}
+                                      disabled={isLaunching || lancamentoExpired || awaitingPayment}
+                                      title={
+                                        awaitingPayment
+                                          ? "As tarefas serão liberadas após a confirmação do pagamento."
+                                          : lancamentoExpired
+                                            ? "Prazo de lançamento expirado"
+                                            : undefined
+                                      }
                                       onClick={() => handleLaunchTask(task.id)}
                                     >
                                       {isLaunching ? (
@@ -2015,7 +2151,11 @@ export function ProjectViewSlidePanel({
                                       ) : (
                                         <Rocket className="h-3 w-3" />
                                       )}
-                                      {lancamentoExpired ? "Expirada" : "Lançar tarefa"}
+                                      {awaitingPayment
+                                        ? "Bloqueado até pagamento"
+                                        : lancamentoExpired
+                                          ? "Expirada"
+                                          : "Lançar tarefa"}
                                     </Button>
                                   );
                                 } else if (task.status === "EM_EXECUCAO") {
@@ -2217,11 +2357,13 @@ export function ProjectViewSlidePanel({
                                               <Eye className="h-3.5 w-3.5 mr-2 text-slate-500" />
                                               Ver detalhes
                                             </DropdownMenuItem>
-                                            {(task.status ===
-                                              "PARA_LANCAMENTO" ||
-                                              task.status === "EM_LANCAMENTO" ||
-                                              task.status ===
-                                                "AGUARDANDO_INFORMACOES") && (
+                                            {!awaitingPayment &&
+                                              (task.status ===
+                                                "PARA_LANCAMENTO" ||
+                                                task.status ===
+                                                  "EM_LANCAMENTO" ||
+                                                task.status ===
+                                                  "AGUARDANDO_INFORMACOES") && (
                                               <DropdownMenuItem
                                                 onClick={() =>
                                                   handleOpenLaunchDrawer(task)
@@ -2231,8 +2373,9 @@ export function ProjectViewSlidePanel({
                                                 Lançar briefing
                                               </DropdownMenuItem>
                                             )}
-                                            {task.status ===
-                                              "EM_LANCAMENTO" && (
+                                            {!awaitingPayment &&
+                                              task.status ===
+                                                "EM_LANCAMENTO" && (
                                               <DropdownMenuItem
                                                 onClick={() =>
                                                   handleOpenLaunchDrawer(task)

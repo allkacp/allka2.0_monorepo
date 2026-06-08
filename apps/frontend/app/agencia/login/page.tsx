@@ -10,7 +10,7 @@ const config: LoginRoleConfig = {
   defaultPassword: "123456",
   redirectPath: "/agency/dashboard",
   accessType: "AGENCY",
-  devUser: { email: "joao.costa@agenciacriativa.com.br" },
+  devUser: { email: "agencia@allka.test" },
   translations: {
     pt: {
       tag: "Allka Agency",

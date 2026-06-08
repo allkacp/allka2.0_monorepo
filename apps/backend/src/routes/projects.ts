@@ -7,6 +7,23 @@ import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 
 const router = Router();
 
+async function getLoggedAgencyName(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      account_type: true,
+      agency: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!user || user.account_type !== "agencias") return null;
+  return user.agency?.name || null;
+}
+
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -61,11 +78,13 @@ router.get("/", verifyToken, async (req, res, next) => {
     const status = req.query.status as string | undefined;
     const client_id = req.query.client_id as string | undefined;
     const search = req.query.search as string | undefined;
+    const loggedAgencyName = await getLoggedAgencyName(req.user!.id);
 
     const where: Record<string, unknown> = {};
     if (status) where["status"] = status;
     if (client_id) where["client_id"] = client_id;
     if (search) where["title"] = { contains: search };
+    if (loggedAgencyName) where["agency"] = loggedAgencyName;
 
     const [total, data] = await Promise.all([
       prisma.project.count({ where }),
@@ -73,6 +92,23 @@ router.get("/", verifyToken, async (req, res, next) => {
         where,
         include: {
           client: { select: { id: true, name: true, cnpj: true } },
+          products: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  category: true,
+                  base_price: true,
+                  image: true,
+                },
+              },
+              variation: {
+                select: { id: true, name: true, price: true },
+              },
+            },
+            orderBy: { created_at: "asc" },
+          },
           _count: { select: { task_executions: true } },
         },
         skip,
@@ -94,6 +130,23 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       where: { id: req.params.id as string },
       include: {
         client: true,
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                category: true,
+                base_price: true,
+                image: true,
+              },
+            },
+            variation: {
+              select: { id: true, name: true, price: true },
+            },
+          },
+          orderBy: { created_at: "asc" },
+        },
         _count: { select: { task_executions: true, invoices: true } },
       },
     });
@@ -180,6 +233,7 @@ router.post(
   async (req, res, next) => {
     try {
       const { start_date, end_date, ...rest } = req.body;
+      const loggedAgencyName = await getLoggedAgencyName(req.user!.id);
       const toDate = (v: string | undefined) => {
         if (!v) return undefined;
         const d = new Date(v);
@@ -188,6 +242,7 @@ router.post(
       const project = await prisma.project.create({
         data: {
           ...rest,
+          agency: loggedAgencyName || rest.agency,
           start_date: toDate(start_date),
           end_date: toDate(end_date),
         },

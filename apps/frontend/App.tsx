@@ -36,6 +36,12 @@ import { EmpresaProvider } from "@/contexts/empresa-context";
 import { AgenciaProvider } from "@/contexts/agencia-context";
 import { ProjectBasketProvider } from "@/contexts/project-basket-context";
 
+function RedirectToAgency() {
+  const location = useLocation();
+  const target = location.pathname.replace(/^\/agencia/, "/agency");
+  return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
+}
+
 // ─── Admin Pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = React.lazy(
   () => import("@/app/admin/dashboard/page"),
@@ -124,9 +130,6 @@ const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
 const NomadDashboardPage = React.lazy(
-  () => import("@/app/nomad/dashboard/page"),
-);
-const NomadesDashboardPage = React.lazy(
   () => import("@/app/nomades/dashboard/page"),
 );
 const NomadesProgramaPage = React.lazy(
@@ -151,19 +154,16 @@ const NomadesPerfilPage = React.lazy(() => import("@/app/nomades/perfil/page"));
 const PartnerDashboardPage = React.lazy(
   () => import("@/app/partner/dashboard/page"),
 );
-const ParceiroDashboardPage = React.lazy(
-  () => import("@/app/parceiro/dashboard/page"),
-);
-const ParceiroAgenciasPage = React.lazy(
+const PartnerAgenciasPage = React.lazy(
   () => import("@/app/parceiro/agencias/page"),
 );
-const ParceiroProjetosPage = React.lazy(
+const PartnerProjetosPage = React.lazy(
   () => import("@/app/parceiro/projetos/page"),
 );
-const ParceiroComissoesPage = React.lazy(
+const PartnerComissoesPage = React.lazy(
   () => import("@/app/parceiro/comissoes/page"),
 );
-const ParceiroSaquesPage = React.lazy(
+const PartnerSaquesPage = React.lazy(
   () => import("@/app/parceiro/saques/page"),
 );
 
@@ -189,19 +189,16 @@ const EmpresaProdutosPage = React.lazy(
 const AgencyDashboardPage = React.lazy(
   () => import("@/app/agency/dashboard/page"),
 );
-const AgenciaDashboardPage = React.lazy(
-  () => import("@/app/agencia/dashboard/page"),
-);
-const AgenciaProjetosPage = React.lazy(
+const AgencyProjetosPage = React.lazy(
   () => import("@/app/agencia/projetos/page"),
 );
-const AgenciaTarefasPage = React.lazy(
+const AgencyTarefasPage = React.lazy(
   () => import("@/app/agencia/tarefas/page"),
 );
-const AgenciaFinanceiroPage = React.lazy(
+const AgencyFinanceiroPage = React.lazy(
   () => import("@/app/agencia/financeiro/page"),
 );
-const AgenciaCatalogoPage = React.lazy(
+const AgencyCatalogoPage = React.lazy(
   () => import("@/app/agencia/catalogo/page"),
 );
 
@@ -209,16 +206,13 @@ const AgenciaCatalogoPage = React.lazy(
 const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
 const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
 const EmpresaLoginPage = React.lazy(() => import("@/app/company/login/page"));
-const AgenciaLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
+const AgencyLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
 const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
 
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
 const LeaderDashboardPage = React.lazy(
   () => import("@/app/leader/dashboard/page"),
-);
-const LiderDashboardPage = React.lazy(
-  () => import("@/app/lider/dashboard/page"),
 );
 const LiderQualificacaoPage = React.lazy(
   () => import("@/app/lider/qualificacao/page"),
@@ -569,13 +563,13 @@ export default function App() {
           path="/agency/login"
           element={
             <Suspense fallback={<PageLoader />}>
-              <AgenciaLoginPage />
+              <AgencyLoginPage />
             </Suspense>
           }
         />
         <Route
           path="/agencia/login"
-          element={<Navigate to="/agency/login" replace />}
+          element={<RedirectToAgency />}
         />
         <Route
           path="/company/login"
@@ -789,7 +783,7 @@ export default function App() {
                   {/* ─── Nômades ──────────────────────────────────────────────── */}
                   <Route
                     path="/nomades/dashboard"
-                    element={<NomadesDashboardPage />}
+                    element={<Navigate to="/nomad/dashboard" replace />}
                   />
                   <Route
                     path="/nomades/programa"
@@ -825,27 +819,43 @@ export default function App() {
                     path="/partner/dashboard"
                     element={<PartnerDashboardPage />}
                   />
+                  <Route
+                    path="/partner/agencias"
+                    element={<PartnerAgenciasPage />}
+                  />
+                  <Route
+                    path="/partner/projetos"
+                    element={<PartnerProjetosPage />}
+                  />
+                  <Route
+                    path="/partner/comissoes"
+                    element={<PartnerComissoesPage />}
+                  />
+                  <Route
+                    path="/partner/saques"
+                    element={<PartnerSaquesPage />}
+                  />
 
                   {/* ─── Parceiro ─────────────────────────────────────────── */}
                   <Route
                     path="/parceiro/dashboard"
-                    element={<ParceiroDashboardPage />}
+                    element={<Navigate to="/partner/dashboard" replace />}
                   />
                   <Route
                     path="/parceiro/agencias"
-                    element={<ParceiroAgenciasPage />}
+                    element={<Navigate to="/partner/agencias" replace />}
                   />
                   <Route
                     path="/parceiro/projetos"
-                    element={<ParceiroProjetosPage />}
+                    element={<Navigate to="/partner/projetos" replace />}
                   />
                   <Route
                     path="/parceiro/comissoes"
-                    element={<ParceiroComissoesPage />}
+                    element={<Navigate to="/partner/comissoes" replace />}
                   />
                   <Route
                     path="/parceiro/saques"
-                    element={<ParceiroSaquesPage />}
+                    element={<Navigate to="/partner/saques" replace />}
                   />
 
                   {/* ─── Empresa ──────────────────────────────────────────── */}
@@ -875,39 +885,63 @@ export default function App() {
                     path="/agency/dashboard"
                     element={<AgencyDashboardPage />}
                   />
+                  <Route
+                    path="/agency/projetos"
+                    element={<AgencyProjetosPage />}
+                  />
+                  <Route
+                    path="/agency/projetos/:projectId"
+                    element={<AgencyProjetosPage />}
+                  />
+                  <Route
+                    path="/agency/tarefas"
+                    element={<AgencyTarefasPage />}
+                  />
+                  <Route
+                    path="/agency/tarefas/:tarefaId"
+                    element={<AgencyTarefasPage />}
+                  />
+                  <Route
+                    path="/agency/catalogo"
+                    element={<AgencyCatalogoPage />}
+                  />
+                  <Route
+                    path="/agency/financeiro"
+                    element={<AgencyFinanceiroPage />}
+                  />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
                   <Route
                     path="/agencia/dashboard"
-                    element={<AgenciaDashboardPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agencia/projetos"
-                    element={<AgenciaProjetosPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agencia/projetos/:projectId"
-                    element={<AgenciaProjetosPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agencia/tarefas"
-                    element={<AgenciaTarefasPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agencia/tarefas/:tarefaId"
-                    element={<AgenciaTarefasPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agencia/catalogo"
-                    element={<AgenciaCatalogoPage />}
+                    element={<RedirectToAgency />}
                   />
                   <Route
                     path="/agency/catalogo"
-                    element={<AgenciaCatalogoPage />}
+                    element={<AgencyCatalogoPage />}
                   />
                   <Route
                     path="/agencia/financeiro"
-                    element={<AgenciaFinanceiroPage />}
+                    element={<RedirectToAgency />}
                   />
 
                   {/* ─── Leader (novo) ────────────────────────────────────── */}
@@ -915,26 +949,52 @@ export default function App() {
                     path="/leader/dashboard"
                     element={<LeaderDashboardPage />}
                   />
+                  <Route
+                    path="/leader/qualificacao"
+                    element={<LiderQualificacaoPage />}
+                  />
+                  <Route
+                    path="/leader/tarefas"
+                    element={<LiderTarefasPage />}
+                  />
+                  <Route
+                    path="/leader/devolvidas"
+                    element={<LiderDevolvidasPage />}
+                  />
+                  <Route
+                    path="/leader/historico"
+                    element={<LiderHistoricoPage />}
+                  />
+                  <Route
+                    path="/leader/perfil"
+                    element={<LiderPerfilPage />}
+                  />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
                   <Route
                     path="/lider/dashboard"
-                    element={<LiderDashboardPage />}
+                    element={<Navigate to="/leader/dashboard" replace />}
                   />
                   <Route
                     path="/lider/qualificacao"
-                    element={<LiderQualificacaoPage />}
+                    element={<Navigate to="/leader/qualificacao" replace />}
                   />
-                  <Route path="/lider/tarefas" element={<LiderTarefasPage />} />
+                  <Route
+                    path="/lider/tarefas"
+                    element={<Navigate to="/leader/tarefas" replace />}
+                  />
                   <Route
                     path="/lider/devolvidas"
-                    element={<LiderDevolvidasPage />}
+                    element={<Navigate to="/leader/devolvidas" replace />}
                   />
                   <Route
                     path="/lider/historico"
-                    element={<LiderHistoricoPage />}
+                    element={<Navigate to="/leader/historico" replace />}
                   />
-                  <Route path="/lider/perfil" element={<LiderPerfilPage />} />
+                  <Route
+                    path="/lider/perfil"
+                    element={<Navigate to="/leader/perfil" replace />}
+                  />
 
                   {/* Fallback — redireciona para o dashboard do perfil ativo */}
                   <Route path="*" element={<ProfileAwareFallback />} />

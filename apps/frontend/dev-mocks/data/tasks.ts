@@ -14,6 +14,18 @@ export interface MockApiTask {
   created_by: string;
   created_at: string;
   updated_at: string;
+  stages?: Array<{
+    id: string;
+    catalog_step_ref: string;
+    titulo: string;
+    descricao: string | null;
+    ordem: number;
+    status: string;
+    obrigatoria: boolean;
+    depende_da_etapa_anterior: boolean;
+    briefing_necessario: boolean;
+    checklist_snapshot?: string[];
+  }>;
 }
 
 export const mockTasks: MockApiTask[] = [

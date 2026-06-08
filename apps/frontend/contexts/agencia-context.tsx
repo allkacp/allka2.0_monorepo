@@ -111,12 +111,16 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    const normalize = (value: string) =>
+      value.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
     async function load() {
       try {
         const [currentUserRes, agenciesRes, projectsRes, invoicesRes] =
           await Promise.allSettled([
             apiClient.getCurrentUser(),
-            apiClient.getAgencies({ limit: "1" }),
+            apiClient.getAgencies({ limit: "20" }),
             apiClient.getProjects({ limit: "100" }),
             apiClient.getInvoices({ limit: "100" }),
           ]);
@@ -133,20 +137,31 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
         if (agenciesRes.status === "fulfilled") {
           const data: any = agenciesRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
-          if (list[0])
+          const matchedAgency = activeAgencyName
+            ? list.find((agency: any) => {
+                const agencyName = String(agency?.name || "");
+                return (
+                  normalize(agencyName) === normalize(activeAgencyName) ||
+                  normalize(agencyName).includes(normalize(activeAgencyName)) ||
+                  normalize(activeAgencyName).includes(normalize(agencyName))
+                );
+              })
+            : list[0];
+          const source = matchedAgency || list[0];
+          if (source)
             setProfile({
-              id: String(currentUser?.agency_id || currentUser?.active_agency_id || list[0].id || list[0].name || ""),
-              name: activeAgencyName || list[0].name || "",
-              cnpj: list[0].document || "",
-              email: list[0].email || "",
-              plan: list[0].plan || "",
-              planDiscount: list[0].planDiscount || 0,
-              partnerName: list[0].partnerName || "",
-              status: list[0].status || "active",
-              createdAt: list[0].created_at || list[0].createdAt || "",
-              currentMrr: list[0].currentMrr || 0,
-              totalProjects: list[0].totalProjects || 0,
-              totalTasks: list[0].totalTasks || 0,
+              id: String(currentUser?.agency_id || currentUser?.active_agency_id || source.id || source.name || ""),
+              name: activeAgencyName || source.name || "",
+              cnpj: source.document || source.cnpj || "",
+              email: source.email || "",
+              plan: source.plan || source.planType || "",
+              planDiscount: source.planDiscount || 0,
+              partnerName: source.partnerName || "",
+              status: source.status || "active",
+              createdAt: source.created_at || source.createdAt || "",
+              currentMrr: source.currentMrr || 0,
+              totalProjects: source.totalProjects || 0,
+              totalTasks: source.totalTasks || 0,
             });
         }
         if (projectsRes.status === "fulfilled") {

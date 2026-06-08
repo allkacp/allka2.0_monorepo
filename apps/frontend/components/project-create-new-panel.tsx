@@ -213,6 +213,8 @@ interface ProjectCreateNewPanelProps {
   cloneMode?: boolean;
   /** When set, empresa field is shown as read-only with this name (company-modal mode) */
   companyName?: string;
+  /** Logged agency name used to own projects on Agency routes. */
+  agencyName?: string;
   /** When set, empresa field is shown as read-only and maps to this id */
   companyId?: string | number;
   /** When true, empresa field becomes a dropdown (admin-projetos mode) */
@@ -283,6 +285,7 @@ export function ProjectCreateNewPanel({
   initialData,
   cloneMode = false,
   companyName,
+  agencyName,
   companyId: companyIdProp,
   allowCompanySelect = false,
   draftProducts,
@@ -421,6 +424,8 @@ export function ProjectCreateNewPanel({
   });
 
   const [formData, setFormData] = useState<FormData>(buildFormFromInitial);
+  const effectiveAgencyName =
+    agencyName?.trim() || resolvedCompanyName?.trim() || formData.agencia?.trim() || "";
 
   const handleClose = () => {
     if (isClosing) return;
@@ -683,7 +688,7 @@ export function ProjectCreateNewPanel({
         const result = await apiClient.checkProjectName({
           title: name,
           client_id: resolvedCompanyId ?? undefined,
-          agency: resolvedCompanyName || formData.agencia || undefined,
+          agency: effectiveAgencyName || undefined,
           // exclude the current draft/project if editing
           exclude_id:
             preCreatedProjectId ??
@@ -706,7 +711,7 @@ export function ProjectCreateNewPanel({
       if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.nome, resolvedCompanyId, formData.agencia]);
+  }, [effectiveAgencyName, formData.nome, resolvedCompanyId, formData.agencia]);
 
   // ── Helpers ──
   const updateField = <K extends keyof FormData>(
@@ -727,7 +732,7 @@ export function ProjectCreateNewPanel({
     // Empresa required only when allowCompanySelect is true (must pick one)
     if (allowCompanySelect && !resolvedCompanyId)
       e.agencia = "Empresa é obrigatória";
-    if (!formData.agencia.trim() && !allowCompanySelect && !companyName)
+    if (!formData.agencia.trim() && !allowCompanySelect && !companyName && !agencyName)
       e.agencia = "Empresa é obrigatória";
     if (!formData.cliente.trim()) e.cliente = "Cliente é obrigatório";
     if (!formData.consultor.trim()) e.consultor = "Consultor é obrigatório";
@@ -755,7 +760,7 @@ export function ProjectCreateNewPanel({
     id: Date.now(),
     name: formData.nome,
     type: formData.tipo,
-    agency: resolvedCompanyName || formData.agencia,
+    agency: effectiveAgencyName || undefined,
     client: formData.cliente,
     clientCNPJ: formData.clienteCnpj,
     consultant: formData.consultor,
@@ -811,7 +816,7 @@ export function ProjectCreateNewPanel({
       const payload: any = {
         title: formData.nome,
         type: formData.tipo || undefined,
-        agency: resolvedCompanyName || formData.agencia || undefined,
+        agency: effectiveAgencyName || undefined,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
         start_date: toISODate(formData.dataInicio),
@@ -1081,7 +1086,7 @@ export function ProjectCreateNewPanel({
         const draftPayload: any = {
           title: formData.nome,
           type: formData.tipo || undefined,
-          agency: resolvedCompanyName || formData.agencia || undefined,
+          agency: effectiveAgencyName || undefined,
           consultant: formData.consultor || undefined,
           consultant_email: formData.emailConsultor || undefined,
           start_date: toISODate(formData.dataInicio),
@@ -1485,7 +1490,7 @@ export function ProjectCreateNewPanel({
       const payload: any = {
         title: formData.nome,
         type: formData.tipo || undefined,
-        agency: resolvedCompanyName || formData.agencia || undefined,
+        agency: effectiveAgencyName || undefined,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
         start_date: toISODate(formData.dataInicio),
@@ -3191,15 +3196,29 @@ export function ProjectCreateNewPanel({
                         </div>
 
                         {selectedProducts.length === 0 ? (
-                          <div className="flex flex-col items-center py-10 text-center px-4">
-                            <Package className="h-10 w-10 text-slate-200 mb-2" />
-                            <p className="text-sm font-medium text-slate-400">
-                              Nenhum produto adicionado
-                            </p>
-                            <p className="text-xs text-slate-300 mt-0.5">
-                              Volte para adicionar produtos
-                            </p>
-                          </div>
+                          preCreatedProjectId || draftProjectId ? (
+                            <div className="flex flex-col items-center py-10 text-center px-4">
+                              <div className="h-12 w-12 rounded-2xl bg-amber-100 flex items-center justify-center mb-3">
+                                <Lock className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <p className="text-sm font-semibold text-amber-900">
+                                Projeto aguardando pagamento
+                              </p>
+                              <p className="text-xs text-amber-700 mt-1 max-w-sm">
+                                Este projeto está aguardando pagamento, mas os produtos não foram encontrados. Verifique o checkout/orçamento vinculado.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center py-10 text-center px-4">
+                              <Package className="h-10 w-10 text-slate-200 mb-2" />
+                              <p className="text-sm font-medium text-slate-400">
+                                Nenhum produto adicionado
+                              </p>
+                              <p className="text-xs text-slate-300 mt-0.5">
+                                Volte para adicionar produtos
+                              </p>
+                            </div>
+                          )
                         ) : (
                           <div className="divide-y divide-slate-50 max-h-[420px] overflow-y-auto">
                             {selectedProducts.map((product, pIdx) => {

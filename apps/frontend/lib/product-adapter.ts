@@ -109,6 +109,17 @@ function safeParseJSON<T>(raw: string | null | undefined, fallback: T): T {
 export function backendToFrontendProduct(b: BackendProduct): Product {
   const meta = safeParseJSON<ProductMetadata>(b.metadata, {});
   const tags = safeParseJSON<string[]>(b.tags, []);
+  const taskLinkCount = b.task_links?.length ?? 0;
+  const embeddedTaskCount = meta.tasks?.length ?? 0;
+  const activeTaskLinkCount = (b.task_links ?? []).filter((link: any) =>
+    link?.catalog_task?.is_active ?? link?.is_active ?? false,
+  ).length;
+  const hasContractableTasks =
+    b.contractability?.isContractable ??
+    (activeTaskLinkCount > 0 || embeddedTaskCount > 0);
+  const activeTaskTemplates =
+    b.contractability?.activeTaskTemplates ??
+    Math.max(activeTaskLinkCount, embeddedTaskCount);
 
   const variations: ProductVariation[] = (b.variations ?? []).map((v) => ({
     id: v.id,
@@ -169,8 +180,8 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     variationsInternal: meta.variationsInternal ?? {},
     demonstrations: safeParseJSON<string[]>(b.demonstrations, []),
     portfolioImages: meta.portfolioImages ?? [],
-    contractable: b.contractability?.isContractable ?? ((b.task_links?.length ?? 0) > 0),
-    activeTaskTemplates: b.contractability?.activeTaskTemplates ?? (b.task_links?.length ?? 0),
+    contractable: hasContractableTasks,
+    activeTaskTemplates,
   } as Product;
 }
 

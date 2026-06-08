@@ -397,7 +397,7 @@ export function Header() {
   let ctx = (() => {
     if (accountType === "parceiro") {
       const p = partner.profile;
-      if (!p) return PLACEHOLDER("Parceiro", "/parceiro/dashboard");
+      if (!p) return PLACEHOLDER("Parceiro", "/partner/dashboard");
       const lvl = LEVEL_CONFIG[p.level ?? "bronze"];
       return {
         name: p.name,
@@ -420,12 +420,12 @@ export function Header() {
         level: lvl.label,
         nextLevel: "Prata",
         tasks: "3 tarefas abertas",
-        settingsPath: "/parceiro/dashboard",
+        settingsPath: "/partner/dashboard",
         menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/parceiro/dashboard" },
-          { label: "Comissões", icon: DollarSign, path: "/parceiro/comissoes" },
-          { label: "Saques", icon: Wallet, path: "/parceiro/saques" },
-          { label: "Agências", icon: Building2, path: "/parceiro/agencias" },
+          { label: "Meu Perfil", icon: User, path: "/partner/dashboard" },
+          { label: "Comissões", icon: DollarSign, path: "/partner/comissoes" },
+          { label: "Saques", icon: Wallet, path: "/partner/saques" },
+          { label: "Agências", icon: Building2, path: "/partner/agencias" },
         ],
       };
     }
@@ -471,7 +471,7 @@ export function Header() {
     }
     if (accountType === "agencias") {
       const p = agencia.profile;
-      if (!p) return PLACEHOLDER("Agência", "/agencia/dashboard");
+      if (!p) return PLACEHOLDER("Agência", "/agency/dashboard");
       return {
         name: p.name,
         email: p.email,
@@ -493,16 +493,16 @@ export function Header() {
         level: null,
         nextLevel: null,
         tasks: `${p.totalProjects} projetos no total`,
-        settingsPath: "/agencia/dashboard",
+        settingsPath: "/agency/dashboard",
         menuItems: [
           {
             label: "Minha Agência",
             icon: Building2,
-            path: "/agencia/dashboard",
+            path: "/agency/dashboard",
           },
-          { label: "Projetos", icon: FolderOpen, path: "/agencia/projetos" },
-          { label: "Tarefas", icon: CheckSquare, path: "/agencia/tarefas" },
-          { label: "Financeiro", icon: Wallet, path: "/agencia/financeiro" },
+          { label: "Projetos", icon: FolderOpen, path: "/agency/projetos" },
+          { label: "Tarefas", icon: CheckSquare, path: "/agency/tarefas" },
+          { label: "Financeiro", icon: Wallet, path: "/agency/financeiro" },
         ],
       };
     }
@@ -552,19 +552,19 @@ export function Header() {
         level: null,
         nextLevel: null,
         tasks: null,
-        settingsPath: "/lider/perfil",
+        settingsPath: "/leader/perfil",
         menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/lider/perfil" },
-          { label: "Dashboard", icon: Activity, path: "/lider/dashboard" },
+          { label: "Meu Perfil", icon: User, path: "/leader/perfil" },
+          { label: "Dashboard", icon: Activity, path: "/leader/dashboard" },
           {
             label: "Para Qualificar",
             icon: CheckSquare,
-            path: "/lider/qualificacao",
+            path: "/leader/qualificacao",
           },
           {
             label: "Tarefas da Área",
             icon: FolderOpen,
-            path: "/lider/tarefas",
+            path: "/leader/tarefas",
           },
         ],
       };

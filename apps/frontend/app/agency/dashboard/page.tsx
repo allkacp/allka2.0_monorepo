@@ -6455,7 +6455,7 @@ export default function AdminDashboardPage() {
                       text: "text-success",
                     },
                     {
-                      to: "/agencia/projetos",
+                      to: "/agency/projetos",
                       icon: Briefcase,
                       label: "Ver Projetos",
                       desc: "Todos os projetos ativos",

@@ -97,33 +97,33 @@ const horizontalMenuConfig = {
   agencias: [
     {
       name: "Dashboard",
-      href: "/agencias/dashboard",
+      href: "/agency/dashboard",
       icon: LayoutDashboard,
       color: "from-blue-500 to-blue-600",
     },
     {
       name: "Clientes",
-      href: "/agencias/clientes",
+      href: "/agency/clientes",
       icon: Building2,
       badge: "15",
       color: "from-purple-500 to-purple-600",
     },
     {
       name: "Projetos",
-      href: "/agencias/projetos",
+      href: "/agency/projetos",
       icon: FolderOpen,
       badge: "24",
       color: "from-green-500 to-green-600",
     },
     {
-      name: "Partner",
-      href: "/agencias/programa",
+      name: "Programa",
+      href: "/agency/programa",
       icon: Award,
       color: "from-amber-500 to-amber-600",
     },
     {
       name: "Equipe",
-      href: "/agencias/equipe",
+      href: "/agency/equipe",
       icon: Users,
       badge: "8",
       color: "from-pink-500 to-pink-600",
@@ -132,7 +132,7 @@ const horizontalMenuConfig = {
   nomades: [
     {
       name: "Dashboard",
-      href: "/nomades/dashboard",
+      href: "/nomad/dashboard",
       icon: LayoutDashboard,
       color: "from-blue-500 to-blue-600",
     },

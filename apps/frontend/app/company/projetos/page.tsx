@@ -36,6 +36,7 @@ import {
 } from "@/lib/export-utils";
 import type { DateRange } from "react-day-picker";
 import { useEmpresa } from "@/contexts/empresa-context";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import {
   Search,
   FolderOpen,
@@ -370,6 +371,15 @@ export default function EmpresaProjetosPage() {
   ]);
 
   const [projectsData, setProjectsData] = useState<FrontendProject[]>([]);
+  const {
+    sortKey,
+    sortDir,
+    handleSort,
+    sortData,
+    columnFilters,
+    toggleColumnFilter,
+    clearColumnFilter,
+  } = useSorting<FrontendProject>();
 
   // Sync API data into local state when loaded
   useEffect(() => {
@@ -528,6 +538,30 @@ export default function EmpresaProjetosPage() {
     return Array.from(new Set(projectsData.map((p) => p.consultant))).sort();
   }, [projectsData]);
 
+  const uniqueProjectStatuses = useMemo(() => {
+    return Array.from(new Set(projectsData.map((p) => p.status))).sort();
+  }, [projectsData]);
+
+  const SORTABLE_COLUMN_CONFIG: Record<
+    string,
+    {
+      field: keyof FrontendProject;
+      type: "text" | "number" | "date" | "status";
+      filterValues?: string[];
+    }
+  > = {
+    id: { field: "id", type: "number" },
+    name: { field: "name", type: "text" },
+    client: { field: "client", type: "text" },
+    agency: { field: "agency", type: "text" },
+    type: { field: "type", type: "text" },
+    status: { field: "status", type: "status", filterValues: uniqueProjectStatuses },
+    progress: { field: "progress", type: "number" },
+    budget: { field: "budget", type: "number" },
+    team: { field: "team", type: "number" },
+    created: { field: "createdDate", type: "date" },
+  };
+
   const allFilterFields = [
     { id: "buscar", label: "Buscar por nome" },
     { id: "empresa", label: "Empresa / Cliente" },
@@ -629,6 +663,8 @@ export default function EmpresaProjetosPage() {
     dateRange,
   ]);
 
+  const sortedProjects = useMemo(() => sortData(filteredProjects), [sortData, filteredProjects]);
+
   // Clear all filters
   const clearAllFilters = () => {
     setSearchTerm("");
@@ -653,7 +689,7 @@ export default function EmpresaProjetosPage() {
   const totalPages = Math.ceil(totalProjects / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
+  const paginatedProjects = sortedProjects.slice(startIndex, endIndex);
 
   // Reset to page 1 when filters change
   const handleItemsPerPageChange = (value: number) => {
@@ -2351,27 +2387,46 @@ export default function EmpresaProjetosPage() {
                   </colgroup>
                   <thead>
                     <tr className="border-b border-slate-200/60">
-                      {visibleCols.map((col) => (
-                        <th
-                          key={col}
-                          className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative bg-white"
-                          style={{
-                            paddingLeft: 20,
-                            paddingRight: 20,
-                            textAlign: "left",
-                            borderRight: "1px solid rgba(148,163,184,0.25)",
-                          }}
-                        >
-                          {COL_LABELS[col]}
-                          <span
-                            className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
-                            style={{ transform: "translateX(50%)" }}
-                            onMouseDown={(e) => onResizeMouseDown(col, e)}
+                      {visibleCols.map((col) => {
+                        const headerConfig = SORTABLE_COLUMN_CONFIG[col];
+
+                        return (
+                          <th
+                            key={col}
+                            className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative bg-white"
+                            style={{
+                              paddingLeft: 20,
+                              paddingRight: 20,
+                              textAlign: "left",
+                              borderRight: "1px solid rgba(148,163,184,0.25)",
+                            }}
                           >
-                            <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
-                          </span>
-                        </th>
-                      ))}
+                            {headerConfig ? (
+                              <SortableHeader
+                                label={COL_LABELS[col]}
+                                field={String(headerConfig.field)}
+                                type={headerConfig.type}
+                                sortKey={sortKey ? String(sortKey) : null}
+                                sortDir={sortDir}
+                                onSort={handleSort}
+                                columnFilters={headerConfig.filterValues ? columnFilters : undefined}
+                                onFilter={headerConfig.filterValues ? toggleColumnFilter : undefined}
+                                onClearFilter={headerConfig.filterValues ? clearColumnFilter : undefined}
+                                filterValues={headerConfig.filterValues}
+                              />
+                            ) : (
+                              COL_LABELS[col]
+                            )}
+                            <span
+                              className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                              style={{ transform: "translateX(50%)" }}
+                              onMouseDown={(e) => onResizeMouseDown(col, e)}
+                            >
+                              <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
+                            </span>
+                          </th>
+                        );
+                      })}
                       <th
                         className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-white"
                         style={{

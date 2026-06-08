@@ -157,7 +157,7 @@ export function CheckoutFlow({
     useState<CheckoutData | null>(null);
 
   const projectRouteBase = /^\/(agencia|agency)(\/|$)/.test(location.pathname)
-    ? "/agencia/projetos"
+    ? "/agency/projetos"
     : "/admin/projetos";
 
   const resolveProjectIdForNavigation = async () => {

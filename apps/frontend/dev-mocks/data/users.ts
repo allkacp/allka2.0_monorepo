@@ -44,7 +44,7 @@ export const mockUsers: MockUser[] = [
   },
   {
     id: "1002",
-    name: "Agência Allka",
+    name: "Lamego Teste Agency",
     email: "agencia@allka.test",
     role: "agency_admin",
     account_type: "agencias",
@@ -54,7 +54,7 @@ export const mockUsers: MockUser[] = [
     created_at: "2026-06-06T00:00:00Z",
     updated_at: "2026-06-06T00:00:00Z",
     last_login: "2026-06-06T00:00:00Z",
-    agency_name: "Agência Criativa SP",
+    agency_name: "Lamego Teste Agency",
   },
   {
     id: "1003",

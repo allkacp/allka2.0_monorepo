@@ -16,11 +16,11 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/parceiro/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/parceiro/agencias", label: "Agências", icon: Building2 },
-  { href: "/parceiro/projetos", label: "Projetos", icon: FolderOpen },
-  { href: "/parceiro/comissoes", label: "Comissões", icon: DollarSign },
-  { href: "/parceiro/saques", label: "Saques", icon: Wallet },
+  { href: "/partner/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/partner/agencias", label: "Agências", icon: Building2 },
+  { href: "/partner/projetos", label: "Projetos", icon: FolderOpen },
+  { href: "/partner/comissoes", label: "Comissões", icon: DollarSign },
+  { href: "/partner/saques", label: "Saques", icon: Wallet },
 ];
 
 function PartnerSidebar() {

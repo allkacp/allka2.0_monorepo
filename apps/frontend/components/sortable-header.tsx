@@ -95,7 +95,7 @@ function humanize(value: string): string {
   return (
     VALUE_LABELS[String(value)] ??
     String(value)
-      .replace(/_/g, " ")
+      .replace(/[_-]/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase())
   )
 }
@@ -120,139 +120,160 @@ export function SortableHeader({
   filterValues,
   className,
 }: SortableHeaderProps) {
-  const isActive       = sortKey === field
-  const activeFilters  = columnFilters?.[field] ?? []
+  const isActive = sortKey === field
+  const activeFilters = columnFilters?.[field] ?? []
   const hasActiveFilter = activeFilters.length > 0
-  const showFilter     = Boolean(filterValues && filterValues.length > 0 && onFilter)
+  const showFilter = Boolean(filterValues && filterValues.length > 0 && onFilter)
+
+  const toggleSort = () => {
+    onSort(field, isActive && sortDir === "asc" ? "desc" : "asc")
+  }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className={cn(
-            // Base layout
-            "flex items-center gap-1 outline-none group",
-            "uppercase text-xs font-semibold tracking-wide select-none",
-            // Interaction
-            "transition-colors rounded px-1 -mx-1 py-0.5 cursor-pointer",
-            "hover:text-slate-700 dark:hover:text-slate-200",
-            // Active / inactive colour
-            isActive
-              ? "text-blue-600 dark:text-blue-400"
-              : "text-slate-500 dark:text-slate-400",
-            className,
+    <div className={cn("inline-flex items-center gap-1", className)}>
+      <button
+        type="button"
+        onClick={toggleSort}
+        className={cn(
+          // Base layout
+          "flex items-center gap-1 outline-none group",
+          "uppercase text-xs font-semibold tracking-wide select-none",
+          // Interaction
+          "transition-colors rounded px-1 -mx-1 py-0.5 cursor-pointer",
+          "hover:text-slate-700 dark:hover:text-slate-200",
+          // Active / inactive colour
+          isActive
+            ? "text-blue-600 dark:text-blue-400"
+            : "text-slate-500 dark:text-slate-400",
+        )}
+      >
+        <span>{label}</span>
+
+        {/* Sort direction indicator */}
+        <span className="flex items-center gap-0.5">
+          {isActive ? (
+            sortDir === "asc"
+              ? <ChevronUp className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              : <ChevronDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+          ) : (
+            <ChevronsUpDown className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-400 transition-colors shrink-0" />
           )}
-        >
-          <span>{label}</span>
 
-          {/* Sort direction indicator */}
-          <span className="flex items-center gap-0.5">
-            {isActive ? (
-              sortDir === "asc"
-                ? <ChevronUp   className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                : <ChevronDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-            ) : (
-              <ChevronsUpDown className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-400 transition-colors shrink-0" />
-            )}
-
-            {/* Amber dot = active column filter */}
-            {hasActiveFilter && (
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-            )}
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start" className="w-52 z-[9999]">
-        {/* Column name as header */}
-        <DropdownMenuLabel className="text-xs text-slate-400 font-normal pb-0.5">
-          {label}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-
-        {/* ── Sort ascending ── */}
-        <DropdownMenuItem
-          onClick={() => onSort(field, "asc")}
-          className={cn(
-            "flex items-center justify-between gap-2 cursor-pointer text-sm",
-            isActive && sortDir === "asc" &&
-              "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+          {/* Amber dot = active column filter */}
+          {hasActiveFilter && (
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
           )}
-        >
-          <span className="flex items-center gap-2">
-            <ArrowUpNarrowWide className="h-3.5 w-3.5 shrink-0" />
-            {SORT_OPTIONS[type].asc}
-          </span>
-          {isActive && sortDir === "asc" && (
-            <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-          )}
-        </DropdownMenuItem>
+        </span>
+      </button>
 
-        {/* ── Sort descending ── */}
-        <DropdownMenuItem
-          onClick={() => onSort(field, "desc")}
-          className={cn(
-            "flex items-center justify-between gap-2 cursor-pointer text-sm",
-            isActive && sortDir === "desc" &&
-              "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-          )}
-        >
-          <span className="flex items-center gap-2">
-            <ArrowDownWideNarrow className="h-3.5 w-3.5 shrink-0" />
-            {SORT_OPTIONS[type].desc}
-          </span>
-          {isActive && sortDir === "desc" && (
-            <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-          )}
-        </DropdownMenuItem>
+      {showFilter && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors",
+                "hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200",
+              )}
+              aria-label={`Opções da coluna ${label}`}
+              title={`Opções da coluna ${label}`}
+            >
+              <ListFilter className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
 
-        {/* ── Filter section (status / plan / type columns) ── */}
-        {showFilter && (
-          <>
+          <DropdownMenuContent align="start" className="w-52 z-9999">
+            {/* Column name as header */}
+            <DropdownMenuLabel className="text-xs text-slate-400 font-normal pb-0.5">
+              {label}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
 
-            {/* Filter header row */}
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <span className="flex items-center gap-1 text-xs text-slate-400 font-medium">
-                <ListFilter className="h-3 w-3" />
-                Filtrar por valor
-              </span>
-              {hasActiveFilter && (
-                <button
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onClearFilter?.(field)
-                  }}
-                  className="flex items-center gap-0.5 text-xs text-red-400 hover:text-red-600 transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                  Limpar
-                </button>
+            {/* ── Sort ascending ── */}
+            <DropdownMenuItem
+              onClick={() => onSort(field, "asc")}
+              className={cn(
+                "flex items-center justify-between gap-2 cursor-pointer text-sm",
+                isActive && sortDir === "asc" &&
+                  "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
               )}
-            </div>
+            >
+              <span className="flex items-center gap-2">
+                <ArrowUpNarrowWide className="h-3.5 w-3.5 shrink-0" />
+                {SORT_OPTIONS[type].asc}
+              </span>
+              {isActive && sortDir === "asc" && (
+                <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              )}
+            </DropdownMenuItem>
 
-            {/* Per-value checkboxes */}
-            {filterValues!.map((val) => (
-              <DropdownMenuCheckboxItem
-                key={val}
-                checked={activeFilters.includes(val)}
-                onCheckedChange={() => onFilter!(field, val)}
-                className="text-sm"
-              >
-                {humanize(val)}
-              </DropdownMenuCheckboxItem>
-            ))}
+            {/* ── Sort descending ── */}
+            <DropdownMenuItem
+              onClick={() => onSort(field, "desc")}
+              className={cn(
+                "flex items-center justify-between gap-2 cursor-pointer text-sm",
+                isActive && sortDir === "desc" &&
+                  "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <ArrowDownWideNarrow className="h-3.5 w-3.5 shrink-0" />
+                {SORT_OPTIONS[type].desc}
+              </span>
+              {isActive && sortDir === "desc" && (
+                <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              )}
+            </DropdownMenuItem>
 
-            {/* Hint when nothing is checked */}
-            {!hasActiveFilter && (
-              <p className="px-2 pb-1.5 text-xs text-slate-400 italic">
-                Selecione para filtrar
-              </p>
+            {/* ── Filter section (status / plan / type columns) ── */}
+            {showFilter && (
+              <>
+                <DropdownMenuSeparator />
+
+                {/* Filter header row */}
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  <span className="flex items-center gap-1 text-xs text-slate-400 font-medium">
+                    <ListFilter className="h-3 w-3" />
+                    Filtrar por valor
+                  </span>
+                  {hasActiveFilter && (
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onClearFilter?.(field)
+                      }}
+                      className="flex items-center gap-0.5 text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                      Limpar
+                    </button>
+                  )}
+                </div>
+
+                {/* Per-value checkboxes */}
+                {filterValues!.map((val) => (
+                  <DropdownMenuCheckboxItem
+                    key={val}
+                    checked={activeFilters.includes(val)}
+                    onCheckedChange={() => onFilter!(field, val)}
+                    className="text-sm"
+                  >
+                    {humanize(val)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+
+                {/* Hint when nothing is checked */}
+                {!hasActiveFilter && (
+                  <p className="px-2 pb-1.5 text-xs text-slate-400 italic">
+                    Selecione para filtrar
+                  </p>
+                )}
+              </>
             )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   )
 }

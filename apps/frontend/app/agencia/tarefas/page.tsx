@@ -3,5 +3,5 @@
 import AdminTarefasPage from "@/app/admin/tarefas/page";
 
 export default function AgenciaTarefasPage() {
-  return <AdminTarefasPage routeBase="/agencia/tarefas" />;
+  return <AdminTarefasPage routeBase="/agency/tarefas" />;
 }

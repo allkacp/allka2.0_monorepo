@@ -6,6 +6,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
@@ -301,7 +302,7 @@ export default function AdminProjetosPage({
   const { toast } = useToast();
   const pageRef = useRef<HTMLDivElement>(null);
   const projectRouteBase =
-    scope === "agency" ? "/agencia/projetos" : "/admin/projetos";
+    scope === "agency" ? "/agency/projetos" : "/admin/projetos";
 
   const [kanbanColumns, setKanbanColumns] = useState([
     { id: "draft", label: "Rascunho", color: "bg-gray-800", count: 0 },
@@ -335,6 +336,15 @@ export default function AdminProjetosPage({
   ]);
 
   const [projectsData, setProjectsData] = useState<FrontendProject[]>([]);
+  const {
+    sortKey,
+    sortDir,
+    handleSort,
+    sortData,
+    columnFilters,
+    toggleColumnFilter,
+    clearColumnFilter,
+  } = useSorting<FrontendProject>();
 
   // Sync API data into local state when loaded (including empty array)
   useEffect(() => {
@@ -491,6 +501,30 @@ export default function AdminProjetosPage({
     return Array.from(new Set(projectsData.map((p) => p.consultant))).sort();
   }, [projectsData]);
 
+  const uniqueProjectStatuses = useMemo(() => {
+    return Array.from(new Set(projectsData.map((p) => p.status))).sort();
+  }, [projectsData]);
+
+  const SORTABLE_COLUMN_CONFIG: Record<
+    string,
+    {
+      field: keyof FrontendProject;
+      type: "text" | "number" | "date" | "status";
+      filterValues?: string[];
+    }
+  > = {
+    id: { field: "id", type: "number" },
+    name: { field: "name", type: "text" },
+    client: { field: "client", type: "text" },
+    agency: { field: "agency", type: "text" },
+    type: { field: "type", type: "text" },
+    status: { field: "status", type: "status", filterValues: uniqueProjectStatuses },
+    progress: { field: "progress", type: "number" },
+    budget: { field: "budget", type: "number" },
+    team: { field: "team", type: "number" },
+    created: { field: "createdDate", type: "date" },
+  };
+
   const allFilterFields = [
     { id: "buscar", label: "Buscar por nome" },
     { id: "empresa", label: "Empresa / Cliente" },
@@ -616,7 +650,8 @@ export default function AdminProjetosPage({
   const totalPages = Math.ceil(totalProjects / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
+  const sortedProjects = useMemo(() => sortData(filteredProjects), [sortData, filteredProjects]);
+  const paginatedProjects = sortedProjects.slice(startIndex, endIndex);
 
   // Reset to page 1 when filters change
   const handleItemsPerPageChange = (value: number) => {
@@ -1411,6 +1446,9 @@ export default function AdminProjetosPage({
 
   const handleContinueDraft = (project: FrontendProject) => {
     const draft = loadDraftFromStorage(project);
+    const linkedProducts = Array.isArray((project as any).products)
+      ? (project as any).products
+      : [];
     if (draft) {
       setProjectCreateData(draft.formData ?? null);
       setDraftPanelProducts(draft.selectedProducts ?? []);
@@ -1425,9 +1463,20 @@ export default function AdminProjetosPage({
         cliente: project.client,
         status: project.status,
       });
-      setDraftPanelProducts([]);
-      setDraftPanelQuantities({});
-      setDraftPanelCommissions({});
+      setDraftPanelProducts(linkedProducts);
+      setDraftPanelQuantities(
+        linkedProducts.reduce((acc: Record<string, number>, item: any) => {
+          acc[String(item.product_id ?? item.id)] = item.quantity ?? 1;
+          return acc;
+        }, {}),
+      );
+      setDraftPanelCommissions(
+        linkedProducts.reduce((acc: Record<string, number>, item: any) => {
+          acc[String(item.product_id ?? item.id)] =
+            item.comissao_snapshot ?? 0;
+          return acc;
+        }, {}),
+      );
       setDraftPanelProjectId(project.id);
       setDraftResumeToCheckout(false);
     }
@@ -2448,32 +2497,51 @@ export default function AdminProjetosPage({
                   </colgroup>
                   <thead>
                     <tr className="border-b border-slate-200/60">
-                      {visibleCols.map((col) => (
-                        <th
-                          key={col}
-                          className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative"
-                          style={{
-                            paddingLeft: 20,
-                            paddingRight: 20,
-                            textAlign: "left",
-                            borderRight: "1px solid rgba(148,163,184,0.25)",
-                            position: "sticky",
-                            top: 0,
-                            zIndex: 2,
-                            background: "var(--table-head)",
-                            boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                          }}
-                        >
-                          {COL_LABELS[col]}
-                          <span
-                            className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
-                            style={{ transform: "translateX(50%)" }}
-                            onMouseDown={(e) => onResizeMouseDown(col, e)}
+                      {visibleCols.map((col) => {
+                        const headerConfig = SORTABLE_COLUMN_CONFIG[col];
+
+                        return (
+                          <th
+                            key={col}
+                            className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative"
+                            style={{
+                              paddingLeft: 20,
+                              paddingRight: 20,
+                              textAlign: "left",
+                              borderRight: "1px solid rgba(148,163,184,0.25)",
+                              position: "sticky",
+                              top: 0,
+                              zIndex: 2,
+                              background: "var(--table-head)",
+                              boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                            }}
                           >
-                            <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
-                          </span>
-                        </th>
-                      ))}
+                            {headerConfig ? (
+                              <SortableHeader
+                                label={COL_LABELS[col]}
+                                field={String(headerConfig.field)}
+                                type={headerConfig.type}
+                                sortKey={sortKey ? String(sortKey) : null}
+                                sortDir={sortDir}
+                                onSort={handleSort}
+                                columnFilters={headerConfig.filterValues ? columnFilters : undefined}
+                                onFilter={headerConfig.filterValues ? toggleColumnFilter : undefined}
+                                onClearFilter={headerConfig.filterValues ? clearColumnFilter : undefined}
+                                filterValues={headerConfig.filterValues}
+                              />
+                            ) : (
+                              COL_LABELS[col]
+                            )}
+                            <span
+                              className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                              style={{ transform: "translateX(50%)" }}
+                              onMouseDown={(e) => onResizeMouseDown(col, e)}
+                            >
+                              <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
+                            </span>
+                          </th>
+                        );
+                      })}
                       <th
                         className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"
                         style={{
@@ -4733,6 +4801,7 @@ export default function AdminProjetosPage({
           initialData={projectCreateData}
           cloneMode={!!projectCreateData && !draftPanelProjectId}
           allowCompanySelect={!projectCreateData}
+          agencyName={scope === "agency" ? agencyName : undefined}
           draftProducts={
             draftPanelProducts.length > 0 ? draftPanelProducts : undefined
           }

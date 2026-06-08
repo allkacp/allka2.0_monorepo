@@ -787,6 +787,17 @@ export default function AdminProdutosPage() {
     }, 0);
   };
 
+  const getContractabilitySummary = (product: Product) =>
+    (product as any).contractability as
+      | { isContractable: boolean; activeTaskTemplates: number }
+      | undefined;
+
+  const canActivateProduct = (product: Product) => {
+    const summary = getContractabilitySummary(product);
+    if (summary) return summary.isContractable;
+    return (product.tasks || []).length > 0;
+  };
+
   // Updated badge colors for dependency statuses
   const getDependencyBadgeColor = (dependencies: string[]) => {
     if (dependencies.length === 0) return "bg-gray-100 text-gray-800";
@@ -1715,11 +1726,8 @@ export default function AdminProdutosPage() {
 
     try {
       if (toggleConfirmation.newStatus) {
-        const catalogTasks = await apiClient.getCatalogTasksByProduct(
-          toggleConfirmation.product.id,
-        );
-
-        if (!Array.isArray(catalogTasks) || catalogTasks.length === 0) {
+        const summary = getContractabilitySummary(toggleConfirmation.product);
+        if (summary && !summary.isContractable) {
           toast({
             title: "Produto sem tarefas",
             description:
@@ -1727,6 +1735,22 @@ export default function AdminProdutosPage() {
             variant: "destructive",
           });
           return;
+        }
+
+        if (!summary) {
+          const catalogTasks = await apiClient.getCatalogTasksByProduct(
+            toggleConfirmation.product.id,
+          );
+
+          if (!Array.isArray(catalogTasks) || catalogTasks.length === 0) {
+            toast({
+              title: "Produto sem tarefas",
+              description:
+                "Cadastre pelo menos 1 modelo de tarefa operacional ativo antes de ativar este produto.",
+              variant: "destructive",
+            });
+            return;
+          }
         }
       }
 
@@ -2043,6 +2067,11 @@ export default function AdminProdutosPage() {
                     <p className="text-[15px] font-semibold truncate leading-tight">
                       {product.name}
                     </p>
+                    {getContractabilitySummary(product)?.isContractable === false && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 shrink-0">
+                        Estrutura incompleta
+                      </span>
+                    )}
                     <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 bg-muted px-2 py-0.5 rounded tracking-wider shrink-0">
                       {product.id}
                     </span>
@@ -2081,6 +2110,7 @@ export default function AdminProdutosPage() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <Switch
                     checked={product.isActive}
+                    disabled={!canActivateProduct(product) && !product.isActive}
                     onCheckedChange={(checked) =>
                       handleToggleProductStatus(product, checked)
                     }
@@ -2286,6 +2316,7 @@ export default function AdminProdutosPage() {
                           <div className="flex items-center gap-2 cursor-pointer">
                             <Switch
                               checked={product.isActive}
+                              disabled={!canActivateProduct(product) && !product.isActive}
                               onCheckedChange={(checked) =>
                                 handleToggleProductStatus(product, checked)
                               }
@@ -6009,6 +6040,16 @@ export default function AdminProdutosPage() {
 
               {/* Always-visible footer with product summary */}
               <div className="shrink-0 border-t bg-background">
+                {!canActivateProduct(selectedProduct) && !selectedProduct.isActive && (
+                  <div className="px-5 py-3 border-b border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                      Produto sem estrutura operacional mínima.
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      Adicione ao menos um modelo de tarefa ativo antes de ativar ou contratar este produto.
+                    </p>
+                  </div>
+                )}
                 {/* Data strip */}
                 <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex-wrap">
                   <span
@@ -6030,6 +6071,14 @@ export default function AdminProdutosPage() {
                   <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     {selectedProduct.category}
                   </span>
+                  {getContractabilitySummary(selectedProduct)?.isContractable === false && (
+                    <>
+                      <div className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
+                      <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                        Estrutura incompleta
+                      </span>
+                    </>
+                  )}
                   <div className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
                   <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                     {formatCurrency(selectedProduct.finalPrice || 0)}

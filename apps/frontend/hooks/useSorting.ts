@@ -30,6 +30,14 @@ function ptBRToISO(s: string): string {
   return `${y}-${m}-${d}`
 }
 
+function isNumericString(value: string): boolean {
+  return /^-?\d+(?:[.,]\d+)?$/.test(value)
+}
+
+function toNumericValue(value: string): number {
+  return Number(value.replace(",", "."))
+}
+
 /**
  * Universal comparator used by sortData
  */
@@ -52,6 +60,12 @@ function compareValues(aVal: any, bVal: any, dir: SortDirection): number {
 
   const aStr = String(aVal)
   const bStr = String(bVal)
+
+  // Numeric strings like "1", "9", "10" or "12,5"
+  if (isNumericString(aStr) && isNumericString(bStr)) {
+    const diff = toNumericValue(aStr) - toNumericValue(bStr)
+    return dir === "asc" ? diff : -diff
+  }
 
   // ISO dates ("2026-04-17" or "2026-04-17T...")
   if (isISODate(aStr) && isISODate(bStr)) {
