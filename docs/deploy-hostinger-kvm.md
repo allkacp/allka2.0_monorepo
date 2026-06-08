@@ -57,3 +57,13 @@ Ao fazer push em `main` ou `master`, a workflow `.github/workflows/deploy.yml`:
 5. Sobe `mysql`, `backend`, `frontend` e `caddy`.
 
 Tambem e possivel disparar manualmente por `workflow_dispatch`.
+
+## Reset de senhas finais no servidor
+
+Depois do deploy, para aplicar a senha final a todos os usuários existentes, rode dentro do backend no VPS:
+
+```bash
+RESET_USERS_PASSWORD=123456 npm run reset:users-password
+```
+
+O script usa `bcryptjs` e atualiza apenas `password_hash` dos usuários existentes. Ele não altera senha do MySQL, JWT nem secrets do GitHub.
