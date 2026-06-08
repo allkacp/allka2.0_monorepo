@@ -14,17 +14,26 @@ if (import.meta.env.DEV) {
   const TOKEN_KEY = "allka_token";
   const hasToken = !!localStorage.getItem(TOKEN_KEY);
   const wasLoggedOut = localStorage.getItem("allka_logged_out") === "true";
-  const useMocks = import.meta.env.MODE === "mock" || import.meta.env.VITE_USE_MOCKS === "true";
+  const isAgencyRoute =
+    window.location.pathname.startsWith("/agency") ||
+    window.location.pathname.startsWith("/agencia");
+  const useMocks =
+    import.meta.env.MODE === "mock" ||
+    import.meta.env.VITE_USE_MOCKS === "true" ||
+    isAgencyRoute;
+  const previewEmail = isAgencyRoute ? "agencia@allka.test" : "admin@allka.test";
+  const previewAccessType = isAgencyRoute ? "AGENCY" : "ADMIN";
 
   if (!hasToken && !wasLoggedOut) {
     const login = useMocks
-      ? mockApiClient.login("admin@allka.test", "123456")
+      ? mockApiClient.login(previewEmail, "123456")
       : fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email: "admin@allka.test",
+            email: previewEmail,
             password: "123456",
+            accessType: previewAccessType,
           }),
         }).then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)));
 
@@ -32,7 +41,7 @@ if (import.meta.env.DEV) {
       .then((data) => {
         if (data?.token) {
           localStorage.setItem(TOKEN_KEY, data.token);
-          console.info("[Dev] Token de preview obtido para admin@allka.test");
+          console.info(`[Dev] Token de preview obtido para ${previewEmail}`);
         }
       })
       .catch((e) =>

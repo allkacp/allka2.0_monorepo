@@ -1,7 +1,7 @@
 /**
  * Mock API Client — same public interface as the real ApiClient in lib/api-client.ts.
- * Operates entirely in-memory; data resets on page reload.
- * CRUD operations persist during the browser session only.
+ * Operates entirely in-browser.
+ * Core collections are persisted to localStorage so Agency preview survives F5.
  */
 import {
   mockCompanies,
@@ -42,40 +42,77 @@ import {
   type MockEnrollment,
 } from "./data";
 
+const STORAGE_KEYS = {
+  projects: "allka_mock_projects",
+  tasks: "allka_mock_tasks",
+};
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function readStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+function nextNumericId(items: Array<{ id: string }>, min = 100) {
+  const maxExisting = items.reduce((max, item) => {
+    const parsed = Number.parseInt(String(item.id), 10);
+    return Number.isFinite(parsed) && parsed > max ? parsed : max;
+  }, min - 1);
+  return Math.max(min, maxExisting + 1);
+}
+
+function persistProjectState() {
+  writeStorage(STORAGE_KEYS.projects, projects);
+  writeStorage(STORAGE_KEYS.tasks, tasks);
+}
+
 // Deep-clone initial data so we can mutate in memory without affecting the source arrays
-const companies: MockCompany[] = JSON.parse(JSON.stringify(mockCompanies));
-const users: MockUser[] = JSON.parse(JSON.stringify(mockUsers));
-const projects: MockApiProject[] = JSON.parse(JSON.stringify(mockProjects));
-const tasks: MockApiTask[] = JSON.parse(JSON.stringify(mockTasks));
-const clients: MockClient[] = JSON.parse(JSON.stringify(mockClients));
-const nomades: MockNomade[] = JSON.parse(JSON.stringify(mockNomades));
-const nomadeLevels: MockNomadeLevel[] = JSON.parse(
-  JSON.stringify(mockNomadeLevels),
-);
-const partnerLevels: MockPartnerLevel[] = JSON.parse(
-  JSON.stringify(mockPartnerLevels),
-);
+const companies: MockCompany[] = clone(mockCompanies);
+const users: MockUser[] = clone(mockUsers);
+const clients: MockClient[] = clone(mockClients);
+const nomades: MockNomade[] = clone(mockNomades);
+const nomadeLevels: MockNomadeLevel[] = clone(mockNomadeLevels);
+const partnerLevels: MockPartnerLevel[] = clone(mockPartnerLevels);
 let nextPartnerLevelId = 100;
-const campaigns: MockCampaign[] = JSON.parse(JSON.stringify(mockCampaigns));
-const products: MockProduct[] = JSON.parse(JSON.stringify(mockProducts));
-const invoices: MockInvoice[] = JSON.parse(JSON.stringify(mockInvoices));
+const campaigns: MockCampaign[] = clone(mockCampaigns);
+const products: MockProduct[] = clone(mockProducts);
+const invoices: MockInvoice[] = clone(mockInvoices);
 const payments: any[] = [];
-const withdrawals: MockWithdrawal[] = JSON.parse(
-  JSON.stringify(mockWithdrawals),
+const withdrawals: MockWithdrawal[] = clone(mockWithdrawals);
+const terms: MockTerm[] = clone(mockTerms);
+const termAcceptances: MockTermAcceptance[] = clone(mockTermAcceptances);
+const courses: MockCourse[] = clone(mockCourses);
+const enrollments: MockEnrollment[] = clone(mockEnrollments);
+
+const projects: MockApiProject[] = readStorage<MockApiProject[]>(
+  STORAGE_KEYS.projects,
+  clone(mockProjects),
 );
-const terms: MockTerm[] = JSON.parse(JSON.stringify(mockTerms));
-const termAcceptances: MockTermAcceptance[] = JSON.parse(
-  JSON.stringify(mockTermAcceptances),
-);
-const courses: MockCourse[] = JSON.parse(JSON.stringify(mockCourses));
-const enrollments: MockEnrollment[] = JSON.parse(
-  JSON.stringify(mockEnrollments),
+const tasks: MockApiTask[] = readStorage<MockApiTask[]>(
+  STORAGE_KEYS.tasks,
+  clone(mockTasks),
 );
 
 let nextCompanyId = 100;
 let nextUserId = 100;
-let nextProjectId = 100;
-let nextTaskId = 100;
+let nextProjectId = nextNumericId(projects);
+let nextTaskId = nextNumericId(tasks);
 let nextClientId = 100;
 let nextNomadeId = 100;
 let nextCampaignId = 100;
@@ -104,6 +141,68 @@ function initialsFromName(name: string) {
     .join("");
 }
 
+function buildProvisionalTaskTemplates(product: any) {
+  const productName = product?.name || "Produto";
+  const baseCategory = product?.category || "Geral";
+  return [
+    {
+      id: `${product?.id || "TMP"}-T01`,
+      code: `${product?.id || "TMP"}-T01`,
+      name: `Estrutura provisória — ${productName}`,
+      title: `Estrutura provisória — ${productName}`,
+      description: `Modelo provisório automático para o produto ${productName}. Ajuste este fluxo depois.`,
+      taskCategory: baseCategory,
+      sort_order: 1,
+      priority: "medium",
+      steps: [
+        {
+          id: "S01",
+          code: "S01",
+          name: "Receber briefing",
+          description: "Confirmar escopo, objetivo e prazo.",
+          order: 1,
+        },
+        {
+          id: "S02",
+          code: "S02",
+          name: "Organizar insumos",
+          description: "Reunir acessos, materiais e referências.",
+          order: 2,
+        },
+        {
+          id: "S03",
+          code: "S03",
+          name: "Executar entrega principal",
+          description: "Produzir a entrega base do produto.",
+          order: 3,
+        },
+        {
+          id: "S04",
+          code: "S04",
+          name: "Revisar internamente",
+          description: "Checar qualidade, consistência e ajustes.",
+          order: 4,
+        },
+        {
+          id: "S05",
+          code: "S05",
+          name: "Enviar para aprovação",
+          description:
+            "Apresentar a versão provisória ao cliente ou à agência.",
+          order: 5,
+        },
+        {
+          id: "S06",
+          code: "S06",
+          name: "Ajustar e finalizar",
+          description: "Aplicar correções finais e registrar a entrega.",
+          order: 6,
+        },
+      ],
+    },
+  ];
+}
+
 function asProjectProductSnapshot(product: any, projectId: string) {
   return {
     id: `pp-${projectId}-${product.id}`,
@@ -118,7 +217,28 @@ function asProjectProductSnapshot(product: any, projectId: string) {
 }
 
 function getProductTaskTemplates(product: any) {
-  return Array.isArray(product?.tasks) ? product.tasks : [];
+  return Array.isArray(product?.tasks) && product.tasks.length > 0
+    ? product.tasks
+    : buildProvisionalTaskTemplates(product);
+}
+
+function buildTaskStagesFromTemplate(template: any, productName: string) {
+  const steps = Array.isArray(template?.steps) && template.steps.length > 0
+    ? template.steps
+    : buildProvisionalTaskTemplates({ id: template?.id || "TMP", name: productName, category: template?.taskCategory || "Geral" })[0].steps;
+
+  return steps.map((step: any, index: number) => ({
+    id: `${template?.id || template?.code || "stage"}-${index + 1}`,
+    catalog_step_ref: step.id || step.code || `S${String(index + 1).padStart(2, "0")}`,
+    titulo: step.name || step.title || step.titulo || `Etapa ${index + 1}`,
+    descricao: step.description || step.descricao || null,
+    ordem: step.order || index + 1,
+    status: index === 0 ? "PENDENTE" : "BLOQUEADA",
+    obrigatoria: step.mandatory !== undefined ? !!step.mandatory : true,
+    depende_da_etapa_anterior: index > 0,
+    briefing_necessario: !!step.requires_briefing,
+    checklist_snapshot: Array.isArray(step.checklist) ? step.checklist : [],
+  }));
 }
 
 function buildMockProjectProduct(project: any, product: any, linkedAt?: string) {
@@ -164,7 +284,7 @@ function buildMockProjectProduct(project: any, product: any, linkedAt?: string) 
         due_date: task.due_date,
         lancamento_expires_at: null,
         task_code: task.task_code || `T-${task.id}`,
-        stages: [],
+        stages: Array.isArray((task as any).stages) ? (task as any).stages : [],
         sort_order: index + 1,
       }))
     : taskLinks.map((link, index) => ({
@@ -175,7 +295,7 @@ function buildMockProjectProduct(project: any, product: any, linkedAt?: string) 
         due_date: linkedAt || null,
         lancamento_expires_at: null,
         task_code: link.catalog_task.code,
-        stages: [],
+        stages: buildTaskStagesFromTemplate(link.catalog_task, product.name),
         sort_order: index + 1,
       }));
 
@@ -524,6 +644,13 @@ class MockApiClient {
   async getProjects(filters?: Record<string, any>) {
     await delay();
     let result = [...projects];
+    const currentUser = (await this.getCurrentUser()) as any;
+    const loggedAgencyName =
+      currentUser?.agency_name || currentUser?.agency?.name || null;
+
+    if (loggedAgencyName) {
+      result = result.filter((p) => String(p.agency || "") === String(loggedAgencyName));
+    }
     if (filters?.client_id) {
       result = result.filter(
         (p) => String(p.client_id) === String(filters.client_id),
@@ -545,8 +672,20 @@ class MockApiClient {
     const currentUser = (await this.getCurrentUser()) as any;
     const agencyName =
       currentUser?.agency_name || currentUser?.agency?.name || null;
+    const projectId = String(nextProjectId++);
+    const incomingProducts = Array.isArray(data?.products) ? data.products : [];
+    const linkedProducts = incomingProducts.map((product: any, index: number) => ({
+      id: product.id || `${projectId}-${index + 1}`,
+      product_id: product.product_id || product.id || `${projectId}-${index + 1}`,
+      name: product.name || product.product_name || "Produto",
+      price: Number(product.price ?? product.finalPrice ?? 0),
+      quantity: Number(product.quantity ?? product.qty ?? 1),
+      category: product.category || "outros",
+      project_id: projectId,
+      recurrence_snapshot: product.recurrence_snapshot ?? data.lifecycle ?? "avulso",
+    }));
     const project: MockApiProject = {
-      id: String(nextProjectId++),
+      id: projectId,
       title: data.title || data.name || "",
       description: data.description || "",
       client_id: data.client_id || "1",
@@ -576,11 +715,13 @@ class MockApiClient {
       billing_day: data.billing_day || null,
       billing_start_date: data.billing_start_date || null,
       _count: { task_executions: 0 },
-      products: [],
+      products: linkedProducts,
       created_at: now(),
       updated_at: now(),
     };
+    project._count = { task_executions: linkedProducts.length };
     projects.push(project);
+    persistProjectState();
     return project;
   }
 
@@ -614,13 +755,21 @@ class MockApiClient {
     const idx = projects.findIndex((p) => p.id === String(id));
     if (idx === -1) throw new Error("Project not found");
     projects[idx] = { ...projects[idx], ...data, updated_at: now() };
+    persistProjectState();
     return projects[idx];
   }
 
   async deleteProject(id: string | number) {
     await delay();
     const idx = projects.findIndex((p) => p.id === String(id));
-    if (idx !== -1) projects.splice(idx, 1);
+    if (idx !== -1) {
+      const projectId = String(id);
+      projects.splice(idx, 1);
+      for (let i = tasks.length - 1; i >= 0; i -= 1) {
+        if (String(tasks[i].project_id) === projectId) tasks.splice(i, 1);
+      }
+      persistProjectState();
+    }
     return { message: "Deleted" };
   }
 
@@ -713,11 +862,13 @@ class MockApiClient {
         created_by: "1",
         created_at: now(),
         updated_at: now(),
+        stages: buildTaskStagesFromTemplate(template, product.name),
       });
     });
 
     project.status = project.status === "draft" ? "planning" : project.status;
     project.updated_at = now();
+    persistProjectState();
 
     return {
       id: projectProduct.id,
@@ -732,6 +883,19 @@ class MockApiClient {
     return tasks
       .filter((t) => t.project_id === String(projectId))
       .map((t) => this.mapOperationalTask(t));
+  }
+
+  async getProjectTaskStages(id: string | number) {
+    await delay();
+    const task = tasks.find((t) => t.id === String(id));
+    if (!task) return { data: [], total: 0 };
+    const stages = Array.isArray((task as any).stages) ? (task as any).stages : [];
+    return { data: stages, total: stages.length };
+  }
+
+  async getProjectLog(_id: string | number) {
+    await delay();
+    return { data: [], total: 0, page: 1, limit: 1000 };
   }
 
   async getOperationalTasks(filters?: Record<string, any>) {
@@ -784,6 +948,7 @@ class MockApiClient {
       updated_at: now(),
     };
     tasks.push(task);
+    persistProjectState();
     return task;
   }
 
@@ -792,6 +957,7 @@ class MockApiClient {
     const idx = tasks.findIndex((t) => t.id === String(id));
     if (idx === -1) throw new Error("Task not found");
     tasks[idx] = { ...tasks[idx], ...data, updated_at: now() };
+    persistProjectState();
     return tasks[idx];
   }
 
@@ -810,7 +976,10 @@ class MockApiClient {
   async deleteTask(id: string | number) {
     await delay();
     const idx = tasks.findIndex((t) => t.id === String(id));
-    if (idx !== -1) tasks.splice(idx, 1);
+    if (idx !== -1) {
+      tasks.splice(idx, 1);
+      persistProjectState();
+    }
     return { message: "Deleted" };
   }
 
@@ -1158,12 +1327,21 @@ class MockApiClient {
           p.is_active ===
           (filters.is_active === "true" || filters.is_active === true),
       );
-    return { data: result, total: result.length, page: 1, limit: 1000 };
+    const enriched = result.map((product) => ({
+      ...product,
+      tasks: getProductTaskTemplates(product),
+    }));
+    return { data: enriched, total: enriched.length, page: 1, limit: 1000 };
   }
 
   async getProduct(id: string) {
     await delay();
-    return products.find((p) => p.id === String(id)) || null;
+    const product = products.find((p) => p.id === String(id)) || null;
+    if (!product) return null;
+    return {
+      ...product,
+      tasks: getProductTaskTemplates(product),
+    };
   }
 
   async createProduct(data: any) {
@@ -1191,6 +1369,9 @@ class MockApiClient {
       // legado
       status: data.is_active ? "active" : "draft",
     };
+    (product as any).tasks = Array.isArray(data.tasks) && data.tasks.length > 0
+      ? data.tasks
+      : buildProvisionalTaskTemplates(product);
     products.push(product);
     return product;
   }

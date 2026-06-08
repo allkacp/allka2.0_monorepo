@@ -533,6 +533,17 @@ export function ProjectBasketDrawer() {
                                     name: item.productName,
                                     category: item.productCategory,
                                     finalPrice: item.finalPrice,
+                                    presentation:
+                                      item.product?.presentation ?? null,
+                                    variations: item.product?.variations ?? [],
+                                    demonstrations:
+                                      item.product?.demonstrations ?? [],
+                                    summaryDescription:
+                                      item.product?.summaryDescription ??
+                                      item.product?.description ??
+                                      null,
+                                    description:
+                                      item.product?.description ?? null,
                                     image:
                                       item.productImage ??
                                       item.product?.productImagePreview ??
@@ -959,7 +970,8 @@ export function ProjectBasketDrawer() {
           if (project?.id) {
             const path = location.pathname;
             let basePath = "/admin";
-            if (path.startsWith("/agencia")) basePath = "/agencia";
+            if (path.startsWith("/agency")) basePath = "/agency";
+            else if (path.startsWith("/agencia")) basePath = "/agency";
             else if (path.startsWith("/empresa")) basePath = "/empresa";
             else if (path.startsWith("/company")) basePath = "/company";
             else if (path.startsWith("/lider")) basePath = "/lider";

@@ -853,5 +853,12 @@ class ApiClient {
 // Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.
 // Assim não depende de alias do Vite funcionar corretamente.
 const env = (import.meta as any).env ?? {};
-const useMocks = env.MODE === "mock" || env.VITE_USE_MOCKS === "true";
+const isAgencyPreviewRoute =
+  env.DEV && typeof window !== "undefined" &&
+  (window.location.pathname.startsWith("/agency") ||
+    window.location.pathname.startsWith("/agencia"));
+const useMocks =
+  env.MODE === "mock" ||
+  env.VITE_USE_MOCKS === "true" ||
+  isAgencyPreviewRoute;
 export const apiClient: any = useMocks ? mockApiClient : new ApiClient();
