@@ -44,7 +44,11 @@ import {
   Wrench,
   ExternalLink,
   Star,
+  Trash2,
+  UserCog,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import {
   Popover,
   PopoverContent,
@@ -90,6 +94,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/contexts/sidebar-context";
 import {
   PageLoader,
   ButtonLoader,
@@ -1022,6 +1027,7 @@ function ModelDetailDrawer({
 }
 
 export default function AdminModelosTarefasPage() {
+  const { sidebarWidth } = useSidebar();
   const [models, setModels] = useState<CatalogTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1155,7 +1161,7 @@ export default function AdminModelosTarefasPage() {
   }, [urlModeloId]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Create dialog
+  // Create sheet
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -1164,15 +1170,69 @@ export default function AdminModelosTarefasPage() {
     subcategory: "",
     task_type: "execution" as TaskType,
     description: "",
+    objective: "",
+    default_deadline_days: "",
+    default_priority: "medium",
+    complexity: "basic",
+    estimated_hours: "",
+    responsible_type: "",
+    requires_access: false,
+    requires_briefing: false,
+    requires_files: false,
+    internal_guidance: "",
+    notes: "",
   });
-  const resetCreateForm = () =>
+
+  const EMPTY_LISTS = {
+    steps: [] as string[],
+    checklist: [] as string[],
+    briefing_questions: [] as string[],
+    required_files: [] as string[],
+    execution_rules: [] as string[],
+    conclusion_rules: [] as string[],
+  };
+  const [createLists, setCreateLists] = useState(EMPTY_LISTS);
+  const [listInputs, setListInputs] = useState<Record<string, string>>({
+    steps: "",
+    checklist: "",
+    briefing_questions: "",
+    required_files: "",
+    execution_rules: "",
+    conclusion_rules: "",
+  });
+
+  const addToList = (key: keyof typeof EMPTY_LISTS, value: string) => {
+    if (!value.trim()) return;
+    setCreateLists((l) => ({ ...l, [key]: [...l[key], value.trim()] }));
+    setListInputs((l) => ({ ...l, [key]: "" }));
+  };
+
+  const removeFromList = (key: keyof typeof EMPTY_LISTS, index: number) => {
+    setCreateLists((l) => ({ ...l, [key]: l[key].filter((_, i) => i !== index) }));
+  };
+
+  const resetCreateForm = () => {
     setCreateForm({
       name: "",
       category: "",
       subcategory: "",
       task_type: "execution",
       description: "",
+      objective: "",
+      default_deadline_days: "",
+      default_priority: "medium",
+      complexity: "basic",
+      estimated_hours: "",
+      responsible_type: "",
+      requires_access: false,
+      requires_briefing: false,
+      requires_files: false,
+      internal_guidance: "",
+      notes: "",
     });
+    setCreateLists(EMPTY_LISTS);
+    setListInputs({ steps: "", checklist: "", briefing_questions: "", required_files: "", execution_rules: "", conclusion_rules: "" });
+  };
 
   // Fetch
   const fetchModels = useCallback(async () => {
@@ -1420,6 +1480,39 @@ export default function AdminModelosTarefasPage() {
         subcategory: createForm.subcategory.trim() || undefined,
         task_type: createForm.task_type,
         description: createForm.description.trim() || undefined,
+        objective: createForm.objective.trim() || undefined,
+        default_deadline_days: createForm.default_deadline_days
+          ? Number(createForm.default_deadline_days)
+          : undefined,
+        default_priority: createForm.default_priority,
+        complexity: createForm.complexity,
+        estimated_hours: createForm.estimated_hours
+          ? Number(createForm.estimated_hours)
+          : undefined,
+        responsible_type: createForm.responsible_type.trim() || undefined,
+        requires_access: createForm.requires_access,
+        requires_briefing: createForm.requires_briefing,
+        requires_files: createForm.requires_files,
+        steps: createLists.steps.length
+          ? JSON.stringify(createLists.steps)
+          : undefined,
+        checklist: createLists.checklist.length
+          ? JSON.stringify(createLists.checklist)
+          : undefined,
+        briefing_questions: createLists.briefing_questions.length
+          ? JSON.stringify(createLists.briefing_questions)
+          : undefined,
+        required_files: createLists.required_files.length
+          ? JSON.stringify(createLists.required_files)
+          : undefined,
+        execution_rules: createLists.execution_rules.length
+          ? JSON.stringify(createLists.execution_rules)
+          : undefined,
+        conclusion_rules: createLists.conclusion_rules.length
+          ? JSON.stringify(createLists.conclusion_rules)
+          : undefined,
+        internal_guidance: createForm.internal_guidance.trim() || undefined,
+        notes: createForm.notes.trim() || undefined,
         status: "em_revisao",
         is_active: false,
       });
@@ -2609,138 +2702,483 @@ export default function AdminModelosTarefasPage() {
         updatingId={updatingId}
       />
 
-      {/* Create Dialog */}
-      <Dialog
+      {/* Create Sheet */}
+      <Sheet
         open={createOpen}
         onOpenChange={(v) => {
           setCreateOpen(v);
           if (!v) resetCreateForm();
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-600 to-fuchsia-600 flex items-center justify-center">
-                <Plus className="h-4 w-4 text-white" />
-              </span>
-              Novo Modelo de Tarefa
-            </DialogTitle>
-            <DialogDescription>
-              Crie um modelo reutilizável que poderá ser vinculado a um ou mais
-              produtos. O código será gerado automaticamente.
-            </DialogDescription>
-          </DialogHeader>
+        <SheetContent
+          side="right"
+          className="p-0 flex flex-col h-full gap-0"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+          }}
+        >
+          <ModalBrandHeader
+            title={createForm.name || "Novo Modelo de Tarefa"}
+            subtitle="Criando modelo de tarefa reutilizável · código gerado automaticamente"
+            icon={<ClipboardList />}
+            onClose={() => { setCreateOpen(false); resetCreateForm(); }}
+          />
 
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="ct-name" className="text-xs font-semibold">
-                Nome do modelo *
-              </Label>
-              <Input
-                id="ct-name"
-                value={createForm.name}
-                onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, name: e.target.value }))
-                }
-                placeholder="Ex.: Configuração de Tag Manager"
-                className="h-9 text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ct-cat" className="text-xs font-semibold">
-                  Categoria *
-                </Label>
-                <Input
-                  id="ct-cat"
-                  value={createForm.category}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, category: e.target.value }))
-                  }
-                  placeholder="Ex.: Tráfego Pago"
-                  className="h-9 text-sm"
-                />
+          <div className="flex-1 overflow-auto">
+            <Tabs defaultValue="info" className="space-y-0">
+              {/* Tab nav */}
+              <div className="sticky top-0 z-10 bg-background border-b border-slate-200 dark:border-slate-700 px-5">
+                <TabsList className="bg-transparent p-0 h-10 border-0 rounded-none gap-0 w-full justify-start">
+                  <TabsTrigger
+                    value="info"
+                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Informações
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="etapas"
+                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                  >
+                    <Layers className="h-3.5 w-3.5" />
+                    Etapas & Checklist
+                    {(createLists.steps.length + createLists.checklist.length) > 0 && (
+                      <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
+                        {createLists.steps.length + createLists.checklist.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="briefing"
+                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                    Briefing & Regras
+                    {(createLists.briefing_questions.length + createLists.required_files.length + createLists.execution_rules.length + createLists.conclusion_rules.length) > 0 && (
+                      <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
+                        {createLists.briefing_questions.length + createLists.required_files.length + createLists.execution_rules.length + createLists.conclusion_rules.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ct-sub" className="text-xs font-semibold">
-                  Subcategoria
-                </Label>
-                <Input
-                  id="ct-sub"
-                  value={createForm.subcategory}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({
-                      ...f,
-                      subcategory: e.target.value,
-                    }))
-                  }
-                  placeholder="Opcional"
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Tipo de tarefa</Label>
-              <Select
-                value={createForm.task_type}
-                onValueChange={(v) =>
-                  setCreateForm((f) => ({ ...f, task_type: v as TaskType }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(
-                    [
-                      "execution",
-                      "review",
-                      "approval",
-                      "qualification",
-                      "support",
-                    ] as TaskType[]
-                  ).map((t) => (
-                    <SelectItem key={t} value={t} className="text-sm">
-                      {TYPE_CONFIG[t].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* ── Tab: Informações ── */}
+              <TabsContent value="info" className="p-6 space-y-5 mt-0">
+                {/* Nome */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="ct-name" className="text-xs font-semibold">
+                    Nome do modelo <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="ct-name"
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Ex.: Configuração de Tag Manager"
+                    className="h-9 text-sm"
+                  />
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="ct-desc" className="text-xs font-semibold">
-                Descrição
-              </Label>
-              <Textarea
-                id="ct-desc"
-                value={createForm.description}
-                onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, description: e.target.value }))
-                }
-                placeholder="Descrição curta do modelo (opcional)"
-                rows={3}
-                className="text-sm resize-none"
-              />
-            </div>
+                {/* Categoria + Subcategoria */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ct-cat" className="text-xs font-semibold">
+                      Categoria <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="ct-cat"
+                      value={createForm.category}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, category: e.target.value }))}
+                      placeholder="Ex.: Tráfego Pago"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ct-sub" className="text-xs font-semibold">
+                      Subcategoria
+                    </Label>
+                    <Input
+                      id="ct-sub"
+                      value={createForm.subcategory}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, subcategory: e.target.value }))}
+                      placeholder="Opcional"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
 
-            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <span>
-                O modelo será criado com status <strong>Em revisão</strong>.
-                Após validação, altere para <strong>Ativo</strong> para que
-                possa ser vinculado a produtos.
-              </span>
-            </div>
+                {/* Tipo + Prioridade + Complexidade */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Tipo de tarefa</Label>
+                    <Select
+                      value={createForm.task_type}
+                      onValueChange={(v) => setCreateForm((f) => ({ ...f, task_type: v as TaskType }))}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(["execution", "review", "approval", "qualification", "support"] as TaskType[]).map((t) => (
+                          <SelectItem key={t} value={t} className="text-sm">{TYPE_CONFIG[t].label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Prioridade padrão</Label>
+                    <Select
+                      value={createForm.default_priority}
+                      onValueChange={(v) => setCreateForm((f) => ({ ...f, default_priority: v }))}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PRIORITY_LABEL).map(([k, label]) => (
+                          <SelectItem key={k} value={k} className="text-sm">{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Complexidade</Label>
+                    <Select
+                      value={createForm.complexity}
+                      onValueChange={(v) => setCreateForm((f) => ({ ...f, complexity: v }))}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(COMPLEXITY_LABEL).map(([k, label]) => (
+                          <SelectItem key={k} value={k} className="text-sm">{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Prazo + Horas + Responsável */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ct-days" className="text-xs font-semibold">Prazo padrão (dias)</Label>
+                    <Input
+                      id="ct-days"
+                      type="number"
+                      min="0"
+                      value={createForm.default_deadline_days}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, default_deadline_days: e.target.value }))}
+                      placeholder="Ex.: 5"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ct-hours" className="text-xs font-semibold">Horas estimadas</Label>
+                    <Input
+                      id="ct-hours"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={createForm.estimated_hours}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, estimated_hours: e.target.value }))}
+                      placeholder="Ex.: 3.5"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ct-resp" className="text-xs font-semibold">Tipo de responsável</Label>
+                    <Input
+                      id="ct-resp"
+                      value={createForm.responsible_type}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, responsible_type: e.target.value }))}
+                      placeholder="Ex.: Designer"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Descrição */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="ct-desc" className="text-xs font-semibold">Descrição</Label>
+                  <Textarea
+                    id="ct-desc"
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="Descrição curta do modelo de tarefa"
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                {/* Objetivo */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="ct-obj" className="text-xs font-semibold">Objetivo</Label>
+                  <Textarea
+                    id="ct-obj"
+                    value={createForm.objective}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, objective: e.target.value }))}
+                    placeholder="Qual o objetivo principal desta tarefa?"
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                {/* Flags */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Requisitos</Label>
+                  <div className="flex flex-col gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+                    {[
+                      { key: "requires_access", label: "Requer acesso a plataformas", desc: "Nômade precisará de credenciais de acesso" },
+                      { key: "requires_briefing", label: "Requer briefing do cliente", desc: "Depende de respostas do formulário de briefing" },
+                      { key: "requires_files", label: "Requer arquivos do cliente", desc: "Cliente precisa enviar arquivos antes da execução" },
+                    ].map(({ key, label, desc }) => (
+                      <div key={key} className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p>
+                        </div>
+                        <Switch
+                          checked={createForm[key] as boolean}
+                          onCheckedChange={(v) => setCreateForm((f) => ({ ...f, [key]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Orientações internas */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="ct-guidance" className="text-xs font-semibold">Orientações internas</Label>
+                  <Textarea
+                    id="ct-guidance"
+                    value={createForm.internal_guidance}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, internal_guidance: e.target.value }))}
+                    placeholder="Instruções visíveis apenas para a equipe interna"
+                    rows={3}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                {/* Notas */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="ct-notes" className="text-xs font-semibold">Notas</Label>
+                  <Textarea
+                    id="ct-notes"
+                    value={createForm.notes}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, notes: e.target.value }))}
+                    placeholder="Observações adicionais (opcional)"
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    O modelo será criado com status <strong>Em revisão</strong>. Após validação, altere para <strong>Ativo</strong> para que possa ser vinculado a produtos.
+                  </span>
+                </div>
+              </TabsContent>
+
+              {/* ── Tab: Etapas & Checklist ── */}
+              <TabsContent value="etapas" className="p-6 space-y-8 mt-0">
+                {/* Etapas de execução */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-indigo-500" />
+                      Etapas de execução
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Passos sequenciais que o nômade deve seguir para completar a tarefa.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={listInputs.steps}
+                      onChange={(e) => setListInputs((l) => ({ ...l, steps: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList("steps", listInputs.steps); }}}
+                      placeholder="Descreva a etapa e pressione Enter"
+                      className="h-9 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addToList("steps", listInputs.steps)}
+                      disabled={!listInputs.steps.trim()}
+                      className="h-9 px-3 shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {createLists.steps.length > 0 && (
+                    <div className="space-y-1.5">
+                      {createLists.steps.map((step, i) => (
+                        <div key={i} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                          <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">{i + 1}.</span>
+                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{step}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFromList("steps", i)}
+                            className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {createLists.steps.length === 0 && (
+                    <p className="text-xs text-slate-400 italic">Nenhuma etapa adicionada ainda.</p>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-slate-800" />
+
+                {/* Checklist */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-emerald-500" />
+                      Checklist de entrega
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Itens que devem ser verificados antes de marcar a tarefa como concluída.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={listInputs.checklist}
+                      onChange={(e) => setListInputs((l) => ({ ...l, checklist: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList("checklist", listInputs.checklist); }}}
+                      placeholder="Adicione um item ao checklist e pressione Enter"
+                      className="h-9 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addToList("checklist", listInputs.checklist)}
+                      disabled={!listInputs.checklist.trim()}
+                      className="h-9 px-3 shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {createLists.checklist.length > 0 && (
+                    <div className="space-y-1.5">
+                      {createLists.checklist.map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{item}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFromList("checklist", i)}
+                            className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {createLists.checklist.length === 0 && (
+                    <p className="text-xs text-slate-400 italic">Nenhum item adicionado ainda.</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* ── Tab: Briefing & Regras ── */}
+              <TabsContent value="briefing" className="p-6 space-y-8 mt-0">
+                {/* Perguntas de briefing */}
+                {[
+                  {
+                    key: "briefing_questions" as const,
+                    title: "Perguntas de briefing",
+                    desc: "Perguntas respondidas pelo cliente antes da execução.",
+                    icon: <HelpCircle className="h-4 w-4 text-violet-500" />,
+                    placeholder: "Ex.: Qual o público-alvo da campanha?",
+                  },
+                  {
+                    key: "required_files" as const,
+                    title: "Arquivos necessários",
+                    desc: "Arquivos que o cliente deve fornecer.",
+                    icon: <FileText className="h-4 w-4 text-orange-500" />,
+                    placeholder: "Ex.: Logo em alta resolução (PNG ou SVG)",
+                  },
+                  {
+                    key: "execution_rules" as const,
+                    title: "Regras de execução",
+                    desc: "Diretrizes obrigatórias durante a execução.",
+                    icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+                    placeholder: "Ex.: Sempre verificar conformidade com a marca",
+                  },
+                  {
+                    key: "conclusion_rules" as const,
+                    title: "Regras de conclusão",
+                    desc: "Critérios para considerar a tarefa concluída.",
+                    icon: <Target className="h-4 w-4 text-red-500" />,
+                    placeholder: "Ex.: Relatório final aprovado pelo cliente",
+                  },
+                ].map(({ key, title, desc, icon, placeholder }, sectionIdx) => (
+                  <div key={key} className="space-y-3">
+                    {sectionIdx > 0 && <div className="border-t border-slate-100 dark:border-slate-800" />}
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        {icon}
+                        {title}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={listInputs[key]}
+                        onChange={(e) => setListInputs((l) => ({ ...l, [key]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList(key, listInputs[key]); }}}
+                        placeholder={placeholder}
+                        className="h-9 text-sm"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => addToList(key, listInputs[key])}
+                        disabled={!listInputs[key]?.trim()}
+                        className="h-9 px-3 shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    {createLists[key].length > 0 ? (
+                      <div className="space-y-1.5">
+                        {createLists[key].map((item, i) => (
+                          <div key={i} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                            <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">{i + 1}.</span>
+                            <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{item}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeFromList(key, i)}
+                              className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">Nenhum item adicionado ainda.</p>
+                    )}
+                  </div>
+                ))}
+              </TabsContent>
+            </Tabs>
           </div>
 
-          <DialogFooter>
+          {/* Footer */}
+          <div className="border-t border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3 shrink-0 bg-background">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => setCreateOpen(false)}
+              onClick={() => { setCreateOpen(false); resetCreateForm(); }}
               disabled={creating}
             >
               Cancelar
@@ -2748,11 +3186,7 @@ export default function AdminModelosTarefasPage() {
             <Button
               size="sm"
               onClick={handleCreateModel}
-              disabled={
-                creating ||
-                !createForm.name.trim() ||
-                !createForm.category.trim()
-              }
+              disabled={creating || !createForm.name.trim() || !createForm.category.trim()}
               className="btn-brand border-0 gap-2"
             >
               {creating ? (
@@ -2762,9 +3196,9 @@ export default function AdminModelosTarefasPage() {
               )}
               Criar modelo
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     </TooltipProvider>
   );
 }

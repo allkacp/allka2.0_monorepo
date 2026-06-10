@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { SheetFooter } from "@/components/ui/sheet";
 import {
   InlineLoader,
@@ -108,6 +108,7 @@ import {
 import { Switch } from "@/components/ui/switch"; // Import Switch
 import { ConfirmationDialog } from "@/components/confirmation-dialog"; // Import ConfirmationDialog
 import { apiClient } from "@/lib/api-client";
+import { backendToFrontendProduct } from "@/lib/product-adapter";
 // Removed: import { ProductSheet } from "@/components/admin/product-sheet"
 // Removed: import { QuestionnaireSheet } from "@/components/admin/questionnaire-sheet"
 // Removed: import { PricingCalculatorModal } from "@/components/admin/pricing-calculator-modal"
@@ -411,6 +412,14 @@ const DEFAULT_TAX_RATES = {
   OPERATIONAL_FEE: 0.03, // 3%
 };
 
+function parseDemonstrations(raw: any): string[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+  return [];
+}
+
 export default function AdminProdutosPage() {
   const {
     products,
@@ -483,7 +492,7 @@ export default function AdminProdutosPage() {
     apiClient
       .getProduct(urlProdutoId)
       .then((product: any) => {
-        setSelectedProduct(product);
+        setSelectedProduct(product ? backendToFrontendProduct(product) : product);
         setIsViewSheetOpen(true);
       })
       .catch(() => {
@@ -584,6 +593,7 @@ export default function AdminProdutosPage() {
     productId: string;
     name: string;
     category: string;
+    categories: string[];
     subcategories: string[];
     tags: string[];
     recurrence: string;
@@ -623,6 +633,7 @@ export default function AdminProdutosPage() {
     productId: "",
     name: "",
     category: "",
+    categories: [],
     subcategories: [],
     tags: [],
     recurrence: "",
@@ -703,9 +714,12 @@ export default function AdminProdutosPage() {
           (task.steps || []).some((step) => filterAreas.includes(step.area)),
         );
 
+      const _productCategories: string[] = (product as any).categories?.length
+        ? (product as any).categories
+        : product.category ? [product.category] : [];
       const matchesCategory =
         filterCategories.length === 0 ||
-        filterCategories.includes(product.category);
+        _productCategories.some((c) => filterCategories.includes(c));
 
       const matchesStatus =
         filterStatus === "all" ||
@@ -772,8 +786,12 @@ export default function AdminProdutosPage() {
   ).filter(Boolean);
 
   const uniqueCategories = Array.from(
-    new Set(safeProducts.map((p) => p.category)),
-  );
+    new Set(
+      safeProducts.flatMap((p) =>
+        (p as any).categories?.length ? (p as any).categories : p.category ? [p.category] : []
+      )
+    ),
+  ).filter(Boolean);
 
   const getTotalHours = (product: Product) => {
     return (product.tasks || []).reduce((total, task) => {
@@ -970,6 +988,9 @@ export default function AdminProdutosPage() {
       information: (product as any).information || "",
       description: product.description || "",
       category: product.category || "",
+      categories: (product as any).categories?.length
+        ? (product as any).categories
+        : product.category ? [product.category] : [],
       subcategories: (product as any).subcategories || [],
       price: product.finalPrice?.toString() || "0",
       deliveryDays: (product as any).deliveryDays?.toString() || "0",
@@ -1009,7 +1030,7 @@ export default function AdminProdutosPage() {
     if (existingPortfolio && existingPortfolio.length > 0) {
       setPortfolioImages(existingPortfolio);
     } else {
-      const demoUrls: string[] = (product as any).demonstrations || [];
+      const demoUrls: string[] = parseDemonstrations((product as any).demonstrations);
       setPortfolioImages(
         demoUrls.map((url, i) => ({
           id: `img-${i}-${Date.now()}`,
@@ -1029,6 +1050,9 @@ export default function AdminProdutosPage() {
   };
 
   const handleViewProduct = (product: Product) => {
+    // products from useProducts() context are ALREADY adapted to frontend shape.
+    // Do NOT run backendToFrontendProduct here — that double-adapts and wipes
+    // tags/demonstrations/stages/tasks.
     setSelectedProduct(product);
     setIsViewSheetOpen(true);
     navigate(`/admin/produtos/${product.id}`, { replace: true });
@@ -1161,18 +1185,20 @@ export default function AdminProdutosPage() {
       return;
     }
 
-    if (!productFormData.category.trim()) {
-      alert("Por favor, selecione uma categoria");
+    if (!productFormData.categories || productFormData.categories.length === 0) {
+      alert("Por favor, selecione ao menos uma categoria");
       return;
     }
 
-    const generatedId = generateProductId(productFormData.category);
+    const primaryCategory = productFormData.categories[0];
+    const generatedId = generateProductId(primaryCategory);
     const newProductWithDefaults = {
       id: generatedId,
       name: productFormData.name,
       description:
         productFormData.summaryDescription || productFormData.benefits,
-      category: productFormData.category,
+      category: primaryCategory,
+      categories: productFormData.categories,
       isActive: productFormData.isActive,
       tasks: productTasks, // This should be populated if tasks are managed within the product form
       createdAt: new Date().toISOString(),
@@ -1189,7 +1215,7 @@ export default function AdminProdutosPage() {
       addOns: productAddOns,
       // Populate other Product fields as needed from productFormData
       price: Number.parseFloat(productFormData.price) || 0,
-      deliveryDays: Number.parseInt(productFormData.deliveryDays) || 0,
+      deliveryDays: effectiveDeliveryDays,
       image: productFormData.productImagePreview,
       productImagePreview: productFormData.productImagePreview,
       deliveryVideoUrl: productFormData.deliveryVideoUrl,
@@ -1233,6 +1259,7 @@ export default function AdminProdutosPage() {
       productId: "",
       name: "",
       category: "",
+      categories: [],
       subcategories: [],
       tags: [],
       recurrence: "",
@@ -1451,7 +1478,7 @@ export default function AdminProdutosPage() {
           ...selectedProduct, // Start with existing selected product
           ...productFormData, // Override with form data
           price: Number.parseFloat(productFormData.price),
-          deliveryDays: Number.parseInt(productFormData.deliveryDays), // Changed from deadline to deliveryDays
+          deliveryDays: effectiveDeliveryDays,
           additionalImages,
           portfolioImages,
           demonstrations: portfolioImages.map((img) => img.url).filter(Boolean),
@@ -1465,7 +1492,8 @@ export default function AdminProdutosPage() {
           benefits: productFormData.benefits,
           information: productFormData.information,
           description: productFormData.description,
-          category: productFormData.category,
+          category: productFormData.categories[0] || productFormData.category,
+          categories: productFormData.categories,
           subcategories: productFormData.subcategories,
           image: productFormData.productImagePreview,
           productImagePreview: productFormData.productImagePreview,
@@ -1521,6 +1549,7 @@ export default function AdminProdutosPage() {
       productId: "",
       name: "",
       category: "",
+      categories: [],
       subcategories: [],
       tags: [],
       recurrence: "",
@@ -1568,9 +1597,8 @@ export default function AdminProdutosPage() {
       return;
     }
 
-    const generatedId = generateProductId(
-      productFormData.category || "Sem categoria",
-    );
+    const _draftPrimaryCategory = productFormData.categories[0] || productFormData.category || "Sem categoria";
+    const generatedId = generateProductId(_draftPrimaryCategory);
 
     const draftProduct: Product = {
       id: generatedId,
@@ -1579,7 +1607,8 @@ export default function AdminProdutosPage() {
         productFormData.summaryDescription ||
         productFormData.benefits ||
         "Rascunho",
-      category: productFormData.category || "Sem categoria",
+      category: _draftPrimaryCategory,
+      categories: productFormData.categories.length ? productFormData.categories : [_draftPrimaryCategory],
       isActive: false,
       tasks: [], // Drafts might not have tasks yet, or they could be saved separately
       createdAt: new Date().toISOString(),
@@ -1593,7 +1622,7 @@ export default function AdminProdutosPage() {
       finalPrice: Number.parseFloat(productFormData.price) || 0,
       // Populate other fields as needed for draft
       price: Number.parseFloat(productFormData.price) || 0,
-      deliveryDays: Number.parseInt(productFormData.deliveryDays) || 0,
+      deliveryDays: effectiveDeliveryDays,
       image: productFormData.productImagePreview,
       productImagePreview: productFormData.productImagePreview,
       deliveryVideoUrl: productFormData.deliveryVideoUrl,
@@ -1809,6 +1838,13 @@ export default function AdminProdutosPage() {
       </div>
     );
   }
+
+  const _editStages = (selectedProduct as any)?.stages;
+  const _hasEditStages = Array.isArray(_editStages) && _editStages.length > 0;
+  const _autoDeliveryDays = _hasEditStages
+    ? Math.max(...(_editStages as any[]).map((s: any) => s.deliveryDeadlineDays || 0))
+    : null;
+  const effectiveDeliveryDays = _autoDeliveryDays ?? (Number.parseInt(productFormData.deliveryDays) || 0);
 
   return (
     <div className="flex-1 space-y-3">
@@ -2081,13 +2117,14 @@ export default function AdminProdutosPage() {
                   </p>
                 </div>
 
-                {/* Category badge */}
-                <Badge
-                  variant="secondary"
-                  className="text-xs font-normal px-2 py-0.5 shrink-0 hidden sm:flex"
-                >
-                  {product.category}
-                </Badge>
+                {/* Category badges */}
+                <div className="hidden sm:flex items-center gap-1 shrink-0">
+                  {((product as any).categories?.length ? (product as any).categories : [product.category]).filter(Boolean).map((cat: string) => (
+                    <Badge key={cat} variant="secondary" className="text-xs font-normal px-2 py-0.5">
+                      {cat}
+                    </Badge>
+                  ))}
+                </div>
 
                 {/* Tasks + hours */}
                 <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
@@ -2233,12 +2270,11 @@ export default function AdminProdutosPage() {
                         "Sem descrição"}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] font-medium px-2 py-0.5"
-                      >
-                        {product.category}
-                      </Badge>
+                      {((product as any).categories?.length ? (product as any).categories : [product.category]).filter(Boolean).map((cat: string) => (
+                        <Badge key={cat} variant="secondary" className="text-[10px] font-medium px-2 py-0.5">
+                          {cat}
+                        </Badge>
+                      ))}
                       {((product as any).tags || [])
                         .slice(0, 2)
                         .map((tag: string) => (
@@ -4384,8 +4420,8 @@ export default function AdminProdutosPage() {
                               )
                                 .map((img: any) => img.url)
                                 .filter(Boolean);
-                              const demoUrls: string[] = (
-                                (selectedProduct as any).demonstrations || []
+                              const demoUrls: string[] = parseDemonstrations(
+                                (selectedProduct as any).demonstrations,
                               ).filter(Boolean);
                               const allUrls =
                                 portfolioUrls.length > 0
@@ -6161,7 +6197,7 @@ export default function AdminProdutosPage() {
             }
             subtitle={
               selectedProduct
-                ? `Editando • ${productFormData.category || selectedProduct.category || ""}`
+                ? `Editando • ${(productFormData.categories || []).join(", ") || productFormData.category || (selectedProduct as any)?.category || ""}`
                 : "Cadastro de novo produto"
             }
             icon={<Package />}
@@ -6227,23 +6263,6 @@ export default function AdminProdutosPage() {
                           <p>
                             Produtos vinculados como complementares (upsell /
                             cross-sell)
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <TabsTrigger
-                            value="descricao"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            Descrição
-                          </TabsTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Textos detalhados, resumo, atenções e itens
-                            inclusos/excluídos
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -6692,33 +6711,50 @@ export default function AdminProdutosPage() {
                       </span>
                     </div>
                     <div className="p-4 grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 col-span-2">
                         <Label className="text-xs font-medium text-muted-foreground">
-                          Categoria <span className="text-red-500">*</span>
+                          Categoria <span className="text-red-500">*</span>{" "}
+                          <span className="text-slate-400 font-normal">(selecione uma ou mais)</span>
                         </Label>
-                        <Select
-                          value={productFormData.category}
-                          onValueChange={(value) =>
-                            setProductFormData({
-                              ...productFormData,
-                              category: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger className="text-xs h-8">
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Mídias e Conteúdo">
-                              Mídias e Conteúdo
-                            </SelectItem>
-                            <SelectItem value="Design">Design</SelectItem>
-                            <SelectItem value="Desenvolvimento">
-                              Desenvolvimento
-                            </SelectItem>
-                            <SelectItem value="Marketing">Marketing</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            "Design e Criação",
+                            "Mídias e Conteúdo",
+                            "Social Media e Publicações",
+                            "Performance e Anúncios Patrocinados",
+                            "Soluções Web",
+                            "Fotografia e Imagem",
+                            "Desenvolvimento",
+                            "Marketing",
+                          ].map((cat) => {
+                            const selected = (productFormData.categories || []).includes(cat);
+                            return (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => {
+                                  const current = productFormData.categories || [];
+                                  setProductFormData({
+                                    ...productFormData,
+                                    categories: selected
+                                      ? current.filter((c) => c !== cat)
+                                      : [...current, cat],
+                                    category: selected && current[0] === cat
+                                      ? current[1] || ""
+                                      : current[0] === cat || current.length === 0 ? cat : current[0],
+                                  });
+                                }}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                                  selected
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-transparent text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600"
+                                }`}
+                              >
+                                {cat}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         <TooltipProvider>
@@ -6812,33 +6848,41 @@ export default function AdminProdutosPage() {
                         <TooltipProvider>
                           <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                             Dias de Entrega{" "}
-                            <span className="text-red-500">*</span>
+                            {!_hasEditStages && <span className="text-red-500">*</span>}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Info className="h-3 w-3 text-slate-400 cursor-help" />
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>
-                                  Prazo máximo de entrega em dias corridos após
-                                  o início da execução
+                                  {_hasEditStages
+                                    ? "Calculado automaticamente a partir das etapas do produto"
+                                    : "Prazo máximo de entrega em dias corridos após o início da execução"}
                                 </p>
                               </TooltipContent>
                             </Tooltip>
                           </Label>
                         </TooltipProvider>
-                        <Input
-                          type="number"
-                          placeholder="Ex: 5"
-                          value={productFormData.deliveryDays}
-                          onChange={(e) =>
-                            setProductFormData({
-                              ...productFormData,
-                              deliveryDays: e.target.value,
-                            })
-                          }
-                          className="text-xs h-8"
-                          min="0"
-                        />
+                        {_hasEditStages ? (
+                          <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-400">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">{_autoDeliveryDays}d</span>
+                            <span className="text-slate-400">· calculado das {(_editStages as any[]).length} etapas</span>
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            placeholder="Ex: 5"
+                            value={productFormData.deliveryDays}
+                            onChange={(e) =>
+                              setProductFormData({
+                                ...productFormData,
+                                deliveryDays: e.target.value,
+                              })
+                            }
+                            className="text-xs h-8"
+                            min="0"
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -6935,6 +6979,183 @@ export default function AdminProdutosPage() {
                                 {sub}
                               </Button>
                             ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Textos */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                      <FileText className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Textos de Descrição
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          Descrição Detalhada{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Textarea
+                          placeholder="Uma descrição completa do produto, incluindo escopo, objetivos e o que o cliente receberá."
+                          value={productFormData.description}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              description: e.target.value,
+                            })
+                          }
+                          className="text-xs min-h-[150px]"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          Resumo da Descrição
+                        </Label>
+                        <Textarea
+                          placeholder="Um resumo conciso para listagens rápidas ou prévias."
+                          value={productFormData.summaryDescription}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              summaryDescription: e.target.value,
+                            })
+                          }
+                          className="text-xs min-h-[80px]"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                          Atenção na Descrição
+                        </Label>
+                        <Textarea
+                          placeholder="Qualquer informação importante que o cliente deve saber antes de comprar."
+                          value={productFormData.descriptionAttention}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              descriptionAttention: e.target.value,
+                            })
+                          }
+                          className="text-xs min-h-[80px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Itens */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Itens Inclusos e Excluídos
+                      </span>
+                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                        · pressione Enter para adicionar
+                      </span>
+                    </div>
+                    <div className="p-4 grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          ✓ Incluso
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 min-h-[40px]">
+                          {productFormData.includedItems.map((item, index) => (
+                            <Badge
+                              key={index}
+                              className="text-xs font-normal bg-emerald-100 text-emerald-800 border-0 cursor-pointer group"
+                            >
+                              {item}
+                              <button
+                                onClick={() =>
+                                  setProductFormData({
+                                    ...productFormData,
+                                    includedItems:
+                                      productFormData.includedItems.filter(
+                                        (_, i) => i !== index,
+                                      ),
+                                  })
+                                }
+                                className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                          <Input
+                            placeholder="Adicionar..."
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                e.currentTarget.value.trim()
+                              ) {
+                                e.preventDefault();
+                                setProductFormData({
+                                  ...productFormData,
+                                  includedItems: [
+                                    ...productFormData.includedItems,
+                                    e.currentTarget.value.trim(),
+                                  ],
+                                });
+                                e.currentTarget.value = "";
+                              }
+                            }}
+                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-red-500">
+                          ✕ Não incluso
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 min-h-[40px]">
+                          {productFormData.notIncludedItems.map(
+                            (item, index) => (
+                              <Badge
+                                key={index}
+                                className="text-xs font-normal bg-red-100 text-red-800 border-0 cursor-pointer group"
+                              >
+                                {item}
+                                <button
+                                  onClick={() =>
+                                    setProductFormData({
+                                      ...productFormData,
+                                      notIncludedItems:
+                                        productFormData.notIncludedItems.filter(
+                                          (_, i) => i !== index,
+                                        ),
+                                    })
+                                  }
+                                  className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ),
+                          )}
+                          <Input
+                            placeholder="Adicionar..."
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                e.currentTarget.value.trim()
+                              ) {
+                                e.preventDefault();
+                                setProductFormData({
+                                  ...productFormData,
+                                  notIncludedItems: [
+                                    ...productFormData.notIncludedItems,
+                                    e.currentTarget.value.trim(),
+                                  ],
+                                });
+                                e.currentTarget.value = "";
+                              }
+                            }}
+                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
+                          />
                         </div>
                       </div>
                     </div>
@@ -7138,184 +7359,6 @@ export default function AdminProdutosPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="descricao" className="space-y-3 mt-3">
-                  {/* Textos */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
-                      <FileText className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Textos de Descrição
-                      </span>
-                    </div>
-                    <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Descrição Detalhada{" "}
-                          <span className="text-red-500">*</span>
-                        </Label>
-                        <Textarea
-                          placeholder="Uma descrição completa do produto, incluindo escopo, objetivos e o que o cliente receberá."
-                          value={productFormData.description}
-                          onChange={(e) =>
-                            setProductFormData({
-                              ...productFormData,
-                              description: e.target.value,
-                            })
-                          }
-                          className="text-xs min-h-[150px]"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Resumo da Descrição
-                        </Label>
-                        <Textarea
-                          placeholder="Um resumo conciso para listagens rápidas ou prévias."
-                          value={productFormData.summaryDescription}
-                          onChange={(e) =>
-                            setProductFormData({
-                              ...productFormData,
-                              summaryDescription: e.target.value,
-                            })
-                          }
-                          className="text-xs min-h-[80px]"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3 text-amber-500" />
-                          Atenção na Descrição
-                        </Label>
-                        <Textarea
-                          placeholder="Qualquer informação importante que o cliente deve saber antes de comprar."
-                          value={productFormData.descriptionAttention}
-                          onChange={(e) =>
-                            setProductFormData({
-                              ...productFormData,
-                              descriptionAttention: e.target.value,
-                            })
-                          }
-                          className="text-xs min-h-[80px]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Itens */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Itens Inclusos e Excluídos
-                      </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
-                        · pressione Enter para adicionar
-                      </span>
-                    </div>
-                    <div className="p-4 grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                          ✓ Incluso
-                        </Label>
-                        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 min-h-[40px]">
-                          {productFormData.includedItems.map((item, index) => (
-                            <Badge
-                              key={index}
-                              className="text-xs font-normal bg-emerald-100 text-emerald-800 border-0 cursor-pointer group"
-                            >
-                              {item}
-                              <button
-                                onClick={() =>
-                                  setProductFormData({
-                                    ...productFormData,
-                                    includedItems:
-                                      productFormData.includedItems.filter(
-                                        (_, i) => i !== index,
-                                      ),
-                                  })
-                                }
-                                className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                          <Input
-                            placeholder="Adicionar..."
-                            onKeyDown={(e) => {
-                              if (
-                                e.key === "Enter" &&
-                                e.currentTarget.value.trim()
-                              ) {
-                                e.preventDefault();
-                                setProductFormData({
-                                  ...productFormData,
-                                  includedItems: [
-                                    ...productFormData.includedItems,
-                                    e.currentTarget.value.trim(),
-                                  ],
-                                });
-                                e.currentTarget.value = "";
-                              }
-                            }}
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-red-500">
-                          ✕ Não incluso
-                        </Label>
-                        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 min-h-[40px]">
-                          {productFormData.notIncludedItems.map(
-                            (item, index) => (
-                              <Badge
-                                key={index}
-                                className="text-xs font-normal bg-red-100 text-red-800 border-0 cursor-pointer group"
-                              >
-                                {item}
-                                <button
-                                  onClick={() =>
-                                    setProductFormData({
-                                      ...productFormData,
-                                      notIncludedItems:
-                                        productFormData.notIncludedItems.filter(
-                                          (_, i) => i !== index,
-                                        ),
-                                    })
-                                  }
-                                  className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            ),
-                          )}
-                          <Input
-                            placeholder="Adicionar..."
-                            onKeyDown={(e) => {
-                              if (
-                                e.key === "Enter" &&
-                                e.currentTarget.value.trim()
-                              ) {
-                                e.preventDefault();
-                                setProductFormData({
-                                  ...productFormData,
-                                  notIncludedItems: [
-                                    ...productFormData.notIncludedItems,
-                                    e.currentTarget.value.trim(),
-                                  ],
-                                });
-                                e.currentTarget.value = "";
-                              }
-                            }}
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
 
                 <TabsContent value="solicitar" className="space-y-3 mt-3">
                   {/* Briefing */}

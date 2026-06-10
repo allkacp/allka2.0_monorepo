@@ -1,10 +1,19 @@
 // @ts-nocheck
 import { useState, useMemo, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProducts, type Product } from "@/lib/contexts/product-context";
+import { useProjectBasket } from "@/contexts/project-basket-context";
+import { useAccountType } from "@/contexts/account-type-context";
+import {
+  formatCatalogRecurrence,
+  getCatalogProductLimitations,
+  resolveCatalogIdentity,
+  resolveCatalogProjectDestination,
+} from "@/lib/catalog-access";
 import {
   Search,
   ShoppingCart,
@@ -52,6 +61,7 @@ import {
 import { useSidebar } from "@/contexts/sidebar-context";
 import { computeProductRating } from "@/dev-mocks/data/product-nomads";
 import { PageLoader } from "@/components/ui/loading";
+import { CatalogCartStickyBar } from "@/components/catalog-cart-sticky-bar";
 
 export type CatalogMode = "page" | "panel";
 
@@ -289,6 +299,18 @@ export function ProductCatalogView({
   initialProductId,
 }: ProductCatalogViewProps) {
   const { products, loading, error: productsError } = useProducts();
+  const basket = useProjectBasket();
+  const { accountType } = useAccountType();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const identity = useMemo(
+    () => resolveCatalogIdentity(accountType),
+    [accountType],
+  );
+  const locationProjectId = useMemo(() => {
+    const state = (location.state || {}) as any;
+    return state?.projectId ?? state?.openProjectId ?? state?.draftProjectId ?? null;
+  }, [location.state]);
 
   const { sidebarWidth } = useSidebar();
   const headerHeight = 64;
@@ -309,6 +331,12 @@ export function ProductCatalogView({
       setDetailOpen(true);
     }
   }, [initialProductId, products]);
+
+  useEffect(() => {
+    if (locationProjectId && locationProjectId !== basket.projectId) {
+      basket.setProjectAssociation(String(locationProjectId));
+    }
+  }, [locationProjectId, basket]);
   const [category, setCategory] = useState("Todos");
   const [sort, setSort] = useState("smart");
   const [recurrenceFilter, setRecurrenceFilter] = useState("all");
@@ -336,16 +364,24 @@ export function ProductCatalogView({
   ]);
 
   const activeProducts = useMemo(
+    () => products.filter((p) => p.isActive),
+    [products],
+  );
+
+  const productLimitations = useMemo(
     () =>
-      products.filter(
-        (p) => p.isActive && (!contractableOnly || p.contractable !== false),
+      new Map(
+        activeProducts.map((product) => [
+          product.id,
+          getCatalogProductLimitations(product, identity),
+        ]),
       ),
-    [products, contractableOnly],
+    [activeProducts, identity],
   );
 
   const hasBlockedActiveProducts = useMemo(
-    () => products.some((p) => p.isActive && p.contractable === false),
-    [products],
+    () => activeProducts.some((product) => !productLimitations.get(product.id)?.canChoose),
+    [activeProducts, productLimitations],
   );
 
   const allCategories = useMemo(
@@ -529,6 +565,35 @@ export function ProductCatalogView({
       </div>
     );
   }
+
+  const cartPrimaryDestination = resolveCatalogProjectDestination(
+    identity,
+    basket.projectId ?? locationProjectId,
+  );
+
+  const cartPrimaryAction = () => {
+    if (cartPrimaryDestination) {
+      navigate(cartPrimaryDestination.pathname, {
+        state: cartPrimaryDestination.state,
+      });
+      return;
+    }
+
+    basket.setOpen(true);
+  };
+
+  const continueShopping = () => {
+    const searchBox = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Buscar produtos, tags..."]',
+    );
+
+    if (searchBox) {
+      searchBox.focus();
+      return;
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className={cn("flex flex-col h-full", mode === "page" && "min-h-0")}>
@@ -916,7 +981,12 @@ export function ProductCatalogView({
       <div
         className={cn(
           "flex-1 overflow-y-auto min-h-0",
-          mode === "page" ? "px-6 pb-6 pt-4" : "px-4 pb-4 pt-3",
+          mode === "page"
+            ? cn(
+                "px-6 pt-4",
+                basket.items.length > 0 ? "pb-44 lg:pb-40" : "pb-6",
+              )
+            : "px-4 pb-4 pt-3",
         )}
       >
         {filteredProducts.length === 0 ? (
@@ -1136,12 +1206,21 @@ export function ProductCatalogView({
                       ) : activeVariations.length > 0 ? (
                         <Button
                           size="sm"
-                          className="h-7 px-3 text-xs font-semibold text-white border-0"
+                          disabled={!canChoose}
+                          title={!canChoose ? chooseHint : undefined}
+                          className={cn(
+                            "h-7 px-3 text-xs font-semibold border-0",
+                            canChoose
+                              ? "text-white"
+                              : "cursor-not-allowed bg-slate-200 text-slate-500 hover:bg-slate-200",
+                          )}
                           style={{
-                            background:
-                              "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))",
+                            background: canChoose
+                              ? "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))"
+                              : undefined,
                           }}
                           onClick={() => {
+                            if (!canChoose) return;
                             setDetailProduct(product);
                             setDetailOpen(true);
                           }}
@@ -1151,12 +1230,21 @@ export function ProductCatalogView({
                       ) : (
                         <Button
                           size="sm"
-                          className="h-7 px-3 text-xs font-semibold text-white border-0"
+                          disabled={!canChoose}
+                          title={!canChoose ? chooseHint : undefined}
+                          className={cn(
+                            "h-7 px-3 text-xs font-semibold border-0",
+                            canChoose
+                              ? "text-white"
+                              : "cursor-not-allowed bg-slate-200 text-slate-500 hover:bg-slate-200",
+                          )}
                           style={{
-                            background:
-                              "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))",
+                            background: canChoose
+                              ? "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))"
+                              : undefined,
                           }}
                           onClick={() => {
+                            if (!canChoose) return;
                             setDetailProduct(product);
                             setDetailOpen(true);
                           }}
@@ -1191,6 +1279,11 @@ export function ProductCatalogView({
               const lineTotal = displayPrice * (selected ? qty : 1);
               const productImage =
                 product.image || (product as any).productImagePreview || null;
+              const limitation =
+                productLimitations.get(product.id) ??
+                getCatalogProductLimitations(product, identity);
+              const canChoose = limitation.canChoose;
+              const chooseHint = limitation.reason ?? "";
               const isCompact = gridMode === 4 || gridMode === 5;
 
               return (
@@ -1496,12 +1589,21 @@ export function ProductCatalogView({
                         ) : activeVariations.length > 0 ? (
                           <Button
                             size="sm"
-                            className="w-full h-8 text-xs font-semibold text-white shadow-sm border-0"
+                            disabled={!canChoose}
+                            title={!canChoose ? chooseHint : undefined}
+                            className={cn(
+                              "w-full h-8 text-xs font-semibold shadow-sm border-0",
+                              canChoose
+                                ? "text-white"
+                                : "cursor-not-allowed bg-slate-200 text-slate-500 hover:bg-slate-200",
+                            )}
                             style={{
-                              background:
-                                "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))",
+                              background: canChoose
+                                ? "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))"
+                                : undefined,
                             }}
                             onClick={() => {
+                              if (!canChoose) return;
                               setDetailProduct(product);
                               setDetailOpen(true);
                             }}
@@ -1512,12 +1614,21 @@ export function ProductCatalogView({
                         ) : (
                           <Button
                             size="sm"
-                            className="w-full h-8 text-xs font-semibold text-white shadow-sm border-0"
+                            disabled={!canChoose}
+                            title={!canChoose ? chooseHint : undefined}
+                            className={cn(
+                              "w-full h-8 text-xs font-semibold shadow-sm border-0",
+                              canChoose
+                                ? "text-white"
+                                : "cursor-not-allowed bg-slate-200 text-slate-500 hover:bg-slate-200",
+                            )}
                             style={{
-                              background:
-                                "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))",
+                              background: canChoose
+                                ? "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))"
+                                : undefined,
                             }}
                             onClick={() => {
+                              if (!canChoose) return;
                               setDetailProduct(product);
                               setDetailOpen(true);
                             }}
@@ -1535,6 +1646,20 @@ export function ProductCatalogView({
           </div>
         )}
       </div>
+
+      {mode === "page" && basket.items.length > 0 && (
+        <CatalogCartStickyBar
+          items={basket.items}
+          total={basket.getTotalPrice()}
+          projectId={basket.projectId ?? locationProjectId}
+          sidebarOffset={sidebarWidth}
+          onPrimaryAction={cartPrimaryAction}
+          onClearCart={basket.clearBasket}
+          onContinueShopping={continueShopping}
+          onUpdateQuantity={basket.updateQuantity}
+          onRemoveItem={basket.removeItem}
+        />
+      )}
 
       {/* ── Sticky footer (panel mode only) ─────────────────── */}
       {/* Detail sheet */}

@@ -316,6 +316,203 @@ function buildMockProjectProduct(project: any, product: any, linkedAt?: string) 
   };
 }
 
+function serializeCatalogTaskField(value: any) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function estimateCatalogTaskHours(task: any) {
+  if (Number.isFinite(Number(task?.estimated_hours))) {
+    return Number(task.estimated_hours);
+  }
+  if (Number.isFinite(Number(task?.calculatedCost))) {
+    return Number(task.calculatedCost);
+  }
+  const steps = Array.isArray(task?.steps) ? task.steps : [];
+  return steps.reduce((total: number, step: any) => {
+    const hours = Number(step?.estimatedHours ?? step?.estimated_hours ?? 0);
+    return total + (Number.isFinite(hours) ? hours : 0);
+  }, 0);
+}
+
+function normalizeCatalogTask(task: any, product?: any) {
+  const id = String(
+    task?.id ?? task?.code ?? `CT-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const nowValue = now();
+  return {
+    ...task,
+    id,
+    code: task?.code || id,
+    name: task?.name || task?.title || "Modelo de tarefa",
+    category: task?.category || task?.taskCategory || product?.category || "Geral",
+    subcategory: task?.subcategory ?? null,
+    task_type: task?.task_type || task?.type || "execution",
+    description: task?.description || null,
+    objective: task?.objective || null,
+    default_deadline_days: task?.default_deadline_days ?? null,
+    default_priority: task?.default_priority || task?.priority || "medium",
+    complexity: task?.complexity || product?.complexity || "basic",
+    estimated_hours: estimateCatalogTaskHours(task),
+    responsible_type: task?.responsible_type ?? null,
+    requires_access: Boolean(task?.requiresAccess ?? task?.requires_access),
+    requires_briefing: Boolean(task?.requiresBriefing ?? task?.requires_briefing),
+    requires_files: Boolean(task?.requiresFiles ?? task?.requires_files),
+    steps: serializeCatalogTaskField(task?.steps),
+    checklist: serializeCatalogTaskField(task?.checklist),
+    briefing_questions: serializeCatalogTaskField(
+      task?.briefing_questions ?? task?.questionnaire,
+    ),
+    required_files: serializeCatalogTaskField(task?.required_files),
+    execution_rules: serializeCatalogTaskField(
+      task?.execution_rules ?? task?.executionRules,
+    ),
+    conclusion_rules: serializeCatalogTaskField(
+      task?.conclusion_rules ?? task?.conclusionRules,
+    ),
+    internal_guidance: serializeCatalogTaskField(task?.internal_guidance),
+    notes: task?.notes ?? null,
+    status: task?.status || (task?.is_active === false ? "inativa" : "ativa"),
+    is_active: task?.is_active ?? true,
+    created_at: task?.created_at || product?.created_at || nowValue,
+    updated_at: task?.updated_at || product?.updated_at || nowValue,
+    created_by: task?.created_by || "mock",
+  };
+}
+
+function buildCatalogTaskLink(task: any, product: any, index: number) {
+  return {
+    id: `ctl-${task.id}-${product.id}`,
+    product_id: product.id,
+    catalog_task_id: task.id,
+    sort_order: index + 1,
+    is_mandatory: true,
+    phase: null,
+    notes: null,
+    product: {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+    },
+  };
+}
+
+function buildCatalogTaskSeed() {
+  const taskMap = new Map<string, any>();
+  const links: any[] = [];
+
+  (mockProducts as any[]).forEach((product) => {
+    let metadata: any = null;
+    try {
+      metadata =
+        typeof product?.metadata === "string"
+          ? JSON.parse(product.metadata)
+          : product?.metadata || null;
+    } catch {
+      metadata = null;
+    }
+
+    const productTasks = Array.isArray(metadata?.tasks)
+      ? metadata.tasks
+      : Array.isArray(product?.tasks)
+        ? product.tasks
+        : [];
+
+    productTasks.forEach((task: any, index: number) => {
+      const normalized = normalizeCatalogTask(task, product);
+      const existing = taskMap.get(normalized.id);
+      taskMap.set(normalized.id, existing ? { ...existing, ...normalized } : normalized);
+      links.push(buildCatalogTaskLink(taskMap.get(normalized.id), product, index));
+    });
+  });
+
+  return {
+    tasks: Array.from(taskMap.values()),
+    links,
+  };
+}
+
+const catalogTaskSeed = buildCatalogTaskSeed();
+const catalogTasks: any[] = catalogTaskSeed.tasks;
+const catalogTaskLinks: any[] = catalogTaskSeed.links;
+let nextCatalogTaskId = catalogTasks.length + 1;
+let nextCatalogTaskLinkId = catalogTaskLinks.length + 1;
+
+function summarizeCatalogTask(task: any) {
+  if (!task) return null;
+  return {
+    id: task.id,
+    code: task.code,
+    name: task.name,
+    category: task.category,
+    subcategory: task.subcategory,
+    task_type: task.task_type,
+    description: task.description,
+    status: task.status,
+    is_active: task.is_active,
+    created_at: task.created_at,
+    updated_at: task.updated_at,
+  };
+}
+
+function materializeCatalogTaskLink(link: any, includeCatalogTask = false) {
+  const task = catalogTasks.find((item) => item.id === String(link.catalog_task_id));
+  const product = link.product || {
+    id: link.product_id,
+    name: `Produto ${link.product_id}`,
+    category: null,
+  };
+  const materialized: any = {
+    ...link,
+    product,
+  };
+  if (includeCatalogTask) {
+    materialized.catalog_task = summarizeCatalogTask(task);
+  }
+  return materialized;
+}
+
+function materializeCatalogTask(task: any) {
+  const productLinks = catalogTaskLinks
+    .filter((link) => String(link.catalog_task_id) === String(task.id))
+    .map((link) => materializeCatalogTaskLink(link, false));
+
+  return {
+    ...task,
+    product_links: productLinks,
+    _count: { product_links: productLinks.length },
+  };
+}
+
+function materializeCatalogTaskDetail(task: any) {
+  const productLinks = catalogTaskLinks
+    .filter((link) => String(link.catalog_task_id) === String(task.id))
+    .map((link) => materializeCatalogTaskLink(link, true));
+
+  return {
+    ...task,
+    product_links: productLinks,
+    _count: { product_links: productLinks.length },
+  };
+}
+
+function findCatalogTaskIndex(id: string) {
+  return catalogTasks.findIndex((task) => String(task.id) === String(id));
+}
+
+function findCatalogTaskById(id: string) {
+  return catalogTasks.find((task) => String(task.id) === String(id));
+}
+
+function findCatalogTaskLinkIndex(productId: string, catalogTaskId: string) {
+  return catalogTaskLinks.findIndex(
+    (link) =>
+      String(link.product_id) === String(productId) &&
+      String(link.catalog_task_id) === String(catalogTaskId),
+  );
+}
+
 class MockApiClient {
   // ─── Auth ───────────────────────────────────────────────────────────────
   private _currentUser: any = null;
@@ -599,6 +796,18 @@ class MockApiClient {
           String(u.company_id) === String(filters.company_id),
       );
     }
+    if (filters?.account_type) {
+      const requested = String(filters.account_type).toLowerCase();
+      const aliases: Record<string, string[]> = {
+        empresas: ["empresas", "company", "empresa"],
+        agencias: ["agencias", "agency", "agencia"],
+        nomades: ["nomades", "nomad", "nomade"],
+      };
+      const accepted = aliases[requested] ?? [requested];
+      result = result.filter((u) =>
+        accepted.includes(String(u.account_type || "").toLowerCase()),
+      );
+    }
     return { data: result, total: result.length, page: 1, limit: 1000 };
   }
 
@@ -638,6 +847,186 @@ class MockApiClient {
     const idx = users.findIndex((u) => u.id === String(id));
     if (idx !== -1) users.splice(idx, 1);
     return { message: "Deleted" };
+  }
+
+  // ─── Catalog Tasks (Cadastro de Tarefas) ────────────────────────────────
+  async getCatalogTasks(filters?: Record<string, any>) {
+    await delay();
+    const page = Math.max(1, Number(filters?.page ?? 1) || 1);
+    const limit = Math.max(1, Number(filters?.limit ?? 1000) || 1000);
+    let result = catalogTasks.map((task) => materializeCatalogTask(task));
+
+    if (filters?.search) {
+      const q = String(filters.search).toLowerCase();
+      result = result.filter(
+        (task) =>
+          task.name?.toLowerCase().includes(q) ||
+          task.code?.toLowerCase().includes(q) ||
+          task.category?.toLowerCase().includes(q) ||
+          task.description?.toLowerCase().includes(q) ||
+          (task.product_links || []).some(
+            (link: any) =>
+              link.product?.name?.toLowerCase().includes(q) ||
+              String(link.product?.id || "").toLowerCase().includes(q),
+          ),
+      );
+    }
+
+    if (filters?.category) {
+      result = result.filter(
+        (task) => String(task.category) === String(filters.category),
+      );
+    }
+
+    if (filters?.status) {
+      result = result.filter(
+        (task) => String(task.status) === String(filters.status),
+      );
+    }
+
+    if (filters?.is_active !== undefined) {
+      const expected =
+        String(filters.is_active) === "true" || filters.is_active === true;
+      result = result.filter((task) => Boolean(task.is_active) === expected);
+    }
+
+    result = result.sort((a, b) =>
+      String(b.created_at).localeCompare(String(a.created_at)),
+    );
+    const total = result.length;
+    const start = (page - 1) * limit;
+
+    return {
+      data: result.slice(start, start + limit),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async getCatalogTask(id: string) {
+    await delay();
+    const task = findCatalogTaskById(String(id));
+    return task ? materializeCatalogTaskDetail(task) : null;
+  }
+
+  async createCatalogTask(data: any) {
+    await delay();
+    const nextId = String(nextCatalogTaskId++);
+    const task = normalizeCatalogTask({
+      ...data,
+      id: data?.id || `ct-${nextId}`,
+      code: data?.code || `CT-${String(nextCatalogTaskId).padStart(3, "0")}`,
+      created_at: now(),
+      updated_at: now(),
+      created_by: data?.created_by || "mock",
+    });
+    catalogTasks.unshift(task);
+    return materializeCatalogTaskDetail(task);
+  }
+
+  async updateCatalogTask(id: string, data: any) {
+    await delay();
+    const idx = findCatalogTaskIndex(String(id));
+    if (idx === -1) throw new Error("CatalogTask not found");
+    catalogTasks[idx] = normalizeCatalogTask(
+      {
+        ...catalogTasks[idx],
+        ...data,
+        updated_at: now(),
+      },
+      undefined,
+    );
+    return materializeCatalogTaskDetail(catalogTasks[idx]);
+  }
+
+  async updateCatalogTaskStatus(id: string, status: string, is_active?: boolean) {
+    await delay();
+    const idx = findCatalogTaskIndex(String(id));
+    if (idx === -1) throw new Error("CatalogTask not found");
+    catalogTasks[idx] = normalizeCatalogTask(
+      {
+        ...catalogTasks[idx],
+        status,
+        is_active: is_active ?? status === "ativa",
+        updated_at: now(),
+      },
+      undefined,
+    );
+    return materializeCatalogTaskDetail(catalogTasks[idx]);
+  }
+
+  async deleteCatalogTask(id: string) {
+    await delay();
+    const idx = findCatalogTaskIndex(String(id));
+    if (idx !== -1) catalogTasks.splice(idx, 1);
+    for (let i = catalogTaskLinks.length - 1; i >= 0; i -= 1) {
+      if (String(catalogTaskLinks[i].catalog_task_id) === String(id)) {
+        catalogTaskLinks.splice(i, 1);
+      }
+    }
+    return { ok: true };
+  }
+
+  async getCatalogTasksByProduct(productId: string) {
+    await delay();
+    return catalogTaskLinks
+      .filter((link) => String(link.product_id) === String(productId))
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
+      .map((link) => materializeCatalogTaskLink(link, true));
+  }
+
+  async linkCatalogTaskToProduct(data: {
+    product_id: string;
+    catalog_task_id: string;
+    sort_order?: number;
+    is_mandatory?: boolean;
+    phase?: string;
+    notes?: string;
+  }) {
+    await delay();
+    const task = findCatalogTaskById(String(data.catalog_task_id));
+    if (!task) throw new Error("CatalogTask not found");
+
+    const product = products.find((item) => String(item.id) === String(data.product_id));
+    if (!product) throw new Error("Product not found");
+
+    const payload = {
+      id: `ctl-${nextCatalogTaskLinkId++}`,
+      product_id: String(data.product_id),
+      catalog_task_id: String(data.catalog_task_id),
+      sort_order: data.sort_order ?? 0,
+      is_mandatory: data.is_mandatory ?? true,
+      phase: data.phase ?? null,
+      notes: data.notes ?? null,
+      product: {
+        id: product.id,
+        name: product.name,
+        category: product.category,
+      },
+    };
+
+    const existingIdx = findCatalogTaskLinkIndex(
+      payload.product_id,
+      payload.catalog_task_id,
+    );
+    if (existingIdx !== -1) {
+      catalogTaskLinks[existingIdx] = {
+        ...catalogTaskLinks[existingIdx],
+        ...payload,
+      };
+      return materializeCatalogTaskLink(catalogTaskLinks[existingIdx], true);
+    }
+
+    catalogTaskLinks.push(payload);
+    return materializeCatalogTaskLink(payload, true);
+  }
+
+  async unlinkCatalogTask(linkId: string) {
+    await delay();
+    const idx = catalogTaskLinks.findIndex((link) => String(link.id) === String(linkId));
+    if (idx !== -1) catalogTaskLinks.splice(idx, 1);
+    return { ok: true };
   }
 
   // ─── Projects ──────────────────────────────────────────────────────────

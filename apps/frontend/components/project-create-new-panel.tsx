@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import { ButtonLoader } from "@/components/ui/loading";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAccountType } from "@/contexts/account-type-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -188,6 +189,19 @@ const PROJECT_TYPES = [
   "Outro",
 ];
 
+const PROJECT_COMPANY_TYPE_OPTIONS = [
+  { value: "all", label: "Todas as empresas" },
+  { value: "company", label: "Empresa Company" },
+  { value: "agency", label: "Empresa Agency" },
+  { value: "nomad", label: "Empresa Nomad" },
+] as const;
+
+const COMPANY_TYPE_TO_ACCOUNT_TYPE = {
+  company: "empresas",
+  agency: "agencias",
+  nomad: "nomades",
+} as const;
+
 // ── Props ──────────────────────────────────────────────────────────────────────
 interface ProjectCreateNewPanelProps {
   open: boolean;
@@ -197,8 +211,10 @@ interface ProjectCreateNewPanelProps {
   initialData?: Partial<{
     nome: string;
     tipo: string;
+    companyType: string;
     agencia: string;
     cliente: string;
+    clienteEmail: string;
     clienteCnpj: string;
     consultor: string;
     emailConsultor: string;
@@ -242,8 +258,10 @@ interface ProjectCreateNewPanelProps {
 interface FormData {
   nome: string;
   tipo: string;
+  companyType: (typeof PROJECT_COMPANY_TYPE_OPTIONS)[number]["value"];
   agencia: string;
   cliente: string;
+  clienteEmail: string;
   clienteCnpj: string;
   consultor: string;
   emailConsultor: string;
@@ -263,16 +281,18 @@ interface FormErrors {
 const EMPTY_FORM: FormData = {
   nome: "",
   tipo: "",
+  companyType: "all",
   agencia: "",
   cliente: "",
+  clienteEmail: "",
   clienteCnpj: "",
   consultor: "",
   emailConsultor: "",
   dataInicio: "",
   prazo: "",
   orcamento: "",
-  permitePortfolio: false,
-  sincronizadoBitrix: false,
+  permitePortfolio: true,
+  sincronizadoBitrix: true,
   descricao: "",
   status: "draft",
 };
@@ -296,6 +316,8 @@ export function ProjectCreateNewPanel({
   resumeToCheckout,
 }: ProjectCreateNewPanelProps) {
   const { toast } = useToast();
+  const { accountType } = useAccountType();
+  const isAdmin = accountType === "admin";
   const { sidebarWidth, sidebarSettings } = useSidebar();
   const [loading, setLoading] = useState(false);
   /** Tracks which footer action triggered loading, so each button shows its own label. */
@@ -421,11 +443,20 @@ export function ProjectCreateNewPanel({
   const buildFormFromInitial = (): FormData => ({
     ...EMPTY_FORM,
     ...(initialData ?? {}),
+    permitePortfolio:
+      initialData?.permitePortfolio ?? true,
+    sincronizadoBitrix: isAdmin
+      ? initialData?.sincronizadoBitrix ?? true
+      : true,
   });
 
   const [formData, setFormData] = useState<FormData>(buildFormFromInitial);
   const effectiveAgencyName =
     agencyName?.trim() || resolvedCompanyName?.trim() || formData.agencia?.trim() || "";
+  const selectedAccountTypeFilter =
+    formData.companyType === "all"
+      ? null
+      : COMPANY_TYPE_TO_ACCOUNT_TYPE[formData.companyType as "company" | "agency" | "nomad"];
 
   const handleClose = () => {
     if (isClosing) return;
@@ -607,10 +638,20 @@ export function ProjectCreateNewPanel({
   // (each Company.user is both a possible client contact AND consultant).
   useEffect(() => {
     if (!open) return;
+    if (allowCompanySelect && !resolvedCompanyId) {
+      setLocalConsultants([]);
+      setLoadingConsultants(false);
+      return;
+    }
+
     let cancelled = false;
     setLocalConsultants([]);
     const filters: Record<string, string> = { limit: "500" };
     if (resolvedCompanyId) filters.company_id = resolvedCompanyId;
+    if (selectedAccountTypeFilter) {
+      filters.account_type = selectedAccountTypeFilter;
+    }
+
     setLoadingConsultants(true);
     apiClient
       .getUsers(filters)
@@ -633,7 +674,7 @@ export function ProjectCreateNewPanel({
         // (no-company) opens don't leak global users into the list.
         if (resolvedCompanyId) {
           const clientItems: MockClientItem[] = activeUsers.map((u) => ({
-            id: u.id,
+            id: String(u.id),
             name: u.name,
             email: u.email || "",
           }));
@@ -669,10 +710,11 @@ export function ProjectCreateNewPanel({
       .finally(() => {
         if (!cancelled) setLoadingConsultants(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [open, resolvedCompanyId]);
+  }, [open, resolvedCompanyId, allowCompanySelect, selectedAccountTypeFilter]);
 
   // Debounced duplicate-name check against the API
   useEffect(() => {
@@ -736,10 +778,19 @@ export function ProjectCreateNewPanel({
       e.agencia = "Empresa é obrigatória";
     if (!formData.cliente.trim()) e.cliente = "Cliente é obrigatório";
     if (!formData.consultor.trim()) e.consultor = "Consultor é obrigatório";
+    if (formData.clienteEmail.trim() && !/\S+@\S+\.\S+/.test(formData.clienteEmail)) {
+      e.clienteEmail = "E-mail inválido";
+    }
+    if (!isAdmin && !formData.sincronizadoBitrix) {
+      e.sincronizadoBitrix = "Sincronização com Bitrix é obrigatória";
+    }
     if (!formData.emailConsultor.trim()) {
       e.emailConsultor = "E-mail é obrigatório";
     } else if (!/\S+@\S+\.\S+/.test(formData.emailConsultor)) {
       e.emailConsultor = "E-mail inválido";
+    }
+    if (formData.clienteEmail.trim() && !/\S+@\S+\.\S+/.test(formData.clienteEmail)) {
+      e.clienteEmail = "E-mail inválido";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -760,8 +811,10 @@ export function ProjectCreateNewPanel({
     id: Date.now(),
     name: formData.nome,
     type: formData.tipo,
+    companyType: formData.companyType,
     agency: effectiveAgencyName || undefined,
     client: formData.cliente,
+    clientEmail: formData.clienteEmail,
     clientCNPJ: formData.clienteCnpj,
     consultant: formData.consultor,
     consultantEmail: formData.emailConsultor,
@@ -817,6 +870,8 @@ export function ProjectCreateNewPanel({
         title: formData.nome,
         type: formData.tipo || undefined,
         agency: effectiveAgencyName || undefined,
+        company_type:
+          formData.companyType === "all" ? undefined : formData.companyType,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
         start_date: toISODate(formData.dataInicio),
@@ -2039,6 +2094,41 @@ export function ProjectCreateNewPanel({
                         )}
                       </div>
 
+                        {allowCompanySelect && (
+                          <div className="col-span-2 space-y-1">
+                            <Label className="text-xs font-medium text-slate-600">
+                              Tipo de Empresa
+                            </Label>
+                            <SearchableSelect
+                              items={PROJECT_COMPANY_TYPE_OPTIONS.map((option) => ({
+                                value: option.value,
+                                label: option.label,
+                              }))}
+                              value={formData.companyType}
+                              onValueChange={(v) => {
+                                const nextType = v as FormData["companyType"];
+                                updateField("companyType", nextType);
+                                setResolvedCompanyId(null);
+                                setResolvedCompanyName("");
+                                updateField("agencia", "");
+                                updateField("cliente", "");
+                                updateField("clienteCnpj", "");
+                                updateField("consultor", "");
+                                updateField("emailConsultor", "");
+                                setLocalClients([]);
+                                setLocalConsultants([]);
+                              }}
+                              placeholder="Todas as empresas"
+                              searchPlaceholder="Filtrar tipo..."
+                              emptyMessage="Nenhum tipo encontrado."
+                              className="h-8 text-xs"
+                            />
+                            <p className="text-[11px] text-slate-400">
+                              O tipo filtra os responsáveis exibidos para o projeto.
+                            </p>
+                          </div>
+                        )}
+
                       {/* Empresa */}
                       <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">
@@ -2109,6 +2199,119 @@ export function ProjectCreateNewPanel({
                         )}
                       </div>
 
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-xs font-medium text-slate-600">
+                          Consultor Responsável *
+                        </Label>
+                        <div className="flex gap-1.5">
+                          <div className="flex-1 min-w-0">
+                            {allowCompanySelect && !resolvedCompanyId ? (
+                              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400">
+                                Selecione uma empresa para carregar os responsáveis
+                              </div>
+                            ) : loadingConsultants ? (
+                              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Carregando consultores...
+                              </div>
+                            ) : localConsultants.length > 0 ? (
+                              <SearchableSelect
+                                items={localConsultants.map((u) => ({
+                                  value: u.name,
+                                  label: u.name,
+                                  sublabel: u.role || u.email,
+                                }))}
+                                value={formData.consultor}
+                                onValueChange={(v) => {
+                                  const u = localConsultants.find(
+                                    (u) => u.name === v,
+                                  );
+                                  updateField("consultor", v);
+                                  if (u?.email) {
+                                    updateField("emailConsultor", u.email);
+                                  }
+                                }}
+                                placeholder="Pesquisar consultor..."
+                                searchPlaceholder="Digite para buscar..."
+                                emptyMessage="Nenhum consultor encontrado."
+                                className={cn(
+                                  "h-8 text-xs",
+                                  errors.consultor && "border-red-400",
+                                )}
+                              />
+                            ) : (
+                              <div className="relative">
+                                <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                <Input
+                                  placeholder={
+                                    resolvedCompanyId
+                                      ? "Nenhum consultor cadastrado nesta empresa"
+                                      : "Nome do consultor"
+                                  }
+                                  value={formData.consultor}
+                                  onChange={(e) =>
+                                    updateField("consultor", e.target.value)
+                                  }
+                                  className={cn(
+                                    "h-8 text-xs pl-8",
+                                    errors.consultor && "border-red-400",
+                                  )}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            title="Adicionar novo consultor"
+                            onClick={() => setShowCreateConsultant(true)}
+                            className="h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 hover:border-indigo-300 text-slate-500 hover:text-indigo-600 transition-colors"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {resolvedCompanyId &&
+                          !loadingConsultants &&
+                          localConsultants.length === 0 && (
+                            <p className="text-xs text-amber-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                              Nenhum consultor ativo nesta empresa. Use o botão{" "}
+                              <UserPlus className="h-3 w-3 inline mx-0.5" /> para
+                              cadastrar.
+                            </p>
+                          )}
+                        {errors.consultor && (
+                          <p className="text-xs text-red-500">
+                            {errors.consultor}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-xs font-medium text-slate-600">
+                          E-mail do Consultor *
+                        </Label>
+                        <div className="relative">
+                          <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                          <Input
+                            type="email"
+                            placeholder="consultor@agencia.com"
+                            value={formData.emailConsultor}
+                            onChange={(e) =>
+                              updateField("emailConsultor", e.target.value)
+                            }
+                            className={cn(
+                              "h-8 text-xs pl-8",
+                              errors.emailConsultor && "border-red-400",
+                            )}
+                          />
+                        </div>
+                        {errors.emailConsultor && (
+                          <p className="text-xs text-red-500">
+                            {errors.emailConsultor}
+                          </p>
+                        )}
+                      </div>
+
                       {/* Cliente */}
                       <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">
@@ -2129,8 +2332,9 @@ export function ProjectCreateNewPanel({
                                     (c) => c.name === v,
                                   );
                                   updateField("cliente", v);
-                                  if (cl?.cnpj)
+                                  if (cl?.cnpj) {
                                     updateField("clienteCnpj", cl.cnpj);
+                                  }
                                 }}
                                 placeholder="Pesquisar cliente..."
                                 searchPlaceholder="Digite para buscar..."
@@ -2219,173 +2423,67 @@ export function ProjectCreateNewPanel({
                         )}
                       </div>
 
-                      {/* CNPJ do cliente */}
-                      <div className="col-span-2 space-y-1">
-                        <Label className="text-xs font-medium text-slate-600">
-                          CNPJ do Cliente
-                        </Label>
-                        <Input
-                          placeholder="00.000.000/0001-00"
-                          value={formData.clienteCnpj}
-                          onChange={(e) =>
-                            updateField("clienteCnpj", e.target.value)
-                          }
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ── SEÇÃO 2: RESPONSÁVEL ── */}
-              <AccordionItem
-                value="responsavel"
-                className={cn(
-                  "border rounded-lg overflow-hidden",
-                  sectionErrors.responsavel > 0
-                    ? "border-red-300"
-                    : "border-slate-200",
-                )}
-              >
-                <AccordionTrigger
-                  className={cn(
-                    "px-3 py-2 text-xs font-semibold",
-                    sectionErrors.responsavel > 0
-                      ? "bg-red-50 hover:bg-red-100"
-                      : "bg-white hover:bg-slate-50",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-700">2</Badge>
-                    Responsável
-                    {sectionErrors.responsavel > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                        {sectionErrors.responsavel}
-                      </span>
-                    )}
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3 grid grid-cols-2 gap-3">
-                    <div className="col-span-2 space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        Consultor Responsável *
-                      </Label>
-                      <div className="flex gap-1.5">
-                        <div className="flex-1 min-w-0">
-                          {loadingConsultants ? (
-                            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Carregando consultores...
-                            </div>
-                          ) : localConsultants.length > 0 ? (
-                            <SearchableSelect
-                              items={localConsultants.map((u) => ({
-                                value: u.name,
-                                label: u.name,
-                                sublabel: u.role || u.email,
-                              }))}
-                              value={formData.consultor}
-                              onValueChange={(v) => {
-                                const u = localConsultants.find(
-                                  (u) => u.name === v,
-                                );
-                                updateField("consultor", v);
-                                if (u?.email)
-                                  updateField("emailConsultor", u.email);
-                              }}
-                              placeholder="Pesquisar consultor..."
-                              searchPlaceholder="Digite para buscar..."
-                              emptyMessage="Nenhum consultor encontrado."
+                      {/* E-mail e CNPJ do cliente */}
+                      <div className="col-span-2 space-y-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-600">
+                            E-mail do Cliente <span className="text-slate-400">(opcional)</span>
+                          </Label>
+                          <div className="relative">
+                            <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                            <Input
+                              type="email"
+                              placeholder="cliente@empresa.com"
+                              value={formData.clienteEmail}
+                              onChange={(e) =>
+                                updateField("clienteEmail", e.target.value)
+                              }
                               className={cn(
-                                "h-8 text-xs",
-                                errors.consultor && "border-red-400",
+                                "h-8 text-xs pl-8",
+                                errors.clienteEmail && "border-red-400",
                               )}
                             />
-                          ) : (
-                            <div className="relative">
-                              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                              <Input
-                                placeholder={
-                                  resolvedCompanyId
-                                    ? "Nenhum consultor cadastrado nesta empresa"
-                                    : "Nome do consultor"
-                                }
-                                value={formData.consultor}
-                                onChange={(e) =>
-                                  updateField("consultor", e.target.value)
-                                }
-                                className={cn(
-                                  "h-8 text-xs pl-8",
-                                  errors.consultor && "border-red-400",
-                                )}
-                              />
-                            </div>
+                          </div>
+                          <p className="text-[11px] text-amber-600">
+                            Não obrigatório no momento.
+                          </p>
+                          {errors.clienteEmail && (
+                            <p className="text-xs text-red-500">
+                              {errors.clienteEmail}
+                            </p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          title="Adicionar novo consultor"
-                          onClick={() => setShowCreateConsultant(true)}
-                          className="h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 hover:border-indigo-300 text-slate-500 hover:text-indigo-600 transition-colors"
-                        >
-                          <UserPlus className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {resolvedCompanyId &&
-                        !loadingConsultants &&
-                        localConsultants.length === 0 && (
-                          <p className="text-xs text-amber-600 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                            Nenhum consultor ativo nesta empresa. Use o botão{" "}
-                            <UserPlus className="h-3 w-3 inline mx-0.5" /> para
-                            cadastrar.
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-600">
+                            CNPJ do Cliente <span className="text-slate-400">(opcional)</span>
+                          </Label>
+                          <Input
+                            placeholder="00.000.000/0001-00"
+                            value={formData.clienteCnpj}
+                            onChange={(e) =>
+                              updateField("clienteCnpj", e.target.value)
+                            }
+                            className="h-8 text-xs"
+                          />
+                          <p className="text-[11px] text-amber-600">
+                            Não obrigatório no momento.
                           </p>
-                        )}
-                      {errors.consultor && (
-                        <p className="text-xs text-red-500">
-                          {errors.consultor}
-                        </p>
-                      )}
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        E-mail do Consultor *
-                      </Label>
-                      <div className="relative">
-                        <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                        <Input
-                          type="email"
-                          placeholder="consultor@agencia.com"
-                          value={formData.emailConsultor}
-                          onChange={(e) =>
-                            updateField("emailConsultor", e.target.value)
-                          }
-                          className={cn(
-                            "h-8 text-xs pl-8",
-                            errors.emailConsultor && "border-red-400",
-                          )}
-                        />
+                        </div>
                       </div>
-                      {errors.emailConsultor && (
-                        <p className="text-xs text-red-500">
-                          {errors.emailConsultor}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* ── SEÇÃO 3: DATAS ── */}
+              {/* ── SEÇÃO 2: DATAS ── */}
               <AccordionItem
                 value="datas"
                 className="border border-slate-200 rounded-lg overflow-hidden"
               >
                 <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-purple-100 text-purple-700">3</Badge>
+                    <Badge className="bg-purple-100 text-purple-700">2</Badge>
                     Datas
                   </div>
                 </AccordionTrigger>
@@ -2479,7 +2577,7 @@ export function ProjectCreateNewPanel({
                             Permite Portfólio
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Exibir em portfólio público
+                            Exibir em portfólio Allka
                           </p>
                         </div>
                         <button
@@ -2513,22 +2611,27 @@ export function ProjectCreateNewPanel({
                             Sincronizar Bitrix
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Integrar com Bitrix24
+                            {isAdmin
+                              ? "Ativa por padrão"
+                              : "Já vem ativa"}
                           </p>
                         </div>
                         <button
                           type="button"
+                          disabled={!isAdmin}
                           onClick={() =>
+                            isAdmin &&
                             updateField(
                               "sincronizadoBitrix",
                               !formData.sincronizadoBitrix,
                             )
                           }
                           className={cn(
-                            "relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0",
+                            "relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0 disabled:cursor-not-allowed",
                             formData.sincronizadoBitrix
                               ? "bg-blue-600"
                               : "bg-slate-300",
+                            !isAdmin && "opacity-80",
                           )}
                         >
                           <div
@@ -2542,6 +2645,17 @@ export function ProjectCreateNewPanel({
                         </button>
                       </label>
                     </div>
+
+                    {!isAdmin && (
+                      <p className="text-[11px] text-slate-500">
+                        A sincronização com Bitrix já fica ativa.
+                      </p>
+                    )}
+                    {errors.sincronizadoBitrix && (
+                      <p className="text-xs text-red-500">
+                        {errors.sincronizadoBitrix}
+                      </p>
+                    )}
 
                     {/* Descrição */}
                     <div className="space-y-1">
@@ -4222,6 +4336,8 @@ export function ProjectCreateNewPanel({
           // refresh local consultants list
           const filters: Record<string, string> = { limit: "500" };
           if (resolvedCompanyId) filters.company_id = String(resolvedCompanyId);
+            if (selectedAccountTypeFilter)
+              filters.account_type = selectedAccountTypeFilter;
           apiClient
             .getUsers(filters)
             .then((res: any) => {

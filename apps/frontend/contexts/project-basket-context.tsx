@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAccountType } from "@/contexts/account-type-context";
+import {
+  getCatalogBasketStorageKey,
+  resolveCatalogIdentity,
+} from "@/lib/catalog-access";
 
-const BASKET_KEY = "allka_catalog_cart";
+type BasketStoragePayload = {
+  items: BasketItem[];
+  projectId: string | null;
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,9 +44,11 @@ export interface BasketItem {
 
 interface ProjectBasketContextType {
   items: BasketItem[];
+  projectId: string | null;
   /** Controls visibility of the basket side panel */
   isOpen: boolean;
   setOpen: (v: boolean) => void;
+  setProjectAssociation: (projectId: string | null) => void;
   addItem: (product: any) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
@@ -61,6 +71,35 @@ function makeItemId(productId: string, variationId?: string) {
   return variationId ? `${productId}--${variationId}` : productId;
 }
 
+function readBasketState(storageKey: string): BasketStoragePayload {
+  if (typeof window === "undefined") return { items: [], projectId: null };
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    if (!saved) return { items: [], projectId: null };
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed)) {
+      return { items: parsed as BasketItem[], projectId: null };
+    }
+    if (parsed && Array.isArray(parsed.items)) {
+      return {
+        items: parsed.items as BasketItem[],
+        projectId:
+          parsed.projectId !== undefined && parsed.projectId !== null
+            ? String(parsed.projectId)
+            : null,
+      };
+    }
+  } catch {}
+  return { items: [], projectId: null };
+}
+
+function writeBasketState(storageKey: string, state: BasketStoragePayload) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(state));
+  } catch {}
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ProjectBasketProvider({
@@ -68,26 +107,27 @@ export function ProjectBasketProvider({
 }: {
   children: React.ReactNode;
 }) {
-  // Synchronous lazy initializer — reads localStorage BEFORE the first render,
-  // so the persist effect never sees a stale empty array on mount.
-  const [items, setItems] = useState<BasketItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(BASKET_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {
-      // ignore malformed data
-    }
-    return [];
-  });
+  const { accountType } = useAccountType();
+  const identity = resolveCatalogIdentity(accountType);
+  const storageKey = getCatalogBasketStorageKey(identity);
+
+  const initialState = readBasketState(storageKey);
+  const [items, setItems] = useState<BasketItem[]>(initialState.items);
+  const [projectId, setProjectId] = useState<string | null>(
+    initialState.projectId,
+  );
   const [isOpen, setOpen] = useState(false);
+
+  useEffect(() => {
+    const next = readBasketState(storageKey);
+    setItems(next.items);
+    setProjectId(next.projectId);
+  }, [storageKey]);
 
   // Persist to localStorage on every change
   useEffect(() => {
-    localStorage.setItem(BASKET_KEY, JSON.stringify(items));
-  }, [items]);
+    writeBasketState(storageKey, { items, projectId });
+  }, [storageKey, items, projectId]);
 
   const addItem = (product: any) => {
     const variation = product.selectedVariation ?? null;
@@ -166,7 +206,14 @@ export function ProjectBasketProvider({
     );
   };
 
-  const clearBasket = () => setItems([]);
+  const setProjectAssociation = (nextProjectId: string | null) => {
+    setProjectId(nextProjectId ? String(nextProjectId) : null);
+  };
+
+  const clearBasket = () => {
+    setItems([]);
+    setProjectId(null);
+  };
 
   const getTotalItems = () => items.reduce((s, i) => s + i.quantity, 0);
   const getTotalPrice = () =>
@@ -186,8 +233,10 @@ export function ProjectBasketProvider({
     <ProjectBasketContext.Provider
       value={{
         items,
+        projectId,
         isOpen,
         setOpen,
+        setProjectAssociation,
         addItem,
         removeItem,
         updateQuantity,

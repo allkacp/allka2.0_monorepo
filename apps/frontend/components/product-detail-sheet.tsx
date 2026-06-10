@@ -409,7 +409,7 @@ export function ProductDetailSheet({
         ref={drawerRef}
         data-slot="sheet-content"
         data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-border z-50 shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-white/40 z-50 shadow-[0_30px_90px_rgba(15,23,42,0.28)] overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         {/* Botão fechar absoluto — fica branco sobre o header escuro */}
@@ -428,15 +428,25 @@ export function ProductDetailSheet({
             HEADER — compacto: info (esq) | highlights (dir)
         ══════════════════════════════════════════════════════════════ */}
         <div
-          className="shrink-0 text-white px-6 pt-4 pb-4 relative"
+          className="shrink-0 text-white px-6 pt-5 pb-5 relative overflow-hidden"
           style={{
             background:
-              "var(--app-brand-header, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+              "var(--app-brand-header, linear-gradient(135deg, #050816 0%, #1a2a6f 42%, #c81a7f 100%))",
           }}
         >
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 -right-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-fuchsia-400/15 blur-3xl" />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-white/15" />
+          </div>
           <div className="flex flex-col lg:flex-row lg:items-center lg:gap-6">
             {/* ── Coluna esquerda: identificação + chips ── */}
             <div className="flex-1 min-w-0 pr-10 lg:pr-0">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100/90 backdrop-blur-md">
+                <Sparkles className="h-3 w-3 text-fuchsia-200" />
+                Detalhes premium
+              </div>
+
               {/* Linha 1: categoria + chip de variações */}
               <div className="flex items-center gap-2 mb-1">
                 <Badge className="bg-white/10 text-white/90 border-white/20 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm shrink-0">
@@ -452,7 +462,7 @@ export function ProductDetailSheet({
               </div>
 
               {/* Nome */}
-              <h2 className="text-lg sm:text-xl font-extrabold leading-tight max-w-2xl">
+              <h2 className="text-xl sm:text-2xl font-extrabold leading-tight max-w-2xl drop-shadow-sm">
                 {product.name}
               </h2>
 
@@ -1169,15 +1179,19 @@ export function ProductDetailSheet({
           >
             {/* Scrollable: preço + variações */}
             <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 bg-linear-to-b from-slate-50 via-white to-slate-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
                 {/* ── Bloco de preço — segue tema do sidebar ── */}
                 <div
-                  className="rounded-2xl p-5 text-white shadow-lg"
+                  className="relative overflow-hidden rounded-3xl p-5 text-white shadow-[0_18px_50px_rgba(26,42,111,0.28)]"
                   style={{
                     background:
-                      "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+                      "var(--app-brand-gradient, linear-gradient(135deg, #050816 0%, #1a2a6f 45%, #c81a7f 100%))",
                   }}
                 >
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute -top-10 right-0 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
+                    <div className="absolute -bottom-12 left-8 h-28 w-28 rounded-full bg-fuchsia-300/15 blur-2xl" />
+                  </div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-2">
                     {hasVariations && !selectedVariation
                       ? "A partir de"
@@ -1407,7 +1421,7 @@ export function ProductDetailSheet({
                   size="lg"
                   disabled={!canAdd}
                   className={cn(
-                    "w-full gap-2.5 font-bold text-sm border-0 shadow-sm transition-all",
+                    "w-full gap-2.5 rounded-2xl font-bold text-sm border-0 shadow-lg transition-all",
                     "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none",
                     isSelected
                       ? "bg-emerald-600 hover:bg-emerald-700 text-white"
