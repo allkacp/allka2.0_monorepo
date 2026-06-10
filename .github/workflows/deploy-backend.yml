@@ -27,7 +27,6 @@ env:
   API_DOMAIN: api.allka.store
   VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.allka.store/api' }}
   VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
-  VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
   MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
   RUN_RESET_USERS_PASSWORD: ${{ vars.RUN_RESET_USERS_PASSWORD || 'false' }}
@@ -49,7 +48,6 @@ jobs:
           short_sha="${GITHUB_SHA::7}"
           echo "backend_image=${REGISTRY}/${repo}/backend:${short_sha}" >> "$GITHUB_OUTPUT"
           echo "backend_latest=${REGISTRY}/${repo}/backend:dev" >> "$GITHUB_OUTPUT"
-          # Frontend usa sempre a tag :dev existente no GHCR
           echo "frontend_image=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -79,14 +77,18 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
           : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+          : "${GHCR_PAT:?Set the GHCR_PAT secret}"
           : "${MYSQL_PASSWORD:?Set the MYSQL_PASSWORD secret}"
           : "${MYSQL_ROOT_PASSWORD:?Set the MYSQL_ROOT_PASSWORD secret}"
           : "${JWT_SECRET:?Set the JWT_SECRET secret}"
@@ -127,7 +129,6 @@ jobs:
       - name: Configure SSH
         shell: bash
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
@@ -142,7 +143,8 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(
@@ -178,13 +180,22 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: allkacp
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
-          SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          SCP_OPTS=(-i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          printf '%s' "$GHCR_TOKEN" | ssh "${SSH_OPTS[@]}" "$remote" \
+          SSH_OPTS=(
+            -i "$HOME/.ssh/allka_deploy_key"
+            -p "$VPS_SSH_PORT"
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=2
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+          printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
@@ -200,8 +211,18 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
-          SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          SSH_OPTS=(
+            -i "$HOME/.ssh/allka_deploy_key"
+            -p "$VPS_SSH_PORT"
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=2
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml run --rm --no-deps backend npm run reset:users-password"
