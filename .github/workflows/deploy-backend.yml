@@ -146,6 +146,9 @@ jobs:
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
@@ -165,10 +168,17 @@ jobs:
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
           )
-          if ! ssh "${SSH_OPTS[@]}" "$remote" "true"; then
-            echo "::error::SSH inacessível em ${VPS_HOST}:${VPS_SSH_PORT}. Verifique VPS_HOST, VPS_SSH_PORT, firewall e se o serviço SSH está ativo no VPS."
-            exit 1
-          fi
+          for i in 1 2 3; do
+            if ssh "${SSH_OPTS[@]}" "$remote" "true"; then
+              break
+            fi
+            echo "Tentativa SSH $i falhou. Aguardando 10s..."
+            sleep 10
+            if [ "$i" = "3" ]; then
+              echo "::error::SSH inacessível em ${VPS_HOST}:${VPS_SSH_PORT}. Verifique VPS_HOST, VPS_SSH_PORT, firewall e se o serviço SSH está ativo no VPS."
+              exit 1
+            fi
+          done
           ssh "${SSH_OPTS[@]}" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
           scp "${SCP_OPTS[@]}" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
           scp "${SCP_OPTS[@]}" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
@@ -183,8 +193,11 @@ jobs:
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: allkacp
+          GHCR_USERNAME: ${{ github.repository_owner }}
         run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
@@ -214,6 +227,9 @@ jobs:
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
