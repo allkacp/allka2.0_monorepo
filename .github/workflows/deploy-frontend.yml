@@ -165,13 +165,13 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: allkacp
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
           remote="${VPS_USER}@${VPS_HOST}"
           SSH_OPTS=(-i ~/.ssh/allka_deploy_key -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           SCP_OPTS=(-i ~/.ssh/allka_deploy_key -P "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          printf '%s' "$GHCR_TOKEN" | ssh "${SSH_OPTS[@]}" "$remote" \
+          printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
