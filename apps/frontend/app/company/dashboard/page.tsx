@@ -712,13 +712,20 @@ type ShareConfig = {
   expiry?: Date;
 };
 
-const generatePublicToken = (config: ShareConfig): string => {
+const generatePublicToken = (
+  config: ShareConfig,
+  extras?: { profile?: string; period?: object; allowFilterChanges?: boolean },
+): string => {
   const payload = {
     target: config.target,
     permission: config.permission,
     pin: config.pin ?? null,
     expiry: config.expiry ? config.expiry.toISOString() : null,
     issued: new Date().toISOString(),
+    ...(extras?.profile ? { profile: extras.profile } : {}),
+    ...(extras?.period ? { period: extras.period } : {}),
+    ...(extras?.allowFilterChanges !== undefined ? { allowFilterChanges: extras.allowFilterChanges } : {}),
+    v: 2,
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 };
@@ -1643,6 +1650,7 @@ export default function AdminDashboardPage() {
   const [shareExpiry, setShareExpiry] = useState("");
   const [generatedShareLink, setGeneratedShareLink] = useState("");
   const [shareActiveTab, setShareActiveTab] = useState("permission");
+  const [shareAllowFilterChanges, setShareAllowFilterChanges] = useState(false);
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Historical modal states ──────────────────────────────────────────────────
@@ -1762,6 +1770,7 @@ export default function AdminDashboardPage() {
     setShareExpiry("");
     setGeneratedShareLink("");
     setShareActiveTab("permission");
+    setShareAllowFilterChanges(false);
     setShowPublicShareDialog(true);
   };
 
@@ -1779,6 +1788,7 @@ export default function AdminDashboardPage() {
     setShareExpiry("");
     setGeneratedShareLink("");
     setShareActiveTab("permission");
+    setShareAllowFilterChanges(false);
     setShowPublicShareDialog(true);
   };
 
@@ -1791,7 +1801,16 @@ export default function AdminDashboardPage() {
       expiry:
         shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
     };
-    const token = generatePublicToken(config);
+    const token = generatePublicToken(config, {
+      profile: "company",
+      period: {
+        type: globalPeriod.type,
+        from: globalPeriod.from?.toISOString(),
+        to: globalPeriod.to?.toISOString(),
+        label: globalPeriod.label,
+      },
+      allowFilterChanges: shareAllowFilterChanges,
+    });
     setGeneratedShareLink(`${window.location.origin}/dashboard/share/${token}`);
   };
 
@@ -11599,6 +11618,27 @@ export default function AdminDashboardPage() {
                       </p>
                     </div>
                   </button>
+                </div>
+                {/* Period being shared */}
+                <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs border border-border/50 flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Este link abrirá com:</span>
+                  <strong className="text-foreground">{globalPeriod.label}</strong>
+                </div>
+                {/* Allow filter changes */}
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium">Permitir alterar filtros</p>
+                    <p className="text-xs text-muted-foreground">
+                      Quem receber pode mudar período e datas
+                    </p>
+                  </div>
+                  <Switch
+                    checked={shareAllowFilterChanges}
+                    onCheckedChange={(v) => {
+                      setShareAllowFilterChanges(v);
+                      setGeneratedShareLink("");
+                    }}
+                  />
                 </div>
               </TabsContent>
 

@@ -30,6 +30,7 @@ import systemAlertsRouter from "./routes/system-alerts";
 import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
+import shareRouter from "./routes/share";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -138,6 +139,8 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/lider", liderRouter);
 // Habilidades — nomad skills and leader area CRUD
 app.use("/api/habilidades", habilidadesRouter);
+// Share links — public endpoint (no auth required)
+app.use("/api/share", shareRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 
