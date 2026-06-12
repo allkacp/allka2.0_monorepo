@@ -53,8 +53,9 @@ export const generateShareData = (filters?: FilterState) => {
   revenue: {
     total: n(270800),
     growth: pct(12.4),
-    recurring: n(198400),
-    oneTime: n(72400),
+    creditPlan: n(114000),
+    recurring: n(97600),
+    oneTime: n(59200),
     projected: n(310000),
   },
   mrr: {
@@ -328,9 +329,9 @@ export function WidgetRevenue({ data }: { data: ShareData }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <KpiCard label="Receita Total" value={`R$ ${d.total.toLocaleString("pt-BR")}`} icon={DollarSign} trend={d.growth} color="success" />
-      <KpiCard label="Receita Recorrente" value={`R$ ${d.recurring.toLocaleString("pt-BR")}`} icon={TrendingUp} color="primary" />
-      <KpiCard label="Receita Avulsa" value={`R$ ${d.oneTime.toLocaleString("pt-BR")}`} icon={CreditCard} color="info" />
-      <KpiCard label="Projeção" value={`R$ ${d.projected.toLocaleString("pt-BR")}`} icon={Target} color="purple" />
+      <KpiCard label="Plano de Crédito" value={`R$ ${(d.creditPlan ?? 0).toLocaleString("pt-BR")}`} icon={CreditCard} color="info" />
+      <KpiCard label="Recorrente" value={`R$ ${d.recurring.toLocaleString("pt-BR")}`} icon={TrendingUp} color="primary" />
+      <KpiCard label="Avulso" value={`R$ ${d.oneTime.toLocaleString("pt-BR")}`} icon={Target} color="warning" />
     </div>
   );
 }

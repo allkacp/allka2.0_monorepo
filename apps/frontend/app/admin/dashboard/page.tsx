@@ -106,6 +106,7 @@ import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
+import { apiClient } from "@/lib/api-client";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (from?: Date, to?: Date): any => {
   const now = new Date();
@@ -889,6 +890,15 @@ export default function AdminDashboardPage() {
     [],
   );
 
+  // Real revenue data from API — replaces generateDashboardData().revenue when loaded.
+  const [revenueData, setRevenueData] = useState<{
+    total: number; creditPlan: number; recurring: number; oneTime: number;
+    projected: number; growth: number;
+    totalGrowth: number; creditPlanGrowth: number; recurringGrowth: number; oneTimeGrowth: number;
+  } | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [widgetData, setWidgetData] = useState<any>(null);
+
   useEffect(() => {
     const savedPeriod = localStorage.getItem("dashboard_global_period");
     if (savedPeriod) {
@@ -1003,23 +1013,24 @@ export default function AdminDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalPeriod.type, globalPeriod.from, globalPeriod.to, historicalData]);
 
-  // Convenience aliases used throughout widget JSX
+  // Convenience aliases used throughout widget JSX — overlay real API data when available
+  const wd = widgetData;
   const rv = dashboardData.revenue;
-  const apW = dashboardData.activeProjects;
-  const cpW = dashboardData.creditPlans;
-  const mrrW = dashboardData.mrr;
-  const churnW = dashboardData.churn;
-  const atW = dashboardData.averageTicket;
-  const ltvW = dashboardData.ltv;
-  const paW = dashboardData.platformActivities;
-  const nmW = dashboardData.nomads;
+  const apW = wd ? { ...dashboardData.activeProjects, ...wd.activeProjects } : dashboardData.activeProjects;
+  const cpW = wd ? { ...dashboardData.creditPlans, ...wd.creditPlans } : dashboardData.creditPlans;
+  const mrrW = wd ? { ...dashboardData.mrr, ...wd.mrr } : dashboardData.mrr;
+  const churnW = wd ? { ...dashboardData.churn, ...wd.churn } : dashboardData.churn;
+  const atW = wd ? { ...dashboardData.averageTicket, ...wd.averageTicket } : dashboardData.averageTicket;
+  const ltvW = wd ? { ...dashboardData.ltv, ...wd.ltv } : dashboardData.ltv;
+  const paW = wd ? { ...dashboardData.platformActivities, ...wd.platformActivities } : dashboardData.platformActivities;
+  const nmW = wd ? { ...dashboardData.nomads, ...wd.nomads } : dashboardData.nomads;
   const agRankW = dashboardData.agenciesRanking;
-  const soW = dashboardData.statusOverview;
-  const arW = dashboardData.accountsReceivable;
-  const tasksW = dashboardData.tasks;
+  const soW = wd ? { ...dashboardData.statusOverview, ...wd.statusOverview } : dashboardData.statusOverview;
+  const arW = wd ? { ...dashboardData.accountsReceivable, ...wd.accountsReceivable } : dashboardData.accountsReceivable;
+  const tasksW = wd ? { ...dashboardData.tasks, ...wd.tasks } : dashboardData.tasks;
   const niW = dashboardData.nomadsIndicators;
   const auW = dashboardData.activeUsers;
-  const ppW = dashboardData.partnerProgram;
+  const ppW = wd ? { ...dashboardData.partnerProgram, ...wd.partnerProgram } : dashboardData.partnerProgram;
 
   const periodOptions = [
     { type: "today" as const, label: "Hoje" },
@@ -1192,13 +1203,39 @@ export default function AdminDashboardPage() {
         label: override.customPeriod.label,
       };
     }
-    // Fallback to global period if no override or global mode is selected
-    return {
-      from: globalPeriod.from || new Date(0), // Use a default if from is undefined
-      to: globalPeriod.to || new Date(), // Use a default if to is undefined
-      label: globalPeriod.label,
-    };
+    // Fallback to global period — derive actual from/to from period type
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
+    );
+    return { from, to, label: globalPeriod.label };
   };
+
+  // Fetch real revenue data whenever the revenue widget's effective period changes.
+  useEffect(() => {
+    if (typeof apiClient.getRevenue !== "function") return;
+    let cancelled = false;
+    const { from, to } = getWidgetPeriod("revenue");
+    setRevenueLoading(true);
+    apiClient
+      .getRevenue(from.toISOString(), to.toISOString())
+      .then((d: any) => { if (!cancelled) { setRevenueData(d); setRevenueLoading(false); } })
+      .catch(() => { if (!cancelled) { setRevenueLoading(false); } });
+    return () => { cancelled = true; };
+  }, [globalPeriod, widgetPeriods]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch real data for all widgets whenever the global period changes.
+  useEffect(() => {
+    if (typeof (apiClient as any).getDashboardWidgets !== "function") return;
+    let cancelled = false;
+    const { from, to } = getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+    (apiClient as any)
+      .getDashboardWidgets(from, to)
+      .then((d: any) => { if (!cancelled) setWidgetData(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [globalPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setWidgetCustomPeriod = (widgetId: string, period: string) => {
     const now = new Date();
@@ -1906,12 +1943,17 @@ export default function AdminDashboardPage() {
       expiry:
         shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
     };
+    // Compute the actual date range used by the widget (or global period for dashboards)
+    const effectivePeriod =
+      shareTarget.type === "widget"
+        ? getWidgetPeriod(shareTarget.id)
+        : getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
     const token = generatePublicToken(config, {
       profile: "admin",
       period: {
         type: globalPeriod.type,
-        from: globalPeriod.from?.toISOString(),
-        to: globalPeriod.to?.toISOString(),
+        from: effectivePeriod.from.toISOString(),
+        to: effectivePeriod.to.toISOString(),
         label: globalPeriod.label,
       },
       allowFilterChanges: shareAllowFilterChanges,
@@ -8172,10 +8214,24 @@ export default function AdminDashboardPage() {
 
       case "revenue": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wRvW = generateDashboardData(
+        const _genRevenue = generateDashboardData(
           effectivePeriod.from,
           effectivePeriod.to,
         ).revenue;
+        // Use real API data when available; fall back to generated while loading or on error.
+        const wRvW = revenueData
+          ? {
+              ..._genRevenue,
+              total: revenueData.total,
+              totalGrowth: revenueData.totalGrowth ?? 0,
+              creditPlan: revenueData.creditPlan,
+              creditPlanGrowth: revenueData.creditPlanGrowth ?? 0,
+              recurring: revenueData.recurring,
+              recurringGrowth: revenueData.recurringGrowth ?? 0,
+              oneTime: revenueData.oneTime,
+              oneTimeGrowth: revenueData.oneTimeGrowth ?? 0,
+            }
+          : _genRevenue;
         return (
           <div
             key={widget.id}
@@ -8205,9 +8261,14 @@ export default function AdminDashboardPage() {
                     <DollarSign className="h-4 w-4 text-success" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      Receita
-                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base font-semibold leading-tight">
+                        Receita
+                      </CardTitle>
+                      {revenueLoading && (
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Total e por tipo de plano
                     </p>
@@ -8386,10 +8447,8 @@ export default function AdminDashboardPage() {
 
       case "activeProjectsWidget": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wApW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).activeProjects;
+        const _mockApW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).activeProjects;
+        const wApW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockApW, ...wd.activeProjects } : _mockApW;
         const apTypes = [
           {
             label: "Agências",
@@ -8770,10 +8829,8 @@ export default function AdminDashboardPage() {
 
       case "mrr": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wMrrW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).mrr;
+        const _mockMrrW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).mrr;
+        const wMrrW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockMrrW, ...wd.mrr } : _mockMrrW;
         const mrrComposition = [
           {
             label: "New",
@@ -9026,10 +9083,8 @@ export default function AdminDashboardPage() {
 
       case "churn": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wChW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).churn;
+        const _mockChW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).churn;
+        const wChW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockChW, ...wd.churn } : _mockChW;
         return (
           <div
             key={widget.id}
@@ -9206,10 +9261,8 @@ export default function AdminDashboardPage() {
 
       case "averageTicket": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wAtW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).averageTicket;
+        const _mockAtW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).averageTicket;
+        const wAtW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockAtW, ...wd.averageTicket } : _mockAtW;
         const atTypes = [
           {
             label: "Agências",
@@ -9391,10 +9444,8 @@ export default function AdminDashboardPage() {
 
       case "ltv": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wLtvW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).ltv;
+        const _mockLtvW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).ltv;
+        const wLtvW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockLtvW, ...wd.ltv } : _mockLtvW;
         const ltvTypes = [
           {
             label: "Agências",
@@ -9810,10 +9861,8 @@ export default function AdminDashboardPage() {
       }
 
       case "platformActivities": {
-        const wPaW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).platformActivities;
+        const _mockPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
+        const wPaW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockPaW, ...wd.platformActivities } : _mockPaW;
         const paMetrics = [
           {
             label: "MAU",
@@ -9969,10 +10018,8 @@ export default function AdminDashboardPage() {
       }
 
       case "nomads": {
-        const wNmW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).nomads;
+        const _mockNmW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomads;
+        const wNmW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockNmW, ...wd.nomads } : _mockNmW;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -10454,10 +10501,8 @@ export default function AdminDashboardPage() {
       }
 
       case "statusOverview": {
-        const wSoW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).statusOverview;
+        const _mockSoW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).statusOverview;
+        const wSoW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockSoW, ...wd.statusOverview } : _mockSoW;
         const soSections = [
           {
             label: "Projetos",
@@ -10686,10 +10731,8 @@ export default function AdminDashboardPage() {
       }
 
       case "accountsReceivable": {
-        const wArW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).accountsReceivable;
+        const _mockArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
+        const wArW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockArW, ...wd.accountsReceivable } : _mockArW;
         return (
           <div
             key={widget.id}
@@ -10840,10 +10883,8 @@ export default function AdminDashboardPage() {
       }
 
       case "tasks": {
-        const wTasksW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).tasks;
+        const _mockTasksW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).tasks;
+        const wTasksW = wd && !widgetPeriods.some((p: any) => p.id === widget.id && p.mode !== "global") ? { ..._mockTasksW, ...wd.tasks } : _mockTasksW;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">

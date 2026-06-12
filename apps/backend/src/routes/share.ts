@@ -96,7 +96,9 @@ router.post("/data", async (req, res, next) => {
       return;
     }
 
-    // Date range: visitor-supplied filters override the saved period
+    // Date range: visitor-supplied filters take precedence, then token-embedded dates,
+    // then period type. When the token has explicit from/to (set by the dashboard at
+    // share-link generation time), use them directly so the share matches the dashboard.
     const savedPeriod = config.period as { type?: string; from?: string; to?: string } | undefined;
     const periodType =
       filters?.periodType ?? savedPeriod?.type ?? "last_30_days";
@@ -104,7 +106,11 @@ router.post("/data", async (req, res, next) => {
       filters?.dateFrom ?? savedPeriod?.from?.slice(0, 10);
     const dateToRaw =
       filters?.dateTo ?? savedPeriod?.to?.slice(0, 10);
-    const { from, to } = getDateRange(periodType, dateFromRaw, dateToRaw);
+    // If explicit dates are available (from visitor filter or token), use them directly.
+    const { from, to } =
+      dateFromRaw && dateToRaw
+        ? { from: new Date(dateFromRaw), to: new Date(`${dateToRaw}T23:59:59.999Z`) }
+        : getDateRange(periodType, dateFromRaw, dateToRaw);
 
     // Scope — enforce profile boundaries
     const profile = (config.profile as string) ?? "admin";
@@ -120,10 +126,19 @@ router.post("/data", async (req, res, next) => {
       profile === "nomad" && scopeId ? { nomade_id: scopeId } : {};
 
     const dateWhere = { gte: from, lte: to };
+    // Paid invoices: use paid_at when set, fall back to created_at.
+    // This ensures invoices created outside the window but paid within it are counted.
+    const paidDateOr = [
+      { paid_at: dateWhere },
+      { paid_at: null as any, created_at: dateWhere },
+    ];
 
     // ── Parallel queries ──────────────────────────────────────────────────────
     const [
       paidRevenue,
+      revenueRecurring,
+      revenueOneTime,
+      revenueCreditPlan,
       pendingRevenue,
       projectsTotal,
       projectsInProgress,
@@ -142,11 +157,26 @@ router.post("/data", async (req, res, next) => {
       companiesTotal,
       partnersActive,
     ] = await Promise.all([
-      // Revenue: paid invoices in period
+      // Revenue: all paid invoices in period
       prisma.invoice.aggregate({
         _sum: { amount: true },
         _count: true,
-        where: { status: "paid", created_at: dateWhere, ...invoiceScope },
+        where: { status: "paid", OR: paidDateOr, ...invoiceScope },
+      }),
+      // Revenue breakdown: recurring (mensal lifecycle projects)
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr, project: { lifecycle: "mensal" }, ...invoiceScope },
+      }),
+      // Revenue breakdown: one-time (avulso lifecycle projects)
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr, project: { lifecycle: "avulso" }, ...invoiceScope },
+      }),
+      // Revenue breakdown: credit plan (invoices not linked to any project)
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr, project_id: null, ...invoiceScope },
       }),
       // Revenue: outstanding (pending + overdue)
       prisma.invoice.aggregate({
@@ -206,6 +236,9 @@ router.post("/data", async (req, res, next) => {
 
     // ── Compute metrics ───────────────────────────────────────────────────────
     const revenue = paidRevenue._sum.amount ?? 0;
+    const revenueRec = revenueRecurring._sum.amount ?? 0;
+    const revenueOne = revenueOneTime._sum.amount ?? 0;
+    const revenueCp = revenueCreditPlan._sum.amount ?? 0;
     const invoiceCount = paidRevenue._count ?? 0;
     const avgTicket =
       invoiceCount > 0 ? Math.round(revenue / invoiceCount) : 0;
@@ -234,8 +267,9 @@ router.post("/data", async (req, res, next) => {
       revenue: {
         total: revenue,
         growth: 0,
-        recurring: revenue,
-        oneTime: 0,
+        creditPlan: revenueCp,
+        recurring: revenueRec,
+        oneTime: revenueOne,
         projected: Math.round(revenue * 1.1),
       },
       mrr: {

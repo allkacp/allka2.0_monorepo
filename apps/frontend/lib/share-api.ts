@@ -15,6 +15,7 @@ export type ShareApiData = {
   revenue: {
     total: number;
     growth: number;
+    creditPlan: number;
     recurring: number;
     oneTime: number;
     projected: number;

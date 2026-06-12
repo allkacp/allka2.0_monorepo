@@ -1387,6 +1387,34 @@ class MockApiClient {
     return mockRecentActivities;
   }
 
+  async getRevenue(_from?: string, _to?: string) {
+    await delay();
+    return {
+      total: 270800, creditPlan: 114000, recurring: 97600, oneTime: 59200,
+      projected: 297880, growth: 0, totalGrowth: 0,
+      creditPlanGrowth: 0, recurringGrowth: 0, oneTimeGrowth: 0,
+    };
+  }
+
+  async getDashboardWidgets(_from: Date, _to: Date) {
+    await delay();
+    return {
+      revenue: { total: 270800, growth: 0, creditPlan: 114000, recurring: 97600, oneTime: 59200, projected: 297880 },
+      mrr: { value: 270800, growth: 0, trendData: [189560, 211224, 227472, 243720, 259968, 270800] },
+      churn: { rate: 0, inactiveAccounts: 0, cancelledProjects: 0, revenueChurn: 0, revenueChurnRate: 0 },
+      averageTicket: { general: 1213, growth: 5, perProject: 2840, trendData: [980, 1050, 1100, 1180, 1210, 1213] },
+      ltv: { value: 14556, agencies: 0, leadPremium: 0, nomades: 0, hist0to1k: 0, hist1kto5k: 0, hist5kto15k: 0, hist15kplus: 0 },
+      activeProjects: { total: 26, inProgress: 12, delivered: 8, pending: 6, growth: 0 },
+      tasks: { total: 93, done: 45, inProgress: 30, pending: 18, completionRate: 48 },
+      accountsReceivable: { total: 270800, creditPlans: 0, postPaid: 270800, others: 0, received: 270800, growth: 0 },
+      nomads: { total: 15, active: 15, newThisMonth: 2, growth: 0, avgRating: 0 },
+      partnerProgram: { activePartners: 0, totalReferrals: 0, conversionRate: 0, partnerRevenue: 0 },
+      statusOverview: { active: 40, trial: 5, suspended: 2, cancelled: 3, total: 50 },
+      creditPlans: { active: 0, totalValue: 0, avgValue: 0, overdue: 0 },
+      platformActivities: { logins: 0, projectsCreated: 26, tasksCompleted: 45, messagesExchanged: 0 },
+    };
+  }
+
   async getMyTasks() {
     await delay();
     return tasks.filter((t) => t.status !== "completed").slice(0, 5);

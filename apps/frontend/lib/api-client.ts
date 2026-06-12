@@ -309,6 +309,14 @@ class ApiClient {
     return this.get("/dashboard/recent-activities");
   }
 
+  async getRevenue(from?: string, to?: string) {
+    return this.get("/dashboard/revenue", { from, to });
+  }
+
+  async getDashboardWidgets(from: Date, to: Date) {
+    return this.post("/dashboard/widgets", { from: from.toISOString(), to: to.toISOString() });
+  }
+
   async getMyTasks() {
     return this.get("/tasks", { my: "true", limit: "10" });
   }
