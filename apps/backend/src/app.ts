@@ -31,6 +31,9 @@ import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
 import shareRouter from "./routes/share";
+import expensesRouter from "./routes/expenses";
+import walletsRouter from "./routes/wallets";
+import squadRouter from "./routes/squad";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -141,6 +144,12 @@ app.use("/api/lider", liderRouter);
 app.use("/api/habilidades", habilidadesRouter);
 // Share links — public endpoint (no auth required)
 app.use("/api/share", shareRouter);
+// Expenses — operational expenses of Allka (separate from CMV/costs)
+app.use("/api/expenses", expensesRouter);
+// Wallets — unified ledger for company/agency/nomad/partner/platform accounts
+app.use("/api/wallets", walletsRouter);
+// Squad — plano pós-pago com limite de crédito
+app.use("/api/squad", squadRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

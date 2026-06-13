@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
+import { recordWalletEvent } from "../lib/wallet-service";
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
 
     const project = await prisma.project.findUnique({
       where: { id: project_id },
-      select: { id: true, status: true, lifecycle: true },
+      select: { id: true, status: true, lifecycle: true, client_id: true, title: true },
     });
 
     if (!project) {
@@ -145,6 +146,40 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       console.log(
         `[payments] Idempotência OK: ${tarefasResult.skipped} tarefa(s) já existiam para projeto ${project_id}. Total no projeto: ${tarefasResult.total_tarefas}`,
       );
+    }
+
+    // ── Registro na carteira (não bloqueia o fluxo) ────────────────────────────
+    // Fluxo Allkoin: pagamento aprovado → crédito na carteira → projeto debita da carteira.
+    // Apenas processa se o projeto tem uma empresa (client_id) vinculada.
+    if (project.client_id) {
+      const paidAmount = Number(amount);
+      const projectTitle = project.title || project_id;
+
+      // 1. Crédito: dinheiro recebido entra na carteira da empresa
+      await recordWalletEvent("company", project.client_id, {
+        type: "payment",
+        direction: "credit",
+        amount: paidAmount,
+        description: `Pagamento aprovado — ${projectTitle}`,
+        idempotencyKey: `pay_credit_${payment.id}`,
+        referenceType: "payment",
+        referenceId: payment.id,
+        createdBy: user?.id,
+        metadata: { gateway: "FAKE_SANDBOX", project_id, payment_id: payment.id },
+      });
+
+      // 2. Débito: projeto consome o crédito da carteira
+      await recordWalletEvent("company", project.client_id, {
+        type: "payment",
+        direction: "debit",
+        amount: paidAmount,
+        description: `Débito projeto — ${projectTitle}`,
+        idempotencyKey: `pay_debit_${payment.id}`,
+        referenceType: "project",
+        referenceId: project_id,
+        createdBy: user?.id,
+        metadata: { project_id, payment_id: payment.id },
+      });
     }
 
     // Derive a truthful status message based on what actually happened

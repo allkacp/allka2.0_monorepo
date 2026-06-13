@@ -98,6 +98,7 @@ model Company {
   invoices        Invoice[]
   users           User[]
   payment_methods CompanyPaymentMethod[]
+  squad_config    SquadConfig?
 
   @@map("companies")
 }
@@ -1174,4 +1175,162 @@ model Payment {
   updated_at          DateTime  @updatedAt
 
   @@map("payments")
+}
+
+// ─── Expenses (Despesas Operacionais) ────────────────────────────────────────
+// Separate from CMV/costs (precificação). These are operating expenses of Allka.
+
+model Expense {
+  id               String    @id @default(cuid())
+  name             String
+  description      String?   @db.LongText
+  category         String    @default("Outros")
+  // Administrativo | Ferramentas e Sistemas | Marketing | Financeiro |
+  // Jurídico/Contábil | Infraestrutura | Pessoas | Operacional | Impostos e Taxas | Outros
+  amount           Float
+  type             String    @default("fixa")
+  // fixa | variável
+  recurrence       String    @default("mensal")
+  // única | mensal | anual | personalizada
+  status           String    @default("prevista")
+  // prevista | pendente | paga | atrasada | cancelada
+  due_date         DateTime?
+  paid_at          DateTime?
+  payment_method   String?
+  // pix | transferência | cartão | boleto | débito | dinheiro | outro
+  department       String?
+  // Administrativo | Financeiro | Marketing | Tecnologia | Jurídico | Pessoas | Operacional | Outros
+  competence_month String?
+  // Format: "YYYY-MM" — competence month reference
+  notes            String?   @db.LongText
+  attachment_url   String?   @db.LongText
+  // recurrence control
+  recurrence_id    String?
+  // groups recurring instances — same recurrence_id = same recurring expense series
+  is_recurring_base Boolean  @default(false)
+  // true = this is the base/template of a recurring series
+  created_by       String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  @@map("expenses")
+  @@index([status])
+  @@index([category])
+  @@index([competence_month])
+  @@index([recurrence_id])
+}
+
+// ─── Wallets & Ledger ─────────────────────────────────────────────────────────
+
+model Wallet {
+  id              String   @id @default(cuid())
+  owner_type      String
+  // "company" | "agency" | "nomad" | "partner" | "platform"
+  owner_id        String
+  balance         Float    @default(0)
+  blocked_balance Float    @default(0)
+  currency        String   @default("BRL")
+  status          String   @default("active")
+  // "active" | "suspended" | "closed"
+  notes           String?  @db.LongText
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  ledger WalletLedger[]
+
+  @@unique([owner_type, owner_id])
+  @@index([owner_type])
+  @@index([status])
+  @@map("wallets")
+}
+
+model WalletLedger {
+  id               String   @id @default(cuid())
+  wallet_id        String
+  wallet           Wallet   @relation(fields: [wallet_id], references: [id])
+  type             String
+  // credit | debit | adjustment | block | unblock | refund | commission | withdrawal | payment | fee | bonus | penalty
+  direction        String
+  // credit | debit
+  amount           Float
+  balance_before   Float
+  balance_after    Float
+  description      String
+  category         String?
+  status           String   @default("confirmed")
+  // pending | confirmed | failed | reversed
+  reference_type   String?
+  // payment | invoice | withdrawal | commission | expense | project | adjustment
+  reference_id     String?
+  idempotency_key  String?  @unique
+  metadata         Json?
+  created_by       String?
+  notes            String?  @db.LongText
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@index([wallet_id])
+  @@index([type])
+  @@index([direction])
+  @@index([status])
+  @@index([created_at])
+  @@index([reference_type, reference_id])
+  @@map("wallet_ledger")
+}
+
+// ─── Squad (plano pós-pago com limite de crédito) ────────────────────────────
+
+model SquadConfig {
+  id              String    @id @default(cuid())
+  company_id      String    @unique
+  company         Company   @relation(fields: [company_id], references: [id])
+  credit_limit    Float     @default(10000)
+  // Limite máximo que a carteira pode ficar negativa
+  monthly_minimum Float     @default(0)
+  // Consumo mínimo mensal garantido
+  billing_day     Int       @default(10)
+  // Dia do mês em que o ciclo fecha (1–28)
+  payment_terms   Int       @default(10)
+  // Dias após fechamento para vencimento da fatura
+  status          String    @default("active")
+  // active | paused | cancelled | delinquent
+  notes           String?   @db.LongText
+  consultant_id   String?
+  // Soft ref para User responsável comercial
+  started_at      DateTime  @default(now())
+  ended_at        DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  cycles          SquadCycle[]
+
+  @@map("squad_configs")
+}
+
+model SquadCycle {
+  id                 String      @id @default(cuid())
+  squad_config_id    String
+  squad_config       SquadConfig @relation(fields: [squad_config_id], references: [id])
+  company_id         String
+  started_at         DateTime
+  closed_at          DateTime?
+  due_at             DateTime?
+  status             String      @default("open")
+  // open | closed | invoiced | paid | overdue | cancelled
+  total_consumed     Float       @default(0)
+  // Soma de todos os débitos do ciclo
+  minimum_adjustment Float       @default(0)
+  // max(0, monthly_minimum - total_consumed)
+  total_invoiced     Float       @default(0)
+  // max(total_consumed, monthly_minimum)
+  invoice_id         String?     @unique
+  // FK suave para Invoice quando ciclo é faturado
+  notes              String?     @db.LongText
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
+
+  @@index([company_id])
+  @@index([status])
+  @@index([squad_config_id])
+  @@map("squad_cycles")
 }

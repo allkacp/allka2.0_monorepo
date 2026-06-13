@@ -1396,6 +1396,35 @@ class MockApiClient {
     };
   }
 
+  async getDRE(_params?: { from?: string; to?: string }) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const paidExp = stored.filter((e: any) => ["paga", "pendente", "atrasada"].includes(e.status));
+    const byCategory: Record<string, { amount: number; count: number }> = {};
+    for (const e of paidExp) {
+      if (!byCategory[e.category]) byCategory[e.category] = { amount: 0, count: 0 };
+      byCategory[e.category].amount += e.amount || 0;
+      byCategory[e.category].count += 1;
+    }
+    const receita = invoices.filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + (i.amount || 0), 0);
+    const custosDiretos = 0; // no CMV in mock (no executed withdrawals)
+    const lucroBruto = receita - custosDiretos;
+    const despesas = paidExp.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+    const lucroOperacional = lucroBruto - despesas;
+    return {
+      receita,
+      custosDiretos,
+      lucroBruto,
+      margemBruta: receita > 0 ? Math.round((lucroBruto / receita) * 10000) / 100 : 0,
+      despesasOperacionais: despesas,
+      lucroOperacional,
+      margemOperacional: receita > 0 ? Math.round((lucroOperacional / receita) * 10000) / 100 : 0,
+      despesasPorCategoria: Object.entries(byCategory)
+        .sort((a, b) => b[1].amount - a[1].amount)
+        .map(([category, { amount, count }]) => ({ category, amount, count })),
+    };
+  }
+
   async getDashboardWidgets(_from: Date, _to: Date) {
     await delay();
     return {
@@ -1821,6 +1850,135 @@ class MockApiClient {
     return { data: result, total: result.length, page: 1, limit: 1000 };
   }
 
+  async getBillingStats(_params?: { from?: string; to?: string }) {
+    await delay();
+    const paid   = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + (i.amount || 0), 0);
+    const pending = invoices.filter((i) => i.status === "pending").reduce((s, i) => s + (i.amount || 0), 0);
+    const overdue  = invoices.filter((i) => i.status === "overdue").reduce((s, i) => s + (i.amount || 0), 0);
+    const paidCount = invoices.filter((i) => i.status === "paid").length;
+    return {
+      totalRevenue: paid + pending + overdue,
+      invoiceCount: invoices.length,
+      avgTicket: paidCount > 0 ? Math.round(paid / paidCount) : 0,
+      byStatus: [
+        { status: "paid",      count: paidCount, amount: paid },
+        { status: "pending",   count: invoices.filter(i => i.status === "pending").length, amount: pending },
+        { status: "overdue",   count: invoices.filter(i => i.status === "overdue").length, amount: overdue },
+        { status: "cancelled", count: invoices.filter(i => i.status === "cancelled").length, amount: 0 },
+      ],
+    };
+  }
+
+  // ─── Expenses (Despesas Operacionais) ──────────────────────────────────────
+
+  private static _getDefaultExpenses(): any[] {
+    return [
+      { id: "exp_001", name: "AWS — EC2 + RDS",              category: "Infraestrutura",         type: "fixa",     recurrence: "mensal", status: "paga",     amount: 3200,  due_date: "2026-06-05", paid_at: "2026-06-04T14:00:00Z", payment_method: "Cartão corporativo",  department: "Tech",       competence_month: "2026-06", description: "Servidores de produção e banco de dados",          notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-04T00:00:00Z" },
+      { id: "exp_002", name: "Cloudflare Pro",                category: "Infraestrutura",         type: "fixa",     recurrence: "mensal", status: "paga",     amount: 210,   due_date: "2026-06-05", paid_at: "2026-06-04T14:00:00Z", payment_method: "Cartão corporativo",  department: "Tech",       competence_month: "2026-06", description: "CDN + proteção DDoS",                               notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-04T00:00:00Z" },
+      { id: "exp_003", name: "Vercel Pro Team",               category: "Infraestrutura",         type: "fixa",     recurrence: "mensal", status: "paga",     amount: 280,   due_date: "2026-06-01", paid_at: "2026-06-01T08:00:00Z", payment_method: "Cartão corporativo",  department: "Tech",       competence_month: "2026-06", description: "Deploy frontend + edge functions",                  notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "exp_004", name: "Domínio allka.com.vc",          category: "Infraestrutura",         type: "fixa",     recurrence: "anual",  status: "paga",     amount: 89,    due_date: "2026-01-15", paid_at: "2026-01-15T09:00:00Z", payment_method: "Cartão corporativo",  department: "Tech",       competence_month: "2026-01", description: "Renovação de domínio",                               notes: "",                                    is_recurring_base: true,  created_at: "2026-01-15T00:00:00Z", updated_at: "2026-01-15T00:00:00Z" },
+      { id: "exp_005", name: "Slack Business+",               category: "Ferramentas e Sistemas", type: "fixa",     recurrence: "mensal", status: "paga",     amount: 480,   due_date: "2026-06-10", paid_at: "2026-06-10T10:00:00Z", payment_method: "Cartão corporativo",  department: "Geral",      competence_month: "2026-06", description: "Comunicação interna — 20 usuários",                 notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-10T00:00:00Z" },
+      { id: "exp_006", name: "Figma Organization",            category: "Ferramentas e Sistemas", type: "fixa",     recurrence: "mensal", status: "paga",     amount: 640,   due_date: "2026-06-10", paid_at: "2026-06-09T15:00:00Z", payment_method: "Cartão corporativo",  department: "Produto",    competence_month: "2026-06", description: "Design tools — time de produto",                    notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-09T00:00:00Z" },
+      { id: "exp_007", name: "Google Workspace Business",     category: "Ferramentas e Sistemas", type: "fixa",     recurrence: "mensal", status: "paga",     amount: 350,   due_date: "2026-06-01", paid_at: "2026-06-01T08:00:00Z", payment_method: "Cartão corporativo",  department: "Geral",      competence_month: "2026-06", description: "Gmail + Drive + Meet — 15 contas",                  notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "exp_008", name: "RD Station Marketing",          category: "Ferramentas e Sistemas", type: "fixa",     recurrence: "mensal", status: "paga",     amount: 890,   due_date: "2026-06-01", paid_at: "2026-06-01T08:00:00Z", payment_method: "Cartão corporativo",  department: "Marketing",  competence_month: "2026-06", description: "CRM e automação de marketing",                      notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "exp_009", name: "Folha de pagamento — Jun",      category: "Pessoas",                type: "fixa",     recurrence: "mensal", status: "paga",     amount: 42000, due_date: "2026-06-30", paid_at: "2026-06-28T18:00:00Z", payment_method: "Transferência",       department: "RH",         competence_month: "2026-06", description: "CLT: 3 devs + 1 designer + 1 PM",                   notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-28T00:00:00Z" },
+      { id: "exp_010", name: "INSS + FGTS — Junho",           category: "Impostos e Taxas",       type: "fixa",     recurrence: "mensal", status: "pendente", amount: 9800,  due_date: "2026-07-07", paid_at: null,                   payment_method: "DARF/GFIP",           department: "RH",         competence_month: "2026-06", description: "Encargos trabalhistas sobre folha",                  notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "exp_011", name: "Simples Nacional — Maio",       category: "Impostos e Taxas",       type: "fixa",     recurrence: "mensal", status: "paga",     amount: 4500,  due_date: "2026-06-20", paid_at: "2026-06-19T10:00:00Z", payment_method: "DAS",                 department: "Financeiro", competence_month: "2026-05", description: "DAS — apuração maio/2026",                           notes: "",                                    is_recurring_base: true,  created_at: "2026-05-01T00:00:00Z", updated_at: "2026-06-19T00:00:00Z" },
+      { id: "exp_012", name: "Aluguel — Escritório SP",       category: "Administrativo",         type: "fixa",     recurrence: "mensal", status: "paga",     amount: 6800,  due_date: "2026-06-10", paid_at: "2026-06-08T09:00:00Z", payment_method: "Transferência",       department: "Admin",      competence_month: "2026-06", description: "Sala comercial Av. Paulista — andar 14",             notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-08T00:00:00Z" },
+      { id: "exp_013", name: "Internet Fibra + VPN",          category: "Administrativo",         type: "fixa",     recurrence: "mensal", status: "paga",     amount: 890,   due_date: "2026-06-15", paid_at: "2026-06-14T11:00:00Z", payment_method: "Débito automático",   department: "Tech",       competence_month: "2026-06", description: "700 Mbps + FortiGate VPN License",                   notes: "",                                    is_recurring_base: false, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-14T00:00:00Z" },
+      { id: "exp_014", name: "Assessoria Jurídica",           category: "Jurídico/Contábil",      type: "fixa",     recurrence: "mensal", status: "pendente", amount: 3500,  due_date: "2026-06-30", paid_at: null,                   payment_method: "Transferência",       department: "Jurídico",   competence_month: "2026-06", description: "Contrato mensal — Escritório Alves & Dias",          notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "exp_015", name: "Contabilidade Digital",         category: "Jurídico/Contábil",      type: "fixa",     recurrence: "mensal", status: "paga",     amount: 1200,  due_date: "2026-06-05", paid_at: "2026-06-03T09:00:00Z", payment_method: "Transferência",       department: "Financeiro", competence_month: "2026-06", description: "Guias + obrigações acessórias",                      notes: "",                                    is_recurring_base: true,  created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-03T00:00:00Z" },
+      { id: "exp_016", name: "Campanha Google Ads — Mai",     category: "Marketing",              type: "variável", recurrence: "única",  status: "paga",     amount: 5200,  due_date: "2026-06-10", paid_at: "2026-06-08T14:00:00Z", payment_method: "Cartão corporativo",  department: "Marketing",  competence_month: "2026-05", description: "Aquisição de leads — produto B2B",                   notes: "",                                    is_recurring_base: false, created_at: "2026-05-01T00:00:00Z", updated_at: "2026-06-08T00:00:00Z" },
+      { id: "exp_017", name: "Evento — AllkaCon 2026",        category: "Marketing",              type: "variável", recurrence: "única",  status: "pendente", amount: 12000, due_date: "2026-07-15", paid_at: null,                   payment_method: "Transferência",       department: "Marketing",  competence_month: "2026-07", description: "Venue + catering + material gráfico",                notes: "",                                    is_recurring_base: false, created_at: "2026-06-10T00:00:00Z", updated_at: "2026-06-10T00:00:00Z" },
+      { id: "exp_018", name: "Consultoria UX — sprint",       category: "Operacional",            type: "variável", recurrence: "única",  status: "paga",     amount: 8500,  due_date: "2026-05-31", paid_at: "2026-05-30T10:00:00Z", payment_method: "Transferência",       department: "Produto",    competence_month: "2026-05", description: "Sprint de redesign do onboarding",                   notes: "",                                    is_recurring_base: false, created_at: "2026-05-01T00:00:00Z", updated_at: "2026-05-30T00:00:00Z" },
+      { id: "exp_019", name: "Seguro Equipamentos TI",        category: "Administrativo",         type: "fixa",     recurrence: "mensal", status: "atrasada", amount: 420,   due_date: "2026-05-30", paid_at: null,                   payment_method: "Débito automático",   department: "Admin",      competence_month: "2026-05", description: "Apólice notebooks + servidores locais",              notes: "Pagamento atrasado — contatar seguradora", is_recurring_base: false, created_at: "2026-05-01T00:00:00Z", updated_at: "2026-05-01T00:00:00Z" },
+      { id: "exp_020", name: "Aluguel impressora",            category: "Administrativo",         type: "fixa",     recurrence: "mensal", status: "atrasada", amount: 320,   due_date: "2026-05-30", paid_at: null,                   payment_method: "Débito automático",   department: "Admin",      competence_month: "2026-05", description: "Contrato Ricoh",                                     notes: "Pagamento em atraso desde 30/05",      is_recurring_base: false, created_at: "2026-05-01T00:00:00Z", updated_at: "2026-05-01T00:00:00Z" },
+    ];
+  }
+
+  private _ensureExpenses(): any[] {
+    if (!localStorage.getItem("mock_expenses")) {
+      localStorage.setItem("mock_expenses", JSON.stringify(MockApiClient._getDefaultExpenses()));
+    }
+    return JSON.parse(localStorage.getItem("mock_expenses")!) as any[];
+  }
+
+  async getExpenses(filters?: Record<string, any>) {
+    await delay();
+    const stored = this._ensureExpenses();
+    let result = [...stored];
+    if (filters?.status)     result = result.filter(e => e.status     === filters.status);
+    if (filters?.category)   result = result.filter(e => e.category   === filters.category);
+    if (filters?.type)       result = result.filter(e => e.type       === filters.type);
+    if (filters?.recurrence) result = result.filter(e => e.recurrence === filters.recurrence);
+    if (filters?.competence) result = result.filter(e => e.competence_month === filters.competence);
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter(e =>
+        e.name?.toLowerCase().includes(q) ||
+        e.description?.toLowerCase().includes(q) ||
+        e.category?.toLowerCase().includes(q)
+      );
+    }
+    const page  = Number(filters?.page  ?? 1);
+    const limit = Number(filters?.limit ?? 20);
+    const skip  = (page - 1) * limit;
+    return { data: result.slice(skip, skip + limit), total: result.length, page, limit };
+  }
+
+  async getExpense(id: string) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const found = stored.find(e => String(e.id) === String(id));
+    if (!found) throw new Error("Despesa não encontrada");
+    return found;
+  }
+
+  async createExpense(data: any) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const expense = { id: `exp_${Date.now()}`, ...data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    stored.push(expense);
+    localStorage.setItem("mock_expenses", JSON.stringify(stored));
+    return expense;
+  }
+
+  async updateExpense(id: string, data: any) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const idx = stored.findIndex(e => String(e.id) === String(id));
+    if (idx >= 0) { stored[idx] = { ...stored[idx], ...data, updated_at: new Date().toISOString() }; }
+    localStorage.setItem("mock_expenses", JSON.stringify(stored));
+    return stored[idx];
+  }
+
+  async deleteExpense(id: string) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const filtered = stored.filter(e => String(e.id) !== String(id));
+    localStorage.setItem("mock_expenses", JSON.stringify(filtered));
+    return {};
+  }
+
+  async getExpenseStats(_params?: Record<string, any>) {
+    await delay();
+    const stored = this._ensureExpenses();
+    const sum = (arr: any[], pred: (e: any) => boolean) => arr.filter(pred).reduce((s, e) => s + (e.amount || 0), 0);
+    return {
+      total:     sum(stored, () => true),
+      count:     stored.length,
+      paid:      sum(stored, e => e.status === "paga"),
+      pending:   sum(stored, e => e.status === "pendente"),
+      overdue:   sum(stored, e => e.status === "atrasada"),
+      projected: sum(stored, e => e.status === "prevista"),
+      fixed:     sum(stored, e => e.type   === "fixa"),
+      variable:  sum(stored, e => e.type   === "variável"),
+      byStatus:  ["prevista","pendente","paga","atrasada","cancelada"].map(s => ({ status: s, amount: sum(stored, e => e.status === s), count: stored.filter(e => e.status === s).length })),
+      byType:    ["fixa","variável"].map(t => ({ type: t, amount: sum(stored, e => e.type === t), count: stored.filter(e => e.type === t).length })),
+      byCategory: [...new Set(stored.map(e => e.category))].map(c => ({ category: c, amount: sum(stored, e => e.category === c), count: stored.filter(e => e.category === c).length })),
+    };
+  }
+
   async fakeSandboxCheckout(data: {
     project_id: string;
     amount: number;
@@ -1865,6 +2023,18 @@ class MockApiClient {
         status: "in-progress",
         updated_at: now(),
       };
+    }
+
+    // Fluxo Allkoin: crédito (pagamento recebido) + débito (projeto ativado)
+    const clientId = (project as any).client_id;
+    if (clientId) {
+      const paidAmt = Number(data.amount);
+      this._addLedgerEntry("company", String(clientId), "payment", "credit", paidAmt,
+        `Pagamento aprovado — ${(project as any).title || data.project_id}`,
+        `pay_credit_${payment.id}`, "payment", payment.id);
+      this._addLedgerEntry("company", String(clientId), "payment", "debit", paidAmt,
+        `Débito projeto — ${(project as any).title || data.project_id}`,
+        `pay_debit_${payment.id}`, "project", String(data.project_id));
     }
 
     const projectTaskList = tasks.filter((task) => task.project_id === String(data.project_id));
@@ -1943,7 +2113,21 @@ class MockApiClient {
     await delay();
     const idx = invoices.findIndex((i) => i.id === String(id));
     if (idx === -1) throw new Error("Fatura não encontrada");
-    invoices[idx] = { ...invoices[idx], ...data, updated_at: now() };
+    const previous = invoices[idx];
+    invoices[idx] = { ...previous, ...data, updated_at: now() };
+
+    // Crédito na carteira da empresa na transição para "paid"
+    if (previous.status !== "paid" && data.status === "paid") {
+      const companyId = (previous as any).company_id || (previous as any).client_id;
+      if (companyId) {
+        const desc = (previous as any).invoice_number
+          ? `Fatura #${(previous as any).invoice_number} paga`
+          : `Fatura ${id} paga`;
+        this._addLedgerEntry("company", String(companyId), "payment", "credit",
+          (previous as any).amount || 0, desc, `inv_credit_${id}`, "invoice", id);
+      }
+    }
+
     return invoices[idx];
   }
 
@@ -1967,7 +2151,20 @@ class MockApiClient {
     await delay();
     const idx = withdrawals.findIndex((w) => w.id === String(id));
     if (idx === -1) throw new Error("Saque não encontrado");
-    withdrawals[idx] = { ...withdrawals[idx], ...data };
+    const previous = withdrawals[idx];
+    withdrawals[idx] = { ...previous, ...data };
+
+    // Débito na carteira do nômade na transição para "pagamento_efetuado"
+    if ((previous.status as string) !== "pagamento_efetuado" && data.status === "pagamento_efetuado") {
+      const nomadeId = previous.nomade_id;
+      if (nomadeId) {
+        this._addLedgerEntry("nomad", String(nomadeId), "withdrawal", "debit",
+          previous.amount || 0,
+          `Saque efetuado — solicitação ${id}`,
+          `wd_debit_${id}`, "withdrawal", id);
+      }
+    }
+
     return withdrawals[idx];
   }
 
@@ -2231,6 +2428,433 @@ class MockApiClient {
   // ─── Coupons (alias of campaigns filtered by type) ───────────────────────
   async getCoupons(filters?: Record<string, any>) {
     return this.getCampaigns({ ...filters, type: "coupon" });
+  }
+
+  // ─── Wallets & Ledger ─────────────────────────────────────────────────────
+
+  // Gera saldo determinístico a partir de uma string seed (sem Math.random)
+  private static _seedBal(seed: string, min: number, max: number): number {
+    const h = Math.abs(seed.split("").reduce((a, c) => ((a * 31 + c.charCodeAt(0)) | 0), 5381));
+    return Math.round(min + (h % (max - min)));
+  }
+
+  // Constrói a lista completa de carteiras a partir das entidades mock
+  private static _buildWallets(): any[] {
+    const now = "2026-06-13T00:00:00Z";
+    const b = MockApiClient._seedBal;
+    return [
+      // ── Plataforma ────────────────────────────────────────────────────────
+      { id: "w_platform", owner_type: "platform", owner_id: "platform", owner_name: "Allka Plataforma", owner_email: "admin@allka.com.vc", owner_cnpj: "", balance: 287500, blocked_balance: 2000, currency: "BRL", status: "active", created_at: "2024-01-01T00:00:00Z", updated_at: now },
+
+      // ── Agências (entidades sem coleção dedicada no mock) ─────────────────
+      { id: "w_a1", owner_type: "agency", owner_id: "ag1", owner_name: "Digital Agency BR",    owner_email: "admin@digitalagency.com",      owner_cnpj: "98.765.432/0001-10", balance: 42300, blocked_balance: 500, currency: "BRL", status: "active",    created_at: "2025-02-01T00:00:00Z", updated_at: now },
+      { id: "w_a2", owner_type: "agency", owner_id: "ag2", owner_name: "Agência Criativa SP",  owner_email: "financeiro@agcriativa.com.br", owner_cnpj: "22.111.333/0001-55", balance: 18700, blocked_balance: 0,   currency: "BRL", status: "active",    created_at: "2025-06-01T00:00:00Z", updated_at: now },
+      { id: "w_a3", owner_type: "agency", owner_id: "ag3", owner_name: "Mídia & Tráfego Hub",  owner_email: "ops@midiatrafego.com",         owner_cnpj: "44.222.666/0001-88", balance: 0,     blocked_balance: 0,   currency: "BRL", status: "suspended", created_at: "2025-03-15T00:00:00Z", updated_at: now },
+
+      // ── Empresas — todas do mockCompanies ─────────────────────────────────
+      ...mockCompanies.map((c) => ({
+        id:              `wc${c.id}`,
+        owner_type:      "company",
+        owner_id:        c.id,
+        owner_name:      c.name,
+        owner_email:     c.email  ?? "",
+        owner_cnpj:      c.cnpj   ?? "",
+        balance:         c.status === "inactive" ? 0 : b(c.id + c.name, 4000, 160000),
+        blocked_balance: c.id === "3" ? 1200 : c.id === "5" ? 800 : 0,
+        currency:        "BRL",
+        status:          c.status === "inactive" ? "suspended" : "active",
+        created_at:      c.created_at,
+        updated_at:      now,
+      })),
+
+      // ── Nômades — todos do mockNomades ────────────────────────────────────
+      ...mockNomades.map((n) => ({
+        id:              `wn${n.id}`,
+        owner_type:      "nomad",
+        owner_id:        n.id,
+        owner_name:      n.name,
+        owner_email:     n.email,
+        owner_cnpj:      "",
+        balance:         n.status === "active" ? b(n.id + n.name, 300, 22000) : 0,
+        blocked_balance: 0,
+        currency:        "BRL",
+        status:          n.status === "suspended" ? "suspended" : "active",
+        created_at:      n.created_at,
+        updated_at:      now,
+      })),
+    ];
+  }
+
+  private _wallets: any[] = MockApiClient._buildWallets();
+
+  private _ledger: Record<string, any[]> = {
+    "w_platform": [
+      { id: "l501", wallet_id: "w_platform", type: "payment",    direction: "credit", amount: 45000, balance_before: 242500, balance_after: 287500, description: "Receita consolidada — Junho",  category: "Receita",  status: "confirmed", reference_type: null, reference_id: null, created_by: "system", created_at: "2026-06-10T23:59:00Z" },
+      { id: "l502", wallet_id: "w_platform", type: "fee",        direction: "debit",  amount: 12000, balance_before: 254500, balance_after: 242500, description: "Repasse nômades — Mai",        category: "Repasse",  status: "confirmed", reference_type: null, reference_id: null, created_by: "system", created_at: "2026-06-01T10:00:00Z" },
+      { id: "l503", wallet_id: "w_platform", type: "payment",    direction: "credit", amount: 38000, balance_before: 216500, balance_after: 254500, description: "Receita consolidada — Maio",   category: "Receita",  status: "confirmed", reference_type: null, reference_id: null, created_by: "system", created_at: "2026-05-31T23:59:00Z" },
+    ],
+    "wc1": [
+      { id: "l101", wallet_id: "wc1", type: "payment",    direction: "credit", amount: 5000, balance_before: 10800, balance_after: 15800, description: "Pagamento — Projeto SEO Q2",      category: "Projeto",  status: "confirmed", reference_type: "project",   reference_id: "proj-1", created_by: "admin", created_at: "2026-06-10T14:00:00Z" },
+      { id: "l102", wallet_id: "wc1", type: "fee",        direction: "debit",  amount: 200,  balance_before: 15800, balance_after: 15600, description: "Taxa de serviço mensal",           category: "Fee",      status: "confirmed", reference_type: null,        reference_id: null,     created_by: "admin", created_at: "2026-06-05T10:00:00Z" },
+      { id: "l103", wallet_id: "wc1", type: "adjustment", direction: "credit", amount: 1000, balance_before: 9800,  balance_after: 10800, description: "Ajuste manual — crédito bônus",   category: "Ajuste",   status: "confirmed", reference_type: null,        reference_id: null,     created_by: "admin", created_at: "2026-05-28T09:00:00Z" },
+      { id: "l104", wallet_id: "wc1", type: "invoice",    direction: "credit", amount: 3500, balance_before: 6300,  balance_after: 9800,  description: "Fatura FAT-2026-003 — liquidada",  category: "Fatura",   status: "confirmed", reference_type: "invoice",   reference_id: "inv-3",  created_by: null,    created_at: "2026-05-15T16:30:00Z" },
+      { id: "l105", wallet_id: "wc1", type: "refund",     direction: "credit", amount: 800,  balance_before: 5500,  balance_after: 6300,  description: "Estorno — serviço cancelado",      category: "Estorno",  status: "confirmed", reference_type: null,        reference_id: null,     created_by: "admin", created_at: "2026-04-20T11:00:00Z" },
+    ],
+    "w_a1": [
+      { id: "l201", wallet_id: "w_a1", type: "commission", direction: "credit", amount: 12000, balance_before: 30300, balance_after: 42300, description: "Comissão — Campanha Black Friday", category: "Comissão", status: "confirmed", reference_type: "commission", reference_id: "comm-1", created_by: null,    created_at: "2026-06-08T09:00:00Z" },
+      { id: "l202", wallet_id: "w_a1", type: "withdrawal", direction: "debit",  amount: 5000,  balance_before: 35300, balance_after: 30300, description: "Saque aprovado — PIX",             category: "Saque",    status: "confirmed", reference_type: "withdrawal", reference_id: "wd-1",   created_by: "admin", created_at: "2026-06-01T14:00:00Z" },
+      { id: "l203", wallet_id: "w_a1", type: "block",      direction: "debit",  amount: 500,   balance_before: 35800, balance_after: 35300, description: "Bloqueio preventivo em análise",   category: "Bloqueio", status: "confirmed", reference_type: null,         reference_id: null,     created_by: "admin", created_at: "2026-05-25T10:00:00Z" },
+    ],
+    "wn1": [
+      { id: "l301", wallet_id: "wn1", type: "credit",     direction: "credit", amount: 1200, balance_before: 2050, balance_after: 3250,  description: "Ganhos — tarefas concluídas Mai", category: "Ganhos", status: "confirmed", reference_type: "project",    reference_id: "proj-2", created_by: null,    created_at: "2026-06-03T18:00:00Z" },
+      { id: "l302", wallet_id: "wn1", type: "bonus",      direction: "credit", amount: 150,  balance_before: 1900, balance_after: 2050,  description: "Bônus nível Silver",              category: "Bônus",  status: "confirmed", reference_type: null,         reference_id: null,     created_by: null,    created_at: "2026-05-31T12:00:00Z" },
+      { id: "l303", wallet_id: "wn1", type: "withdrawal", direction: "debit",  amount: 500,  balance_before: 2400, balance_after: 1900,  description: "Saque solicitado — PIX",          category: "Saque",  status: "confirmed", reference_type: "withdrawal", reference_id: "wd-2",   created_by: null,    created_at: "2026-05-20T09:30:00Z" },
+    ],
+    "wn2": [
+      { id: "l401", wallet_id: "wn2", type: "payment",    direction: "credit", amount: 3200, balance_before: 5700, balance_after: 8900,  description: "Pagamento projeto React",          category: "Projeto", status: "confirmed", reference_type: "project",    reference_id: "proj-3", created_by: null,    created_at: "2026-06-07T10:00:00Z" },
+      { id: "l402", wallet_id: "wn2", type: "withdrawal", direction: "debit",  amount: 2000, balance_before: 3900, balance_after: 1900,  description: "Saque — PIX",                      category: "Saque",  status: "confirmed", reference_type: "withdrawal", reference_id: "wd-3",   created_by: null,    created_at: "2026-05-18T11:00:00Z" },
+    ],
+    "wn3": [
+      { id: "l601", wallet_id: "wn3", type: "payment",    direction: "credit", amount: 4500, balance_before: 3100, balance_after: 7600,  description: "Projeto API Node.js — conclusão",  category: "Projeto", status: "confirmed", reference_type: "project",    reference_id: "proj-4", created_by: null,    created_at: "2026-06-09T16:00:00Z" },
+      { id: "l602", wallet_id: "wn3", type: "bonus",      direction: "credit", amount: 300,  balance_before: 2800, balance_after: 3100,  description: "Bônus Expert — avaliação 5★",      category: "Bônus",  status: "confirmed", reference_type: null,         reference_id: null,     created_by: null,    created_at: "2026-05-22T10:00:00Z" },
+      { id: "l603", wallet_id: "wn3", type: "withdrawal", direction: "debit",  amount: 1000, balance_before: 3800, balance_after: 2800,  description: "Saque PIX",                        category: "Saque",  status: "confirmed", reference_type: "withdrawal", reference_id: "wd-4",   created_by: null,    created_at: "2026-05-10T09:00:00Z" },
+    ],
+  };
+
+  async getWallets(filters?: Record<string, any>) {
+    await delay();
+    let result = [...this._wallets];
+    if (filters?.owner_type && filters.owner_type !== "all") result = result.filter(w => w.owner_type === filters.owner_type);
+    if (filters?.status     && filters.status     !== "all") result = result.filter(w => w.status     === filters.status);
+    if (filters?.search) { const q = String(filters.search).toLowerCase(); result = result.filter(w => w.owner_name.toLowerCase().includes(q) || w.owner_email.toLowerCase().includes(q)); }
+    if (filters?.min_balance !== undefined) {
+      const min = parseFloat(filters.min_balance);
+      if (min === 0) result = result.filter(w => w.balance === 0);
+      else           result = result.filter(w => w.balance > 0);
+    }
+    const page = parseInt(filters?.page || "1"); const limit = parseInt(filters?.limit || "10");
+    const total = result.length; const start = (page - 1) * limit;
+    return { data: result.slice(start, start + limit), total, page, limit };
+  }
+
+  async getWallet(id: string) {
+    await delay();
+    return this._wallets.find(w => w.id === id) || null;
+  }
+
+  async getWalletStats(params?: Record<string, any>) {
+    await delay();
+    let wallets = [...this._wallets];
+    if (params?.owner_type && params.owner_type !== "all") wallets = wallets.filter(w => w.owner_type === params.owner_type);
+    const walletIds = new Set(wallets.map(w => w.id));
+    const totalBalance   = wallets.reduce((s, w) => s + w.balance, 0);
+    const blockedBalance = wallets.reduce((s, w) => s + w.blocked_balance, 0);
+    const activeCount    = wallets.filter(w => w.status === "active").length;
+    const suspendedCount = wallets.filter(w => w.status === "suspended").length;
+    const zeroCount      = wallets.filter(w => w.balance === 0).length;
+    const allLedger: any[] = Object.entries(this._ledger)
+      .filter(([id]) => walletIds.has(id))
+      .flatMap(([, entries]) => entries);
+    const confirmed = allLedger.filter(e => e.status === "confirmed");
+    const credits   = confirmed.filter(e => e.direction === "credit").reduce((s, e) => s + e.amount, 0);
+    const debits    = confirmed.filter(e => e.direction === "debit").reduce((s, e) => s + e.amount, 0);
+    const sum = (pred: (e: any) => boolean) => confirmed.filter(pred).reduce((s, e) => s + e.amount, 0);
+    const cnt = (pred: (e: any) => boolean) => confirmed.filter(pred).length;
+    const byType = ["company","agency","nomad","partner","platform"].map(t => ({
+      owner_type: t,
+      balance:    wallets.filter(w => w.owner_type === t).reduce((s, w) => s + w.balance, 0),
+      count:      wallets.filter(w => w.owner_type === t).length,
+    })).filter(b => b.count > 0);
+    return {
+      totalBalance, blockedBalance, walletCount: wallets.length,
+      activeCount, suspendedCount, zeroCount,
+      credits, debits,
+      creditCount: cnt(e => e.direction === "credit"),
+      debitCount:  cnt(e => e.direction === "debit"),
+      // Type breakdowns
+      bonus:             sum(e => e.type === "bonus"      && e.direction === "credit"),
+      bonusCount:        cnt(e => e.type === "bonus"      && e.direction === "credit"),
+      withdrawals:       sum(e => e.type === "withdrawal" && e.direction === "debit"),
+      withdrawalCount:   cnt(e => e.type === "withdrawal" && e.direction === "debit"),
+      additionalCredit:  sum(e => e.type === "adjustment" && e.direction === "credit"),
+      additionalCreditCount: cnt(e => e.type === "adjustment" && e.direction === "credit"),
+      planCredits:       sum(e => e.reference_type === "invoice" && e.direction === "credit"),
+      planCreditCount:   cnt(e => e.reference_type === "invoice" && e.direction === "credit"),
+      recurringCredits:  sum(e => e.reference_type === "project" && e.direction === "credit"),
+      recurringCreditCount: cnt(e => e.reference_type === "project" && e.direction === "credit"),
+      commissions:       sum(e => e.type === "commission" && e.direction === "credit"),
+      commissionCount:   cnt(e => e.type === "commission" && e.direction === "credit"),
+      byType,
+    };
+  }
+
+  async getWalletGlobalLedger(params?: Record<string, any>) {
+    await delay();
+    let allEntries: any[] = Object.entries(this._ledger).flatMap(([walletId, entries]) =>
+      entries.map(e => ({
+        ...e,
+        wallet: this._wallets.find(w => w.id === walletId) || { id: walletId, owner_type: "unknown", owner_name: "—" },
+      }))
+    );
+    if (params?.direction && params.direction !== "all") allEntries = allEntries.filter(e => e.direction === params.direction);
+    if (params?.type      && params.type      !== "all") allEntries = allEntries.filter(e => e.type      === params.type);
+    if (params?.reference_type && params.reference_type !== "all") allEntries = allEntries.filter(e => e.reference_type === params.reference_type);
+    if (params?.owner_type     && params.owner_type     !== "all") allEntries = allEntries.filter(e => e.wallet?.owner_type === params.owner_type);
+    allEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const page  = parseInt(params?.page  || "1");
+    const limit = parseInt(params?.limit || "20");
+    const total = allEntries.length;
+    const start = (page - 1) * limit;
+    const confirmed = allEntries.filter(e => e.status === "confirmed");
+    const credits = confirmed.filter(e => e.direction === "credit").reduce((s, e) => s + e.amount, 0);
+    const debits  = confirmed.filter(e => e.direction === "debit").reduce((s, e) => s + e.amount, 0);
+    return { data: allEntries.slice(start, start + limit), total, page, limit, summary: { credits, debits, net: credits - debits } };
+  }
+
+  async getWalletProjections(params?: Record<string, any>) {
+    await delay();
+    const days = parseInt(params?.days || "30");
+    const now  = new Date("2026-06-13T00:00:00Z");
+    const horizon = new Date(now.getTime() + days * 86_400_000);
+    // Mock pending invoices due in next N days
+    const pendingInvoices = [
+      { id: "inv-fut-1", amount: 4800,  due_date: new Date(now.getTime() + 5  * 86400000).toISOString(), company_name: "TechStart Ltda",    description: "Plano Pro — Julho/2026",     invoice_number: "FAT-2026-071" },
+      { id: "inv-fut-2", amount: 9200,  due_date: new Date(now.getTime() + 8  * 86400000).toISOString(), company_name: "Inova Digital",      description: "Plano Business — Julho",     invoice_number: "FAT-2026-072" },
+      { id: "inv-fut-3", amount: 2400,  due_date: new Date(now.getTime() + 12 * 86400000).toISOString(), company_name: "Studio Visual",      description: "Projeto recorrente — ciclo", invoice_number: "FAT-2026-073" },
+      { id: "inv-fut-4", amount: 15000, due_date: new Date(now.getTime() + 18 * 86400000).toISOString(), company_name: "Grupo Expansão",     description: "Plano Enterprise — Jul",     invoice_number: "FAT-2026-074" },
+      { id: "inv-fut-5", amount: 3600,  due_date: new Date(now.getTime() + 22 * 86400000).toISOString(), company_name: "Soluções Rápidas",  description: "Plano Starter — Julho",      invoice_number: "FAT-2026-075" },
+    ].filter(i => new Date(i.due_date) <= horizon);
+    // Mock recurring projects that will generate debits
+    const recurringProjects = [
+      { id: "rp-1", title: "SEO Mensal — TechStart",      client_name: "TechStart Ltda",   value: 3200, status: "in-progress" },
+      { id: "rp-2", title: "Social Media — Inova",        client_name: "Inova Digital",    value: 2800, status: "in-progress" },
+      { id: "rp-3", title: "Dev Backend — Grupo Expansão",client_name: "Grupo Expansão",   value: 8500, status: "in-progress" },
+      { id: "rp-4", title: "UX/UI Mensal — Studio",       client_name: "Studio Visual",    value: 4200, status: "in-progress" },
+    ];
+    const futureCredits = pendingInvoices.reduce((s, i) => s + i.amount, 0);
+    const futureDebits  = recurringProjects.reduce((s, p) => s + p.value, 0);
+    return { horizon: days, horizonDate: horizon.toISOString(), futureCredits, futureDebits, pendingInvoices, recurringProjects };
+  }
+
+  async getWalletLedger(id: string, params?: Record<string, any>) {
+    await delay();
+    let entries = [...(this._ledger[id] || [])];
+    if (params?.direction && params.direction !== "all") entries = entries.filter(e => e.direction === params.direction);
+    if (params?.type      && params.type      !== "all") entries = entries.filter(e => e.type      === params.type);
+    const page = parseInt(params?.page || "1"); const limit = parseInt(params?.limit || "20");
+    const credits = entries.filter(e => e.direction === "credit").reduce((s, e) => s + e.amount, 0);
+    const debits  = entries.filter(e => e.direction === "debit").reduce((s, e) => s + e.amount, 0);
+    const total = entries.length; const start = (page - 1) * limit;
+    return { data: entries.slice(start, start + limit), total, page, limit, summary: { credits, debits, net: credits - debits } };
+  }
+
+  async createWallet(data: Record<string, any>) {
+    await delay();
+    const wallet = { id: `w${Date.now()}`, ...data, balance: data.balance ?? 0, blocked_balance: 0, currency: "BRL", status: "active", owner_name: data.owner_name || "Nova Carteira", owner_email: "", owner_cnpj: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this._wallets.push(wallet);
+    this._ledger[wallet.id] = [];
+    return wallet;
+  }
+
+  async updateWallet(id: string, data: Record<string, any>) {
+    await delay();
+    const idx = this._wallets.findIndex(w => w.id === id);
+    if (idx === -1) throw new Error("Carteira não encontrada");
+    this._wallets[idx] = { ...this._wallets[idx], ...data, updated_at: new Date().toISOString() };
+    return this._wallets[idx];
+  }
+
+  // ── Helpers privados de carteira ──────────────────────────────────────────
+  private _findOrCreateMockWallet(ownerType: string, ownerId: string) {
+    let wallet = this._wallets.find(w => w.owner_type === ownerType && w.owner_id === ownerId);
+    if (!wallet) {
+      wallet = {
+        id: `w-${ownerType}-${ownerId}`,
+        owner_type: ownerType,
+        owner_id: ownerId,
+        balance: 0,
+        blocked_balance: 0,
+        currency: "BRL",
+        status: "active",
+        owner_name: "—",
+        owner_email: "",
+        owner_cnpj: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this._wallets.push(wallet);
+      this._ledger[wallet.id] = [];
+    }
+    return wallet;
+  }
+
+  private _addLedgerEntry(
+    ownerType: string,
+    ownerId: string,
+    type: string,
+    direction: "credit" | "debit",
+    amount: number,
+    description: string,
+    idempotencyKey: string,
+    referenceType?: string,
+    referenceId?: string,
+  ) {
+    // Idempotência: não duplicar se já registrado
+    const allEntries = Object.values(this._ledger).flat() as any[];
+    if (allEntries.some((e: any) => e.idempotency_key === idempotencyKey)) return;
+
+    const wallet = this._findOrCreateMockWallet(ownerType, ownerId);
+    const balanceBefore = wallet.balance;
+    const balanceAfter = direction === "credit" ? balanceBefore + amount : balanceBefore - amount;
+    const entry = {
+      id: `l${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      wallet_id: wallet.id,
+      type,
+      direction,
+      amount,
+      balance_before: balanceBefore,
+      balance_after: balanceAfter,
+      description,
+      idempotency_key: idempotencyKey,
+      status: "confirmed",
+      reference_type: referenceType ?? null,
+      reference_id: referenceId ?? null,
+      created_by: "system",
+      created_at: new Date().toISOString(),
+    };
+    (this._ledger[wallet.id] = this._ledger[wallet.id] || []).unshift(entry);
+    wallet.balance = balanceAfter;
+  }
+
+  async createWalletAdjustment(id: string, data: Record<string, any>) {
+    await delay();
+    const wallet = this._wallets.find(w => w.id === id);
+    if (!wallet) throw new Error("Carteira não encontrada");
+    const balanceBefore = wallet.balance;
+    const balanceAfter  = data.direction === "credit" ? balanceBefore + data.amount : balanceBefore - data.amount;
+    if (data.direction === "debit" && balanceAfter < 0) throw new Error("Saldo insuficiente");
+    const entry = { id: `l${Date.now()}`, wallet_id: id, type: "adjustment", direction: data.direction, amount: data.amount, balance_before: balanceBefore, balance_after: balanceAfter, description: data.description, category: data.category || "Ajuste", notes: data.notes || "", status: "confirmed", reference_type: data.reference_type || null, reference_id: data.reference_id || null, created_by: "admin", created_at: new Date().toISOString() };
+    (this._ledger[id] = this._ledger[id] || []).unshift(entry);
+    wallet.balance = balanceAfter;
+    return entry;
+  }
+
+  // ─── Squad (mock) ─────────────────────────────────────────────────────────
+  private _squad: any[] = [];
+  private _squadCycles: any[] = [];
+
+  async getSquadStats() {
+    await delay();
+    const total = this._squad.length;
+    const active = this._squad.filter(s => s.status === "active").length;
+    const totalLimit = this._squad.reduce((s, c) => s + (c.credit_limit || 0), 0);
+    const wallets = this._wallets.filter(w => this._squad.some(s => s.company_id === w.owner_id));
+    const totalUsed = wallets.reduce((s, w) => s + Math.abs(Math.min(0, w.balance)), 0);
+    return { totalSquad: total, activeSquad: active, pausedSquad: 0, cancelledSquad: total - active, delinquentSquad: 0, totalCreditLimit: totalLimit, totalCreditUsed: totalUsed, totalCreditAvailable: totalLimit - totalUsed, totalMonthlyMinimum: this._squad.reduce((s, c) => s + (c.monthly_minimum || 0), 0), openCycles: this._squadCycles.filter(c => c.status === "open").length, openInvoices: 0, overdueInvoices: 0 };
+  }
+
+  async getSquadList(params?: Record<string, any>) {
+    await delay();
+    const result = this._squad.map(s => {
+      const company = (this as any)._clients?.find((c: any) => c.id === s.company_id) || { id: s.company_id, name: "Empresa" };
+      const wallet = this._wallets.find(w => w.owner_id === s.company_id);
+      const cycle = this._squadCycles.find(c => c.squad_config_id === s.id && c.status === "open");
+      const balance = wallet?.balance ?? 0;
+      return { ...s, company, wallet: wallet ?? null, current_cycle: cycle ?? null, balance, credit_available: Math.max(0, s.credit_limit + balance), credit_used: Math.abs(Math.min(0, balance)) };
+    });
+    return { data: result, total: result.length, page: 1, limit: 50 };
+  }
+
+  async getSquad(id: string) {
+    await delay();
+    const s = this._squad.find(x => x.id === id);
+    if (!s) throw new Error("Squad não encontrado");
+    const wallet = this._wallets.find(w => w.owner_id === s.company_id);
+    const cycle = this._squadCycles.find(c => c.squad_config_id === id && c.status === "open");
+    const balance = wallet?.balance ?? 0;
+    return { ...s, wallet: wallet ?? null, current_cycle: cycle ?? null, balance, credit_available: Math.max(0, s.credit_limit + balance), credit_used: Math.abs(Math.min(0, balance)) };
+  }
+
+  async createSquad(data: Record<string, any>) {
+    await delay();
+    const existing = this._squad.find(s => s.company_id === data.company_id);
+    if (existing) throw new Error("Esta empresa já possui configuração Squad");
+    const id = `sq-${Date.now()}`;
+    const config = { id, ...data, status: data.status ?? "active", started_at: data.started_at ?? new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this._squad.push(config);
+    // Criar primeiro ciclo
+    const cycleId = `sqc-${Date.now()}`;
+    this._squadCycles.push({ id: cycleId, squad_config_id: id, company_id: data.company_id, started_at: new Date().toISOString(), status: "open", total_consumed: 0, minimum_adjustment: 0, total_invoiced: 0 });
+    // Garantir carteira
+    this._findOrCreateMockWallet("company", data.company_id);
+    const wallet = this._wallets.find(w => w.owner_id === data.company_id);
+    return { ...config, wallet, current_cycle: this._squadCycles[this._squadCycles.length - 1], balance: wallet?.balance ?? 0, credit_available: data.credit_limit, credit_used: 0 };
+  }
+
+  async updateSquad(id: string, data: Record<string, any>) {
+    await delay();
+    const idx = this._squad.findIndex(s => s.id === id);
+    if (idx === -1) throw new Error("Squad não encontrado");
+    this._squad[idx] = { ...this._squad[idx], ...data, updated_at: new Date().toISOString() };
+    return this._squad[idx];
+  }
+
+  async deleteSquad(id: string) { await delay(); }
+
+  async getSquadCycles(id: string) {
+    await delay();
+    const cycles = this._squadCycles.filter(c => c.squad_config_id === id);
+    return { data: cycles, total: cycles.length, page: 1, limit: 50 };
+  }
+
+  async getSquadCurrentCycle(id: string) {
+    await delay();
+    const squad = this._squad.find(s => s.id === id);
+    const cycle = this._squadCycles.find(c => c.squad_config_id === id && c.status === "open");
+    if (!cycle || !squad) return { cycle: null, ledger_entries: [] };
+    const wallet = this._wallets.find(w => w.owner_id === squad.company_id);
+    const entries = wallet ? (this._ledger[wallet.id] || []).filter((e: any) => e.direction === "debit") : [];
+    return { cycle, ledger_entries: entries };
+  }
+
+  async closeSquadCycle(id: string) {
+    await delay();
+    const squad = this._squad.find(s => s.id === id);
+    if (!squad) throw new Error("Squad não encontrado");
+    const cycleIdx = this._squadCycles.findIndex(c => c.squad_config_id === id && c.status === "open");
+    if (cycleIdx === -1) throw new Error("Nenhum ciclo aberto");
+    const cycle = this._squadCycles[cycleIdx];
+    const totalConsumed = cycle.total_consumed || 0;
+    const minAdj = Math.max(0, squad.monthly_minimum - totalConsumed);
+    const totalInvoiced = Math.max(totalConsumed, squad.monthly_minimum);
+    this._squadCycles[cycleIdx] = { ...cycle, status: "invoiced", closed_at: new Date().toISOString(), total_consumed: totalConsumed, minimum_adjustment: minAdj, total_invoiced: totalInvoiced };
+    const newCycle = { id: `sqc-${Date.now()}`, squad_config_id: id, company_id: squad.company_id, started_at: new Date().toISOString(), status: "open", total_consumed: 0, minimum_adjustment: 0, total_invoiced: 0 };
+    this._squadCycles.push(newCycle);
+    return { closed_cycle: this._squadCycles[cycleIdx], new_cycle: newCycle, summary: { total_consumed: totalConsumed, monthly_minimum: squad.monthly_minimum, minimum_adjustment: minAdj, total_invoiced: totalInvoiced } };
+  }
+
+  async paySquadInvoice(id: string, data: Record<string, any>) {
+    await delay();
+    const squad = this._squad.find(s => s.id === id);
+    if (!squad) throw new Error("Squad não encontrado");
+    const amount = data.amount || 1000;
+    this._addLedgerEntry("company", squad.company_id, "payment", "credit", amount,
+      `Pagamento fatura Squad`, `squad_pay_${data.invoice_id || Date.now()}`, "invoice", data.invoice_id);
+    return { invoice: { id: data.invoice_id, status: "paid", amount }, message: "Pagamento registrado com sucesso" };
+  }
+
+  async squadContract(id: string, data: Record<string, any>) {
+    await delay();
+    const squad = this._squad.find(s => s.id === id);
+    if (!squad) throw new Error("Squad não encontrado");
+    if (squad.status !== "active") throw new Error(`Contratação bloqueada: Squad está ${squad.status}`);
+    const wallet = this._findOrCreateMockWallet("company", squad.company_id);
+    if ((wallet.balance - data.amount) < -squad.credit_limit) throw new Error("Limite Squad insuficiente para esta contratação.");
+    this._addLedgerEntry("company", squad.company_id, "payment", "debit", data.amount,
+      data.description || "Contratação Squad", `squad_contract_${Date.now()}`, data.reference_type || "project", data.reference_id);
+    const cycleIdx = this._squadCycles.findIndex(c => c.squad_config_id === id && c.status === "open");
+    if (cycleIdx !== -1) this._squadCycles[cycleIdx].total_consumed += data.amount;
+    return { success: true, balance_after: wallet.balance, credit_available: Math.max(0, squad.credit_limit + wallet.balance) };
   }
 }
 

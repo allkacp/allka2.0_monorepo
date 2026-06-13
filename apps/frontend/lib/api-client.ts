@@ -317,6 +317,10 @@ class ApiClient {
     return this.post("/dashboard/widgets", { from: from.toISOString(), to: to.toISOString() });
   }
 
+  async getDRE(from?: string, to?: string) {
+    return this.get("/dashboard/dre", { from, to });
+  }
+
   async getMyTasks() {
     return this.get("/tasks", { my: "true", limit: "10" });
   }
@@ -473,8 +477,8 @@ class ApiClient {
     return this.del(`/billing/invoices/${id}`);
   }
 
-  async getBillingStats() {
-    return this.get("/billing/stats");
+  async getBillingStats(params?: { from?: string; to?: string }) {
+    return this.get("/billing/stats", params);
   }
 
   async getFinancialStats() {
@@ -501,6 +505,55 @@ class ApiClient {
   async createWithdrawal(data: Record<string, any>) {
     return this.requestWithdrawal(data);
   }
+
+  // ─── Expenses (Despesas Operacionais) ────────────────────────────────────
+  async getExpenses(filters?: Record<string, any>) {
+    return this.get("/expenses", filters);
+  }
+
+  async getExpense(id: string) {
+    return this.get(`/expenses/${id}`);
+  }
+
+  async createExpense(data: Record<string, any>) {
+    return this.post("/expenses", data);
+  }
+
+  async updateExpense(id: string, data: Record<string, any>) {
+    return this.put(`/expenses/${id}`, data);
+  }
+
+  async deleteExpense(id: string, only_this = false) {
+    return this.del(`/expenses/${id}?only_this=${only_this}`);
+  }
+
+  async getExpenseStats(params?: Record<string, any>) {
+    return this.get("/expenses/stats", params);
+  }
+
+  // ─── Wallets & Ledger ─────────────────────────────────────────────────────
+  async getWallets(filters?: Record<string, any>) { return this.get("/wallets", filters); }
+  async getWallet(id: string) { return this.get(`/wallets/${id}`); }
+  async getWalletStats(params?: Record<string, any>) { return this.get("/wallets/stats", params); }
+  async getWalletLedger(id: string, params?: Record<string, any>) { return this.get(`/wallets/${id}/ledger`, params); }
+  async getWalletGlobalLedger(params?: Record<string, any>) { return this.get("/wallets/ledger", params); }
+  async getWalletProjections(params?: Record<string, any>) { return this.get("/wallets/projections", params); }
+  async createWallet(data: Record<string, any>) { return this.post("/wallets", data); }
+  async updateWallet(id: string, data: Record<string, any>) { return this.put(`/wallets/${id}`, data); }
+  async createWalletAdjustment(id: string, data: Record<string, any>) { return this.post(`/wallets/${id}/adjustment`, data); }
+
+  // ─── Squad ────────────────────────────────────────────────────────────────
+  async getSquadStats() { return this.get("/squad/stats"); }
+  async getSquadList(params?: Record<string, any>) { return this.get("/squad", params); }
+  async getSquad(id: string) { return this.get(`/squad/${id}`); }
+  async createSquad(data: Record<string, any>) { return this.post("/squad", data); }
+  async updateSquad(id: string, data: Record<string, any>) { return this.put(`/squad/${id}`, data); }
+  async deleteSquad(id: string) { return this.delete(`/squad/${id}`); }
+  async getSquadCycles(id: string, params?: Record<string, any>) { return this.get(`/squad/${id}/cycles`, params); }
+  async getSquadCurrentCycle(id: string) { return this.get(`/squad/${id}/current-cycle`); }
+  async closeSquadCycle(id: string) { return this.post(`/squad/${id}/close-cycle`, {}); }
+  async paySquadInvoice(id: string, data: Record<string, any>) { return this.post(`/squad/${id}/pay-invoice`, data); }
+  async squadContract(id: string, data: Record<string, any>) { return this.post(`/squad/${id}/contract`, data); }
 
   // ─── Agency Leadership & Reports ─────────────────────────────────────────
   async getLedAgencies() {

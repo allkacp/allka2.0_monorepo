@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { recordWalletEvent } from "../lib/wallet-service";
 
 const router = Router();
 
@@ -100,6 +101,12 @@ router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, 
       scheduled_for?: string;
     };
 
+    // Capture previous status to detect the "pagamento_efetuado" transition
+    const previous = await prisma.withdrawalRequest.findUnique({
+      where: { id: req.params.id as string },
+      select: { status: true, nomade_id: true, amount: true },
+    });
+
     const data: Record<string, unknown> = {
       status,
       reviewed_by: req.user?.id,
@@ -114,6 +121,22 @@ router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, 
       data,
       include: { nomade: { select: { id: true, name: true } } },
     });
+
+    // ── Registro na carteira (não bloqueia o fluxo) ────────────────────────────
+    // Debita a carteira do nômade apenas na transição para "pagamento_efetuado".
+    if (previous?.status !== "pagamento_efetuado" && status === "pagamento_efetuado" && previous?.nomade_id) {
+      await recordWalletEvent("nomad", previous.nomade_id, {
+        type: "withdrawal",
+        direction: "debit",
+        amount: previous.amount,
+        description: `Saque efetuado — solicitação ${withdrawal.id}`,
+        idempotencyKey: `wd_debit_${withdrawal.id}`,
+        referenceType: "withdrawal",
+        referenceId: withdrawal.id,
+        createdBy: req.user?.id,
+        metadata: { withdrawal_id: withdrawal.id, nomade_id: previous.nomade_id },
+      });
+    }
 
     res.json(withdrawal);
   } catch (err) {

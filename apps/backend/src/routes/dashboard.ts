@@ -298,6 +298,87 @@ router.post("/widgets", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/dashboard/dre?from=&to=
+// DRE (Demonstrativo de Resultado do Exercício) — P&L breakdown for the given period.
+router.get("/dre", verifyToken, async (req, res, next) => {
+  try {
+    const fromParam = req.query.from as string | undefined;
+    const toParam = req.query.to as string | undefined;
+    const now = new Date();
+    const from = fromParam ? new Date(fromParam) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = toParam ? new Date(toParam) : now;
+
+    const dateWhere = { gte: from, lte: to };
+    const paidDateOr = [
+      { paid_at: dateWhere },
+      { paid_at: null as any, created_at: dateWhere },
+    ];
+
+    const [receitaAgg, custosAgg, despesasByCat, despesasTotal] = await Promise.all([
+      // Receita = faturas pagas no período
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr },
+      }),
+      // Custos Diretos (CMV) = pagamentos de nômades efetuados no período
+      prisma.withdrawalRequest.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: "pagamento_efetuado",
+          OR: [
+            { paid_at: dateWhere },
+            { paid_at: null as any, updated_at: dateWhere },
+          ],
+        },
+      }),
+      // Despesas Operacionais agrupadas por categoria
+      prisma.expense.groupBy({
+        by: ["category"],
+        _sum: { amount: true },
+        _count: true,
+        where: {
+          status: { in: ["paga", "pendente", "atrasada"] },
+          due_date: { gte: from, lte: new Date(to.getTime() + 30 * 86_400_000) },
+        },
+        orderBy: { _sum: { amount: "desc" } },
+      }),
+      // Total de despesas operacionais
+      prisma.expense.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: { in: ["paga", "pendente", "atrasada"] },
+          due_date: { gte: from, lte: new Date(to.getTime() + 30 * 86_400_000) },
+        },
+      }),
+    ]);
+
+    const receita = receitaAgg._sum.amount ?? 0;
+    const custosDiretos = custosAgg._sum.amount ?? 0;
+    const lucroBruto = receita - custosDiretos;
+    const margemBruta = receita > 0 ? Math.round((lucroBruto / receita) * 10000) / 100 : 0;
+    const despesas = despesasTotal._sum.amount ?? 0;
+    const lucroOperacional = lucroBruto - despesas;
+    const margemOperacional = receita > 0 ? Math.round((lucroOperacional / receita) * 10000) / 100 : 0;
+
+    res.json({
+      receita,
+      custosDiretos,
+      lucroBruto,
+      margemBruta,
+      despesasOperacionais: despesas,
+      lucroOperacional,
+      margemOperacional,
+      despesasPorCategoria: despesasByCat.map((d) => ({
+        category: d.category,
+        amount: d._sum.amount ?? 0,
+        count: d._count,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/dashboard/my-tasks
 router.get("/my-tasks", verifyToken, async (req, res, next) => {
   try {
