@@ -235,6 +235,150 @@ router.get("/projections", verifyToken, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── Conciliation helpers ─────────────────────────────────────────────────────
+
+// Ledger types that represent real money entering the bank account
+const BANK_IN_TYPES = [
+  "payment",           // card / PIX / boleto payment approved
+  "pix",               // direct PIX credit
+  "boleto",            // boleto compensated
+  "card",              // card charge captured
+  "plan",              // plan payment received
+  "recharge",          // balance top-up paid
+  "additional_credit", // extra credit purchased with real money
+  "invoice_payment",   // invoice paid in cash
+  "invoice",           // invoice ledger entry (legacy)
+  "squad_payment",     // Squad invoice payment
+];
+
+// Ledger types that represent real money leaving the bank account
+const BANK_OUT_TYPES = [
+  "withdrawal",        // saque pago via PIX/TED
+  "transfer",          // transferência bancária
+  "refund",            // reembolso real pago
+  "chargeback",        // estorno financeiro real
+  "bank_fee",          // taxa bancária real
+  "external_payment",  // pagamento externo realizado
+];
+
+// ─── GET /api/wallets/conciliation ─────────────────────────────────────────────
+// Returns only WalletLedger entries with real bank impact (money actually moved
+// in/out of a bank account). Excludes bonus, project debits, internal transfers,
+// adjustments, and any type not in BANK_IN/BANK_OUT lists.
+router.get("/conciliation", verifyToken, async (req, res, next) => {
+  try {
+    const { page, limit, skip } = parsePagination(req.query);
+    const fromRaw   = req.query.from       as string | undefined;
+    const toRaw     = req.query.to         as string | undefined;
+    const ownerType = req.query.owner_type as string | undefined;
+    const walletId  = req.query.wallet_id  as string | undefined;
+    const impact    = req.query.impact     as string | undefined; // bank_in | bank_out | all
+    const origin    = req.query.origin     as string | undefined; // specific type (payment, withdrawal …)
+    const search    = req.query.search     as string | undefined;
+
+    // ── Base filters ──────────────────────────────────────────────────────────
+    const baseWhere: any = { status: "confirmed" };
+    if (walletId) baseWhere.wallet_id = walletId;
+    if (ownerType && ownerType !== "all") baseWhere.wallet = { owner_type: ownerType };
+    if (fromRaw || toRaw) {
+      baseWhere.created_at = {};
+      if (fromRaw) baseWhere.created_at.gte = new Date(fromRaw);
+      if (toRaw)   baseWhere.created_at.lte = new Date(toRaw);
+    }
+    if (search) baseWhere.description = { contains: search };
+
+    // ── Bank-impact filter ────────────────────────────────────────────────────
+    let impactClause: any;
+    if (impact === "bank_in") {
+      const types = origin && BANK_IN_TYPES.includes(origin) ? [origin] : BANK_IN_TYPES;
+      impactClause = { type: { in: types }, direction: "credit" };
+    } else if (impact === "bank_out") {
+      const types = origin && BANK_OUT_TYPES.includes(origin) ? [origin] : BANK_OUT_TYPES;
+      impactClause = { type: { in: types }, direction: "debit" };
+    } else if (origin) {
+      if      (BANK_IN_TYPES.includes(origin))  impactClause = { type: origin, direction: "credit" };
+      else if (BANK_OUT_TYPES.includes(origin)) impactClause = { type: origin, direction: "debit" };
+      else impactClause = { id: "__never__" }; // unknown origin → return nothing
+    } else {
+      impactClause = {
+        OR: [
+          { type: { in: BANK_IN_TYPES },  direction: "credit" },
+          { type: { in: BANK_OUT_TYPES }, direction: "debit"  },
+        ],
+      };
+    }
+
+    const where = { ...baseWhere, ...impactClause };
+
+    // ── Summary always covers all bank-impact entries (ignores impact/origin) ─
+    const summaryWhere = { ...baseWhere };
+    const bankInWhere  = { ...summaryWhere, type: { in: BANK_IN_TYPES },  direction: "credit" };
+    const bankOutWhere = { ...summaryWhere, type: { in: BANK_OUT_TYPES }, direction: "debit"  };
+    const wdWhere      = { ...summaryWhere, type: "withdrawal",            direction: "debit"  };
+
+    const [
+      total, entries,
+      bankInAgg, bankOutAgg, wdAgg,
+      distinctWalletGroups,
+    ] = await Promise.all([
+      prisma.walletLedger.count({ where }),
+      prisma.walletLedger.findMany({
+        where, skip, take: limit, orderBy: { created_at: "desc" },
+        include: { wallet: { select: { id: true, owner_type: true, owner_id: true } } },
+      }),
+      prisma.walletLedger.aggregate({ _sum: { amount: true }, _count: true, where: bankInWhere }),
+      prisma.walletLedger.aggregate({ _sum: { amount: true }, _count: true, where: bankOutWhere }),
+      prisma.walletLedger.aggregate({ _sum: { amount: true }, _count: true, where: wdWhere }),
+      prisma.walletLedger.groupBy({
+        by: ["wallet_id"],
+        where: {
+          ...summaryWhere,
+          OR: [
+            { type: { in: BANK_IN_TYPES },  direction: "credit" },
+            { type: { in: BANK_OUT_TYPES }, direction: "debit"  },
+          ],
+        },
+      }),
+    ]);
+
+    // ── Enrich entries with owner info ────────────────────────────────────────
+    const walletIds = [...new Set(entries.map((e: any) => e.wallet_id))];
+    const rawWallets = walletIds.length
+      ? await prisma.wallet.findMany({
+          where: { id: { in: walletIds } },
+          select: { id: true, owner_type: true, owner_id: true },
+        })
+      : [];
+    const enrichedWallets = await enrichWallets(rawWallets);
+    const walletMap = new Map(enrichedWallets.map((w) => [w.id, w]));
+
+    const bankIn  = bankInAgg._sum.amount  ?? 0;
+    const bankOut = bankOutAgg._sum.amount ?? 0;
+
+    res.json({
+      data: entries.map((e: any) => ({
+        ...e,
+        bank_impact: BANK_IN_TYPES.includes(e.type) && e.direction === "credit"
+          ? "bank_in" : "bank_out",
+        wallet: walletMap.get(e.wallet_id) ?? e.wallet,
+      })),
+      total, page, limit,
+      summary: {
+        bankIn,
+        bankOut,
+        netReal:             bankIn - bankOut,
+        bankInCount:         bankInAgg._count,
+        bankOutCount:        bankOutAgg._count,
+        withdrawals:         wdAgg._sum.amount ?? 0,
+        withdrawalCount:     wdAgg._count,
+        realCredits:         bankIn,
+        realCreditCount:     bankInAgg._count,
+        walletsWithMovement: distinctWalletGroups.length,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/wallets ─────────────────────────────────────────────────────────
 router.get("/", verifyToken, async (req, res, next) => {
   try {

@@ -2648,6 +2648,75 @@ class MockApiClient {
     return { data: entries.slice(start, start + limit), total, page, limit, summary: { credits, debits, net: credits - debits } };
   }
 
+  async getWalletConciliation(params?: Record<string, any>) {
+    await delay();
+    const BANK_IN_TYPES  = ["payment", "pix", "boleto", "card", "plan", "recharge", "additional_credit", "invoice_payment", "invoice", "squad_payment"];
+    const BANK_OUT_TYPES = ["withdrawal", "transfer", "refund", "chargeback", "bank_fee", "external_payment"];
+
+    // Collect all ledger entries enriched with wallet info
+    let allEntries: any[] = Object.entries(this._ledger).flatMap(([walletId, entries]) =>
+      entries.map(e => ({
+        ...e,
+        bank_impact: BANK_IN_TYPES.includes(e.type) && e.direction === "credit" ? "bank_in" : "bank_out",
+        wallet: { ...(this._wallets.find(w => w.id === walletId) || { id: walletId, owner_type: "unknown", owner_name: "—" }) },
+      }))
+    );
+
+    // Keep only confirmed bank-impact entries
+    allEntries = allEntries.filter(e =>
+      e.status === "confirmed" && (
+        (BANK_IN_TYPES.includes(e.type)  && e.direction === "credit") ||
+        (BANK_OUT_TYPES.includes(e.type) && e.direction === "debit")
+      )
+    );
+
+    // Apply filters
+    if (params?.owner_type && params.owner_type !== "all")
+      allEntries = allEntries.filter(e => e.wallet?.owner_type === params.owner_type);
+    if (params?.wallet_id)
+      allEntries = allEntries.filter(e => e.wallet_id === params.wallet_id);
+    if (params?.impact && params.impact !== "all")
+      allEntries = allEntries.filter(e => e.bank_impact === params.impact);
+    if (params?.origin && params.origin !== "all")
+      allEntries = allEntries.filter(e => e.type === params.origin);
+    if (params?.search) {
+      const q = String(params.search).toLowerCase();
+      allEntries = allEntries.filter(e => e.description?.toLowerCase().includes(q));
+    }
+
+    allEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Summary (always over all matching bank entries, before pagination)
+    const bankInAll  = allEntries.filter(e => e.bank_impact === "bank_in");
+    const bankOutAll = allEntries.filter(e => e.bank_impact === "bank_out");
+    const wdAll      = allEntries.filter(e => e.type === "withdrawal" && e.direction === "debit");
+    const bankIn     = bankInAll.reduce((s, e) => s + e.amount, 0);
+    const bankOut    = bankOutAll.reduce((s, e) => s + e.amount, 0);
+    const walletIds  = new Set(allEntries.map(e => e.wallet_id));
+
+    const page  = parseInt(params?.page  || "1");
+    const limit = parseInt(params?.limit || "20");
+    const total = allEntries.length;
+    const start = (page - 1) * limit;
+
+    return {
+      data: allEntries.slice(start, start + limit),
+      total, page, limit,
+      summary: {
+        bankIn,
+        bankOut,
+        netReal:             bankIn - bankOut,
+        bankInCount:         bankInAll.length,
+        bankOutCount:        bankOutAll.length,
+        withdrawals:         wdAll.reduce((s, e) => s + e.amount, 0),
+        withdrawalCount:     wdAll.length,
+        realCredits:         bankIn,
+        realCreditCount:     bankInAll.length,
+        walletsWithMovement: walletIds.size,
+      },
+    };
+  }
+
   async createWallet(data: Record<string, any>) {
     await delay();
     const wallet = { id: `w${Date.now()}`, ...data, balance: data.balance ?? 0, blocked_balance: 0, currency: "BRL", status: "active", owner_name: data.owner_name || "Nova Carteira", owner_email: "", owner_cnpj: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };

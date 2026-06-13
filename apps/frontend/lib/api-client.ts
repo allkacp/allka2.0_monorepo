@@ -538,6 +538,7 @@ class ApiClient {
   async getWalletLedger(id: string, params?: Record<string, any>) { return this.get(`/wallets/${id}/ledger`, params); }
   async getWalletGlobalLedger(params?: Record<string, any>) { return this.get("/wallets/ledger", params); }
   async getWalletProjections(params?: Record<string, any>) { return this.get("/wallets/projections", params); }
+  async getWalletConciliation(params?: Record<string, any>) { return this.get("/wallets/conciliation", params); }
   async createWallet(data: Record<string, any>) { return this.post("/wallets", data); }
   async updateWallet(id: string, data: Record<string, any>) { return this.put(`/wallets/${id}`, data); }
   async createWalletAdjustment(id: string, data: Record<string, any>) { return this.post(`/wallets/${id}/adjustment`, data); }

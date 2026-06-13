@@ -79,6 +79,9 @@ import {
   CalendarClock,
   ArrowUpRight,
   ArrowDownRight,
+  Landmark,
+  ShieldCheck,
+  FileText,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -299,11 +302,24 @@ export default function AdminFinanceiroPage() {
   });
   const [squadFormLoading, setSquadFormLoading] = useState(false);
 
+  // ── state: conciliação bancária ────────────────────────────────────────────
+  const [concilLoading, setConcilLoading] = useState(false);
+  const [concilData, setConcilData] = useState<any[]>([]);
+  const [concilTotal, setConcilTotal] = useState(0);
+  const [concilPage, setConcilPage] = useState(1);
+  const [concilPerPage, setConcilPerPage] = useState(20);
+  const [concilStats, setConcilStats] = useState<any>(null);
+  const [concilDateRange, setConcilDateRange] = useState<DateRange | undefined>(undefined);
+  const [concilImpact, setConcilImpact] = useState("all");   // all | bank_in | bank_out
+  const [concilOrigin, setConcilOrigin] = useState("all");   // all | payment | withdrawal | …
+  const [concilOwnerType, setConcilOwnerType] = useState("all");
+  const [concilSearch, setConcilSearch] = useState("");
+
   // ── state: period ──────────────────────────────────────────────────────────
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   // ── state: UI ──────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<"faturas" | "saques" | "despesas" | "carteiras" | "squad">("faturas");
+  const [activeTab, setActiveTab] = useState<"faturas" | "saques" | "despesas" | "carteiras" | "squad" | "conciliacao">("faturas");
   const [filterOpen, setFilterOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
   // saved filters (session-only, like Projetos)
@@ -319,7 +335,7 @@ export default function AdminFinanceiroPage() {
   const [draftExpType, setDraftExpType] = useState("all");
   const [draftWalletType, setDraftWalletType] = useState("all");
   const [draftWalletStatus, setDraftWalletStatus] = useState("all");
-  const [filterActiveTab, setFilterActiveTab] = useState<"faturas" | "saques" | "despesas" | "carteiras" | "squad">("faturas");
+  const [filterActiveTab, setFilterActiveTab] = useState<"faturas" | "saques" | "despesas" | "carteiras" | "squad" | "conciliacao">("faturas");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -425,6 +441,33 @@ export default function AdminFinanceiroPage() {
   }, []);
 
   useEffect(() => { if (activeTab === "squad") loadSquad(); }, [loadSquad, activeTab]);
+
+  // ── load conciliação ───────────────────────────────────────────────────────
+  const concilFrom = concilDateRange?.from?.toISOString();
+  const concilTo   = concilDateRange?.to?.toISOString();
+
+  const loadConciliation = useCallback(async () => {
+    setConcilLoading(true);
+    try {
+      const params: Record<string, any> = { page: concilPage, limit: concilPerPage };
+      if (concilFrom)                        params.from       = concilFrom;
+      if (concilTo)                          params.to         = concilTo;
+      if (concilImpact !== "all")            params.impact     = concilImpact;
+      if (concilOrigin !== "all")            params.origin     = concilOrigin;
+      if (concilOwnerType !== "all")         params.owner_type = concilOwnerType;
+      if (concilSearch.trim())               params.search     = concilSearch.trim();
+      const res = await apiClient.getWalletConciliation(params);
+      setConcilData(res.data || []);
+      setConcilTotal(res.total || 0);
+      setConcilStats(res.summary || null);
+    } catch (err) {
+      console.error("[Financeiro] conciliation:", err);
+    } finally {
+      setConcilLoading(false);
+    }
+  }, [concilPage, concilPerPage, concilFrom, concilTo, concilImpact, concilOrigin, concilOwnerType, concilSearch]);
+
+  useEffect(() => { if (activeTab === "conciliacao") loadConciliation(); }, [loadConciliation, activeTab]);
 
   // ── load companies ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1115,15 +1158,28 @@ export default function AdminFinanceiroPage() {
                 </span>
               )}
             </Button>
+            <Button
+              size="sm"
+              variant={activeTab === "conciliacao" ? "default" : "ghost"}
+              onClick={() => setActiveTab("conciliacao" as any)}
+              className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                activeTab === "conciliacao"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                  : "hover:bg-background"
+              }`}
+            >
+              <Landmark className="h-3 w-3 mr-1" />
+              Conciliação
+            </Button>
           </div>
 
           {/* Search */}
           <div className="flex-1 relative min-w-0 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder={activeTab === "faturas" ? "Buscar fatura, empresa..." : activeTab === "saques" ? "Buscar parceiro, PIX..." : activeTab === "despesas" ? "Buscar despesa, categoria..." : activeTab === "squad" ? "Buscar empresa Squad..." : "Buscar carteira, titular, e-mail..."}
-              value={activeTab === "faturas" ? invSearch : activeTab === "saques" ? wdSearch : activeTab === "despesas" ? expSearch : activeTab === "squad" ? squadSearch : walletSearch}
-              onChange={(e) => { if (activeTab === "faturas") setInvSearch(e.target.value); else if (activeTab === "saques") setWdSearch(e.target.value); else if (activeTab === "despesas") { setExpSearch(e.target.value); setExpPage(1); } else if (activeTab === "squad") setSquadSearch(e.target.value); else { setWalletSearch(e.target.value); setWalletPage(1); } }}
+              placeholder={activeTab === "faturas" ? "Buscar fatura, empresa..." : activeTab === "saques" ? "Buscar parceiro, PIX..." : activeTab === "despesas" ? "Buscar despesa, categoria..." : activeTab === "squad" ? "Buscar empresa Squad..." : activeTab === "conciliacao" ? "Buscar por descrição, titular..." : "Buscar carteira, titular, e-mail..."}
+              value={activeTab === "faturas" ? invSearch : activeTab === "saques" ? wdSearch : activeTab === "despesas" ? expSearch : activeTab === "squad" ? squadSearch : activeTab === "conciliacao" ? concilSearch : walletSearch}
+              onChange={(e) => { if (activeTab === "faturas") setInvSearch(e.target.value); else if (activeTab === "saques") setWdSearch(e.target.value); else if (activeTab === "despesas") { setExpSearch(e.target.value); setExpPage(1); } else if (activeTab === "squad") setSquadSearch(e.target.value); else if (activeTab === "conciliacao") { setConcilSearch(e.target.value); setConcilPage(1); } else { setWalletSearch(e.target.value); setWalletPage(1); } }}
               className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
             />
           </div>
@@ -1131,11 +1187,12 @@ export default function AdminFinanceiroPage() {
           {/* Items per page + count */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <ItemsPerPageSelect
-              value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "squad" ? "200" : walletPerPage.toString()}
+              value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "squad" ? "200" : activeTab === "conciliacao" ? concilPerPage.toString() : walletPerPage.toString()}
               onValueChange={(v) => {
                 if (activeTab === "faturas") { setInvPerPage(Number(v)); setInvPage(1); }
                 else if (activeTab === "saques") { setWdPerPage(Number(v)); setWdPage(1); }
                 else if (activeTab === "despesas") { setExpPerPage(Number(v)); setExpPage(1); }
+                else if (activeTab === "conciliacao") { setConcilPerPage(Number(v)); setConcilPage(1); }
                 else if (activeTab !== "squad") { setWalletPerPage(Number(v)); setWalletPage(1); }
               }}
             />
@@ -1148,6 +1205,8 @@ export default function AdminFinanceiroPage() {
                 <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{expenseTotal}</span> despesa{expenseTotal !== 1 ? "s" : ""}</>
               ) : activeTab === "squad" ? (
                 <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{squadList.length}</span> empresa{squadList.length !== 1 ? "s" : ""}</>
+              ) : activeTab === "conciliacao" ? (
+                <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{concilTotal}</span> transaç{concilTotal !== 1 ? "ões" : "ão"}</>
               ) : (
                 <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{walletTotal}</span> carteira{walletTotal !== 1 ? "s" : ""}</>
               )}
@@ -2097,6 +2156,235 @@ export default function AdminFinanceiroPage() {
                   </tbody>
                 </table>
               </div>
+            </Card>
+          </>
+        )}
+
+        {/* ── aba Conciliação Bancária ──────────────────────────────────────── */}
+        {activeTab === "conciliacao" && (
+          <>
+            {/* Aviso explicativo */}
+            <div className="flex items-start gap-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
+              <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                Este relatório considera apenas movimentações com entrada ou saída real de dinheiro, para conferência com extratos bancários.
+                Bônus, créditos promocionais e movimentações internas de projetos <strong>não entram</strong> na conciliação.
+              </p>
+            </div>
+
+            {/* Filtros de período + tipo */}
+            <div className="flex flex-wrap items-center gap-2">
+              <AdvancedDateFilter
+                dateRange={concilDateRange}
+                onDateRangeChange={(r) => { setConcilDateRange(r); setConcilPage(1); }}
+              />
+              {concilDateRange && (
+                <button onClick={() => { setConcilDateRange(undefined); setConcilPage(1); }}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                  <X className="h-3 w-3" /> Limpar período
+                </button>
+              )}
+              {/* Impacto: entrada / saída */}
+              <div className="flex items-center gap-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5">
+                {[
+                  { v: "all",      l: "Todas" },
+                  { v: "bank_in",  l: "Entradas" },
+                  { v: "bank_out", l: "Saídas" },
+                ].map(({ v, l }) => (
+                  <button key={v} onClick={() => { setConcilImpact(v); setConcilPage(1); }}
+                    className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                      concilImpact === v
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {/* Origem */}
+              <Select value={concilOrigin} onValueChange={(v) => { setConcilOrigin(v); setConcilPage(1); }}>
+                <SelectTrigger className="h-8 text-xs w-44">
+                  <SelectValue placeholder="Origem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as origens</SelectItem>
+                  <SelectItem value="payment">Pagamento (cartão/PIX/boleto)</SelectItem>
+                  <SelectItem value="pix">PIX direto</SelectItem>
+                  <SelectItem value="boleto">Boleto compensado</SelectItem>
+                  <SelectItem value="plan">Plano</SelectItem>
+                  <SelectItem value="invoice">Fatura paga</SelectItem>
+                  <SelectItem value="additional_credit">Crédito adicional</SelectItem>
+                  <SelectItem value="recharge">Recarga</SelectItem>
+                  <SelectItem value="withdrawal">Saque</SelectItem>
+                  <SelectItem value="refund">Reembolso/Estorno</SelectItem>
+                  <SelectItem value="transfer">Transferência</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Perfil */}
+              <Select value={concilOwnerType} onValueChange={(v) => { setConcilOwnerType(v); setConcilPage(1); }}>
+                <SelectTrigger className="h-8 text-xs w-40">
+                  <SelectValue placeholder="Perfil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as carteiras</SelectItem>
+                  <SelectItem value="company">Empresas</SelectItem>
+                  <SelectItem value="agency">Agências</SelectItem>
+                  <SelectItem value="nomad">Nômades</SelectItem>
+                  <SelectItem value="partner">Parceiros</SelectItem>
+                  <SelectItem value="platform">Plataforma</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Cards de resumo */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Entradas reais",     value: concilStats?.bankIn       ?? 0, fmt, color: "border-emerald-400 dark:border-emerald-600", badge: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400", icon: <ArrowUpCircle className="h-4 w-4 text-emerald-500" />, sub: `${concilStats?.bankInCount ?? 0} transações` },
+                { label: "Saídas reais",       value: concilStats?.bankOut      ?? 0, fmt, color: "border-red-400 dark:border-red-600",     badge: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400",     icon: <ArrowDownCircle className="h-4 w-4 text-red-500" />,     sub: `${concilStats?.bankOutCount ?? 0} transações` },
+                { label: "Saldo líquido real", value: concilStats?.netReal      ?? 0, fmt, color: `${(concilStats?.netReal ?? 0) >= 0 ? "border-blue-400" : "border-orange-400"}`, badge: `${(concilStats?.netReal ?? 0) >= 0 ? "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400" : "bg-orange-100 text-orange-700"}`, icon: <TrendingUp className="h-4 w-4 text-blue-500" />, sub: "Entradas − Saídas" },
+                { label: "Total de transações",value: (concilStats?.bankInCount ?? 0) + (concilStats?.bankOutCount ?? 0), fmt: (v) => v, color: "border-slate-300 dark:border-slate-600", badge: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400", icon: <FileText className="h-4 w-4 text-slate-500" />, sub: "conciliáveis no período" },
+              ].map(({ label, value, fmt: fmtFn, color, badge, icon, sub }) => (
+                <div key={label} className={`rounded-xl border-2 ${color} bg-white dark:bg-slate-900 p-4 shadow-sm`}>
+                  <div className="flex items-center justify-between mb-2">
+                    {icon}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${badge}`}>real</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide leading-tight mb-1">{label}</p>
+                  <p className="text-base font-bold text-slate-800 dark:text-slate-100 tabular-nums">{fmtFn(value)}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{sub}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Saques pagos",          value: concilStats?.withdrawals         ?? 0, fmt,        sub: `${concilStats?.withdrawalCount ?? 0} saques`, color: "border-rose-200",   icon: <ArrowDownRight className="h-4 w-4 text-rose-500" /> },
+                { label: "Créditos reais",         value: concilStats?.realCredits         ?? 0, fmt,        sub: `${concilStats?.realCreditCount ?? 0} entradas`, color: "border-emerald-200", icon: <ArrowUpRight className="h-4 w-4 text-emerald-500" /> },
+                { label: "Carteiras com movimento",value: concilStats?.walletsWithMovement ?? 0, fmt: v => v, sub: "no período filtrado",   color: "border-blue-200",   icon: <Wallet className="h-4 w-4 text-blue-500" /> },
+                { label: "Período",                value: concilDateRange?.from ? `${fmtDate(concilDateRange.from)} → ${fmtDate(concilDateRange.to)}` : "Sem filtro", fmt: v => v, sub: "intervalo selecionado", color: "border-slate-200", icon: <CalendarClock className="h-4 w-4 text-slate-400" /> },
+              ].map(({ label, value, fmt: fmtFn, sub, color, icon }) => (
+                <div key={label} className={`rounded-xl border ${color} bg-white dark:bg-slate-900 p-3 shadow-sm`}>
+                  <div className="flex items-center gap-2 mb-1">{icon}</div>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide leading-tight mb-1">{label}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">{fmtFn(value)}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabela de conciliação */}
+            <Card className="overflow-hidden">
+              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 36rem)" }}>
+                <table className="w-full text-sm">
+                  <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Data/Hora</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Titular</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Perfil</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Origem</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Referência</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {concilLoading ? (
+                      <tr><td colSpan={9} className="py-12 text-center text-sm text-slate-400">Carregando conciliação…</td></tr>
+                    ) : concilData.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-16 text-center text-sm text-slate-400">
+                          <div className="flex flex-col items-center gap-2">
+                            <Landmark className="h-8 w-8 opacity-30" />
+                            <p>Nenhuma movimentação bancária real encontrada</p>
+                            <p className="text-[11px]">Ajuste o período ou os filtros para ver as transações</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      concilData.map((entry, idx) => {
+                        const isBankIn = entry.bank_impact === "bank_in";
+                        const ownerLabels = { company: "Empresa", agency: "Agência", nomad: "Nômade", partner: "Parceiro", platform: "Plataforma" };
+                        const ownerColors = { company: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400", agency: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400", nomad: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400", partner: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400", platform: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400" };
+                        const originLabels = { payment: "Pagamento", pix: "PIX", boleto: "Boleto", card: "Cartão", plan: "Plano", recharge: "Recarga", additional_credit: "Créd. Adicional", invoice_payment: "Fatura", invoice: "Fatura", squad_payment: "Squad", withdrawal: "Saque", transfer: "Transferência", refund: "Reembolso", chargeback: "Estorno", bank_fee: "Taxa Bancária", external_payment: "Pag. Externo" };
+                        return (
+                          <tr key={entry.id} className={idx % 2 === 0 ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]" : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                            <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDateTime(entry.created_at)}</td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-slate-800 dark:text-slate-200 text-xs leading-tight">{entry.wallet?.owner_name ?? "—"}</p>
+                              {entry.wallet?.owner_email && <p className="text-[10px] text-slate-400">{entry.wallet.owner_email}</p>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline" className={`text-[10px] font-semibold ${ownerColors[entry.wallet?.owner_type] || ""}`}>
+                                {ownerLabels[entry.wallet?.owner_type] || entry.wallet?.owner_type || "—"}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isBankIn ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
+                                {isBankIn ? <ArrowUpCircle className="h-2.5 w-2.5" /> : <ArrowDownCircle className="h-2.5 w-2.5" />}
+                                {isBankIn ? "Entrada real" : "Saída real"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">{originLabels[entry.type] || entry.type}</span>
+                            </td>
+                            <td className="px-4 py-3 max-w-xs">
+                              <p className="text-xs text-slate-700 dark:text-slate-300 truncate" title={entry.description}>{entry.description}</p>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`font-bold tabular-nums text-sm ${isBankIn ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                                {isBankIn ? "+" : "−"}{fmt(entry.amount)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {entry.reference_type ? (
+                                <div>
+                                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{entry.reference_type}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono truncate max-w-[100px]" title={entry.reference_id}>{entry.reference_id || "—"}</p>
+                                </div>
+                              ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => openExtrato(entry.wallet)}
+                                  className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                                  title="Abrir carteira"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" /> Carteira
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {/* Paginação */}
+              {concilTotal > 0 && (
+                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <p className="text-xs text-slate-400">{concilTotal} transaç{concilTotal !== 1 ? "ões" : "ão"} conciliável{concilTotal !== 1 ? "is" : ""}</p>
+                  <div className="flex items-center gap-0.5">
+                    {(() => {
+                      const totalPages = Math.max(1, Math.ceil(concilTotal / concilPerPage));
+                      return (
+                        <>
+                          <button onClick={() => setConcilPage(p => Math.max(1, p - 1))} disabled={concilPage === 1}
+                            className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <span className="text-xs text-slate-400 px-1">{concilPage} / {totalPages}</span>
+                          <button onClick={() => setConcilPage(p => Math.min(totalPages, p + 1))} disabled={concilPage === totalPages}
+                            className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </Card>
           </>
         )}
