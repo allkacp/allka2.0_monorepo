@@ -291,6 +291,7 @@ export default function AdminFinanceiroPage() {
   const [squadList, setSquadList] = useState<any[]>([]);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadSearch, setSquadSearch] = useState("");
+  const [squadPerPage, setSquadPerPage] = useState(50);
   const [squadAddOpen, setSquadAddOpen] = useState(false);
   const [squadEditTarget, setSquadEditTarget] = useState<any>(null);
   const [squadDetailTarget, setSquadDetailTarget] = useState<any>(null);
@@ -307,7 +308,7 @@ export default function AdminFinanceiroPage() {
   const [concilData, setConcilData] = useState<any[]>([]);
   const [concilTotal, setConcilTotal] = useState(0);
   const [concilPage, setConcilPage] = useState(1);
-  const [concilPerPage, setConcilPerPage] = useState(20);
+  const [concilPerPage, setConcilPerPage] = useState(25);
   const [concilStats, setConcilStats] = useState<any>(null);
   const [concilDateRange, setConcilDateRange] = useState<DateRange | undefined>(undefined);
   const [concilImpact, setConcilImpact] = useState("all");   // all | bank_in | bank_out
@@ -1186,18 +1187,17 @@ export default function AdminFinanceiroPage() {
 
           {/* Items per page + count */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {activeTab !== "squad" && (
-              <ItemsPerPageSelect
-                value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "conciliacao" ? concilPerPage.toString() : walletPerPage.toString()}
-                onValueChange={(v) => {
-                  if (activeTab === "faturas") { setInvPerPage(Number(v)); setInvPage(1); }
-                  else if (activeTab === "saques") { setWdPerPage(Number(v)); setWdPage(1); }
-                  else if (activeTab === "despesas") { setExpPerPage(Number(v)); setExpPage(1); }
-                  else if (activeTab === "conciliacao") { setConcilPerPage(Number(v)); setConcilPage(1); }
-                  else { setWalletPerPage(Number(v)); setWalletPage(1); }
-                }}
-              />
-            )}
+            <ItemsPerPageSelect
+              value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "squad" ? squadPerPage.toString() : activeTab === "conciliacao" ? concilPerPage.toString() : walletPerPage.toString()}
+              onValueChange={(v) => {
+                if (activeTab === "faturas") { setInvPerPage(Number(v)); setInvPage(1); }
+                else if (activeTab === "saques") { setWdPerPage(Number(v)); setWdPage(1); }
+                else if (activeTab === "despesas") { setExpPerPage(Number(v)); setExpPage(1); }
+                else if (activeTab === "squad") { setSquadPerPage(Number(v)); }
+                else if (activeTab === "conciliacao") { setConcilPerPage(Number(v)); setConcilPage(1); }
+                else { setWalletPerPage(Number(v)); setWalletPage(1); }
+              }}
+            />
             <span className="text-xs text-slate-400 whitespace-nowrap">
               {activeTab === "faturas" ? (
                 <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{invoiceTotal}</span> fatura{invoiceTotal !== 1 ? "s" : ""}</>
@@ -2096,6 +2096,7 @@ export default function AdminFinanceiroPage() {
                     ) : (
                       squadList
                         .filter(s => !squadSearch.trim() || s.company?.name?.toLowerCase().includes(squadSearch.toLowerCase()))
+                        .slice(0, squadPerPage)
                         .map((sq, idx) => {
                           const walletBalance = sq.wallet?.balance ?? 0;
                           const available = (sq.credit_limit ?? 0) + walletBalance;
