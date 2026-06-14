@@ -549,7 +549,7 @@ class ApiClient {
   async getSquad(id: string) { return this.get(`/squad/${id}`); }
   async createSquad(data: Record<string, any>) { return this.post("/squad", data); }
   async updateSquad(id: string, data: Record<string, any>) { return this.put(`/squad/${id}`, data); }
-  async deleteSquad(id: string) { return this.delete(`/squad/${id}`); }
+  async deleteSquad(id: string) { return this.del(`/squad/${id}`); }
   async getSquadCycles(id: string, params?: Record<string, any>) { return this.get(`/squad/${id}/cycles`, params); }
   async getSquadCurrentCycle(id: string) { return this.get(`/squad/${id}/current-cycle`); }
   async closeSquadCycle(id: string) { return this.post(`/squad/${id}/close-cycle`, {}); }

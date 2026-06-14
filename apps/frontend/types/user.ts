@@ -312,7 +312,8 @@ export type AccountType =
   | "agencias"
   | "nomades"
   | "admin"
-  | "parceiro";
+  | "parceiro"
+  | "lider";
 export type AccountSubType = "company" | "in-house" | null;
 
 export type UserRole =

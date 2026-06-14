@@ -173,11 +173,7 @@ export function CatalogCartStickyBar({
           <div className="max-h-[60vh] overflow-y-auto px-4 py-4 sm:px-6">
             <div className="space-y-3">
               {items.map((item) => {
-                const summary =
-                  item.productDescription?.trim() ||
-                  item.product?.summaryDescription?.trim() ||
-                  item.product?.description?.trim() ||
-                  "";
+                const summary = item.productDescription?.trim() || "";
                 return (
                   <div
                     key={item.id}

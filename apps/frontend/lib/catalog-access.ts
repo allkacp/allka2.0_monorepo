@@ -62,7 +62,7 @@ export function resolveCatalogIdentity(accountType: AccountType): CatalogIdentit
             ? "nomad"
             : accountType === "parceiro" || role === "partner"
               ? "partner"
-              : role === "lider"
+              : accountType === "lider" || role === "lider"
                 ? "leader"
                 : "company";
 
