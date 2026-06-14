@@ -6,6 +6,16 @@ import { validate, parsePagination } from "../middleware/validate";
 
 const router = Router();
 
+function getQueryString(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : undefined;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return undefined;
+}
+
 const EXPENSE_STATUSES = ["prevista", "pendente", "paga", "atrasada", "cancelada"] as const;
 const EXPENSE_TYPES = ["fixa", "variável"] as const;
 const EXPENSE_RECURRENCES = ["única", "mensal", "anual", "personalizada"] as const;
@@ -35,15 +45,15 @@ const updateSchema = createSchema.partial();
 router.get("/", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const status       = req.query.status       as string | undefined;
-    const category     = req.query.category     as string | undefined;
-    const type         = req.query.type         as string | undefined;
-    const recurrence   = req.query.recurrence   as string | undefined;
-    const department   = req.query.department   as string | undefined;
-    const competence   = req.query.competence   as string | undefined;
-    const search       = req.query.search       as string | undefined;
-    const fromRaw      = req.query.from         as string | undefined;
-    const toRaw        = req.query.to           as string | undefined;
+    const status       = getQueryString(req.query.status);
+    const category     = getQueryString(req.query.category);
+    const type         = getQueryString(req.query.type);
+    const recurrence   = getQueryString(req.query.recurrence);
+    const department   = getQueryString(req.query.department);
+    const competence   = getQueryString(req.query.competence);
+    const search       = getQueryString(req.query.search);
+    const fromRaw      = getQueryString(req.query.from);
+    const toRaw        = getQueryString(req.query.to);
 
     const where: Record<string, unknown> = {};
     if (status)     where["status"]           = status;
@@ -84,9 +94,9 @@ router.get("/", verifyToken, async (req, res, next) => {
 // ─── GET /api/expenses/stats ────────────────────────────────────────────────
 router.get("/stats", verifyToken, async (req, res, next) => {
   try {
-    const fromRaw  = req.query.from      as string | undefined;
-    const toRaw    = req.query.to        as string | undefined;
-    const competence = req.query.competence as string | undefined;
+    const fromRaw    = getQueryString(req.query.from);
+    const toRaw      = getQueryString(req.query.to);
+    const competence = getQueryString(req.query.competence);
 
     const where: Record<string, unknown> = {};
     if (competence) where["competence_month"] = competence;
@@ -129,7 +139,7 @@ router.get("/stats", verifyToken, async (req, res, next) => {
 // ─── GET /api/expenses/:id ─────────────────────────────────────────────────
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
-    const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });
+    const expense = await prisma.expense.findUnique({ where: { id: getQueryString(req.params.id)! } });
     if (!expense) { res.status(404).json({ error: "Despesa não encontrada" }); return; }
     res.json(expense);
   } catch (err) { next(err); }
@@ -195,7 +205,7 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
     if (data["status"] === "paga" && !data["paid_at"]) data["paid_at"] = new Date();
 
     const expense = await prisma.expense.update({
-      where: { id: req.params.id },
+      where: { id: getQueryString(req.params.id)! },
       data: data as any,
     });
     res.json(expense);
@@ -205,8 +215,9 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
 // ─── DELETE /api/expenses/:id ──────────────────────────────────────────────
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    const only_this = req.query.only_this === "true";
-    const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });
+    const only_this = getQueryString(req.query.only_this) === "true";
+    const expenseId = getQueryString(req.params.id)!;
+    const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
     if (!expense) { res.status(404).json({ error: "Despesa não encontrada" }); return; }
 
     if (!only_this && expense.is_recurring_base && expense.recurrence_id) {
@@ -216,7 +227,7 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
         data: { status: "cancelada" },
       });
     }
-    await prisma.expense.delete({ where: { id: req.params.id } });
+    await prisma.expense.delete({ where: { id: expenseId } });
     res.status(204).send();
   } catch (err) { next(err); }
 });

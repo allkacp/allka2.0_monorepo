@@ -1186,16 +1186,18 @@ export default function AdminFinanceiroPage() {
 
           {/* Items per page + count */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <ItemsPerPageSelect
-              value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "squad" ? "200" : activeTab === "conciliacao" ? concilPerPage.toString() : walletPerPage.toString()}
-              onValueChange={(v) => {
-                if (activeTab === "faturas") { setInvPerPage(Number(v)); setInvPage(1); }
-                else if (activeTab === "saques") { setWdPerPage(Number(v)); setWdPage(1); }
-                else if (activeTab === "despesas") { setExpPerPage(Number(v)); setExpPage(1); }
-                else if (activeTab === "conciliacao") { setConcilPerPage(Number(v)); setConcilPage(1); }
-                else if (activeTab !== "squad") { setWalletPerPage(Number(v)); setWalletPage(1); }
-              }}
-            />
+            {activeTab !== "squad" && (
+              <ItemsPerPageSelect
+                value={activeTab === "faturas" ? invPerPage.toString() : activeTab === "saques" ? wdPerPage.toString() : activeTab === "despesas" ? expPerPage.toString() : activeTab === "conciliacao" ? concilPerPage.toString() : walletPerPage.toString()}
+                onValueChange={(v) => {
+                  if (activeTab === "faturas") { setInvPerPage(Number(v)); setInvPage(1); }
+                  else if (activeTab === "saques") { setWdPerPage(Number(v)); setWdPage(1); }
+                  else if (activeTab === "despesas") { setExpPerPage(Number(v)); setExpPage(1); }
+                  else if (activeTab === "conciliacao") { setConcilPerPage(Number(v)); setConcilPage(1); }
+                  else { setWalletPerPage(Number(v)); setWalletPage(1); }
+                }}
+              />
+            )}
             <span className="text-xs text-slate-400 whitespace-nowrap">
               {activeTab === "faturas" ? (
                 <>de <span className="font-semibold text-slate-600 dark:text-slate-300">{invoiceTotal}</span> fatura{invoiceTotal !== 1 ? "s" : ""}</>

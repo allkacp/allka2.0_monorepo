@@ -6,6 +6,16 @@ import { validate, parsePagination } from "../middleware/validate";
 
 const router = Router();
 
+function getQueryString(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : undefined;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return undefined;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type OwnerType = "company" | "agency" | "nomad" | "partner" | "platform";
@@ -61,9 +71,9 @@ async function enrichWallets(wallets: any[]) {
 // ─── GET /api/wallets/stats ────────────────────────────────────────────────────
 router.get("/stats", verifyToken, async (req, res, next) => {
   try {
-    const fromRaw   = req.query.from        as string | undefined;
-    const toRaw     = req.query.to          as string | undefined;
-    const ownerType = req.query.owner_type  as string | undefined;
+    const fromRaw   = getQueryString(req.query.from);
+    const toRaw     = getQueryString(req.query.to);
+    const ownerType = getQueryString(req.query.owner_type);
 
     const walletWhere: Record<string, any> = {};
     if (ownerType && ownerType !== "all") walletWhere.owner_type = ownerType;
@@ -133,13 +143,13 @@ router.get("/stats", verifyToken, async (req, res, next) => {
 router.get("/ledger", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const direction  = req.query.direction      as string | undefined;
-    const type       = req.query.type           as string | undefined;
-    const status     = req.query.status         as string | undefined;
-    const fromRaw    = req.query.from           as string | undefined;
-    const toRaw      = req.query.to             as string | undefined;
-    const ownerType  = req.query.owner_type     as string | undefined;
-    const refType    = req.query.reference_type as string | undefined;
+    const direction  = getQueryString(req.query.direction);
+    const type       = getQueryString(req.query.type);
+    const status     = getQueryString(req.query.status);
+    const fromRaw    = getQueryString(req.query.from);
+    const toRaw      = getQueryString(req.query.to);
+    const ownerType  = getQueryString(req.query.owner_type);
+    const refType    = getQueryString(req.query.reference_type);
 
     const where: Record<string, any> = {};
     if (direction && direction !== "all") where.direction      = direction;
@@ -194,7 +204,7 @@ router.get("/ledger", verifyToken, async (req, res, next) => {
 // for the next N days (default 30). Not tied to wallet ledger — it's a projection.
 router.get("/projections", verifyToken, async (req, res, next) => {
   try {
-    const days    = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const days    = Math.min(parseInt(getQueryString(req.query.days) ?? "", 10) || 30, 365);
     const now     = new Date();
     const horizon = new Date(now.getTime() + days * 86_400_000);
 
@@ -268,13 +278,13 @@ const BANK_OUT_TYPES = [
 router.get("/conciliation", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const fromRaw   = req.query.from       as string | undefined;
-    const toRaw     = req.query.to         as string | undefined;
-    const ownerType = req.query.owner_type as string | undefined;
-    const walletId  = req.query.wallet_id  as string | undefined;
-    const impact    = req.query.impact     as string | undefined; // bank_in | bank_out | all
-    const origin    = req.query.origin     as string | undefined; // specific type (payment, withdrawal …)
-    const search    = req.query.search     as string | undefined;
+    const fromRaw   = getQueryString(req.query.from);
+    const toRaw     = getQueryString(req.query.to);
+    const ownerType = getQueryString(req.query.owner_type);
+    const walletId  = getQueryString(req.query.wallet_id);
+    const impact    = getQueryString(req.query.impact); // bank_in | bank_out | all
+    const origin    = getQueryString(req.query.origin); // specific type (payment, withdrawal …)
+    const search    = getQueryString(req.query.search);
 
     // ── Base filters ──────────────────────────────────────────────────────────
     const baseWhere: any = { status: "confirmed" };
@@ -383,10 +393,10 @@ router.get("/conciliation", verifyToken, async (req, res, next) => {
 router.get("/", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const ownerType = req.query.owner_type as string | undefined;
-    const status    = req.query.status    as string | undefined;
-    const search    = req.query.search    as string | undefined;
-    const minBal    = req.query.min_balance ? parseFloat(req.query.min_balance as string) : undefined;
+    const ownerType = getQueryString(req.query.owner_type);
+    const status    = getQueryString(req.query.status);
+    const search    = getQueryString(req.query.search);
+    const minBal    = req.query.min_balance ? parseFloat(getQueryString(req.query.min_balance) ?? "") : undefined;
 
     const where: Record<string, any> = {};
     if (ownerType && ownerType !== "all") where.owner_type = ownerType;
@@ -420,7 +430,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 // ─── GET /api/wallets/:id ─────────────────────────────────────────────────────
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { id: req.params.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { id: getQueryString(req.params.id)! } });
     if (!wallet) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
     const [enriched] = await enrichWallets([wallet]);
     res.json(enriched);
@@ -431,13 +441,13 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 router.get("/:id/ledger", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const direction = req.query.direction as string | undefined;
-    const type      = req.query.type      as string | undefined;
-    const status    = req.query.status    as string | undefined;
-    const fromRaw   = req.query.from      as string | undefined;
-    const toRaw     = req.query.to        as string | undefined;
+    const direction = getQueryString(req.query.direction);
+    const type      = getQueryString(req.query.type);
+    const status    = getQueryString(req.query.status);
+    const fromRaw   = getQueryString(req.query.from);
+    const toRaw     = getQueryString(req.query.to);
 
-    const where: Record<string, any> = { wallet_id: req.params.id };
+    const where: Record<string, any> = { wallet_id: getQueryString(req.params.id)! };
     if (direction && direction !== "all") where.direction = direction;
     if (type      && type      !== "all") where.type      = type;
     if (status    && status    !== "all") where.status    = status;
@@ -509,7 +519,7 @@ const adjustSchema = z.object({
 
 router.post("/:id/adjustment", verifyToken, validate(adjustSchema), async (req, res, next) => {
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { id: req.params.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { id: getQueryString(req.params.id)! } });
     if (!wallet) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
 
     const { direction, amount, description, category, notes, reference_type, reference_id } = req.body;
@@ -549,7 +559,7 @@ const updateSchema = z.object({
 
 router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
   try {
-    const wallet = await prisma.wallet.update({ where: { id: req.params.id }, data: req.body });
+    const wallet = await prisma.wallet.update({ where: { id: getQueryString(req.params.id)! }, data: req.body });
     const [enriched] = await enrichWallets([wallet]);
     res.json(enriched);
   } catch (err) { next(err); }
