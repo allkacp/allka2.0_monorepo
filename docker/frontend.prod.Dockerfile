@@ -10,7 +10,7 @@ ENV VITE_USE_MOCKS=${VITE_USE_MOCKS}
 COPY package.json package-lock.json ./
 COPY apps/frontend/package.json apps/frontend/package.json
 COPY apps/backend/package.json apps/backend/package.json
-RUN npm ci --workspace apps/frontend
+RUN npm ci --workspace apps/frontend --ignore-scripts
 
 COPY apps/frontend apps/frontend
 WORKDIR /app/apps/frontend

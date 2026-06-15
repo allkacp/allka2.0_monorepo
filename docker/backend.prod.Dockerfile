@@ -9,7 +9,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/frontend/package.json apps/frontend/package.json
-RUN npm ci --workspace apps/backend
+RUN npm ci --workspace apps/backend --ignore-scripts
 
 COPY apps/backend apps/backend
 WORKDIR /app/apps/backend
@@ -28,7 +28,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/frontend/package.json apps/frontend/package.json
-RUN npm ci --workspace apps/backend --omit=dev \
+RUN npm ci --workspace apps/backend --omit=dev --ignore-scripts \
   && npm cache clean --force
 
 COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
