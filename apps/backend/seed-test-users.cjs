@@ -1,6 +1,7 @@
 // seed-test-users.cjs
-// Cria 8 usuários de teste idempotentemente para desenvolvimento.
-// Requer: SEED_TEST_USER_PASSWORD no .env
+// Cria/atualiza usuários de teste idempotentemente.
+// Senha: process.env.SEED_TEST_USER_PASSWORD (fallback "123456").
+// Em produção, só roda com ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true.
 
 "use strict";
 
@@ -10,15 +11,21 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
 if (process.env.NODE_ENV === "production") {
-  console.error("❌ Este script não pode rodar em produção.");
-  process.exit(1);
+  if (process.env.ALLOW_TEST_USERS_SEED_IN_PRODUCTION !== "true") {
+    console.error(
+      "❌ Bloqueado em produção.\n" +
+        "   Para criar/atualizar os usuários de teste em produção, defina:\n" +
+        "   ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true",
+    );
+    process.exit(1);
+  }
+  console.warn(
+    "⚠️  Rodando seed de usuários de teste em PRODUÇÃO (flag habilitada).",
+  );
 }
 
-const DEFAULT_PASSWORD = process.env.SEED_TEST_USER_PASSWORD;
-if (!DEFAULT_PASSWORD) {
-  console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
-  process.exit(1);
-}
+// Fallback "123456" se a env não estiver definida.
+const DEFAULT_PASSWORD = process.env.SEED_TEST_USER_PASSWORD || "123456";
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
@@ -28,12 +35,17 @@ async function hashPassword(plain) {
 }
 
 async function upsertUser({ email, name, role, account_type }) {
+  const password_hash = await hashPassword(DEFAULT_PASSWORD);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log(`  ↩  Já existe: ${email}`);
-    return existing;
+    // Atualiza a senha e reativa, preservando role/account_type/name.
+    const user = await prisma.user.update({
+      where: { email },
+      data: { password_hash, is_active: true },
+    });
+    console.log(`  ↻  Senha atualizada: ${email}`);
+    return user;
   }
-  const password_hash = await hashPassword(DEFAULT_PASSWORD);
   const user = await prisma.user.create({
     data: {
       email,
@@ -50,7 +62,7 @@ async function upsertUser({ email, name, role, account_type }) {
 
 async function main() {
   console.log("▶ Seeding test users...");
-  console.log(`  Senha: (definida em SEED_TEST_USER_PASSWORD)\n`);
+  console.log(`  Senha: ${DEFAULT_PASSWORD}\n`);
 
   // ── 1. Admin ──────────────────────────────────────────────────────────────
   await upsertUser({
@@ -234,7 +246,7 @@ async function main() {
   }
 
   console.log("\n✅ Seed de usuários de teste concluído.");
-  console.log("   Logins disponíveis (senha: SEED_TEST_USER_PASSWORD):");
+  console.log(`   Logins disponíveis (senha: ${DEFAULT_PASSWORD}):`);
   console.log("   admin@allka.test              →  /login");
   console.log("   agencia@allka.test            →  /agencia/login");
   console.log("   nomade@allka.test             →  /nomades/login");

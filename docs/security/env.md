@@ -62,7 +62,8 @@ cp apps/frontend/.env.example apps/frontend/.env.development
 | `JWT_SECRET` | Sim | Mínimo 32 caracteres, aleatório |
 | `PORT` | Não | Padrão: `3001` |
 | `NODE_ENV` | Não | `development` ou `production` |
-| `SEED_TEST_USER_PASSWORD` | Seeds de teste | Senha dos usuários `.allka.test` |
+| `SEED_TEST_USER_PASSWORD` | Não | Senha dos usuários `.allka.test`. Fallback: `123456` |
+| `ALLOW_TEST_USERS_SEED_IN_PRODUCTION` | Não | `true` libera o seed de usuários de teste em produção. Padrão: bloqueado |
 
 ### Frontend (`apps/frontend/.env.development`)
 
@@ -115,13 +116,31 @@ ele deve ser rotacionado imediatamente:
 
 ## Seeds de teste em produção
 
-Todos os seeds de teste têm trava explícita:
+O seed principal (`prisma/seed.ts`) é **sempre bloqueado** em produção.
+
+O seed dos 6 usuários de teste (`seed-test-users.ts` / `.cjs`) é bloqueado em
+produção por padrão, mas pode ser liberado com uma flag explícita:
 
 ```ts
 if (process.env.NODE_ENV === "production") {
-  throw new Error("Este seed não pode rodar em produção.");
+  if (process.env.ALLOW_TEST_USERS_SEED_IN_PRODUCTION !== "true") {
+    // bloqueado — instrui como habilitar
+    process.exit(1);
+  }
 }
 ```
 
-Nunca executar `npm run db:seed:test-users` em ambiente de produção.
-O seed principal (`prisma/seed.ts`) também tem essa trava.
+**Local (dev):**
+```bash
+npm run db:seed:test-users -w apps/backend
+```
+
+**Produção / staging (apenas se realmente necessário):**
+```bash
+NODE_ENV=production ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true \
+SEED_TEST_USER_PASSWORD=123456 \
+npm run db:seed:test-users -w apps/backend
+```
+
+Esse seed afeta **somente** os 6 e-mails `*@allka.test`. Atualiza a senha mesmo
+se o usuário já existir e preserva `role`/`account_type` de usuários existentes.

@@ -1,13 +1,15 @@
 /**
  * seed-test-users.ts
- * Cria os usuários de teste para uso com o seletor de login de dev.
+ * Cria/atualiza APENAS os 6 usuários de teste do seletor de login.
  *
- * Execução: npx tsx seed-test-users.ts
+ * Execução local:  npx tsx seed-test-users.ts
  *
  * Regras:
  *  - Idempotente: usa upsert — não duplica nem apaga usuários existentes.
- *  - Não altera usuários fora desta lista.
- *  - Destinado apenas a ambientes de desenvolvimento.
+ *  - Afeta SOMENTE os e-mails listados em `users` abaixo.
+ *  - Sempre atualiza a senha, mesmo se o usuário já existir.
+ *  - Preserva role/account_type de usuários já existentes.
+ *  - Em produção, só roda com ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true.
  */
 
 import "dotenv/config";
@@ -16,16 +18,22 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Senha dos usuários de teste. Fallback "123456" se a env não estiver definida.
+const PASSWORD = process.env.SEED_TEST_USER_PASSWORD || "123456";
+
 async function main() {
   if (process.env.NODE_ENV === "production") {
-    console.error("❌ Este script não pode rodar em produção.");
-    process.exit(1);
-  }
-
-  const PASSWORD = process.env.SEED_TEST_USER_PASSWORD;
-  if (!PASSWORD) {
-    console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
-    process.exit(1);
+    if (process.env.ALLOW_TEST_USERS_SEED_IN_PRODUCTION !== "true") {
+      console.error(
+        "❌ Bloqueado em produção.\n" +
+          "   Para criar/atualizar os usuários de teste em produção, defina:\n" +
+          "   ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true",
+      );
+      process.exit(1);
+    }
+    console.warn(
+      "⚠️  Rodando seed de usuários de teste em PRODUÇÃO (flag habilitada).",
+    );
   }
 
   console.log("🌱 Criando/atualizando usuários de teste...\n");
@@ -74,13 +82,13 @@ async function main() {
   for (const u of users) {
     const result = await prisma.user.upsert({
       where: { email: u.email },
+      // Usuário existente: só atualiza senha e reativa.
+      // role/account_type/name são preservados.
       update: {
         password_hash: passwordHash,
         is_active: true,
-        name: u.name,
-        role: u.role,
-        account_type: u.account_type,
       },
+      // Usuário novo: cria com os dados mínimos do padrão.
       create: {
         email: u.email,
         password_hash: passwordHash,
@@ -94,7 +102,7 @@ async function main() {
   }
 
   console.log("\n✔  Todos os usuários de teste estão prontos.");
-  console.log(`   Senha comum: (definida em SEED_TEST_USER_PASSWORD)\n`);
+  console.log(`   Senha comum: ${PASSWORD}\n`);
 }
 
 main()
