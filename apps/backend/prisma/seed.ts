@@ -1,9 +1,21 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.error("❌ Este seed não pode rodar em produção.");
+    process.exit(1);
+  }
+
+  const seedPassword = process.env.SEED_TEST_USER_PASSWORD;
+  if (!seedPassword) {
+    console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
+    process.exit(1);
+  }
+
   console.log("🌱 Iniciando seed...");
 
   // ─── Admin Profiles ────────────────────────────────────────────────────────
@@ -30,7 +42,7 @@ async function main() {
   });
 
   // ─── Users (10 total) ─────────────────────────────────────────────────────
-  const sharedPassword = await bcrypt.hash("Teste@123456", 10);
+  const sharedPassword = await bcrypt.hash(seedPassword, 10);
 
   const adminUser = await prisma.user.upsert({
     where: { email: "admin@allka.com" },
@@ -71,7 +83,7 @@ async function main() {
     },
     create: {
       email: "cp@lamego.com.vc",
-      password_hash: viniciusPassword,
+      password_hash: sharedPassword,
       name: "Vinicius Guardia",
       role: "admin",
       account_type: "admin",
@@ -80,7 +92,7 @@ async function main() {
     },
   });
 
-  // ─── Usuários dev por tipo de conta (senha: Teste@123456) ────────────────
+  // ─── Usuários dev por tipo de conta (senha: SEED_TEST_USER_PASSWORD) ────────
   await prisma.user.upsert({
     where: { email: "nomade@allka.com.vc" },
     update: { password_hash: sharedPassword, is_active: true },

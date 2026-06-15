@@ -7,6 +7,7 @@
     "apps/backend"
   ],
   "scripts": {
+    "postinstall": "prisma generate --schema=apps/backend/prisma/schema.prisma",
     "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
     "dev:mock": "npm run dev:mock -w apps/frontend",
     "dev:front": "npm run dev -w apps/frontend",

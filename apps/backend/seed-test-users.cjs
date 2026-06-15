@@ -1,16 +1,27 @@
 // seed-test-users.cjs
 // Cria 8 usuários de teste idempotentemente para desenvolvimento.
-// Senha padrão: 123456
+// Requer: SEED_TEST_USER_PASSWORD no .env
 
 "use strict";
+
+require("dotenv").config();
 
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
-const prisma = new PrismaClient();
+if (process.env.NODE_ENV === "production") {
+  console.error("❌ Este script não pode rodar em produção.");
+  process.exit(1);
+}
 
+const DEFAULT_PASSWORD = process.env.SEED_TEST_USER_PASSWORD;
+if (!DEFAULT_PASSWORD) {
+  console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
+  process.exit(1);
+}
+
+const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
-const DEFAULT_PASSWORD = "123456";
 
 async function hashPassword(plain) {
   return bcrypt.hash(plain, SALT_ROUNDS);
@@ -39,7 +50,7 @@ async function upsertUser({ email, name, role, account_type }) {
 
 async function main() {
   console.log("▶ Seeding test users...");
-  console.log(`  Senha padrão: ${DEFAULT_PASSWORD}\n`);
+  console.log(`  Senha: (definida em SEED_TEST_USER_PASSWORD)\n`);
 
   // ── 1. Admin ──────────────────────────────────────────────────────────────
   await upsertUser({
@@ -223,15 +234,15 @@ async function main() {
   }
 
   console.log("\n✅ Seed de usuários de teste concluído.");
-  console.log("   Logins disponíveis:");
-  console.log("   admin@allka.test         / 123456  →  /login");
-  console.log("   agencia@allka.test       / 123456  →  /agencia/login");
-  console.log("   nomade@allka.test        / 123456  →  /nomades/login");
-  console.log("   company@allka.test       / 123456  →  /company/login");
-  console.log("   partner@allka.test       / 123456  →  /parceiro/login");
-  console.log("   lider.performance@allka.test / 123456  →  /lider/login");
-  console.log("   lider.design@allka.test      / 123456  →  /lider/login");
-  console.log("   lider.conteudo@allka.test    / 123456  →  /lider/login");
+  console.log("   Logins disponíveis (senha: SEED_TEST_USER_PASSWORD):");
+  console.log("   admin@allka.test              →  /login");
+  console.log("   agencia@allka.test            →  /agencia/login");
+  console.log("   nomade@allka.test             →  /nomades/login");
+  console.log("   company@allka.test            →  /company/login");
+  console.log("   partner@allka.test            →  /parceiro/login");
+  console.log("   lider.performance@allka.test  →  /lider/login");
+  console.log("   lider.design@allka.test       →  /lider/login");
+  console.log("   lider.conteudo@allka.test     →  /lider/login");
 }
 
 main()

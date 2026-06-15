@@ -15,11 +15,16 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const PASSWORD = "123456";
 
 async function main() {
   if (process.env.NODE_ENV === "production") {
     console.error("❌ Este script não pode rodar em produção.");
+    process.exit(1);
+  }
+
+  const PASSWORD = process.env.SEED_TEST_USER_PASSWORD;
+  if (!PASSWORD) {
+    console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
     process.exit(1);
   }
 
@@ -89,7 +94,7 @@ async function main() {
   }
 
   console.log("\n✔  Todos os usuários de teste estão prontos.");
-  console.log(`   Senha comum: ${PASSWORD}\n`);
+  console.log(`   Senha comum: (definida em SEED_TEST_USER_PASSWORD)\n`);
 }
 
 main()
