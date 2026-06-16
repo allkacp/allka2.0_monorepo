@@ -1,0 +1,5 @@
+import { ReportListPage } from "@/features/reports/report-list-page";
+
+export default function CompanyRelatoriosPage() {
+  return <ReportListPage profileType="company" />;
+}

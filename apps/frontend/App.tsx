@@ -132,6 +132,9 @@ const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
 const NomadDashboardPage = React.lazy(
   () => import("@/app/nomades/dashboard/page"),
 );
+const NomadesRelatoriosPage = React.lazy(
+  () => import("@/app/nomades/relatorios/page"),
+);
 const NomadesProgramaPage = React.lazy(
   () => import("@/app/nomades/programa/page"),
 );
@@ -166,6 +169,9 @@ const PartnerComissoesPage = React.lazy(
 const PartnerSaquesPage = React.lazy(
   () => import("@/app/parceiro/saques/page"),
 );
+const PartnerRelatoriosPage = React.lazy(
+  () => import("@/app/partner/relatorios/page"),
+);
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
 const CompanyDashboardPage = React.lazy(
@@ -184,6 +190,9 @@ const EmpresaFaturasPage = React.lazy(
 const EmpresaProdutosPage = React.lazy(
   () => import("@/app/company/produtos/page"),
 );
+const CompanyRelatoriosPage = React.lazy(
+  () => import("@/app/company/relatorios/page"),
+);
 
 // ─── Agência Pages ─────────────────────────────────────────────────────────
 const AgencyDashboardPage = React.lazy(
@@ -201,6 +210,9 @@ const AgencyFinanceiroPage = React.lazy(
 const AgencyCatalogoPage = React.lazy(
   () => import("@/app/agencia/catalogo/page"),
 );
+const AgencyRelatoriosPage = React.lazy(
+  () => import("@/app/agency/relatorios/page"),
+);
 
 // ─── Login Pages ─────────────────────────────────────────────────────────
 const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
@@ -213,6 +225,9 @@ const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
 const LeaderDashboardPage = React.lazy(
   () => import("@/app/leader/dashboard/page"),
+);
+const LeaderRelatoriosPage = React.lazy(
+  () => import("@/app/leader/relatorios/page"),
 );
 const LiderQualificacaoPage = React.lazy(
   () => import("@/app/lider/qualificacao/page"),
@@ -813,6 +828,14 @@ export default function App() {
                     path="/nomades/perfil"
                     element={<NomadesPerfilPage />}
                   />
+                  <Route
+                    path="/nomades/relatorios"
+                    element={<NomadesRelatoriosPage />}
+                  />
+                  <Route
+                    path="/nomad/relatorios"
+                    element={<NomadesRelatoriosPage />}
+                  />
 
                   {/* ─── Partner (novo) ──────────────────────────────────── */}
                   <Route
@@ -834,6 +857,10 @@ export default function App() {
                   <Route
                     path="/partner/saques"
                     element={<PartnerSaquesPage />}
+                  />
+                  <Route
+                    path="/partner/relatorios"
+                    element={<PartnerRelatoriosPage />}
                   />
 
                   {/* ─── Parceiro ─────────────────────────────────────────── */}
@@ -857,6 +884,10 @@ export default function App() {
                     path="/parceiro/saques"
                     element={<Navigate to="/partner/saques" replace />}
                   />
+                  <Route
+                    path="/parceiro/relatorios"
+                    element={<Navigate to="/partner/relatorios" replace />}
+                  />
 
                   {/* ─── Empresa ──────────────────────────────────────────── */}
                   <Route
@@ -878,6 +909,10 @@ export default function App() {
                   <Route
                     path="/company/produtos"
                     element={<EmpresaProdutosPage />}
+                  />
+                  <Route
+                    path="/company/relatorios"
+                    element={<CompanyRelatoriosPage />}
                   />
 
                   {/* ─── Agency (novo) ────────────────────────────────────── */}
@@ -908,6 +943,10 @@ export default function App() {
                   <Route
                     path="/agency/financeiro"
                     element={<AgencyFinanceiroPage />}
+                  />
+                  <Route
+                    path="/agency/relatorios"
+                    element={<AgencyRelatoriosPage />}
                   />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
@@ -943,6 +982,10 @@ export default function App() {
                     path="/agencia/financeiro"
                     element={<RedirectToAgency />}
                   />
+                  <Route
+                    path="/agencia/relatorios"
+                    element={<RedirectToAgency />}
+                  />
 
                   {/* ─── Leader (novo) ────────────────────────────────────── */}
                   <Route
@@ -969,6 +1012,10 @@ export default function App() {
                     path="/leader/perfil"
                     element={<LiderPerfilPage />}
                   />
+                  <Route
+                    path="/leader/relatorios"
+                    element={<LeaderRelatoriosPage />}
+                  />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
                   <Route
@@ -994,6 +1041,10 @@ export default function App() {
                   <Route
                     path="/lider/perfil"
                     element={<Navigate to="/leader/perfil" replace />}
+                  />
+                  <Route
+                    path="/lider/relatorios"
+                    element={<Navigate to="/leader/relatorios" replace />}
                   />
 
                   {/* Fallback — redireciona para o dashboard do perfil ativo */}

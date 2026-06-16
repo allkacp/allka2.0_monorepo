@@ -3459,7 +3459,7 @@ export function AdminDashboardPage() {
           const maxTrend = Math.max(1, ...mPaW.trendData);
           return (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-3">
                 {[
                   { label: "MAU", value: mPaW.mau.toLocaleString("pt-BR") },
                   { label: "DAU", value: mPaW.dau.toLocaleString("pt-BR") },
@@ -3871,7 +3871,7 @@ export function AdminDashboardPage() {
                 </div>
               </div>
               {/* Trend summary */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2">
                 {[
                   {
                     label: "Menor",
@@ -4843,7 +4843,7 @@ export function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-3">
                 {[
                   {
                     label: "Novos no período",
@@ -5468,7 +5468,7 @@ export function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* Type summary */}
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2.5">
                 {(
                   [
                     {
@@ -5553,7 +5553,7 @@ export function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* KPI invite stats */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-border/40 bg-muted/30 text-center">
                   <p className="text-2xl font-bold">{mpP.invitesSent}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -5733,7 +5733,7 @@ export function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* Header summary */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 @[16rem]:grid-cols-4 gap-2">
                 {(
                   ["Master", "Financeiro", "Comercial", "Operacional"] as const
                 ).map((role, i) => {
@@ -5944,7 +5944,7 @@ export function AdminDashboardPage() {
               ) : (
                 <>
                   {/* Top 3 podium */}
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2.5">
                     {topPerformers.slice(0, 3).map((performer, index) => {
                       const mc = [
                         {
@@ -9045,7 +9045,7 @@ export function AdminDashboardPage() {
                     <Calculator className="h-4 w-4 text-warning" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">
+                    <CardTitle className="text-base font-semibold leading-tight truncate">
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -9419,7 +9419,7 @@ export function AdminDashboardPage() {
 
               {/* Métricas adicionais */}
               <div className="rounded-lg border bg-card p-4">
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2 text-center">
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Novos no período
@@ -9722,7 +9722,7 @@ export function AdminDashboardPage() {
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Top 3 — large cards */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2">
                   {agTop3.map((agency, idx) => (
                     <div
                       key={agency.id}
@@ -9984,7 +9984,7 @@ export function AdminDashboardPage() {
                     <LayoutGrid className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">
+                    <CardTitle className="text-base font-semibold leading-tight truncate">
                       Visão Geral por Status
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -10503,7 +10503,7 @@ export function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
               {/* Invite stats 3-col */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-2">
                 {(
                   [
                     {
@@ -10862,11 +10862,11 @@ export function AdminDashboardPage() {
         {/* Dashboard Header */}
         <div
           className={cn(
-            "flex items-center gap-3",
+            "flex flex-wrap items-center gap-3",
             isHeaderCompact ? "py-2" : "pt-0 pb-5",
           )}
         >
-          <div className="overflow-hidden shrink-0">
+          <div className="overflow-hidden shrink-0 min-w-0">
             <h1
               className={cn(
                 "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
@@ -11307,6 +11307,8 @@ export function AdminDashboardPage() {
                     : widget.colSpan === 2
                       ? "lg:col-span-2 md:col-span-2"
                       : "col-span-1",
+                  // container query context: inner grids respond to widget width
+                  "@container",
                   // propagate height through: grid cell → outer widget div → Card
                   "flex flex-col",
                   "[&>*]:flex-1 [&>*]:flex [&>*]:flex-col",
@@ -12401,7 +12403,7 @@ export function AdminDashboardPage() {
                         {draftWidgets.length}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 @[15rem]:grid-cols-3 gap-3">
                       {draftWidgets.map((widget) => {
                         const libItem = widgetLibrary.find(
                           (l) => l.id === widget.type,

@@ -731,6 +731,68 @@ class ApiClient {
     return this.get("/reports/financial");
   }
 
+  async getReportConfigs() {
+    return this.get("/reports/config");
+  }
+
+  async saveReportConfig(reportKey: string, config: Record<string, any>) {
+    return this.put(`/reports/config/${encodeURIComponent(reportKey)}`, config);
+  }
+
+  async getAvailableReports() {
+    return this.get("/reports/available");
+  }
+
+  async runIndicator(payload: {
+    indicatorId: string;
+    startDate: string;
+    endDate: string;
+    filters?: Record<string, unknown>;
+    comparisonMode?: boolean;
+  }) {
+    return this.post("/reports/indicators/run", payload);
+  }
+
+  async runIndicatorBatch(indicators: Array<{
+    indicatorId: string;
+    startDate: string;
+    endDate: string;
+    filters?: Record<string, unknown>;
+    comparisonMode?: boolean;
+  }>) {
+    return this.post("/reports/indicators/run/batch", { indicators });
+  }
+
+  // ─── Admin report CRUD ─────────────────────────────────────────────────────
+  async getAdminReports() {
+    return this.get("/admin/reports");
+  }
+
+  async createAdminReport(reportKey: string, config: Record<string, unknown>) {
+    return this.post("/admin/reports", { report_key: reportKey, ...config });
+  }
+
+  async updateAdminReport(reportKey: string, config: Record<string, unknown>) {
+    return this.put(`/admin/reports/${encodeURIComponent(reportKey)}`, config);
+  }
+
+  async patchAdminReportPermissions(reportKey: string, permissions: Record<string, unknown>) {
+    return this.patch(`/admin/reports/${encodeURIComponent(reportKey)}/permissions`, permissions);
+  }
+
+  async deleteAdminReport(reportKey: string) {
+    return this.del(`/admin/reports/${encodeURIComponent(reportKey)}`);
+  }
+
+  async recordUsageEvent(payload: {
+    event_type: string;
+    route: string;
+    session_id?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.post("/reports/usage-event", payload);
+  }
+
   async getLevels(filters?: Record<string, any>) {
     return this.get("/levels", filters);
   }

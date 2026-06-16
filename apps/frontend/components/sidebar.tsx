@@ -87,6 +87,12 @@ const navigationConfig = {
         icon: Package,
         current: false,
       },
+      {
+        name: "Relatórios",
+        href: "/company/relatorios",
+        icon: BarChart3,
+        current: false,
+      },
     ],
     "in-house": [
       {
@@ -172,6 +178,12 @@ const navigationConfig = {
       icon: Wallet,
       current: false,
     },
+    {
+      name: "Relatórios",
+      href: "/agency/relatorios",
+      icon: BarChart3,
+      current: false,
+    },
   ],
   parceiro: [
     {
@@ -199,6 +211,7 @@ const navigationConfig = {
       current: false,
     },
     { name: "Saques", href: "/partner/saques", icon: Wallet, current: false },
+    { name: "Relatórios", href: "/partner/relatorios", icon: BarChart3, current: false },
   ],
   nomades: [
     {
@@ -239,6 +252,12 @@ const navigationConfig = {
       name: "Perfil",
       href: "/nomades/perfil",
       icon: UserCheck,
+      current: false,
+    },
+    {
+      name: "Relatórios",
+      href: "/nomades/relatorios",
+      icon: BarChart3,
       current: false,
     },
     {
@@ -283,6 +302,12 @@ const navigationConfig = {
       name: "Perfil",
       href: "/leader/perfil",
       icon: UserCheck,
+      current: false,
+    },
+    {
+      name: "Relatórios",
+      href: "/leader/relatorios",
+      icon: BarChart3,
       current: false,
     },
   ],
