@@ -372,6 +372,18 @@ class ApiClient {
     return this.get(`/agencies/${id}`);
   }
 
+  async createAgency(data: Record<string, any>) {
+    return this.post("/agencies", data);
+  }
+
+  async updateAgency(id: string, data: Record<string, any>) {
+    return this.put(`/agencies/${id}`, data);
+  }
+
+  async deleteAgency(id: string) {
+    return this.del(`/agencies/${id}`);
+  }
+
   // ─── Partners ─────────────────────────────────────────────────────────────
   async getPartners(filters?: Record<string, any>) {
     return this.get("/partners", filters);

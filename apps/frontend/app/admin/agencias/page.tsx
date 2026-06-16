@@ -1,265 +1,285 @@
-
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Building2,
   Search,
   Plus,
   Edit,
-  Trash2,
   Mail,
   Phone,
-  MapPin,
   Users,
   TrendingUp,
-  DollarSign,
   Star,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react"
+import { useAgencies } from "@/hooks/useAgencies"
+import { apiClient } from "@/lib/api-client"
+import { useToast } from "@/components/ui/use-toast"
 
-interface Agency {
+interface ApiAgency {
   id: string
   name: string
-  logo: string
-  email: string
-  phone: string
-  location: string
-  plan: string
-  status: "active" | "inactive" | "pending"
-  teamSize: number
-  activeProjects: number
-  totalRevenue: number
-  level: string
+  email: string | null
+  phone: string | null
+  status: string
+  partner_level: string
+  user_id: string
+  user: { id: string; email: string; name: string } | null
+  created_at: string
 }
 
+const PARTNER_LEVEL_LABELS: Record<string, string> = {
+  bronze: "Bronze",
+  silver: "Silver",
+  gold: "Gold",
+  platinum: "Platinum",
+  diamond: "Diamond",
+}
+
+const LEVEL_BADGE_CLASSES: Record<string, string> = {
+  bronze: "bg-gradient-to-r from-orange-400 to-orange-600 text-white",
+  silver: "bg-gradient-to-r from-gray-300 to-gray-500 text-white",
+  gold: "bg-gradient-to-r from-yellow-400 to-yellow-600 text-white",
+  platinum: "bg-gradient-to-r from-cyan-400 to-cyan-600 text-white",
+  diamond: "bg-gradient-to-r from-purple-400 to-purple-600 text-white",
+}
+
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  ativo: "bg-green-100 text-green-700 border-green-200",
+  inativo: "bg-gray-100 text-gray-700 border-gray-200",
+  pendente: "bg-yellow-100 text-yellow-700 border-yellow-200",
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  ativo: "Ativa",
+  inativo: "Inativa",
+  pendente: "Pendente",
+}
+
+const agencyInitials = (name: string) =>
+  name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+
 export default function AgenciasPage() {
+  const { agencies: rawAgencies, loading, error, refetch, updateAgency } = useAgencies()
+  const { toast } = useToast()
+
+  const agencies = rawAgencies as ApiAgency[]
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
+
+  // Create dialog
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    partner_level: "bronze",
+  })
 
-  // Mock data
-  const agencies: Agency[] = [
-    {
-      id: "1",
-      name: "Digital Innovations",
-      logo: "/placeholder.svg",
-      email: "contact@digitalinnovations.com",
-      phone: "+55 11 98765-4321",
-      location: "São Paulo, SP",
-      plan: "Premium",
-      status: "active",
-      teamSize: 15,
-      activeProjects: 8,
-      totalRevenue: 125000,
-      level: "Gold",
-    },
-    {
-      id: "2",
-      name: "Creative Studio",
-      logo: "/placeholder.svg",
-      email: "hello@creativestudio.com",
-      phone: "+55 21 91234-5678",
-      location: "Rio de Janeiro, RJ",
-      plan: "Business",
-      status: "active",
-      teamSize: 8,
-      activeProjects: 5,
-      totalRevenue: 75000,
-      level: "Silver",
-    },
-    {
-      id: "3",
-      name: "Tech Solutions",
-      logo: "/placeholder.svg",
-      email: "info@techsolutions.com",
-      phone: "+55 11 99876-5432",
-      location: "São Paulo, SP",
-      plan: "Starter",
-      status: "pending",
-      teamSize: 5,
-      activeProjects: 2,
-      totalRevenue: 35000,
-      level: "Bronze",
-    },
-  ]
+  // Edit dialog
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [selectedAgency, setSelectedAgency] = useState<ApiAgency | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    status: "ativo",
+    partner_level: "bronze",
+  })
 
-  const stats = [
-    {
-      title: "Total de Agências",
-      value: "32",
-      icon: Building2,
-      change: "+3 este mês",
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
-    },
-    {
-      title: "Agências Ativas",
-      value: "28",
-      icon: TrendingUp,
-      change: "87.5% do total",
-      color: "text-green-600",
-      bgColor: "bg-green-50",
-    },
-    {
-      title: "Equipes Totais",
-      value: "245",
-      icon: Users,
-      change: "+12 este mês",
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
-    {
-      title: "Receita Total",
-      value: "R$ 2.4M",
-      icon: DollarSign,
-      change: "+18% vs mês anterior",
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50",
-    },
-  ]
-
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      active: "bg-green-100 text-green-700 border-green-200",
-      inactive: "bg-gray-100 text-gray-700 border-gray-200",
-      pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  const filteredAgencies = useMemo(() => {
+    let list = agencies
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          (a.email || "").toLowerCase().includes(q) ||
+          (a.phone || "").includes(q),
+      )
     }
-    const labels = {
-      active: "Ativa",
-      inactive: "Inativa",
-      pending: "Pendente",
+    if (selectedStatus !== "all") {
+      list = list.filter((a) => a.status === selectedStatus)
     }
-    return <Badge className={variants[status as keyof typeof variants]}>{labels[status as keyof typeof labels]}</Badge>
+    return list
+  }, [agencies, searchQuery, selectedStatus])
+
+  const stats = useMemo(
+    () => ({
+      total: agencies.length,
+      active: agencies.filter((a) => a.status === "ativo").length,
+    }),
+    [agencies],
+  )
+
+  const handleCreate = async () => {
+    if (!createForm.name.trim() || !createForm.email.trim() || !createForm.password) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome, e-mail e senha são obrigatórios.",
+        variant: "destructive",
+      })
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      // Backend creates the Agency record automatically inside $transaction
+      await apiClient.createUser({
+        name: createForm.name.trim(),
+        email: createForm.email.trim(),
+        password: createForm.password,
+        account_type: "agencias",
+        role: "agency_admin",
+        ...(createForm.phone ? { phone: createForm.phone } : {}),
+      })
+      toast({ title: "Agência criada", description: `"${createForm.name.trim()}" cadastrada com sucesso.` })
+      setIsAddDialogOpen(false)
+      setCreateForm({ name: "", email: "", password: "", phone: "", partner_level: "bronze" })
+      await refetch()
+    } catch (err: any) {
+      toast({
+        title: "Erro ao criar agência",
+        description: err.message || "Verifique os dados e tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const getLevelBadge = (level: string) => {
-    const variants = {
-      Gold: "bg-gradient-to-r from-yellow-400 to-yellow-600 text-white",
-      Silver: "bg-gradient-to-r from-gray-300 to-gray-500 text-white",
-      Bronze: "bg-gradient-to-r from-orange-400 to-orange-600 text-white",
+  const handleOpenEdit = (agency: ApiAgency) => {
+    setSelectedAgency(agency)
+    setEditForm({
+      name: agency.name,
+      email: agency.email || "",
+      phone: agency.phone || "",
+      status: agency.status,
+      partner_level: agency.partner_level,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedAgency) return
+    setIsSubmitting(true)
+    try {
+      await updateAgency(selectedAgency.id, {
+        name: editForm.name.trim() || undefined,
+        email: editForm.email.trim() || undefined,
+        phone: editForm.phone.trim() || undefined,
+        status: editForm.status,
+        partner_level: editForm.partner_level,
+      })
+      toast({ title: "Agência atualizada", description: "Dados salvos com sucesso." })
+      setIsEditDialogOpen(false)
+      setSelectedAgency(null)
+    } catch (err: any) {
+      toast({
+        title: "Erro ao salvar",
+        description: err.message || "Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
+  }
+
+  if (loading) {
     return (
-      <Badge className={variants[level as keyof typeof variants]}>
-        <Star className="h-3 w-3 mr-1" />
-        {level}
-      </Badge>
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="text-sm text-slate-500">Carregando agências…</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-6 text-center px-6">
+        <div className="rounded-full bg-red-50 p-4">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+            Erro ao carregar agências
+          </h2>
+          <p className="text-sm text-slate-500 max-w-sm">{error}</p>
+        </div>
+        <Button onClick={() => refetch()} className="btn-brand">
+          Tentar novamente
+        </Button>
+      </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-transparent dark:via-transparent dark:to-transparent p-6 bg-slate-200 dark:bg-transparent px-0 py-0">
       <div className="max-w-7xl mx-auto bg-slate-200 dark:bg-transparent px-0 py-0 space-y-6">
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Gestão de Agências
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie todas as agências parceiras da plataforma</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Gerencie todas as agências parceiras da plataforma
+            </p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="btn-brand">
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Agência
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Adicionar Nova Agência</DialogTitle>
-                <DialogDescription>Preencha os dados da nova agência parceira</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome da Agência</Label>
-                    <Input id="name" placeholder="Ex: Digital Innovations" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="contato@agencia.com" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Telefone</Label>
-                    <Input id="phone" placeholder="+55 11 98765-4321" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Localização</Label>
-                    <Input id="location" placeholder="São Paulo, SP" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="plan">Plano</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o plano" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="lite">Lite — R$ 300/mês</SelectItem>
-                        <SelectItem value="start">Start — R$ 500/mês</SelectItem>
-                        <SelectItem value="standard">Standard — R$ 1.000/mês</SelectItem>
-                        <SelectItem value="growth">Growth — R$ 1.500/mês</SelectItem>
-                        <SelectItem value="scale">Scale — R$ 3.000/mês</SelectItem>
-                        <SelectItem value="squad">Squad — R$ 5.000/mês</SelectItem>
-                        <SelectItem value="enterprise">Enterprise — R$ 5.000/mês</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="teamSize">Tamanho da Equipe</Label>
-                    <Input id="teamSize" type="number" placeholder="10" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição</Label>
-                  <Textarea id="description" placeholder="Breve descrição da agência..." rows={3} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button className="btn-brand">Adicionar Agência</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button className="btn-brand" onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Agência
+          </Button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat) => (
-            <Card key={stat.title} className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-600">{stat.title}</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-2">{stat.value}</p>
-                    <p className="text-xs text-slate-500 mt-1">{stat.change}</p>
-                  </div>
-                  <div className={`${stat.bgColor} ${stat.color} p-3 rounded-xl`}>
-                    <stat.icon className="h-6 w-6" />
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="border-0 shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600">Total de Agências</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-2">{stats.total}</p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <div className="bg-blue-50 text-blue-600 p-3 rounded-xl">
+                  <Building2 className="h-6 w-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600">Agências Ativas</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-2">{stats.active}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% do total
+                  </p>
+                </div>
+                <div className="bg-green-50 text-green-600 p-3 rounded-xl">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
@@ -269,7 +289,7 @@ export default function AgenciasPage() {
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Buscar agências..."
+                  placeholder="Buscar agências por nome, e-mail ou telefone…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -281,83 +301,236 @@ export default function AgenciasPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os Status</SelectItem>
-                  <SelectItem value="active">Ativas</SelectItem>
-                  <SelectItem value="inactive">Inativas</SelectItem>
-                  <SelectItem value="pending">Pendentes</SelectItem>
+                  <SelectItem value="ativo">Ativas</SelectItem>
+                  <SelectItem value="inativo">Inativas</SelectItem>
+                  <SelectItem value="pendente">Pendentes</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Agencies List */}
-        <div className="grid grid-cols-1 gap-6">
-          {agencies.map((agency) => (
-            <Card key={agency.id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    <Avatar className="h-16 w-16 border-2 border-slate-200">
-                      <AvatarImage src={agency.logo || "/placeholder.svg"} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
-                        <Building2 className="h-8 w-8" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-semibold text-slate-900">{agency.name}</h3>
-                        {getStatusBadge(agency.status)}
-                        {getLevelBadge(agency.level)}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Mail className="h-4 w-4" />
-                          {agency.email}
+        {/* Agency List */}
+        {filteredAgencies.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+            <Building2 className="h-12 w-12 text-slate-300" />
+            <p className="text-slate-500 text-sm">
+              {searchQuery || selectedStatus !== "all"
+                ? "Nenhuma agência encontrada com os filtros aplicados."
+                : "Nenhuma agência cadastrada ainda."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            {filteredAgencies.map((agency) => (
+              <Card key={agency.id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4 flex-1">
+                      <Avatar className="h-16 w-16 border-2 border-slate-200">
+                        <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-lg font-bold">
+                          {agencyInitials(agency.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                            {agency.name}
+                          </h3>
+                          <Badge className={STATUS_BADGE_CLASSES[agency.status] || STATUS_BADGE_CLASSES.pendente}>
+                            {STATUS_LABELS[agency.status] || agency.status}
+                          </Badge>
+                          <Badge className={LEVEL_BADGE_CLASSES[agency.partner_level] || LEVEL_BADGE_CLASSES.bronze}>
+                            <Star className="h-3 w-3 mr-1" />
+                            {PARTNER_LEVEL_LABELS[agency.partner_level] || agency.partner_level}
+                          </Badge>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Phone className="h-4 w-4" />
-                          {agency.phone}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <MapPin className="h-4 w-4" />
-                          {agency.location}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Badge variant="outline">{agency.plan}</Badge>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-200">
-                        <div>
-                          <p className="text-xs text-slate-500">Equipe</p>
-                          <p className="text-sm font-semibold text-slate-900">{agency.teamSize} membros</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500">Projetos Ativos</p>
-                          <p className="text-sm font-semibold text-slate-900">{agency.activeProjects}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500">Receita Total</p>
-                          <p className="text-sm font-semibold text-slate-900">
-                            R$ {(agency.totalRevenue / 1000).toFixed(0)}k
-                          </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                          {agency.email && (
+                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                              <Mail className="h-4 w-4 flex-shrink-0" />
+                              <span className="truncate">{agency.email}</span>
+                            </div>
+                          )}
+                          {agency.phone && (
+                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                              <Phone className="h-4 w-4 flex-shrink-0" />
+                              {agency.phone}
+                            </div>
+                          )}
+                          {agency.user && (
+                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                              <Users className="h-4 w-4 flex-shrink-0" />
+                              <span className="truncate">
+                                Admin: {agency.user.name || agency.user.email}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
+                    <div className="flex gap-2 ml-4 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEdit(agency)}
+                        title="Editar agência"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 bg-transparent">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Dialog — Nova Agência */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nova Agência</DialogTitle>
+            <DialogDescription>
+              Cria um usuário agency_admin e vincula uma agência automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="create-name">
+                Nome da Agência <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-name"
+                placeholder="Ex: Digital Innovations"
+                value={createForm.name}
+                onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-email">
+                E-mail do responsável <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-email"
+                type="email"
+                placeholder="contato@agencia.com"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-password">
+                Senha de acesso <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-password"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={createForm.password}
+                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-phone">Telefone</Label>
+              <Input
+                id="create-phone"
+                placeholder="+55 11 98765-4321"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button className="btn-brand" onClick={handleCreate} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar Agência
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — Editar Agência */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Agência</DialogTitle>
+            <DialogDescription>
+              Atualiza os dados da agência selecionada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nome</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">E-mail</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Telefone</Label>
+              <Input
+                id="edit-phone"
+                value={editForm.phone}
+                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger id="edit-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativa</SelectItem>
+                    <SelectItem value="inativo">Inativa</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-level">Nível</Label>
+                <Select value={editForm.partner_level} onValueChange={(v) => setEditForm((f) => ({ ...f, partner_level: v }))}>
+                  <SelectTrigger id="edit-level">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bronze">Bronze</SelectItem>
+                    <SelectItem value="silver">Silver</SelectItem>
+                    <SelectItem value="gold">Gold</SelectItem>
+                    <SelectItem value="platinum">Platinum</SelectItem>
+                    <SelectItem value="diamond">Diamond</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button className="btn-brand" onClick={handleSaveEdit} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
