@@ -22,6 +22,7 @@ import partnersRouter from "./routes/partners";
 import campaignsRouter from "./routes/campaigns";
 import permissionsRouter from "./routes/permissions";
 import reportsRouter from "./routes/reports";
+import adminReportsRouter from "./routes/admin-reports";
 import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
@@ -128,6 +129,8 @@ app.use("/api/partners", partnersRouter);
 app.use("/api/campaigns", campaignsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/reports", reportsRouter);
+// Admin report CRUD + permission management
+app.use("/api/admin/reports", adminReportsRouter);
 app.use("/api/levels", levelsRouter);
 app.use("/api/task-templates", taskTemplatesRouter);
 // project-products também serve /api/project-products/tasks (sub-rota do mesmo router)

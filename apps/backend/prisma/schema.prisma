@@ -1278,6 +1278,60 @@ model WalletLedger {
   @@map("wallet_ledger")
 }
 
+// ─── Report Configuration & Permissions ──────────────────────────────────────
+
+model ReportConfig {
+  id                    String   @id @default(cuid())
+  report_key            String   @unique
+  // Matches report.id from the frontend catalog: "revenue", "invoices", "cashflow", etc.
+  is_active             Boolean  @default(true)
+  allowed_account_types String?  @db.LongText
+  // JSON: string[] — e.g., ["agencias","empresas","nomades","parceiro","lider"]
+  allowed_roles         String?  @db.LongText
+  // JSON: string[] — e.g., ["agency_admin","company_admin"]
+  allowed_user_ids      String?  @db.LongText
+  // JSON: string[] — specific user IDs always allowed
+  blocked_user_ids      String?  @db.LongText
+  // JSON: string[] — specific user IDs always blocked
+  data_scope            String   @default("GLOBAL")
+  // GLOBAL | OWN_PROFILE_SCOPE | OWN_COMPANY_SCOPE | OWN_AGENCY_SCOPE | OWN_NOMAD_SCOPE | OWN_PARTNER_SCOPE | OWN_LEADER_SCOPE | CUSTOM_USERS
+  can_export            Boolean  @default(true)
+  can_change_filters    Boolean  @default(true)
+  only_related_data     Boolean  @default(false)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@map("report_configs")
+}
+
+// ─── Usage Events (platform analytics) ───────────────────────────────────────
+// Additive model for page-view and funnel tracking. Writing is opt-in via
+// POST /api/reports/usage-event. Reading feeds the Usabilidade indicator.
+
+model UsageEvent {
+  id           String   @id @default(cuid())
+  user_id      String
+  account_type String
+  // agencias | empresas | nomades | admin | parceiro
+  route        String   @db.VarChar(500)
+  // e.g. "/projetos", "/checkout/montagem", "/tarefas"
+  event_type   String
+  // "page_view" | "login" | "project_start" | "project_abandon"
+  // | "checkout_start" | "checkout_complete" | "checkout_abandon"
+  session_id   String?
+  // client-generated session identifier for funnel grouping
+  metadata     String?  @db.LongText
+  // JSON: any extra context (product_id, task_id, etc.)
+  created_at   DateTime @default(now())
+
+  @@index([user_id])
+  @@index([account_type])
+  @@index([event_type])
+  @@index([created_at])
+  @@index([session_id])
+  @@map("usage_events")
+}
+
 // ─── Squad (plano pós-pago com limite de crédito) ────────────────────────────
 
 model SquadConfig {
