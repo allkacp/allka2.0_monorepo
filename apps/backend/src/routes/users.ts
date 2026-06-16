@@ -99,6 +99,17 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
+// ─── Role defaults per account_type ─────────────────────────────────────────
+
+const DEFAULT_ROLE: Record<string, string> = {
+  agencias: "agency_admin",
+  empresas: "company_admin",
+  nomades:  "nomad",
+  parceiro: "partner",
+  lider:    "lider",
+  admin:    "admin",
+};
+
 // POST /api/users
 router.post(
   "/",
@@ -107,17 +118,112 @@ router.post(
   validate(createUserSchema),
   async (req, res, next) => {
     try {
-      const { password, ...rest } = req.body as {
+      const {
+        password,
+        role: rawRole,
+        account_type,
+        company_id,
+        ...rest
+      } = req.body as {
         password: string;
+        role: string;
+        account_type: string;
+        company_id?: string;
         [key: string]: unknown;
       };
+
       const password_hash = await bcrypt.hash(password, 10);
 
-      const user = await prisma.user.create({
-        data: { ...(rest as object), password_hash } as Parameters<
-          typeof prisma.user.create
-        >[0]["data"],
-        select: safeSelect,
+      // Normalize role: use provided role if compatible; otherwise use default for account_type
+      const resolvedRole =
+        rawRole && rawRole !== "company_user"
+          ? rawRole
+          : (account_type === "empresas" && (rawRole === "company_user" || company_id))
+            ? (rawRole || DEFAULT_ROLE[account_type] || "company_user")
+            : (DEFAULT_ROLE[account_type] || rawRole || "company_user");
+
+      const user = await prisma.$transaction(async (tx) => {
+        // 1. Create the User record
+        const created = await tx.user.create({
+          data: {
+            ...(rest as object),
+            account_type,
+            role: resolvedRole,
+            password_hash,
+            ...(company_id ? { company_id } : {}),
+          } as Parameters<typeof tx.user.create>[0]["data"],
+          select: { ...safeSelect, id: true },
+        });
+
+        // 2. Create the profile entity matching account_type
+        if (account_type === "agencias") {
+          const existing = await tx.agency.findUnique({ where: { user_id: created.id } });
+          if (!existing) {
+            await tx.agency.create({
+              data: {
+                user_id: created.id,
+                name: (rest.name as string) || "Nova Agência",
+                email: rest.email as string | undefined,
+                status: "ativo",
+                partner_level: "bronze",
+              },
+            });
+          }
+        } else if (account_type === "nomades") {
+          const existing = await tx.nomade.findUnique({ where: { user_id: created.id } });
+          if (!existing) {
+            await tx.nomade.create({
+              data: {
+                user_id: created.id,
+                name: (rest.name as string) || "Novo Nômade",
+                email: rest.email as string,
+                status: "aguardando_aprovacao",
+              },
+            });
+          }
+        } else if (account_type === "parceiro") {
+          const existing = await tx.partnerProfile.findUnique({ where: { user_id: created.id } });
+          if (!existing) {
+            await tx.partnerProfile.create({
+              data: {
+                user_id: created.id,
+                status: "pending",
+                balance: 0,
+                total_earned: 0,
+                total_withdrawn: 0,
+              },
+            });
+          }
+        } else if (account_type === "lider") {
+          const existing = await tx.liderArea.findFirst({ where: { user_id: created.id } });
+          if (!existing) {
+            await tx.liderArea.create({
+              data: {
+                user_id: created.id,
+                area_nome: "Geral",
+                ativo: true,
+                categorias_permitidas: JSON.stringify([]),
+                produtos_permitidos: JSON.stringify([]),
+              },
+            });
+          }
+        } else if (account_type === "empresas" && !company_id && resolvedRole !== "company_user") {
+          // Create a new Company for company_admin users without an existing company link
+          const company = await tx.company.create({
+            data: {
+              name: (rest.name as string) || "Nova Empresa",
+              email: rest.email as string | undefined,
+              status: "ativo",
+            },
+          });
+          await tx.user.update({
+            where: { id: created.id },
+            data: { company_id: company.id },
+          });
+          return tx.user.findUnique({ where: { id: created.id }, select: safeSelect });
+        }
+
+        return tx.user.findUnique({ where: { id: created.id }, select: safeSelect });
       });
 
       res.status(201).json(user);
