@@ -7,21 +7,59 @@ import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 
 const router = Router();
 
-async function getLoggedAgencyName(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      account_type: true,
-      agency: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
+// ─── Project scope helpers ───────────────────────────────────────────────────
 
-  if (!user || user.account_type !== "agencias") return null;
-  return user.agency?.name || null;
+type ProjectScope =
+  | { kind: "admin" }
+  | { kind: "open" }
+  | { kind: "agency"; agencyName: string }
+  | { kind: "company"; companyId: string }
+  | { kind: "company_unlinked" };
+
+async function getProjectScope(
+  userId: string,
+  accountType: string,
+): Promise<ProjectScope> {
+  if (accountType === "admin") return { kind: "admin" };
+
+  if (accountType === "agencias") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { agency: { select: { name: true } } },
+    });
+    const agencyName = user?.agency?.name;
+    if (!agencyName) return { kind: "open" };
+    return { kind: "agency", agencyName };
+  }
+
+  if (accountType === "empresas") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { company_id: true },
+    });
+    if (!user?.company_id) return { kind: "company_unlinked" };
+    return { kind: "company", companyId: user.company_id };
+  }
+
+  return { kind: "open" };
+}
+
+function scopeToWhere(scope: ProjectScope): Record<string, unknown> | null {
+  if (scope.kind === "company_unlinked") return null;
+  if (scope.kind === "agency") return { agency: scope.agencyName };
+  if (scope.kind === "company") return { client_id: scope.companyId };
+  return {};
+}
+
+function projectInScope(
+  scope: ProjectScope,
+  project: { agency: string | null; client_id: string | null },
+): boolean {
+  if (scope.kind === "admin" || scope.kind === "open") return true;
+  if (scope.kind === "company_unlinked") return false;
+  if (scope.kind === "agency") return project.agency === scope.agencyName;
+  if (scope.kind === "company") return project.client_id === scope.companyId;
+  return false;
 }
 
 const createSchema = z.object({
@@ -78,13 +116,22 @@ router.get("/", verifyToken, async (req, res, next) => {
     const status = req.query.status as string | undefined;
     const client_id = req.query.client_id as string | undefined;
     const search = req.query.search as string | undefined;
-    const loggedAgencyName = await getLoggedAgencyName(req.user!.id);
 
-    const where: Record<string, unknown> = {};
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    const scopeWhere = scopeToWhere(scope);
+
+    if (scopeWhere === null) {
+      res.json({ data: [], total: 0, page, limit });
+      return;
+    }
+
+    const where: Record<string, unknown> = { ...scopeWhere };
     if (status) where["status"] = status;
-    if (client_id) where["client_id"] = client_id;
     if (search) where["title"] = { contains: search };
-    if (loggedAgencyName) where["agency"] = loggedAgencyName;
+    // client_id filter is only applied for admin/open — scoped users already have their scope locked
+    if (client_id && (scope.kind === "admin" || scope.kind === "open")) {
+      where["client_id"] = client_id;
+    }
 
     const [total, data] = await Promise.all([
       prisma.project.count({ where }),
@@ -156,6 +203,12 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, project)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+
     res.json(project);
   } catch (err) {
     next(err);
@@ -167,6 +220,20 @@ router.get("/:id/tasks", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const status = req.query.status as string | undefined;
+
+    const parent = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!parent) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, parent)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
 
     const where: Record<string, unknown> = {
       project_id: req.params.id as string,
@@ -233,7 +300,8 @@ router.post(
   async (req, res, next) => {
     try {
       const { start_date, end_date, ...rest } = req.body;
-      const loggedAgencyName = await getLoggedAgencyName(req.user!.id);
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const agencyName = scope.kind === "agency" ? scope.agencyName : undefined;
       const toDate = (v: string | undefined) => {
         if (!v) return undefined;
         const d = new Date(v);
@@ -242,7 +310,7 @@ router.post(
       const project = await prisma.project.create({
         data: {
           ...rest,
-          agency: loggedAgencyName || rest.agency,
+          agency: agencyName || rest.agency,
           start_date: toDate(start_date),
           end_date: toDate(end_date),
         },
@@ -270,11 +338,22 @@ router.put(
         return isNaN(d.getTime()) ? undefined : d;
       };
 
-      // Capture previous status before update so we can detect transition to "planning"
+      // Capture previous status and validate scope before update
       const before = await prisma.project.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, agency: true, client_id: true },
       });
+
+      if (!before) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      if (!projectInScope(scope, before)) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
 
       const project = await prisma.project.update({
         where: { id },
@@ -306,6 +385,19 @@ router.put(
 // DELETE /api/projects/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!project) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, project)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
     await prisma.project.delete({ where: { id: req.params.id as string } });
     res.status(204).send();
   } catch (err) {
