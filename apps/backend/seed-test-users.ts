@@ -1,14 +1,16 @@
 /**
  * seed-test-users.ts
- * Cria/atualiza APENAS os 6 usuários de teste do seletor de login.
+ * Cria/atualiza os 6 usuários de teste do seletor de login
+ * e suas entidades vinculadas (Agency, Company, Nomade, PartnerProfile, LiderArea).
  *
  * Execução local:  npx tsx seed-test-users.ts
+ * Via npm:         npm run db:seed:test-users  (no diretório apps/backend)
  *
  * Regras:
- *  - Idempotente: usa upsert — não duplica nem apaga usuários existentes.
- *  - Afeta SOMENTE os e-mails listados em `users` abaixo.
- *  - Sempre atualiza a senha, mesmo se o usuário já existir.
- *  - Preserva role/account_type de usuários já existentes.
+ *  - Idempotente: usa upsert — não duplica nem apaga dados existentes.
+ *  - Afeta SOMENTE os 6 e-mails listados em `users` abaixo.
+ *  - Sempre atualiza senha, is_active, role e account_type.
+ *  - Preserva dados existentes das entidades vinculadas quando possível.
  *  - Em produção, só roda com ALLOW_TEST_USERS_SEED_IN_PRODUCTION=true.
  */
 
@@ -55,7 +57,7 @@ async function main() {
     },
     {
       email: "nomade@allka.test",
-      name: "Nomad Test",
+      name: "Nômade Teste",
       role: "nomad",
       account_type: "nomades",
     },
@@ -79,16 +81,20 @@ async function main() {
     },
   ];
 
+  // ── 1. Usuários ──────────────────────────────────────────────────────────────
+  // update sempre aplica role/account_type esperados para esses 6 usuários de teste.
+  const savedUsers: Record<string, { id: string; company_id: string | null }> =
+    {};
+
   for (const u of users) {
     const result = await prisma.user.upsert({
       where: { email: u.email },
-      // Usuário existente: só atualiza senha e reativa.
-      // role/account_type/name são preservados.
       update: {
         password_hash: passwordHash,
         is_active: true,
+        role: u.role,
+        account_type: u.account_type,
       },
-      // Usuário novo: cria com os dados mínimos do padrão.
       create: {
         email: u.email,
         password_hash: passwordHash,
@@ -98,10 +104,135 @@ async function main() {
         is_active: true,
       },
     });
+    savedUsers[u.email] = { id: result.id, company_id: result.company_id };
     console.log(`  ✅ ${u.role.padEnd(14)} → ${result.email}`);
   }
 
-  console.log("\n✔  Todos os usuários de teste estão prontos.");
+  console.log("\n🔗 Vinculando entidades...\n");
+
+  // ── 2. Agency para agencia@allka.test ────────────────────────────────────────
+  {
+    const userId = savedUsers["agencia@allka.test"].id;
+    await prisma.agency.upsert({
+      where: { user_id: userId },
+      create: {
+        user_id: userId,
+        name: "Agency Test",
+        email: "agencia@allka.test",
+        status: "ativo",
+        partner_level: "bronze",
+      },
+      update: { status: "ativo" },
+    });
+    console.log("  ✅ Agency          → agencia@allka.test");
+  }
+
+  // ── 3. Nomade para nomade@allka.test ─────────────────────────────────────────
+  // Upsert por email (UNIQUE no model Nomade). Preserva dados extras existentes.
+  {
+    const userId = savedUsers["nomade@allka.test"].id;
+    await prisma.nomade.upsert({
+      where: { email: "nomade@allka.test" },
+      create: {
+        user_id: userId,
+        name: "Nômade Teste",
+        email: "nomade@allka.test",
+        status: "ativo",
+      },
+      update: { user_id: userId, status: "ativo" },
+    });
+    console.log("  ✅ Nomade          → nomade@allka.test");
+  }
+
+  // ── 4. Company para company@allka.test ───────────────────────────────────────
+  // Company não tem campo único além do id; identifica por email na ausência de company_id.
+  {
+    const userId = savedUsers["company@allka.test"].id;
+    const existingCompanyId = savedUsers["company@allka.test"].company_id;
+
+    let companyId: string;
+    if (existingCompanyId) {
+      // Usuário já está vinculado — preservar
+      companyId = existingCompanyId;
+      console.log(
+        `  ✅ Company         → company@allka.test (já vinculado id=${companyId})`,
+      );
+    } else {
+      // Buscar pelo email para evitar duplicar em execuções repetidas
+      let company = await prisma.company.findFirst({
+        where: { email: "company@allka.test" },
+      });
+      if (!company) {
+        company = await prisma.company.create({
+          data: {
+            name: "Company Test",
+            email: "company@allka.test",
+            status: "ativo",
+          },
+        });
+        console.log(`  ✅ Company         → criada id=${company.id}`);
+      } else {
+        console.log(`  ✅ Company         → já existia id=${company.id}`);
+      }
+      companyId = company.id;
+      // Vincular user.company_id
+      await prisma.user.update({
+        where: { id: userId },
+        data: { company_id: companyId },
+      });
+      console.log("     User.company_id → atualizado");
+    }
+  }
+
+  // ── 5. PartnerProfile para partner@allka.test ────────────────────────────────
+  {
+    const userId = savedUsers["partner@allka.test"].id;
+    await prisma.partnerProfile.upsert({
+      where: { user_id: userId },
+      create: {
+        user_id: userId,
+        status: "active",
+        balance: 0,
+        total_earned: 0,
+        total_withdrawn: 0,
+      },
+      update: { status: "active" },
+    });
+    console.log("  ✅ PartnerProfile  → partner@allka.test");
+  }
+
+  // ── 6. LiderArea para lider.performance@allka.test ───────────────────────────
+  // LiderArea não tem unique composto; usa findFirst + create se não existir.
+  {
+    const userId = savedUsers["lider.performance@allka.test"].id;
+    const existing = await prisma.liderArea.findFirst({
+      where: { user_id: userId, area_nome: "Performance" },
+    });
+    if (!existing) {
+      await prisma.liderArea.create({
+        data: {
+          user_id: userId,
+          area_nome: "Performance",
+          ativo: true,
+          categorias_permitidas: JSON.stringify([
+            "Performance e Anúncios Patrocinados",
+            "Tráfego Pago",
+            "SEO",
+          ]),
+          produtos_permitidos: JSON.stringify([]),
+        },
+      });
+      console.log(
+        "  ✅ LiderArea       → criada (Performance) para lider.performance@allka.test",
+      );
+    } else {
+      console.log(
+        "  ✅ LiderArea       → já existia (Performance) para lider.performance@allka.test",
+      );
+    }
+  }
+
+  console.log("\n✔  Todos os usuários e vínculos estão prontos.");
   console.log(`   Senha comum: ${PASSWORD}\n`);
 }
 

@@ -47,17 +47,17 @@ export type AccessTypeId = (typeof ACCESS_TYPES)[number]["id"];
 const PORTAL_LINKS = [
   {
     id: "ADMIN",
-    loginPath: "/login",
+    loginPath: "/admin/login",
     labels: { pt: "Allka", en: "Allka", es: "Allka", zh: "Allka" },
   },
   {
     id: "NOMAD",
-    loginPath: "/nomad/login",
+    loginPath: "/nomades/login",
     labels: { pt: "Nomad", en: "Nomad", es: "Nomad", zh: "Nomad" },
   },
   {
     id: "AGENCY",
-    loginPath: "/agency/login",
+    loginPath: "/agencia/login",
     labels: { pt: "Agency", en: "Agency", es: "Agency", zh: "Agency" },
   },
   {
@@ -67,12 +67,12 @@ const PORTAL_LINKS = [
   },
   {
     id: "PARTNER",
-    loginPath: "/partner/login",
+    loginPath: "/parceiro/login",
     labels: { pt: "Partner", en: "Partner", es: "Partner", zh: "Partner" },
   },
   {
     id: "LEADER",
-    loginPath: "/leader/login",
+    loginPath: "/lider/login",
     labels: { pt: "Leader", en: "Leader", es: "Leader", zh: "Leader" },
   },
 ] as const;
