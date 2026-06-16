@@ -466,9 +466,21 @@ export function UserCreateSlidePanel({
                     ) : (
                       <Select
                         value={newUser.account_type}
-                        onValueChange={(value) =>
-                          setNewUser({ ...newUser, account_type: value })
-                        }
+                        onValueChange={(value) => {
+                          const roleByType: Record<string, string> = {
+                            empresas: "company_admin",
+                            agencias: "agency_admin",
+                            nomades:  "nomad",
+                            parceiro: "partner",
+                            lider:    "lider",
+                            admin:    "admin",
+                          };
+                          setNewUser({
+                            ...newUser,
+                            account_type: value,
+                            role: roleByType[value] || "company_user",
+                          });
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -477,6 +489,8 @@ export function UserCreateSlidePanel({
                           <SelectItem value="empresas">Empresas</SelectItem>
                           <SelectItem value="agencias">Agências</SelectItem>
                           <SelectItem value="nomades">Nômades</SelectItem>
+                          <SelectItem value="parceiro">Parceiro</SelectItem>
+                          <SelectItem value="lider">Líder de Área</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                         </SelectContent>
                       </Select>
