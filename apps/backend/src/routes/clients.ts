@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 
 const router = Router();
@@ -39,9 +39,35 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
+const COMPANY_COUNT_SELECT = { _count: { select: { users: true, projects: true, invoices: true } } } as const;
+
 // GET /api/clients
 router.get("/", verifyToken, async (req, res, next) => {
   try {
+    const { role, account_type, id: userId } = req.user!;
+
+    // Company users see only their own company
+    if (account_type === "empresas") {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
+      if (!user?.company_id) {
+        res.json({ data: [], total: 0, page: 1, limit: 10 });
+        return;
+      }
+      const company = await prisma.company.findUnique({
+        where: { id: user.company_id },
+        include: COMPANY_COUNT_SELECT,
+      });
+      res.json({ data: company ? [company] : [], total: company ? 1 : 0, page: 1, limit: 1 });
+      return;
+    }
+
+    // Non-admin, non-company accounts cannot list companies
+    if (role !== "admin") {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+
+    // Admin: full paginated listing
     const { page, limit, skip } = parsePagination(req.query);
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
@@ -60,6 +86,7 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.company.count({ where }),
       prisma.company.findMany({
         where,
+        include: COMPANY_COUNT_SELECT,
         skip,
         take: limit,
         orderBy: { created_at: "desc" },
@@ -75,9 +102,23 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET /api/clients/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
+    const { role, account_type, id: userId } = req.user!;
+
+    // Company users can only see their own company
+    if (account_type === "empresas") {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
+      if (!user?.company_id || user.company_id !== req.params.id) {
+        res.status(403).json({ error: "Acesso não autorizado" });
+        return;
+      }
+    } else if (role !== "admin") {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+
     const company = await prisma.company.findUnique({
       where: { id: req.params.id as string },
-      include: { _count: { select: { projects: true, invoices: true } } },
+      include: { _count: { select: { users: true, projects: true, invoices: true } } },
     });
 
     if (!company) {
@@ -91,10 +132,11 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
-// POST /api/clients
+// POST /api/clients — admin only
 router.post(
   "/",
   verifyToken,
+  requireRole("admin"),
   validate(createSchema),
   async (req, res, next) => {
     try {
@@ -106,10 +148,11 @@ router.post(
   },
 );
 
-// PUT /api/clients/:id
+// PUT /api/clients/:id — admin only
 router.put(
   "/:id",
   verifyToken,
+  requireRole("admin"),
   validate(updateSchema),
   async (req, res, next) => {
     try {
@@ -124,8 +167,8 @@ router.put(
   },
 );
 
-// DELETE /api/clients/:id
-router.delete("/:id", verifyToken, async (req, res, next) => {
+// DELETE /api/clients/:id — admin only
+router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     await prisma.company.delete({ where: { id: req.params.id as string } });
     res.status(204).send();

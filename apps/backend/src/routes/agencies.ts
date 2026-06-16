@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 
 const router = Router();
@@ -23,6 +23,28 @@ const updateSchema = createSchema.partial().omit({ user_id: true });
 // GET /api/agencies
 router.get("/", verifyToken, async (req, res, next) => {
   try {
+    const { role, account_type, id: userId } = req.user!;
+
+    // Agency users see only their own agency
+    if (account_type === "agencias") {
+      const agency = await prisma.agency.findFirst({
+        where: { user_id: userId },
+        include: {
+          user: { select: { id: true, email: true, name: true } },
+          match_queue_entry: true,
+        },
+      });
+      res.json({ data: agency ? [agency] : [], total: agency ? 1 : 0, page: 1, limit: 1 });
+      return;
+    }
+
+    // Non-admin, non-agency accounts cannot list agencies
+    if (role !== "admin") {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+
+    // Admin: full paginated listing
     const { page, limit, skip } = parsePagination(req.query);
     const partner_level = req.query.partner_level as string | undefined;
     const status = req.query.status as string | undefined;
@@ -61,6 +83,20 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET /api/agencies/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
+    const { role, account_type, id: userId } = req.user!;
+
+    // Agency users can only see their own agency
+    if (account_type === "agencias") {
+      const own = await prisma.agency.findFirst({ where: { user_id: userId }, select: { id: true } });
+      if (!own || own.id !== req.params.id) {
+        res.status(403).json({ error: "Acesso não autorizado" });
+        return;
+      }
+    } else if (role !== "admin") {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+
     const agency = await prisma.agency.findUnique({
       where: { id: (req.params.id as string) },
       include: {
@@ -80,8 +116,8 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
-// POST /api/agencies
-router.post("/", verifyToken, validate(createSchema), async (req, res, next) => {
+// POST /api/agencies — admin only
+router.post("/", verifyToken, requireRole("admin"), validate(createSchema), async (req, res, next) => {
   try {
     const agency = await prisma.agency.create({
       data: req.body,
@@ -93,8 +129,8 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
   }
 });
 
-// PUT /api/agencies/:id
-router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
+// PUT /api/agencies/:id — admin only
+router.put("/:id", verifyToken, requireRole("admin"), validate(updateSchema), async (req, res, next) => {
   try {
     const agency = await prisma.agency.update({
       where: { id: (req.params.id as string) },
@@ -106,8 +142,8 @@ router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) =
   }
 });
 
-// DELETE /api/agencies/:id
-router.delete("/:id", verifyToken, async (req, res, next) => {
+// DELETE /api/agencies/:id — admin only
+router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     await prisma.agency.delete({ where: { id: (req.params.id as string) } });
     res.status(204).send();
