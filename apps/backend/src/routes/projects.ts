@@ -13,6 +13,7 @@ type ProjectScope =
   | { kind: "admin" }
   | { kind: "open" }
   | { kind: "agency"; agencyName: string }
+  | { kind: "agency_unlinked" }
   | { kind: "company"; companyId: string }
   | { kind: "company_unlinked" };
 
@@ -28,7 +29,7 @@ async function getProjectScope(
       select: { agency: { select: { name: true } } },
     });
     const agencyName = user?.agency?.name;
-    if (!agencyName) return { kind: "open" };
+    if (!agencyName) return { kind: "agency_unlinked" };
     return { kind: "agency", agencyName };
   }
 
@@ -45,7 +46,7 @@ async function getProjectScope(
 }
 
 function scopeToWhere(scope: ProjectScope): Record<string, unknown> | null {
-  if (scope.kind === "company_unlinked") return null;
+  if (scope.kind === "company_unlinked" || scope.kind === "agency_unlinked") return null;
   if (scope.kind === "agency") return { agency: scope.agencyName };
   if (scope.kind === "company") return { client_id: scope.companyId };
   return {};
@@ -56,7 +57,7 @@ function projectInScope(
   project: { agency: string | null; client_id: string | null },
 ): boolean {
   if (scope.kind === "admin" || scope.kind === "open") return true;
-  if (scope.kind === "company_unlinked") return false;
+  if (scope.kind === "company_unlinked" || scope.kind === "agency_unlinked") return false;
   if (scope.kind === "agency") return project.agency === scope.agencyName;
   if (scope.kind === "company") return project.client_id === scope.companyId;
   return false;
