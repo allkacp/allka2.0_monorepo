@@ -71,6 +71,27 @@ router.get("/", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/nomades/me — perfil do nômade logado (busca por user_id)
+router.get("/me", verifyToken, async (req, res, next) => {
+  try {
+    const nomade = await prisma.nomade.findUnique({
+      where: { user_id: req.user!.id },
+      include: {
+        qualifications: true,
+        bank_account: true,
+        _count: { select: { task_executions: true, wallet_transactions: true } },
+      },
+    });
+    if (!nomade) {
+      res.status(404).json({ error: "Perfil nômade não encontrado" });
+      return;
+    }
+    res.json(nomade);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/nomades/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
