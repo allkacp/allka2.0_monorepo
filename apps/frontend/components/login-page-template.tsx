@@ -11,7 +11,7 @@ export type Locale = "pt" | "en" | "es" | "zh";
 
 export interface LocaleContent {
   tag: string;
-  headlineLines: Array<{ text: string; outlined?: boolean }>;
+  headlineLines: Array<{ text: string; outlined?: boolean; fontSize?: string; fontFamily?: string }>;
   subtext: string;
   stats: Array<{ value: string; label: string }>;
 }
@@ -208,7 +208,20 @@ export function LoginPageTemplate({ config }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [portalOpen, setPortalOpen] = useState(false);
+  const portalRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!portalOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (portalRef.current && !portalRef.current.contains(e.target as Node)) {
+        setPortalOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [portalOpen]);
   const { toast } = useToast();
 
   const ui = UI[locale];
@@ -283,81 +296,126 @@ export function LoginPageTemplate({ config }: Props) {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* ── Painel esquerdo: brand ─────────────────────────────────────────── */}
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* ── Painel brand (topo no mobile, esquerda no desktop) ──────────────── */}
       <div
-        className="hidden lg:flex lg:w-[58%] flex-col p-16 pb-12 relative overflow-hidden"
+        className="flex flex-col lg:w-[55%] xl:w-[58%] relative overflow-hidden"
         style={{ background: config.gradient }}
       >
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 bg-white" />
-        <div className="absolute -bottom-48 -right-24 w-md h-112 rounded-full opacity-10 bg-white" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-xl h-144 rounded-full opacity-[0.04] bg-white" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 bg-white pointer-events-none" />
+        <div className="absolute -bottom-48 -right-24 w-md h-112 rounded-full opacity-10 bg-white pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-xl h-144 rounded-full opacity-[0.04] bg-white pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col gap-5">
-          <img
-            src="/logo-allka-full.png"
-            alt="ALLKA"
-            className="h-14 object-contain self-start"
-          />
-          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 text-sm font-semibold tracking-widest uppercase rounded-full px-5 py-2 self-start">
-            {content.tag}
+        {/* ── Mobile layout ── */}
+        <div className="lg:hidden relative z-10 p-5 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <img src="/logo-allka-full.png" alt="ALLKA" className="h-7 object-contain" />
+            <div className="inline-flex items-center bg-white/10 border border-white/20 text-white/70 text-[10px] font-semibold tracking-widest uppercase rounded-full px-3 py-1">
+              {content.tag}
+            </div>
           </div>
           <h1
-            className="text-white font-extrabold leading-tight"
-            style={{ fontSize: "clamp(3.5rem, 5.8vw, 6.5rem)" }}
+            className="text-white font-extrabold leading-none mb-3"
+            style={{ fontSize: "clamp(1.25rem, 6.5vw, 2.2rem)" }}
           >
             {content.headlineLines.map((line, i) =>
               line.outlined ? (
                 <span
                   key={i}
-                  className="block mt-1"
+                  className="block"
                   style={{
-                    WebkitTextStroke: "1.5px rgba(255,255,255,0.7)",
-                    color: "transparent",
-                    fontSize:
-                      config.outlinedFontSize ?? "clamp(2.4rem, 4vw, 4.5rem)",
+                    fontFamily: line.fontFamily ?? "AllkaVertexOutlineBold",
+                    color: "white",
+                    fontSize: line.fontSize ?? config.outlinedFontSize ?? "clamp(1.15rem, 6vw, 2rem)",
                     lineHeight: 1.05,
                   }}
                 >
                   {line.text}
                 </span>
               ) : (
-                <span key={i}>{line.text}</span>
-              ),
+                <span key={i} className="block"
+                  style={line.fontFamily || line.fontSize ? { fontFamily: line.fontFamily, fontSize: line.fontSize } : undefined}
+                >
+                  {line.text}
+                </span>
+              )
             )}
           </h1>
-          <p className="text-white/70 text-lg leading-relaxed max-w-lg">
-            {content.subtext}
-          </p>
-        </div>
-
-        <div className="relative z-10 flex flex-col gap-5 mt-auto mb-44">
-          <div className="flex items-end gap-8">
+          <div className="flex items-end gap-4 mt-1">
             {content.stats.map((stat, i) => (
-              <div key={i} className="flex items-end gap-8">
-                {i > 0 && <div className="w-px h-10 bg-white/20 self-center" />}
+              <div key={i} className="flex items-end gap-4">
+                {i > 0 && <div className="w-px h-6 bg-white/25 self-center" />}
                 <div>
-                  <p className="text-white font-bold text-5xl leading-none">
-                    {stat.value}
-                  </p>
-                  <p className="text-white/60 text-base mt-1">{stat.label}</p>
+                  <p className="text-white font-bold text-xl leading-none">{stat.value}</p>
+                  <p className="text-white/55 text-[10px] mt-0.5">{stat.label}</p>
                 </div>
               </div>
             ))}
           </div>
+        </div>
 
-          <p className="text-white/30 text-xs">
-            © {new Date().getFullYear()} Allka Platform · Todos os direitos
-            reservados
+        {/* ── Desktop layout ── */}
+        <div className="hidden lg:flex flex-col gap-5 xl:gap-5 flex-1 min-h-0 p-8 xl:p-14 2xl:p-16">
+          <img src="/logo-allka-full.png" alt="ALLKA" className="h-10 xl:h-14 object-contain self-start" />
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 text-xs xl:text-sm font-semibold tracking-widest uppercase rounded-full px-4 xl:px-5 py-1.5 xl:py-2 self-start">
+            {content.tag}
+          </div>
+          <h1
+            className="text-white font-extrabold leading-tight"
+            style={{ fontSize: "clamp(1.6rem, 3.8vw, 6.5rem)" }}
+          >
+            {content.headlineLines.map((line, i) =>
+              line.outlined ? (
+                <span
+                  key={i}
+                  className="block mt-0.5"
+                  style={{
+                    fontFamily: line.fontFamily ?? "AllkaVertexOutlineBold",
+                    color: "white",
+                    fontSize: line.fontSize ?? config.outlinedFontSize ?? "clamp(1.5rem, 3.2vw, 4.5rem)",
+                    lineHeight: 1.05,
+                  }}
+                >
+                  {line.text}
+                </span>
+              ) : (
+                <span key={i} className="block"
+                  style={line.fontFamily || line.fontSize ? { fontFamily: line.fontFamily, fontSize: line.fontSize } : undefined}
+                >
+                  {line.text}
+                </span>
+              )
+            )}
+          </h1>
+          <p className="text-white/70 text-sm xl:text-lg leading-relaxed max-w-lg">
+            {content.subtext}
           </p>
+          <div className="flex flex-col gap-3 mt-auto">
+            <div className="flex items-end gap-5 xl:gap-8">
+              {content.stats.map((stat, i) => (
+                <div key={i} className="flex items-end gap-5 xl:gap-8">
+                  {i > 0 && <div className="w-px h-8 xl:h-10 bg-white/20 self-center" />}
+                  <div>
+                    <p className="text-white font-bold text-3xl xl:text-5xl leading-none">{stat.value}</p>
+                    <p className="text-white/60 text-xs xl:text-base mt-1">{stat.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-white/30 text-xs">
+              © {new Date().getFullYear()} Allka Platform · Todos os direitos reservados
+            </p>
+          </div>
         </div>
       </div>
 
       {/* ── Painel direito: formulário ─────────────────────────────────────── */}
       <div className="flex-1 flex flex-col bg-white dark:bg-slate-950">
-        {/* Top bar: portal pills + language selector */}
+        {/* Top bar: portal selector + language */}
         <div className="flex justify-between items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0">
+
+          {/* Desktop: pills */}
+          <div className="hidden lg:flex items-center gap-1.5 min-w-0">
             {PORTAL_LINKS.map((portal) => {
               const isActive = config.accessType === portal.id;
               return (
@@ -377,6 +435,51 @@ export function LoginPageTemplate({ config }: Props) {
               );
             })}
           </div>
+
+          {/* Mobile: dropdown */}
+          <div className="lg:hidden relative" ref={portalRef}>
+            <button
+              type="button"
+              onClick={() => setPortalOpen((v) => !v)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-sm transition-all duration-200"
+              style={{ background: config.gradient }}
+            >
+              {PORTAL_LINKS.find((p) => p.id === config.accessType)?.labels[locale] ?? "Portal"}
+              <svg
+                className={`w-3 h-3 transition-transform duration-200 ${portalOpen ? "rotate-180" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {portalOpen && (
+              <div className="absolute left-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden min-w-[160px]">
+                {PORTAL_LINKS.map((portal) => {
+                  const isActive = config.accessType === portal.id;
+                  return (
+                    <button
+                      key={portal.id}
+                      type="button"
+                      onClick={() => {
+                        setPortalOpen(false);
+                        if (!isActive) navigate(portal.loginPath);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors ${
+                        isActive
+                          ? "text-white"
+                          : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                      style={isActive ? { background: config.gradient } : undefined}
+                    >
+                      {portal.labels[locale]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Language selector — igual em mobile e desktop */}
           <div className="inline-flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shrink-0">
             {LOCALES.map((l) => {
               const isActive = locale === l.code;
