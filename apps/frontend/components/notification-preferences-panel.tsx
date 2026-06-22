@@ -12,6 +12,8 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
+  FolderOpen,
+  CheckCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
@@ -21,6 +23,103 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
+
+interface NotifItem {
+  id: string
+  type: "task" | "system" | "user" | "project" | "approval"
+  title: string
+  body: string
+  date: string
+  read: boolean
+}
+
+const MOCK_NOTIFICATIONS: NotifItem[] = [
+  {
+    id: "ni-1",
+    type: "task",
+    title: "Tarefa aprovada",
+    body: "A tarefa 'Campanha Meta – Junho' foi aprovada com sucesso.",
+    date: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    read: false,
+  },
+  {
+    id: "ni-2",
+    type: "task",
+    title: "Nova tarefa para qualificar",
+    body: "Você tem uma tarefa aguardando qualificação: 'SEO On-page – Cliente X'.",
+    date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    read: false,
+  },
+  {
+    id: "ni-3",
+    type: "system",
+    title: "Atualização da plataforma",
+    body: "A plataforma foi atualizada para a versão 2.1.0 com melhorias de performance.",
+    date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+  {
+    id: "ni-4",
+    type: "task",
+    title: "Tarefa devolvida",
+    body: "'Google Ads – E-commerce' foi devolvida com observações do líder.",
+    date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+  {
+    id: "ni-5",
+    type: "task",
+    title: "Entrega recebida",
+    body: "Carla Souza enviou a entrega da tarefa 'Relatório Performance – Maio'.",
+    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+  {
+    id: "ni-6",
+    type: "user",
+    title: "Novo nômade cadastrado",
+    body: "João Silva se cadastrou como nômade na área de Performance.",
+    date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+  {
+    id: "ni-7",
+    type: "project",
+    title: "Novo projeto criado",
+    body: "O projeto 'Marketing Digital Q3 – Allka' foi associado à sua área.",
+    date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+  {
+    id: "ni-8",
+    type: "approval",
+    title: "Aprovação pendente",
+    body: "'Campanha Instagram – Verão' aguarda sua aprovação há 2 dias.",
+    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+]
+
+const NOTIF_ICON_CFG: Record<NotifItem["type"], { Icon: any; bg: string; text: string }> = {
+  task: { Icon: CheckCircle2, bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-600 dark:text-green-400" },
+  system: { Icon: AlertCircle, bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
+  user: { Icon: UserPlus, bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
+  project: { Icon: FolderOpen, bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
+  approval: { Icon: CheckCircle2, bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const min = Math.floor(diff / 60000)
+  if (min < 60) return `${min > 0 ? min : 1}min atrás`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h}h atrás`
+  const d = Math.floor(h / 24)
+  if (d === 1) return "ontem"
+  if (d < 7) return `${d} dias atrás`
+  return new Date(dateStr).toLocaleDateString("pt-BR")
+}
 
 interface NotificationPreference {
   id: string
@@ -59,16 +158,22 @@ interface NotificationPreferencesPanelProps {
   open?: boolean
   onClose?: () => void
   embedded?: boolean
+  initialTab?: string
 }
 
 export function NotificationPreferencesPanel({
   open = false,
   onClose,
   embedded = false,
+  initialTab = "inbox",
 }: NotificationPreferencesPanelProps) {
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [expandedPreference, setExpandedPreference] = useState<string | null>(null)
+  const [readSet, setReadSet] = useState<Set<string>>(
+    new Set(MOCK_NOTIFICATIONS.filter((n) => n.read).map((n) => n.id)),
+  )
+  const unreadCount = MOCK_NOTIFICATIONS.filter((n) => !readSet.has(n.id)).length
 
   const [userGroups] = useState<UserGroup[]>([
     {
@@ -697,8 +802,8 @@ export function NotificationPreferencesPanel({
       >
         <div className="flex flex-col h-full">
           <ModalBrandHeader
-            title="Preferências de Notificação"
-            subtitle="Configure as notificações e destinatários"
+            title="Central de Notificações"
+            subtitle="Notificações e preferências da plataforma"
             icon={<Bell />}
             onClose={onClose}
           />
@@ -711,15 +816,24 @@ export function NotificationPreferencesPanel({
             </div>
           )}
 
-          <Tabs defaultValue="notifications" className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="mx-6 mt-4">
-              <TabsTrigger value="notifications" className="flex items-center space-x-2">
+          <Tabs defaultValue={initialTab} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="mx-6 mt-4 shrink-0">
+              <TabsTrigger value="inbox" className="flex items-center gap-1.5">
                 <Bell className="h-4 w-4" />
                 <span>Notificações</span>
+                {unreadCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                    {unreadCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="flex items-center space-x-2">
+                <Settings className="h-4 w-4" />
+                <span>Configurações</span>
               </TabsTrigger>
               <TabsTrigger value="rules" className="flex items-center space-x-2">
                 <Settings className="h-4 w-4" />
-                <span>Regras de Distribuição</span>
+                <span>Regras</span>
               </TabsTrigger>
               <TabsTrigger value="groups" className="flex items-center space-x-2">
                 <Users className="h-4 w-4" />
@@ -727,7 +841,96 @@ export function NotificationPreferencesPanel({
               </TabsTrigger>
             </TabsList>
 
-            {/* Notifications Tab */}
+            {/* ── Inbox Tab ─────────────────────────────────────────── */}
+            <TabsContent value="inbox" className="flex-1 overflow-y-auto mt-0">
+              {/* inbox header */}
+              <div className="flex items-center justify-between px-6 py-3 border-b bg-background sticky top-0 z-10">
+                <span className="text-sm font-semibold text-foreground">
+                  {unreadCount > 0
+                    ? `${unreadCount} não ${unreadCount === 1 ? "lida" : "lidas"}`
+                    : "Tudo lido"}
+                </span>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() =>
+                      setReadSet(new Set(MOCK_NOTIFICATIONS.map((n) => n.id)))
+                    }
+                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Marcar todas como lidas
+                  </button>
+                )}
+              </div>
+
+              {/* notification list */}
+              <div className="divide-y divide-border">
+                {MOCK_NOTIFICATIONS.map((n) => {
+                  const isRead = readSet.has(n.id)
+                  const cfg = NOTIF_ICON_CFG[n.type]
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() =>
+                        setReadSet((prev) => new Set([...prev, n.id]))
+                      }
+                      className={cn(
+                        "w-full flex items-start gap-3 px-6 py-4 text-left hover:bg-muted/50 transition-colors",
+                        !isRead && "bg-blue-50/60 dark:bg-blue-950/15",
+                      )}
+                    >
+                      {/* unread dot */}
+                      <div className="mt-2 shrink-0">
+                        <div
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            !isRead ? "bg-blue-500" : "bg-transparent",
+                          )}
+                        />
+                      </div>
+                      {/* icon */}
+                      <div
+                        className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+                          cfg.bg,
+                        )}
+                      >
+                        <cfg.Icon className={cn("h-4 w-4", cfg.text)} />
+                      </div>
+                      {/* text */}
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={cn(
+                            "text-sm leading-snug",
+                            !isRead
+                              ? "font-semibold text-foreground"
+                              : "font-medium text-foreground/80",
+                          )}
+                        >
+                          {n.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                          {n.body}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">
+                          {timeAgo(n.date)}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {MOCK_NOTIFICATIONS.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Bell className="h-12 w-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">Sem notificações</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Você está em dia!</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── Preferences Tab (existing content) ────────────────── */}
             <TabsContent value="notifications" className="flex-1 overflow-y-auto p-6 space-y-6 mt-0">
               {/* Notification Channels */}
               <div className="space-y-4">

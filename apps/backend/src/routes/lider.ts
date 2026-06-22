@@ -175,6 +175,63 @@ router.get("/tasks/counts", async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// ── GET /api/lider/nomades ────────────────────────────────────────────────────
+
+router.get("/nomades", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    const { page = "1", limit = "20", status } = req.query as Record<string, string>;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    const allowedCats = await getAllowedCategories(user.id, user.role);
+
+    // Determina os nômades da área: quem tem NomadeHabilidade com categoria na área do líder
+    const nomadeIdFilter =
+      allowedCats !== null && allowedCats.length > 0
+        ? {
+            habilidades: {
+              some: {
+                categoria_produto: { in: allowedCats },
+                ativo: true,
+              },
+            },
+          }
+        : {};
+
+    const statusFilter = status && status !== "todos" ? { status } : { status: "ativo" };
+
+    const where = { ...nomadeIdFilter, ...statusFilter };
+
+    const [nomades, total] = await Promise.all([
+      prisma.nomade.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+          level: true,
+          status: true,
+          score: true,
+          tasks_completed_total: true,
+          tasks_completed_quarter: true,
+          performance_avg_rating: true,
+          areas_of_interest: true,
+        },
+      }),
+      prisma.nomade.count({ where }),
+    ]);
+
+    res.json({ nomades, total, page: parseInt(page), limit: take });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── PATCH /api/lider/tasks/:id/approve ───────────────────────────────────────
 // For tasks WITHOUT stages: marks the whole task as APROVADA.
 // For tasks WITH stages: advances the current EM_ANDAMENTO stage.

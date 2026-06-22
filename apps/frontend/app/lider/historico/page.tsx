@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
@@ -63,6 +64,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function LiderHistoricoPage() {
+  const [searchParams] = useSearchParams();
+  const filterKey = searchParams.get("filter") ?? "";
+  const isAprovacoes = filterKey === "aprovacoes";
+
   const [tasks, setTasks] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -75,10 +80,12 @@ export default function LiderHistoricoPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch("/lider/tasks", {
+      const params: Record<string, string> = {
         page: String(page),
         limit: String(PAGE_SIZE),
-      });
+      };
+      if (isAprovacoes) params.status = "APROVADA";
+      const data = await apiFetch("/lider/tasks", params);
       setTasks(data.tasks ?? []);
       setTotal(data.total ?? 0);
     } catch (e: any) {
@@ -86,15 +93,15 @@ export default function LiderHistoricoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, isAprovacoes]);
 
   useEffect(() => { load(); }, [load]);
 
   return (
     <div>
       <PageHeader
-        title="Histórico"
-        description={`${total} tarefa${total !== 1 ? "s" : ""} no total`}
+        title={isAprovacoes ? "Aprovações Feitas Hoje" : "Histórico"}
+        description={`${total} tarefa${total !== 1 ? "s" : ""} ${isAprovacoes ? "aprovadas" : "no total"}`}
       />
 
       {error && (

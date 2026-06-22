@@ -120,6 +120,7 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifTab, setNotifTab] = useState<"inbox" | "notifications">("inbox");
   const [profileOpen, setProfileOpen] = useState(false);
   const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -235,7 +236,7 @@ export function Header() {
         projects: true,
         usersPath: "",
         companiesPath: "",
-        projectsPath: `${base("empresa")}/projetos`,
+        projectsPath: "/company/projetos",
       };
     if (accountType === "agencias")
       return {
@@ -328,8 +329,8 @@ export function Header() {
             list.slice(0, 5).forEach((p: any) =>
               results.push({
                 type: "Projeto",
-                label: p.name ?? p.titulo,
-                sub: p.client ?? p.status ?? "",
+                label: p.title ?? p.name ?? p.titulo ?? "Projeto",
+                sub: p.client?.name ?? p.status ?? "",
                 path: searchScope.projectsPath,
                 icon: Briefcase,
               }),
@@ -805,8 +806,8 @@ export function Header() {
               <FontScaleControl />
             </div>
 
-            {/* ── Cesta de projeto ──────────────────────────────────── */}
-            {(() => {
+            {/* ── Cesta de projeto (oculta para líder) ───────────── */}
+            {accountType !== "lider" && (() => {
               const totalItems = basket.getTotalItems();
               const hasItems = totalItems > 0;
               return (
@@ -883,7 +884,7 @@ export function Header() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setNotifOpen(true)}
+                onClick={() => { setNotifTab("inbox"); setNotifOpen(true); }}
                 className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
               >
                 <Bell className="h-4 w-4" />
@@ -1031,7 +1032,7 @@ export function Header() {
                   Meu Perfil
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setNotifOpen(true)}
+                  onClick={() => { setNotifTab("notifications"); setNotifOpen(true); }}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
                 >
                   <Settings className="h-4 w-4 text-gray-400 shrink-0" />
@@ -1130,6 +1131,7 @@ export function Header() {
       <NotificationPreferencesPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
+        initialTab={notifTab}
       />
       <UserViewSlidePanel
         open={profileOpen}

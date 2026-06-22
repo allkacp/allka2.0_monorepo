@@ -2,10 +2,29 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Eye, AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
+
+const FILTER_CONFIG: Record<string, { status: string; title: string; description: string }> = {
+  briefings: {
+    status: "LANCAMENTO_ENVIADO_PARA_ANALISE",
+    title: "Briefings para Revisar",
+    description: "Briefings aguardando revisão do líder",
+  },
+  entregas: {
+    status: "ENTREGA_PENDENTE",
+    title: "Entregas Aguardando Análise",
+    description: "Entregas aguardando análise do líder",
+  },
+  atrasadas: {
+    status: "ENTREGA_ATRASADA",
+    title: "Tarefas Atrasadas",
+    description: "Tarefas com entrega atrasada",
+  },
+};
 
 const API_BASE = "/api";
 const PAGE_SIZE = 20;
@@ -88,6 +107,13 @@ function buildDrawerTask(task: any) {
 }
 
 export default function LiderTarefasPage() {
+  const [searchParams] = useSearchParams();
+  const filterKey = searchParams.get("filter") ?? "";
+  const filterCfg = FILTER_CONFIG[filterKey];
+  const activeStatus = filterCfg?.status ?? "EM_EXECUCAO";
+  const pageTitle = filterCfg?.title ?? "Em Execução";
+  const pageDescription = filterCfg?.description ?? "Tarefas em execução na sua área";
+
   const [tasks, setTasks] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -104,7 +130,7 @@ export default function LiderTarefasPage() {
     setError(null);
     try {
       const data = await apiFetch("/lider/tasks", {
-        status: "EM_EXECUCAO",
+        status: activeStatus,
         page: String(page),
         limit: String(PAGE_SIZE),
       });
@@ -115,7 +141,7 @@ export default function LiderTarefasPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, activeStatus]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -127,8 +153,8 @@ export default function LiderTarefasPage() {
   return (
     <div>
       <PageHeader
-        title="Em Execução"
-        description={`${total} tarefa${total !== 1 ? "s" : ""} em execução`}
+        title={pageTitle}
+        description={`${total} tarefa${total !== 1 ? "s" : ""} — ${pageDescription}`}
       />
 
       {error && (

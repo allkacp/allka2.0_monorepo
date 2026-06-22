@@ -299,6 +299,18 @@ const navigationConfig = {
       current: false,
     },
     {
+      name: "Nômades",
+      href: "/leader/nomades",
+      icon: Users,
+      current: false,
+    },
+    {
+      name: "Catálogo",
+      href: "/leader/catalogo",
+      icon: BookOpen,
+      current: false,
+    },
+    {
       name: "Perfil",
       href: "/leader/perfil",
       icon: UserCheck,

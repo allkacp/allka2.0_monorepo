@@ -67,7 +67,7 @@ import {
   SlidersHorizontal,
   ImageDown,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -744,6 +744,8 @@ export default function AdminDashboardPage() {
     refetch: refetchDashboard,
   } = useDashboard();
 
+  const navigate = useNavigate();
+
   const [globalPeriod, setGlobalPeriod] = useState<{
     type:
       | "today"
@@ -960,12 +962,12 @@ export default function AdminDashboardPage() {
   >([
     { id: "activeProjects", order: 0, visible: true },
     { id: "tasksToLaunch", order: 1, visible: true },
-    { id: "tasksInProgress", order: 2, visible: true },
-    { id: "approvalsPending", order: 3, visible: true },
-    { id: "proposalsAwaitingClient", order: 4, visible: true },
-    { id: "contractedValueMonth", order: 5, visible: true },
-    { id: "estimatedMargin", order: 6, visible: true },
-    { id: "pendingPayments", order: 7, visible: true },
+    { id: "approvalsPending", order: 2, visible: true },
+    { id: "contractedValueMonth", order: 3, visible: true },
+    { id: "pendingPayments", order: 4, visible: true },
+    { id: "tasksInProgress", order: 5, visible: false },
+    { id: "proposalsAwaitingClient", order: 6, visible: false },
+    { id: "estimatedMargin", order: 7, visible: false },
   ]);
   const [draggedMetric, setDraggedMetric] = useState<MetricType | null>(null);
   const [dragOverMetric, setDragOverMetric] = useState<MetricType | null>(null);
@@ -1348,7 +1350,7 @@ export default function AdminDashboardPage() {
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
     const widgetPeriod = widgetPeriods.find((wp) => wp.widgetId === widgetId);
     const isCustom = widgetPeriod?.mode === "custom";
-    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : "Global";
+    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : globalPeriod.label;
 
     return (
       <DropdownMenu>
@@ -1967,7 +1969,15 @@ export default function AdminDashboardPage() {
     const savedMetrics = localStorage.getItem("dashboard-metric-cards-company");
     if (savedMetrics) {
       try {
-        setMetricCards(JSON.parse(savedMetrics));
+        const parsed = JSON.parse(savedMetrics);
+        // Migration: if old default had all 8 visible, reset to new 5-card default
+        const wasOldDefault =
+          parsed.length === 8 && parsed.every((m: any) => m.visible === true);
+        if (!wasOldDefault) {
+          setMetricCards(parsed);
+        } else {
+          localStorage.removeItem("dashboard-metric-cards-company");
+        }
       } catch (e) {
         console.error("Failed to parse saved metric cards:", e);
       }
@@ -3007,10 +3017,10 @@ export default function AdminDashboardPage() {
         shadowClass = "";
         break;
       case "activeProjects":
-        bgColor = "from-orange-400 to-orange-600";
-        gradientFrom = "from-orange-600/10";
-        cardBgGradient = "from-orange-500 to-rose-600";
-        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
+        bgColor = "from-blue-400 to-blue-600";
+        gradientFrom = "from-blue-600/10";
+        cardBgGradient = "from-blue-500 to-indigo-600";
+        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
         shadowClass = "";
         break;
       case "revenue":
@@ -3027,6 +3037,48 @@ export default function AdminDashboardPage() {
         borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
         shadowClass = "";
         break;
+      case "tasksToLaunch":
+        bgColor = "from-violet-400 to-violet-600";
+        gradientFrom = "from-violet-600/10";
+        cardBgGradient = "from-violet-500 to-purple-700";
+        borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
+        shadowClass = "";
+        break;
+      case "tasksInProgress":
+        bgColor = "from-teal-400 to-teal-600";
+        gradientFrom = "from-teal-600/10";
+        cardBgGradient = "from-teal-500 to-cyan-600";
+        borderClass = "border-2 border-teal-300/70 dark:border-teal-300/50";
+        shadowClass = "";
+        break;
+      case "approvalsPending":
+        bgColor = "from-amber-400 to-amber-600";
+        gradientFrom = "from-amber-600/10";
+        cardBgGradient = "from-amber-500 to-orange-600";
+        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+        shadowClass = "";
+        break;
+      case "proposalsAwaitingClient":
+        bgColor = "from-sky-400 to-sky-600";
+        gradientFrom = "from-sky-600/10";
+        cardBgGradient = "from-sky-500 to-blue-600";
+        borderClass = "border-2 border-sky-300/70 dark:border-sky-300/50";
+        shadowClass = "";
+        break;
+      case "estimatedMargin":
+        bgColor = "from-emerald-400 to-emerald-600";
+        gradientFrom = "from-emerald-600/10";
+        cardBgGradient = "from-emerald-500 to-teal-600";
+        borderClass = "border-2 border-emerald-300/70 dark:border-emerald-300/50";
+        shadowClass = "";
+        break;
+      case "pendingPayments":
+        bgColor = "from-orange-400 to-orange-600";
+        gradientFrom = "from-orange-600/10";
+        cardBgGradient = "from-orange-500 to-amber-600";
+        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
+        shadowClass = "";
+        break;
       default:
         bgColor = "from-muted to-muted-foreground";
         gradientFrom = "from-muted/5";
@@ -3034,6 +3086,16 @@ export default function AdminDashboardPage() {
         borderClass = "border-2 border-slate-400/50 dark:border-slate-300/40";
         shadowClass = "";
     }
+
+    const metricNav: Partial<Record<MetricType, string>> = {
+      activeProjects: "/company/projetos",
+      tasksToLaunch: "/company/tarefas",
+      tasksInProgress: "/company/tarefas",
+      approvalsPending: "/company/tarefas",
+      contractedValueMonth: "/company/faturas",
+      pendingPayments: "/company/faturas",
+    };
+    const navDest = metricNav[metricType];
 
     const cardProps = {
       draggable: isEditing,
@@ -3069,9 +3131,13 @@ export default function AdminDashboardPage() {
           onDragLeave={handleMetricDragLeave}
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
+          onClick={() => { if (!isEditing && navDest) navigate(navDest); }}
+          aria-label={navDest ? `Ver ${metricName}` : undefined}
+          role={navDest && !isEditing ? "button" : undefined}
           className={cn(
             `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
+            !isEditing && navDest && "cursor-pointer",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
             !isDragging &&
@@ -3139,9 +3205,13 @@ export default function AdminDashboardPage() {
         onDragLeave={handleMetricDragLeave}
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
+        onClick={() => { if (!isEditing && navDest) navigate(navDest); }}
+        aria-label={navDest ? `Ver ${metricName}` : undefined}
+        role={navDest && !isEditing ? "button" : undefined}
         className={cn(
           `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
+          !isEditing && navDest && "cursor-pointer",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
           !isDragging &&
@@ -11279,6 +11349,139 @@ export default function AdminDashboardPage() {
             .sort((a, b) => a.order - b.order)
             .map((metric) => renderMetricCard(metric.id))}
         </div>
+
+        {/* Pontos de atenção */}
+        {(() => {
+          const attentionItems: Array<{
+            id: string;
+            label: string;
+            value: string | number;
+            severity: "high" | "medium";
+            dest: string;
+            icon: React.ElementType;
+          }> = [];
+
+          const projectsDelayed = soW?.projects?.delayed ?? 0;
+          if (projectsDelayed > 0) {
+            attentionItems.push({
+              id: "projects-delayed",
+              label: `${projectsDelayed} projeto${projectsDelayed > 1 ? "s" : ""} em atraso`,
+              value: projectsDelayed,
+              severity: "high",
+              dest: "/company/projetos",
+              icon: AlertTriangle,
+            });
+          }
+
+          const tasksToLaunch = tasksW.contracted ?? 0;
+          if (tasksToLaunch > 0) {
+            attentionItems.push({
+              id: "tasks-to-launch",
+              label: `${tasksToLaunch} tarefa${tasksToLaunch > 1 ? "s" : ""} aguardando lançamento`,
+              value: tasksToLaunch,
+              severity: "high",
+              dest: "/company/tarefas",
+              icon: Clock,
+            });
+          }
+
+          const pendingPaymentsValue =
+            Math.max(0, arW.total - arW.received);
+          if (pendingPaymentsValue > 0) {
+            attentionItems.push({
+              id: "pending-payments",
+              label: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k em pagamentos pendentes`,
+              value: pendingPaymentsValue,
+              severity: "medium",
+              dest: "/company/faturas",
+              icon: DollarSign,
+            });
+          }
+
+          const pendingApprovals = soW?.leads?.proposal ?? 0;
+          if (pendingApprovals > 0) {
+            attentionItems.push({
+              id: "approvals-pending",
+              label: `${pendingApprovals} proposta${pendingApprovals > 1 ? "s" : ""} aguardando sua resposta`,
+              value: pendingApprovals,
+              severity: "medium",
+              dest: "/company/projetos",
+              icon: FileText,
+            });
+          }
+
+          if (attentionItems.length === 0) return null;
+
+          return (
+            <div className="rounded-2xl border border-amber-200/70 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800/50 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Pontos de atenção
+                </h3>
+                <span className="ml-auto text-xs text-amber-700/70 dark:text-amber-400/70">
+                  {attentionItems.length} item{attentionItems.length > 1 ? "s" : ""} requer{attentionItems.length === 1 ? "" : "em"} atenção
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {attentionItems.map((item) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => navigate(item.dest)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 hover:scale-[1.02] cursor-pointer border",
+                        item.severity === "high"
+                          ? "bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-950/30 dark:border-red-800/50 dark:hover:bg-red-950/50"
+                          : "bg-orange-50 border-orange-200 hover:bg-orange-100 dark:bg-orange-950/30 dark:border-orange-800/50 dark:hover:bg-orange-950/50",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "p-1.5 rounded-lg shrink-0",
+                          item.severity === "high"
+                            ? "bg-red-100 dark:bg-red-900/40"
+                            : "bg-orange-100 dark:bg-orange-900/40",
+                        )}
+                      >
+                        <ItemIcon
+                          className={cn(
+                            "h-3.5 w-3.5",
+                            item.severity === "high"
+              ? "text-red-600 dark:text-red-400"
+                              : "text-orange-600 dark:text-orange-400",
+                          )}
+                        />
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-medium leading-tight",
+                          item.severity === "high"
+                            ? "text-red-800 dark:text-red-200"
+                            : "text-orange-800 dark:text-orange-200",
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                      <ArrowRight
+                        className={cn(
+                          "h-3 w-3 shrink-0 ml-auto",
+                          item.severity === "high"
+                            ? "text-red-400"
+                            : "text-orange-400",
+                        )}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Widgets Grid */}
         <div

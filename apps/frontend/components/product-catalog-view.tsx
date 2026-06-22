@@ -92,6 +92,8 @@ interface ProductCatalogViewProps {
   panelTitle?: string;
   /** Pre-open a specific product by ID (deep link) */
   initialProductId?: string;
+  /** Hides all contracting/basket actions — catalog is browse-only */
+  readOnly?: boolean;
 }
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -297,6 +299,7 @@ export function ProductCatalogView({
   onConfirm,
   panelTitle = "Selecionar Produtos",
   initialProductId,
+  readOnly = false,
 }: ProductCatalogViewProps) {
   const { products, loading, error: productsError } = useProducts();
   const basket = useProjectBasket();
@@ -333,10 +336,11 @@ export function ProductCatalogView({
   }, [initialProductId, products]);
 
   useEffect(() => {
+    if (readOnly) return;
     if (locationProjectId && locationProjectId !== basket.projectId) {
       basket.setProjectAssociation(String(locationProjectId));
     }
-  }, [locationProjectId, basket]);
+  }, [locationProjectId, basket, readOnly]);
   const [category, setCategory] = useState("Todos");
   const [sort, setSort] = useState("smart");
   const [recurrenceFilter, setRecurrenceFilter] = useState("all");
@@ -1020,6 +1024,11 @@ export function ProductCatalogView({
               const lineTotal = displayPrice * (selected ? qty : 1);
               const productImage =
                 product.image || (product as any).productImagePreview || null;
+              const limitation =
+                productLimitations.get(product.id) ??
+                getCatalogProductLimitations(product, identity);
+              const canChoose = limitation.canChoose;
+              const chooseHint = limitation.reason ?? "";
 
               return (
                 <div
@@ -1176,7 +1185,7 @@ export function ProductCatalogView({
                       >
                         Detalhes
                       </Button>
-                      {selected ? (
+                      {!readOnly && (selected ? (
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
@@ -1251,7 +1260,7 @@ export function ProductCatalogView({
                         >
                           Escolher
                         </Button>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1556,7 +1565,7 @@ export function ProductCatalogView({
                           </Button>
                         )}
 
-                        {selected ? (
+                        {!readOnly && (selected ? (
                           <>
                             <div className="flex items-center gap-2">
                               <button
@@ -1636,7 +1645,7 @@ export function ProductCatalogView({
                             <SlidersHorizontal className="h-3 w-3 mr-1" />
                             {isCompact ? "Escolher" : "Escolher"}
                           </Button>
-                        )}
+                        ))}
                       </div>
                     </div>
                   </CardContent>
@@ -1647,7 +1656,7 @@ export function ProductCatalogView({
         )}
       </div>
 
-      {mode === "page" && basket.items.length > 0 && (
+      {!readOnly && mode === "page" && basket.items.length > 0 && (
         <CatalogCartStickyBar
           items={basket.items}
           total={basket.getTotalPrice()}

@@ -240,6 +240,8 @@ const LiderHistoricoPage = React.lazy(
   () => import("@/app/lider/historico/page"),
 );
 const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
+const LiderNomadesPage = React.lazy(() => import("@/app/lider/nomades/page"));
+const LiderCatalogoPage = React.lazy(() => import("@/app/lider/catalogo/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -1016,6 +1018,14 @@ export default function App() {
                     path="/leader/relatorios"
                     element={<LeaderRelatoriosPage />}
                   />
+                  <Route
+                    path="/leader/nomades"
+                    element={<LiderNomadesPage />}
+                  />
+                  <Route
+                    path="/leader/catalogo"
+                    element={<LiderCatalogoPage />}
+                  />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
                   <Route
@@ -1045,6 +1055,14 @@ export default function App() {
                   <Route
                     path="/lider/relatorios"
                     element={<Navigate to="/leader/relatorios" replace />}
+                  />
+                  <Route
+                    path="/lider/nomades"
+                    element={<Navigate to="/leader/nomades" replace />}
+                  />
+                  <Route
+                    path="/lider/catalogo"
+                    element={<Navigate to="/leader/catalogo" replace />}
                   />
 
                   {/* Fallback — redireciona para o dashboard do perfil ativo */}

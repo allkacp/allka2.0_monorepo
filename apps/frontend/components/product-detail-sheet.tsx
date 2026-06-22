@@ -736,8 +736,50 @@ export function ProductDetailSheet({
                     </Section>
                   )}
 
-                  {/* Benefícios */}
-                  {pres?.benefits?.length > 0 && (
+                  {/* Vantagens (company) / Benefícios (outros perfis) */}
+                  {accountType === "empresas" ? (
+                    <Section
+                      icon={Sparkles}
+                      title="Vantagens"
+                      color="text-yellow-600"
+                      bg="bg-yellow-100 dark:bg-yellow-900/40"
+                    >
+                      {pres?.benefits?.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-3">
+                          {pres.benefits.map((b: any, i: number) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/40"
+                            >
+                              <Sparkles className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-semibold">{b.title}</p>
+                                {b.description && (
+                                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                                    {b.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-xl border border-dashed border-yellow-200 dark:border-yellow-800/50 bg-yellow-50/40 dark:bg-yellow-950/20 px-4 py-5">
+                          <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 shrink-0">
+                            <Sparkles className="h-4 w-4 text-yellow-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                              Nenhuma vantagem cadastrada
+                            </p>
+                            <p className="text-xs text-yellow-700/70 dark:text-yellow-400/70 mt-0.5">
+                              As vantagens deste produto aparecerão aqui quando forem configuradas.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </Section>
+                  ) : pres?.benefits?.length > 0 ? (
                     <Section
                       icon={Sparkles}
                       title="Benefícios"
@@ -763,10 +805,45 @@ export function ProductDetailSheet({
                         ))}
                       </div>
                     </Section>
-                  )}
+                  ) : null}
 
                   {/* Entregas */}
-                  {pres?.deliverables?.length > 0 && (
+                  {accountType === "empresas" ? (
+                    <Section
+                      icon={ClipboardList}
+                      title="O que você recebe"
+                      color="text-teal-600"
+                      bg="bg-teal-100 dark:bg-teal-900/40"
+                    >
+                      {pres?.deliverables?.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {pres.deliverables.map((d: string, i: number) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2.5 text-sm"
+                            >
+                              <CheckCircle2 className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
+                              <span>{d}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-xl border border-dashed border-teal-200 dark:border-teal-800/50 bg-teal-50/40 dark:bg-teal-950/20 px-4 py-5">
+                          <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/40 shrink-0">
+                            <ClipboardList className="h-4 w-4 text-teal-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
+                              Entregas não especificadas
+                            </p>
+                            <p className="text-xs text-teal-700/70 dark:text-teal-400/70 mt-0.5">
+                              As entregas deste serviço aparecerão aqui quando forem configuradas.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </Section>
+                  ) : pres?.deliverables?.length > 0 ? (
                     <Section
                       icon={ClipboardList}
                       title="O que você recebe"
@@ -785,7 +862,7 @@ export function ProductDetailSheet({
                         ))}
                       </div>
                     </Section>
-                  )}
+                  ) : null}
 
                   {/* Não incluído */}
                   {pres?.notIncluded?.length > 0 && (
@@ -966,7 +1043,50 @@ export function ProductDetailSheet({
                   )}
 
                   {/* Como contratar */}
-                  {pres?.howToRequest?.length > 0 && (
+                  {accountType === "empresas" ? (
+                    <Section
+                      icon={Zap}
+                      title="Como contratar"
+                      color="text-purple-600"
+                      bg="bg-purple-100 dark:bg-purple-900/40"
+                    >
+                      {pres?.howToRequest?.length > 0 ? (
+                        <div className="relative">
+                          <div className="absolute left-4.75 top-6 bottom-4 w-px bg-border" />
+                          {pres.howToRequest.map((s: any, i: number) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-3 relative pb-4 last:pb-0"
+                            >
+                              <span className="flex items-center justify-center h-10 w-10 rounded-full border-2 border-purple-300 dark:border-purple-700 bg-background text-purple-700 dark:text-purple-300 text-xs font-bold shrink-0 z-10">
+                                {i + 1}
+                              </span>
+                              <div className="pt-2">
+                                <p className="text-sm font-semibold">{s.step}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                                  {s.description}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-xl border border-dashed border-purple-200 dark:border-purple-800/50 bg-purple-50/40 dark:bg-purple-950/20 px-4 py-5">
+                          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/40 shrink-0">
+                            <Zap className="h-4 w-4 text-purple-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                              Processo de contratação não disponível
+                            </p>
+                            <p className="text-xs text-purple-700/70 dark:text-purple-400/70 mt-0.5">
+                              Clique em "Escolher" para iniciar o processo de contratação deste serviço.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </Section>
+                  ) : pres?.howToRequest?.length > 0 ? (
                     <Section
                       icon={Zap}
                       title="Como contratar"
@@ -993,7 +1113,7 @@ export function ProductDetailSheet({
                         ))}
                       </div>
                     </Section>
-                  )}
+                  ) : null}
 
                   {/* FAQ */}
                   {pres?.faq?.length > 0 && (

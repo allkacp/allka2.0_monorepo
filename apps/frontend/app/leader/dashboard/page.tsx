@@ -69,7 +69,7 @@ import {
   Database,
   Eye,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -856,9 +856,21 @@ const generatePublicToken = (
 
 const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["LEADER"]);
 
+const METRIC_NAV: Record<string, string> = {
+  qualificationTasks: "/leader/qualificacao",
+  briefingsToReview: "/leader/tarefas?filter=briefings",
+  deliveriesAwaitingAnalysis: "/leader/tarefas?filter=entregas",
+  tasksInExecution: "/leader/tarefas",
+  tasksReturned: "/leader/devolvidas",
+  tasksOverdue: "/leader/tarefas?filter=atrasadas",
+  approvalsToday: "/leader/historico?filter=aprovacoes",
+  activeNomadsArea: "/leader/nomades",
+};
+
 export default function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
   const { toast } = useToast(); // Get toast function
+  const navigate = useNavigate();
   const {
     stats: apiStats,
     activities: apiActivities,
@@ -2643,13 +2655,21 @@ export default function AdminDashboardPage() {
           icon:
             a.type === "project"
               ? Briefcase
-              : a.type === "user"
+              : a.type === "nomade" || a.type === "user"
                 ? Users
-                : a.type === "client"
-                  ? Building2
-                  : Activity,
+                : a.type === "task"
+                  ? CheckCircle2
+                  : a.type === "client"
+                    ? Building2
+                    : Activity,
           color: "text-primary",
           bgColor: "bg-primary/10",
+          to:
+            a.type === "nomade" || a.type === "user"
+              ? "/leader/nomades"
+              : a.type === "task" || a.type === "project"
+                ? "/leader/tarefas"
+                : null,
         }))
       : [
           {
@@ -2661,6 +2681,7 @@ export default function AdminDashboardPage() {
             icon: FileText,
             color: "text-info",
             bgColor: "bg-info/10",
+            to: "/leader/tarefas?filter=briefings",
           },
           {
             id: 2,
@@ -2671,6 +2692,7 @@ export default function AdminDashboardPage() {
             icon: CheckCircle2,
             color: "text-success",
             bgColor: "bg-success/10",
+            to: "/leader/tarefas?filter=entregas",
           },
           {
             id: 3,
@@ -2682,6 +2704,7 @@ export default function AdminDashboardPage() {
             icon: UserCheck,
             color: "text-primary",
             bgColor: "bg-primary/10",
+            to: "/leader/historico?filter=aprovacoes",
           },
           {
             id: 4,
@@ -2693,6 +2716,7 @@ export default function AdminDashboardPage() {
             icon: AlertCircle,
             color: "text-warning",
             bgColor: "bg-warning/10",
+            to: "/leader/devolvidas",
           },
         ];
 
@@ -3489,6 +3513,7 @@ export default function AdminDashboardPage() {
           onDragLeave={handleMetricDragLeave}
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
+          onClick={!isEditing && METRIC_NAV[metricType] ? () => navigate(METRIC_NAV[metricType]) : undefined}
           className={cn(
             `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
@@ -3498,6 +3523,7 @@ export default function AdminDashboardPage() {
               !isDragOver &&
               !isEditing &&
               "hover:shadow-xl hover:scale-[1.02]",
+            !isEditing && !!METRIC_NAV[metricType] && "cursor-pointer",
           )}
         >
           {isEditing && (
@@ -3556,6 +3582,7 @@ export default function AdminDashboardPage() {
         onDragLeave={handleMetricDragLeave}
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
+        onClick={!isEditing && METRIC_NAV[metricType] ? () => navigate(METRIC_NAV[metricType]) : undefined}
         className={cn(
           `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
@@ -3565,6 +3592,7 @@ export default function AdminDashboardPage() {
             !isDragOver &&
             !isEditing &&
             "hover:shadow-xl hover:scale-[1.02]",
+          !isEditing && !!METRIC_NAV[metricType] && "cursor-pointer",
         )}
       >
         {isEditing && (
@@ -7634,30 +7662,49 @@ export default function AdminDashboardPage() {
                 />
               </CardHeader>
               <CardContent className="space-y-3">
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-start space-x-3 p-3 rounded-xl hover:bg-muted/50 transition-all duration-200 hover:shadow-md border border-transparent hover:border-border/50"
-                  >
-                    <div
-                      className={`p-2 rounded-xl ${activity.bgColor} shadow-sm`}
-                    >
-                      <activity.icon className={`h-4 w-4 ${activity.color}`} />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium leading-none">
-                        {activity.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {activity.description}
-                      </p>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{activity.time}</span>
+                {recentActivities.map((activity) => {
+                  const inner = (
+                    <>
+                      <div
+                        className={`p-2 rounded-xl ${activity.bgColor} shadow-sm`}
+                      >
+                        <activity.icon
+                          className={`h-4 w-4 ${activity.color}`}
+                        />
                       </div>
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <p className="text-sm font-medium leading-none">
+                          {activity.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.description}
+                        </p>
+                        <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span>{activity.time}</span>
+                        </div>
+                      </div>
+                      {(activity as any).to && !isCustomizeMode && (
+                        <ArrowRightIcon className="h-3.5 w-3.5 text-muted-foreground self-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                    </>
+                  );
+                  const baseCls =
+                    "group flex items-start space-x-3 p-3 rounded-xl hover:bg-muted/50 transition-all duration-200 hover:shadow-md border border-transparent hover:border-border/50";
+                  return (activity as any).to && !isCustomizeMode ? (
+                    <Link
+                      key={activity.id}
+                      to={(activity as any).to}
+                      className={cn(baseCls, "cursor-pointer")}
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={activity.id} className={baseCls}>
+                      {inner}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </div>
@@ -7946,7 +7993,7 @@ export default function AdminDashboardPage() {
                   {(
                     [
                       {
-                        to: "/leader/qualificar",
+                        to: "/leader/qualificacao",
                         icon: CheckCircle2,
                         label: "Qualificar Tarefa",
                         border: "border-info/20",

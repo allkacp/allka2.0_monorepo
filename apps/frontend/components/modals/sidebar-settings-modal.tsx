@@ -480,13 +480,21 @@ export function SidebarSettingsModal({
   };
 
   const handleLogoFile = (file: File) => {
-    const url = URL.createObjectURL(file);
-    applyPreview({ sidebarLogo: url });
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      applyPreview({ sidebarLogo: url });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleFaviconFile = (file: File) => {
-    const url = URL.createObjectURL(file);
-    applyPreview({ sidebarFavicon: url });
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      applyPreview({ sidebarFavicon: url });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
