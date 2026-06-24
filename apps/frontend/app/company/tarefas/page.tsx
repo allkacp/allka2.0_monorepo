@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { Search } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
@@ -36,8 +37,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function EmpresaTarefas() {
+  const location = useLocation();
   const { tasks, loading } = useEmpresa();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState((location.state as any)?.search ?? "");
   const [statusFilter, setStatusFilter] = useState("all");
   const {
     sortKey,

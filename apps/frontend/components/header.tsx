@@ -125,7 +125,7 @@ export function Header() {
   const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<
-    { type: string; label: string; sub: string; path: string; icon: any }[]
+    { type: string; label: string; sub: string; path: string; icon: any; navState?: Record<string, string> }[]
   >([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -326,17 +326,40 @@ export function Header() {
               }),
             );
           } else if (key === "projects") {
-            list.slice(0, 5).forEach((p: any) =>
+            list.slice(0, 5).forEach((p: any) => {
+              const title = p.title ?? p.name ?? p.titulo ?? "Projeto";
               results.push({
                 type: "Projeto",
-                label: p.title ?? p.name ?? p.titulo ?? "Projeto",
+                label: title,
                 sub: p.client?.name ?? p.status ?? "",
                 path: searchScope.projectsPath,
                 icon: Briefcase,
-              }),
-            );
+                navState: { searchTerm: title },
+              });
+            });
           }
         });
+        // Empresa: também busca tarefas em memória
+        if (accountType === "empresas") {
+          const q2 = q.toLowerCase();
+          empresa.tasks
+            .filter((t) =>
+              t.name.toLowerCase().includes(q2) ||
+              t.projectName.toLowerCase().includes(q2)
+            )
+            .slice(0, 5)
+            .forEach((t) =>
+              results.push({
+                type: "Tarefa",
+                label: t.name,
+                sub: t.projectName,
+                path: "/company/tarefas",
+                icon: CheckSquare,
+                navState: { search: t.name },
+              })
+            );
+        }
+
         setSearchResults(results);
       } catch {
         setSearchResults([]);
@@ -344,7 +367,7 @@ export function Header() {
         setSearchLoading(false);
       }
     },
-    [accountType],
+    [accountType, empresa.tasks],
   );
 
   useEffect(() => {
@@ -623,113 +646,7 @@ export function Header() {
 
   return (
     <>
-      {/* Global search overlay */}
-      {searchOpen && (
-        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
-          <div
-            ref={searchRef}
-            className="w-full max-w-2xl bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-2xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden"
-          >
-            {/* Search input */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-[oklch(0.20_0.022_258)]">
-              <Search className="h-5 w-5 text-gray-400 shrink-0" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={
-                  accountType === "admin"
-                    ? "Buscar usuários, empresas, projetos..."
-                    : "Buscar na plataforma..."
-                }
-                className="flex-1 text-sm outline-none bg-transparent text-gray-900 dark:text-white placeholder:text-gray-400"
-              />
-              {searchLoading && (
-                <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin shrink-0" />
-              )}
-              <button
-                onClick={() => {
-                  setSearchOpen(false);
-                  setSearchQuery("");
-                  setSearchResults([]);
-                }}
-                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <X className="h-4 w-4 text-gray-400" />
-              </button>
-            </div>
-            {/* Results */}
-            <div className="max-h-96 overflow-y-auto">
-              {!searchQuery && (
-                <div className="px-4 py-8 text-center text-sm text-gray-400">
-                  <Search className="h-10 w-10 mx-auto mb-3 text-gray-200" />
-                  Digite para buscar na plataforma
-                </div>
-              )}
-              {searchQuery && !searchLoading && searchResults.length === 0 && (
-                <div className="px-4 py-8 text-center text-sm text-gray-400">
-                  Nenhum resultado encontrado para "{searchQuery}"
-                </div>
-              )}
-              {searchResults.length > 0 && (
-                <div className="py-2">
-                  {["Usuário", "Empresa", "Projeto"].map((type) => {
-                    const group = searchResults.filter((r) => r.type === type);
-                    if (!group.length) return null;
-                    const GroupIcon =
-                      type === "Usuário"
-                        ? User
-                        : type === "Empresa"
-                          ? Building2
-                          : Briefcase;
-                    return (
-                      <div key={type}>
-                        <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                          {type}s
-                        </p>
-                        {group.map((result, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              window.open(result.path, "_blank");
-                              setSearchOpen(false);
-                              setSearchQuery("");
-                              setSearchResults([]);
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                          >
-                            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-                              <GroupIcon className="h-4 w-4 text-gray-500" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {result.label}
-                              </p>
-                              {result.sub && (
-                                <p className="text-xs text-gray-400 truncate">
-                                  {result.sub}
-                                </p>
-                              )}
-                            </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">
-                              {result.type}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
-              <span>ESC para fechar</span>
-              <span>↵ para navegar</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* search overlay removed — dropdown is now inline below the bar */}
 
       <header
         className="border-b border-white/10 px-4 sm:px-8 relative z-40 shadow-xl overflow-visible"
@@ -773,18 +690,118 @@ export function Header() {
 
           {/* Right actions */}
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-55"
-            >
-              <Search className="h-4 w-4 shrink-0" />
-              <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
-                Buscar...
-              </span>
-              <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">
-                ⌘K
-              </span>
-            </button>
+            <div ref={searchRef} className="relative">
+              {/* Input activo */}
+              {searchOpen ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/30 text-white md:min-w-80">
+                  <Search className="h-4 w-4 shrink-0 text-white/60" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={
+                      accountType === "admin"
+                        ? "Usuários, empresas, projetos..."
+                        : "Buscar projetos, tarefas..."
+                    }
+                    className="flex-1 text-xs bg-transparent outline-none text-white placeholder:text-white/40 min-w-0"
+                  />
+                  {searchLoading && (
+                    <div className="h-3.5 w-3.5 rounded-full border-2 border-white/50 border-t-transparent animate-spin shrink-0" />
+                  )}
+                  <button
+                    onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                    className="p-0.5 rounded hover:bg-white/10"
+                  >
+                    <X className="h-3.5 w-3.5 text-white/50" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-72"
+                >
+                  <Search className="h-4 w-4 shrink-0" />
+                  <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
+                    Buscar...
+                  </span>
+                  <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">
+                    ⌘K
+                  </span>
+                </button>
+              )}
+
+              {/* Dropdown de resultados — sem overlay */}
+              {searchOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-[oklch(0.135_0.018_258)] rounded-xl shadow-2xl border border-gray-200 dark:border-[oklch(0.22_0.025_258)] overflow-hidden z-50">
+                  <div className="max-h-80 overflow-y-auto">
+                    {!searchQuery && (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">
+                        <Search className="h-8 w-8 mx-auto mb-2 text-gray-200" />
+                        Digite para buscar
+                      </div>
+                    )}
+                    {searchQuery && !searchLoading && searchResults.length === 0 && (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">
+                        Nenhum resultado para "{searchQuery}"
+                      </div>
+                    )}
+                    {searchResults.length > 0 && (
+                      <div className="py-1">
+                        {["Usuário", "Empresa", "Projeto", "Tarefa"].map((type) => {
+                          const group = searchResults.filter((r) => r.type === type);
+                          if (!group.length) return null;
+                          const GroupIcon =
+                            type === "Usuário" ? User
+                            : type === "Empresa" ? Building2
+                            : type === "Tarefa" ? CheckSquare
+                            : Briefcase;
+                          return (
+                            <div key={type}>
+                              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {type}s
+                              </p>
+                              {group.map((result, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => {
+                                    navigate(result.path, result.navState ? { state: result.navState } : {});
+                                    setSearchOpen(false);
+                                    setSearchQuery("");
+                                    setSearchResults([]);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                                >
+                                  <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+                                    <GroupIcon className="h-3.5 w-3.5 text-gray-500" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {result.label}
+                                    </p>
+                                    {result.sub && (
+                                      <p className="text-xs text-gray-400 truncate">{result.sub}</p>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">
+                                    {result.type}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] text-gray-400">
+                    <span>ESC para fechar</span>
+                    <span>Enter para navegar</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <AlertsHeaderIcon />
 

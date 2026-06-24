@@ -92,6 +92,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -112,6 +118,7 @@ import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
+import { useEmpresa } from "@/contexts/empresa-context";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (_from?: any, _to?: any): any => ({
   revenue: {
@@ -746,6 +753,13 @@ export default function AdminDashboardPage() {
 
   const navigate = useNavigate();
 
+  // Real company data from context
+  const {
+    projects: empresaProjects,
+    tasks: empresaTasks,
+    invoices: empresaInvoices,
+  } = useEmpresa();
+
   const [globalPeriod, setGlobalPeriod] = useState<{
     type:
       | "today"
@@ -851,6 +865,91 @@ export default function AdminDashboardPage() {
       default:
         return { from: thirtyDaysAgo, to: today };
     }
+  };
+
+  // ── Real company data scoped to a date range ────────────────────────────
+  const getCompanyData = (from: Date, to: Date) => {
+    const inR = (d?: string) => {
+      if (!d) return false;
+      const dt = new Date(d);
+      return dt >= from && dt <= to;
+    };
+    const periodMs = to.getTime() - from.getTime();
+    const prevFrom = new Date(from.getTime() - periodMs);
+    const prevTo   = new Date(from.getTime() - 1);
+    const inPrev = (d?: string) => {
+      if (!d) return false;
+      const dt = new Date(d);
+      return dt >= prevFrom && dt <= prevTo;
+    };
+    const pct = (c: number, p: number) => p === 0 ? 0 : Math.round(((c - p) / p) * 100);
+    const ACTIVE = ["briefing", "producao", "revisao"];
+
+    // Projects
+    const projCur = empresaProjects.filter(p => inR(p.startDate));
+    const projPrev = empresaProjects.filter(p => inPrev(p.startDate));
+    const activeCur = projCur.filter(p => ACTIVE.includes(p.status));
+    const activePrev = projPrev.filter(p => ACTIVE.includes(p.status));
+    const deliveredCur = projCur.filter(p => p.status === "entregue");
+
+    // Tasks
+    const tasksCur = empresaTasks.filter(t => inR(t.dueDate));
+    const tasksPrev = empresaTasks.filter(t => inPrev(t.dueDate));
+    const doneCur = tasksCur.filter(t => t.status === "done");
+    const donePrev = tasksPrev.filter(t => t.status === "done");
+    const inProgCur = tasksCur.filter(t => t.status === "in_progress");
+    const inProgPrev = tasksPrev.filter(t => t.status === "in_progress");
+    const availCur = tasksCur.filter(t => t.status === "available");
+    const availPrev = tasksPrev.filter(t => t.status === "available");
+    const cancelledCur = tasksCur.filter(t => t.status === "cancelled");
+
+    // SLA: tasks done on time (deliveredAt <= dueDate)
+    const doneWithDate = doneCur.filter(t => t.deliveredAt && t.dueDate);
+    const onTime = doneWithDate.filter(t => new Date(t.deliveredAt!) <= new Date(t.dueDate));
+    const sla = doneWithDate.length > 0 ? (onTime.length / doneWithDate.length) * 100 : 100;
+
+    // Financeiro
+    const paidCur = empresaInvoices.filter(i => i.status === "paid" && inR(i.paidAt || i.issuedAt));
+    const paidPrev = empresaInvoices.filter(i => i.status === "paid" && inPrev(i.paidAt || i.issuedAt));
+    const paidAmtCur = paidCur.reduce((s, i) => s + i.amount, 0);
+    const paidAmtPrev = paidPrev.reduce((s, i) => s + i.amount, 0);
+    const pendingCur = empresaInvoices.filter(i => ["pending","overdue"].includes(i.status) && inR(i.issuedAt));
+    const pendingAmt = pendingCur.reduce((s, i) => s + i.amount, 0);
+    const contractedAmt = projCur.reduce((s, p) => s + (p.value || 0), 0);
+    const contractedPrev = projPrev.reduce((s, p) => s + (p.value || 0), 0);
+
+    return {
+      activeProjects: {
+        total: activeCur.length,
+        growth: pct(activeCur.length, activePrev.length),
+        byStatus: {
+          briefing: projCur.filter(p => p.status === "briefing").length,
+          producao: projCur.filter(p => p.status === "producao").length,
+          revisao: projCur.filter(p => p.status === "revisao").length,
+          entregue: deliveredCur.length,
+          cancelado: projCur.filter(p => p.status === "cancelado").length,
+        },
+        newTotal: projCur.length,
+      },
+      tasks: {
+        completed:       doneCur.length,
+        completedGrowth: pct(doneCur.length, donePrev.length),
+        inProgress:      inProgCur.length,
+        inProgressGrowth: pct(inProgCur.length, inProgPrev.length),
+        contracted:      availCur.length,
+        contractedGrowth: pct(availCur.length, availPrev.length),
+        cancelled:       cancelledCur.length,
+        cancelledChange: 0,
+        slaCompliance:   sla,
+      },
+      revenue: {
+        total:       contractedAmt,
+        totalGrowth: pct(contractedAmt, contractedPrev),
+        paid:        paidAmtCur,
+        paidGrowth:  pct(paidAmtCur, paidAmtPrev),
+        pending:     pendingAmt,
+      },
+    };
   };
 
   // ── Historical data (persisted in localStorage) ──────────────────────────
@@ -1359,141 +1458,78 @@ export default function AdminDashboardPage() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 px-2 text-xs gap-1.5",
-              isCustom && "bg-primary/10 text-primary hover:bg-primary/20",
+              "h-7 px-2 text-xs gap-1.5 transition-all",
+              isCustom
+                ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/50"
+                : "bg-primary/8 text-primary border border-primary/20 hover:bg-primary/15",
             )}
           >
-            <Calendar className="h-3 w-3" />
-            <span className="hidden sm:inline">Período:</span>
-            {displayLabel}
-            {isCustom && (
-              <span className="text-[10px] opacity-70">(custom)</span>
+            {isCustom ? (
+              <Calendar className="h-3 w-3" />
+            ) : (
+              <Globe className="h-3 w-3" />
             )}
+            <span className="hidden sm:inline font-medium">
+              {isCustom ? "Período:" : "Global ·"}
+            </span>
+            {displayLabel}
             <ChevronDown className="h-3 w-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="text-xs">
-            Período do Widget
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "global")}
-            className="text-xs"
-          >
-            <Check
+        <DropdownMenuContent align="end" className="w-64">
+          <div className="px-3 py-2 border-b bg-muted/30">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Período deste widget
+            </p>
+          </div>
+          {/* Global option */}
+          <div className="p-1">
+            <DropdownMenuItem
+              onClick={() => setWidgetCustomPeriod(widgetId, "global")}
               className={cn(
-                "mr-2 h-3 w-3",
-                !isCustom ? "opacity-100" : "opacity-0",
+                "text-xs rounded-md flex-col items-start gap-0.5 py-2",
+                !isCustom && "bg-primary/8 text-primary",
               )}
-            />
-            Usar período global
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "today")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Hoje"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Hoje
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "7days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 7 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 7 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "30days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 30 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 30 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "thisMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Este mês"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Este mês
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "lastMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Mês passado"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Mês passado
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "90days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 90 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 90 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "365days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Último ano"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Último ano
-          </DropdownMenuItem>
+            >
+              <div className="flex items-center gap-2 w-full">
+                <Globe className={cn("h-3.5 w-3.5 shrink-0", !isCustom ? "text-primary" : "text-muted-foreground")} />
+                <span className="font-medium">Seguir período global</span>
+                {!isCustom && <Check className="h-3 w-3 ml-auto text-primary" />}
+              </div>
+              <span className="text-[10px] text-muted-foreground pl-5 font-normal">
+                Usa automaticamente: {globalPeriod.label}
+              </span>
+            </DropdownMenuItem>
+          </div>
+          <div className="px-3 py-1.5 border-t border-b bg-muted/20">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Ou escolha um período específico
+            </p>
+          </div>
+          <div className="p-1">
+            {([
+              { key: "today", label: "Hoje" },
+              { key: "7days", label: "Últimos 7 dias" },
+              { key: "30days", label: "Últimos 30 dias" },
+              { key: "thisMonth", label: "Este mês" },
+              { key: "lastMonth", label: "Mês passado" },
+              { key: "90days", label: "Últimos 90 dias" },
+              { key: "365days", label: "Último ano" },
+            ] as const).map(({ key, label }) => {
+              const isActive = widgetPeriod?.mode === "custom" && widgetPeriod?.customPeriod?.label === label;
+              return (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => setWidgetCustomPeriod(widgetId, key)}
+                  className={cn("text-xs rounded-md", isActive && "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400")}
+                >
+                  <Check className={cn("mr-2 h-3 w-3", isActive ? "opacity-100" : "opacity-0")} />
+                  {label}
+                  {isActive && <span className="ml-auto text-[10px] opacity-60">ativo</span>}
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -2173,64 +2209,118 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const getMetricsForPeriod = () => {
-    const activeProjects = dashboardData.activeProjects;
-    const tasks = dashboardData.tasks;
-    const statusOverview = dashboardData.statusOverview;
-    const revenue = dashboardData.revenue;
-    const accountsReceivable = dashboardData.accountsReceivable;
-    const cmv = dashboardData.cmv;
-
-    const pendingPaymentsValue = Math.max(
-      0,
-      accountsReceivable.total - accountsReceivable.received,
+  // ── Company real metrics computed from empresa context + globalPeriod ────
+  const metrics = useMemo(() => {
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
     );
+    // Previous period (same length, shifted back)
+    const periodMs = to.getTime() - from.getTime();
+    const prevFrom = new Date(from.getTime() - periodMs);
+    const prevTo = new Date(from.getTime() - 1);
+
+    const inRange = (dateStr: string | undefined, f: Date, t: Date) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      return d >= f && d <= t;
+    };
+    const pct = (cur: number, prev: number) =>
+      prev === 0 ? 0 : Math.round(((cur - prev) / prev) * 100);
+
+    // Active projects in period (by startDate, active status)
+    const ACTIVE = ["briefing", "producao", "revisao"];
+    const activeCur = empresaProjects.filter(
+      (p) => ACTIVE.includes(p.status) && inRange(p.startDate, from, to)
+    ).length;
+    const activePrev = empresaProjects.filter(
+      (p) => ACTIVE.includes(p.status) && inRange(p.startDate, prevFrom, prevTo)
+    ).length;
+
+    // Tasks available in period (by dueDate)
+    const availCur = empresaTasks.filter(
+      (t) => t.status === "available" && inRange(t.dueDate, from, to)
+    ).length;
+    const availPrev = empresaTasks.filter(
+      (t) => t.status === "available" && inRange(t.dueDate, prevFrom, prevTo)
+    ).length;
+
+    // Tasks in progress/review in period
+    const inProgCur = empresaTasks.filter(
+      (t) => ["in_progress", "review"].includes(t.status) && inRange(t.dueDate, from, to)
+    ).length;
+    const inProgPrev = empresaTasks.filter(
+      (t) => ["in_progress", "review"].includes(t.status) && inRange(t.dueDate, prevFrom, prevTo)
+    ).length;
+
+    // Tasks in review (aprovações pendentes)
+    const reviewCur = empresaTasks.filter(
+      (t) => t.status === "review" && inRange(t.dueDate, from, to)
+    ).length;
+
+    // Contracted value: sum of project budgets started in period
+    const contractedCur = empresaProjects
+      .filter((p) => inRange(p.startDate, from, to))
+      .reduce((s, p) => s + (p.value || 0), 0);
+    const contractedPrev = empresaProjects
+      .filter((p) => inRange(p.startDate, prevFrom, prevTo))
+      .reduce((s, p) => s + (p.value || 0), 0);
+
+    // Pending payments: invoices pending/overdue issued in period
+    const pendingCur = empresaInvoices
+      .filter((i) => ["pending", "overdue"].includes(i.status) && inRange(i.issuedAt, from, to))
+      .reduce((s, i) => s + i.amount, 0);
+    const pendingPrev = empresaInvoices
+      .filter((i) => ["pending", "overdue"].includes(i.status) && inRange(i.issuedAt, prevFrom, prevTo))
+      .reduce((s, i) => s + i.amount, 0);
+
+    const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString("pt-BR")}`;
 
     return {
       activeProjects: {
-        value: activeProjects.total.toLocaleString("pt-BR"),
-        change: activeProjects.growth,
-        trend: activeProjects.growth >= 0 ? ("up" as const) : ("down" as const),
+        value: activeCur.toLocaleString("pt-BR"),
+        change: pct(activeCur, activePrev),
+        trend: (activeCur >= activePrev ? "up" : "down") as "up" | "down",
       },
       tasksToLaunch: {
-        value: tasks.contracted.toLocaleString("pt-BR"),
-        change: tasks.contractedGrowth,
-        trend: tasks.contractedGrowth >= 0 ? ("up" as const) : ("down" as const),
+        value: availCur.toLocaleString("pt-BR"),
+        change: pct(availCur, availPrev),
+        trend: (availCur >= availPrev ? "up" : "down") as "up" | "down",
       },
       tasksInProgress: {
-        value: tasks.inProgress.toLocaleString("pt-BR"),
-        change: tasks.inProgressGrowth,
-        trend: tasks.inProgressGrowth >= 0 ? ("up" as const) : ("down" as const),
+        value: inProgCur.toLocaleString("pt-BR"),
+        change: pct(inProgCur, inProgPrev),
+        trend: (inProgCur >= inProgPrev ? "up" : "down") as "up" | "down",
       },
       approvalsPending: {
-        value: statusOverview.projects.delayed.toLocaleString("pt-BR"),
+        value: reviewCur.toLocaleString("pt-BR"),
         change: 0,
         trend: "up" as const,
       },
       proposalsAwaitingClient: {
-        value: statusOverview.leads.proposal.toLocaleString("pt-BR"),
+        value: "0",
         change: 0,
         trend: "up" as const,
       },
       contractedValueMonth: {
-        value: `R$ ${(revenue.total / 1000).toFixed(1)}k`,
-        change: revenue.totalGrowth,
-        trend: revenue.totalGrowth >= 0 ? ("up" as const) : ("down" as const),
+        value: fmtK(contractedCur),
+        change: pct(contractedCur, contractedPrev),
+        trend: (contractedCur >= contractedPrev ? "up" : "down") as "up" | "down",
       },
       estimatedMargin: {
-        value: `R$ ${(cmv.comissoes.value / 1000).toFixed(1)}k`,
-        change: cmv.comissoes.percent,
+        value: "—",
+        change: 0,
         trend: "up" as const,
       },
       pendingPayments: {
-        value: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k`,
-        change: accountsReceivable.growth,
-        trend: accountsReceivable.growth >= 0 ? ("up" as const) : ("down" as const),
+        value: fmtK(pendingCur),
+        change: pct(pendingCur, pendingPrev),
+        trend: (pendingCur <= pendingPrev ? "up" : "down") as "up" | "down",
       },
     };
-  };
-
-  const metrics = getMetricsForPeriod();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaProjects, empresaTasks, empresaInvoices, globalPeriod]);
 
   // Recent activities from API (fallback to empty)
   // Recent activities (company-scoped mock)
@@ -3338,7 +3428,7 @@ export default function AdminDashboardPage() {
     const renderContent = () => {
       switch (detailsWidgetId) {
         case "metrics": {
-          const mp = getMetricsForPeriod();
+          const mp = metrics;
           const items: Array<{
             key: string;
             label: string;
@@ -6552,10 +6642,7 @@ export default function AdminDashboardPage() {
                   {(() => {
                     // Compute widget-specific metrics based on per-widget period override
                     const wp = effectivePeriod as { periodKey?: string };
-                    const widgetBase = getMetricsForPeriod(
-                      undefined,
-                      wp.periodKey,
-                    );
+                    const widgetBase = metrics;
                     const widgetMetrics = !apiStats
                       ? widgetBase
                       : {
@@ -7585,10 +7672,21 @@ export default function AdminDashboardPage() {
 
       case "revenue": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wRvW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
+        const _compRv = getCompanyData(
+          effectivePeriod.from ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).from,
+          effectivePeriod.to   ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).to,
         ).revenue;
+        const wRvW = {
+          total: _compRv.total,
+          totalGrowth: _compRv.totalGrowth,
+          trendData: [],
+          creditPlan: _compRv.paid,
+          creditPlanGrowth: _compRv.paidGrowth,
+          recurring: _compRv.pending,
+          recurringGrowth: 0,
+          oneTime: 0,
+          oneTimeGrowth: 0,
+        };
         return (
           <div
             key={widget.id}
@@ -7799,10 +7897,22 @@ export default function AdminDashboardPage() {
 
       case "activeProjectsWidget": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const wApW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
-        ).activeProjects;
+        const _compAp = getCompanyData(
+          effectivePeriod.from ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).from,
+          effectivePeriod.to   ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).to,
+        );
+        const wApW = {
+          ..._compAp.activeProjects,
+          agencies: _compAp.activeProjects.byStatus.briefing,
+          agenciesGrowth: 0,
+          newAgencies: 0,
+          leadPremium: _compAp.activeProjects.byStatus.producao,
+          leadPremiumGrowth: 0,
+          newLeadPremium: 0,
+          nomades: _compAp.activeProjects.byStatus.revisao,
+          nomadesGrowth: 0,
+          newNomades: _compAp.activeProjects.byStatus.entregue,
+        };
         const apTypes = [
           {
             label: "Agências",
@@ -10253,9 +10363,9 @@ export default function AdminDashboardPage() {
       }
 
       case "tasks": {
-        const wTasksW = generateDashboardData(
-          effectivePeriod.from,
-          effectivePeriod.to,
+        const wTasksW = getCompanyData(
+          effectivePeriod.from ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).from,
+          effectivePeriod.to   ?? getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to).to,
         ).tasks;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
@@ -10950,8 +11060,37 @@ export default function AdminDashboardPage() {
 
           {/* Period Controls */}
           <div className="flex items-center gap-2 mx-3">
-            <div className="flex items-center gap-0.5 bg-muted/50 dark:bg-muted/30 rounded-xl p-1 border border-border/50 shadow-sm">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
+            {/* Global badge + info */}
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 border border-primary/25 rounded-full">
+                  <Globe className="h-3 w-3 text-primary" />
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider leading-none">
+                    Global
+                  </span>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors">
+                      <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                    <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      O período selecionado aqui é aplicado automaticamente a <strong>todos os widgets</strong> do dashboard.
+                    </p>
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Para ajustar o período de um widget específico, clique em <strong>"Período"</strong> no cabeçalho de cada widget.
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+            <div className="flex items-center gap-0.5 bg-background border border-border rounded-xl p-1 shadow-sm ring-1 ring-primary/10">
+              <Calendar className="h-3.5 w-3.5 text-primary/70 ml-1.5 mr-0.5" />
               {(
                 [
                   {
@@ -10975,8 +11114,8 @@ export default function AdminDashboardPage() {
                   className={cn(
                     "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
                     globalPeriod.type === type
-                      ? "bg-background shadow-sm text-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                   )}
                 >
                   {label}
@@ -10997,8 +11136,8 @@ export default function AdminDashboardPage() {
                 className={cn(
                   "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
                   globalPeriod.label === "Últimos 90 dias"
-                    ? "bg-background shadow-sm text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                 )}
               >
                 90d
@@ -11127,8 +11266,8 @@ export default function AdminDashboardPage() {
               </Popover>
             </div>
             {/* Period label badge */}
-            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
+            <span className="text-xs font-medium text-primary/80 hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary/8 rounded-full border border-primary/15">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block animate-pulse" />
               {globalPeriod.label}
             </span>
           </div>

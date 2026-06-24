@@ -217,6 +217,14 @@ export function ProjectBasketDrawer() {
     }, 420);
   };
 
+  // Fecha ao navegar para outra página
+  useEffect(() => {
+    if (basket.isOpen) {
+      basket.setOpen(false);
+      setIsClosing(false);
+    }
+  }, [location.pathname]);
+
   // ── Helpers
   const getCategoryIcon = (cat: string) => CATEGORY_ICONS[cat] || Package;
   const getCategoryGradient = (cat: string) =>

@@ -139,7 +139,7 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       // Step 2: load projects (filtered by company) + invoices in parallel
       const [projectsRes, invoicesRes, tasksRes] = await Promise.allSettled([
         apiClient.getProjects({ limit: "100", client_id: companyId }),
-        apiClient.getInvoices({ limit: "100" }),
+        apiClient.getInvoices({ limit: "100", company_id: companyId }),
         apiClient.getTasks({ limit: "500" }),
       ]);
 
@@ -188,7 +188,18 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       if (invoicesRes.status === "fulfilled") {
         const iData: any = invoicesRes.value;
         const iList = iData.data || (Array.isArray(iData) ? iData : []);
-        setInvoices(iList);
+        setInvoices(
+          iList.map((i: any) => ({
+            id: String(i.id),
+            number: i.invoice_number || i.number || "",
+            description: i.description || "",
+            amount: i.amount || 0,
+            status: i.status || "pending",
+            issuedAt: i.created_at || i.issuedAt || "",
+            dueDate: i.due_date || i.dueDate || "",
+            paidAt: i.paid_at || i.paidAt || undefined,
+          })),
+        );
       }
 
       // Step 3: filter tasks that belong to this company's projects

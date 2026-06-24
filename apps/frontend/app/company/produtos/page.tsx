@@ -1,7 +1,9 @@
 // @ts-nocheck
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { PageLoader } from "@/components/ui/loading";
 import { ShoppingCart, X, Trash2, Minus, Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,12 +21,21 @@ function fmtBRL(n: number) {
 }
 
 export default function EmpresaProdutos() {
-  const { products } = useProducts();
-
+  const { products, loading, refetch } = useProducts();
   const basket = useProjectBasket();
-
   const [cartOpen, setCartOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const { pathname } = useLocation();
+  const isFirstRender = useRef(true);
+
+  useEffect(() => { void refetch(); }, []);
+
+  // Fecha cesta e painel ao navegar para outra tela
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    setCartOpen(false);
+    setPanelOpen(false);
+  }, [pathname]);
 
   // Derive from basket context — single source of truth
   const selectedProducts = useMemo<CatalogSelectedProduct[]>(
@@ -50,6 +61,10 @@ export default function EmpresaProdutos() {
       ),
     [basket.items],
   );
+
+  if (loading) {
+    return <PageLoader text="Carregando catálogo…" />;
+  }
 
   /* ── cart helpers ─────────────────────────────────────── */
   const handleAdd = (product: Product) => {

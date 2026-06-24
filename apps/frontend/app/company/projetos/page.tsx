@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
@@ -193,7 +194,8 @@ export default function EmpresaProjetosPage() {
   );
   const refetchProjects = refetch;
   const setApiProjects = (_: any) => {};
-  const [searchTerm, setSearchTerm] = useState("");
+  const location = useLocation();
+  const [searchTerm, setSearchTerm] = useState((location.state as any)?.searchTerm ?? "");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterPaymentStatus, setFilterPaymentStatus] = useState("all");

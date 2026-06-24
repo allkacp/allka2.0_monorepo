@@ -524,6 +524,12 @@ export function Sidebar() {
 
   const location = useLocation();
   const pathname = location.pathname;
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNavigatingTo(null);
+  }, [pathname]);
+
   const { accountType, accountSubType } = useAccountType();
   const {
     sidebarSettings,
@@ -1214,30 +1220,40 @@ export function Sidebar() {
                           </div>
                           {item.subitems.map((subitem: any) => {
                             const isActive = pathname === subitem.href;
+                            const isNavigatingHere = navigatingTo === subitem.href;
                             return (
                               <Link
                                 key={subitem.name}
                                 to={subitem.href}
-                                onClick={() => setOpenPopover(null)}
+                                onClick={() => {
+                                  setOpenPopover(null);
+                                  if (pathname !== subitem.href) setNavigatingTo(subitem.href);
+                                }}
                                 className={cn(
                                   "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200",
-                                  isActive
+                                  isActive || isNavigatingHere
                                     ? "bg-white/15 text-white shadow-md"
                                     : "text-white/70 hover:bg-white/10 hover:text-white",
                                 )}
                               >
-                                <subitem.icon className="h-4 w-4 mr-3" />
+                                {isNavigatingHere ? (
+                                  <span className="h-4 w-4 mr-3 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                                ) : (
+                                  <subitem.icon className="h-4 w-4 mr-3 shrink-0" />
+                                )}
                                 <span className="flex-1 truncate">
                                   {subitem.name}
                                 </span>
-                                {subitem.badge && (
+                                {isNavigatingHere ? (
+                                  <span className="text-[10px] text-white/50 animate-pulse">carregando...</span>
+                                ) : subitem.badge ? (
                                   <Badge
                                     variant="secondary"
                                     className="bg-white/20 text-white text-xs"
                                   >
                                     {subitem.badge}
                                   </Badge>
-                                )}
+                                ) : null}
                               </Link>
                             );
                           })}
@@ -1318,14 +1334,17 @@ export function Sidebar() {
                             >
                               <Link
                                 to={subitem.href}
+                                onClick={() => {
+                                  if (pathname !== subitem.href) setNavigatingTo(subitem.href);
+                                }}
                                 className={cn(
                                   "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
-                                  isActive
+                                  isActive || navigatingTo === subitem.href
                                     ? "text-white shadow-md"
                                     : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                                 )}
                                 style={
-                                  isActive
+                                  isActive || navigatingTo === subitem.href
                                     ? {
                                         background:
                                           "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)",
@@ -1334,11 +1353,17 @@ export function Sidebar() {
                                 }
                               >
                                 <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
-                                <subitem.icon className="h-4 w-4 mr-3" />
+                                {navigatingTo === subitem.href ? (
+                                  <span className="h-4 w-4 mr-3 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                                ) : (
+                                  <subitem.icon className="h-4 w-4 mr-3 shrink-0" />
+                                )}
                                 <span className="flex-1 truncate">
                                   {subitem.name}
                                 </span>
-                                {subitem.badge && (
+                                {navigatingTo === subitem.href ? (
+                                  <span className="text-[10px] text-white/50 animate-pulse">carregando...</span>
+                                ) : subitem.badge ? (
                                   <Badge
                                     variant="secondary"
                                     className={
@@ -1357,7 +1382,7 @@ export function Sidebar() {
                                   >
                                     {subitem.badge}
                                   </Badge>
-                                )}
+                                ) : null}
                               </Link>
                             </div>
                           );
@@ -1369,6 +1394,7 @@ export function Sidebar() {
               }
 
               const isActive = pathname === item.href;
+              const isNavigatingHere = navigatingTo === item.href;
               return (
                 <div
                   key={item.name}
@@ -1387,15 +1413,18 @@ export function Sidebar() {
                     <TooltipTrigger asChild>
                       <Link
                         to={item.href}
+                        onClick={() => {
+                          if (pathname !== item.href) setNavigatingTo(item.href);
+                        }}
                         className={cn(
                           "flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
-                          isActive
+                          isActive || isNavigatingHere
                             ? "text-white shadow-lg backdrop-blur-sm"
                             : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
                           collapsed && "justify-center",
                         )}
                         style={
-                          isActive
+                          isActive || isNavigatingHere
                             ? {
                                 background:
                                   "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, color-mix(in srgb, var(--app-brand-active, #c81a7f) 35%, transparent) 100%)",
@@ -1406,13 +1435,27 @@ export function Sidebar() {
                         {!collapsed && (
                           <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
                         )}
-                        <item.icon
-                          className={cn("h-5 w-5", !collapsed && "mr-3")}
-                        />
+                        {isNavigatingHere ? (
+                          <span
+                            className={cn(
+                              "h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0",
+                              !collapsed && "mr-3",
+                            )}
+                          />
+                        ) : (
+                          <item.icon
+                            className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")}
+                          />
+                        )}
                         {!collapsed && (
                           <>
                             <span className="flex-1 truncate">{item.name}</span>
-                            {item.badge && (
+                            {isNavigatingHere && (
+                              <span className="text-[10px] text-white/60 font-normal animate-pulse">
+                                carregando...
+                              </span>
+                            )}
+                            {!isNavigatingHere && item.badge && (
                               <Badge
                                 variant="secondary"
                                 className={

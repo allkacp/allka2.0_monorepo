@@ -467,7 +467,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                   className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
                                   id="sidebar-overlay"
                                 />
-                                <div className="hidden lg:flex shrink-0">
+                                <div className="hidden lg:flex shrink-0 relative z-60">
                                   <Sidebar />
                                 </div>
                                 <div
