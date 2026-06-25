@@ -29,7 +29,16 @@ import {
   Activity,
   CalendarDays,
   Wallet,
+  Image,
+  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PageLoader } from "@/components/ui/loading";
@@ -796,6 +805,266 @@ export default function AgenciaDashboard() {
     }
   }
 
+  async function exportBrandedPdf() {
+    setExportLoading(true);
+    try {
+      // Load Allka font + logo as base64 so they embed inline (no CORS issues)
+      async function toB64(url: string): Promise<string> {
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        let bin = "";
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+
+      const [boldFont, regularFont, logoB64] = await Promise.all([
+        toB64("/fonts/AllkaVertexOutlineBold-Regular.ttf"),
+        toB64("/fonts/AllkaVertexOutline-Regular.ttf"),
+        toB64("/logo-allka-full.png"),
+      ]);
+
+      const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+      const agencyName = profile.name;
+      const agencyCnpj = profile.cnpj || "";
+
+      const statusLabel: Record<string, string> = {
+        briefing: "Briefing", producao: "Produção", revisao: "Revisão",
+        entregue: "Entregue", cancelado: "Cancelado", "in-progress": "Em andamento",
+        planning: "Planejamento", completed: "Concluído",
+        available: "Disponível", in_progress: "Em execução", review: "Em revisão",
+        done: "Concluída", cancelled: "Cancelada",
+        paid: "Pago", pending: "Pendente", overdue: "Em atraso",
+      };
+      const statusColor: Record<string, string> = {
+        briefing: "#6366f1", producao: "#3b82f6", revisao: "#f59e0b",
+        entregue: "#10b981", cancelado: "#ef4444", "in-progress": "#3b82f6",
+        planning: "#8b5cf6", completed: "#10b981",
+        available: "#94a3b8", in_progress: "#3b82f6", review: "#f59e0b",
+        done: "#10b981", cancelled: "#ef4444",
+        paid: "#10b981", pending: "#f59e0b", overdue: "#ef4444",
+      };
+
+      function badge(status: string) {
+        const color = statusColor[status] || "#94a3b8";
+        const label = statusLabel[status] || status;
+        return `<span style="background:${color}18;color:${color};border:1px solid ${color}44;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;white-space:nowrap">${label}</span>`;
+      }
+
+      function kpiCard(label: string, value: string, sub: string, color: string) {
+        return `
+          <div style="background:#fff;border-radius:12px;padding:16px 20px;flex:1;min-width:140px;border-top:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.08)">
+            <p style="font-size:10px;color:#64748b;margin:0 0 6px;text-transform:uppercase;letter-spacing:.05em">${label}</p>
+            <p style="font-family:'AllkaVertexBold',sans-serif;font-size:22px;color:#1e293b;margin:0 0 4px;line-height:1">${value}</p>
+            <p style="font-size:10px;color:#94a3b8;margin:0">${sub}</p>
+          </div>`;
+      }
+
+      function tableRows(rows: string[][]) {
+        return rows.map((cols, i) =>
+          `<tr style="background:${i % 2 === 0 ? "#fff" : "#f8fafc"};page-break-inside:avoid">
+            ${cols.map((c, ci) => `<td style="padding:8px 10px;font-size:11px;color:#334155;border-bottom:1px solid #e2e8f0;${ci === 0 ? "font-weight:600;color:#1e293b" : ""}">${c}</td>`).join("")}
+          </tr>`
+        ).join("");
+      }
+
+      function section(title: string, icon: string, thead: string[], rows: string[][]) {
+        if (rows.length === 0) return "";
+        return `
+          <div style="margin-bottom:28px;page-break-inside:avoid">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e2e8f0">
+              <span style="font-size:16px">${icon}</span>
+              <h2 style="font-family:'AllkaVertexBold',sans-serif;font-size:14px;color:#1e293b;margin:0;letter-spacing:.02em">${title}</h2>
+              <span style="margin-left:auto;font-size:10px;color:#94a3b8">${rows.length} registros</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+              <thead>
+                <tr style="background:linear-gradient(135deg,#4f46e5,#7c3aed)">
+                  ${thead.map(h => `<th style="padding:9px 10px;text-align:left;font-size:10px;color:#fff;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${h}</th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>${tableRows(rows)}</tbody>
+            </table>
+          </div>`;
+      }
+
+      const projectRows = projects.map(p => [
+        p.name || "—",
+        badge(p.status),
+        fmtBRL(p.value || 0),
+        fmtDate(p.startDate || ""),
+        fmtDate(p.deliveryDate || ""),
+      ]);
+
+      const invoiceRows = [...invoices]
+        .sort((a: any, b: any) => (b.issuedAt || "").localeCompare(a.issuedAt || ""))
+        .map((inv: any) => [
+          inv.number || inv.invoice_number || "—",
+          inv.description || "—",
+          fmtBRL(inv.amount || 0),
+          badge(inv.status),
+          fmtDate(inv.issuedAt || inv.created_at || ""),
+          fmtDate(inv.dueDate || inv.due_date || ""),
+        ]);
+
+      const taskRows = tasks.map((t: any) => [
+        t.name || "—",
+        t.projectName || "—",
+        badge(t.status),
+        t.nomadeName || "—",
+        fmtDate(t.dueDate || t.due_date || ""),
+      ]);
+
+      const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório — ${agencyName}</title>
+<style>
+  @font-face {
+    font-family: 'AllkaVertexBold';
+    src: url('data:font/truetype;base64,${boldFont}') format('truetype');
+    font-weight: bold;
+  }
+  @font-face {
+    font-family: 'AllkaVertex';
+    src: url('data:font/truetype;base64,${regularFont}') format('truetype');
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 12px;
+    margin: 0;
+    padding: 0;
+    background: #f1f5f9;
+    color: #1e293b;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page { max-width: 960px; margin: 0 auto; background: #fff; }
+
+  /* ─── Header ─── */
+  .header {
+    background: linear-gradient(135deg, #312e81 0%, #4f46e5 45%, #7c3aed 100%);
+    padding: 32px 40px 28px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .header-logo img { height: 36px; filter: brightness(0) invert(1); }
+  .header-title h1 {
+    font-family: 'AllkaVertexBold', 'Montserrat', sans-serif;
+    font-size: 24px;
+    margin: 0 0 4px;
+    letter-spacing: .03em;
+  }
+  .header-title p { margin: 0; font-size: 12px; opacity: .75; }
+  .header-meta { text-align: right; }
+  .header-meta p { margin: 0; font-size: 11px; opacity: .8; line-height: 1.7; }
+  .header-meta strong { font-family: 'AllkaVertexBold', sans-serif; font-size: 13px; opacity: 1; display: block; }
+
+  /* ─── KPI bar ─── */
+  .kpi-bar {
+    display: flex;
+    gap: 12px;
+    padding: 20px 40px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+  }
+
+  /* ─── Content ─── */
+  .content { padding: 28px 40px; }
+
+  /* ─── Footer ─── */
+  .footer {
+    padding: 16px 40px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: #94a3b8;
+    background: #f8fafc;
+  }
+  .footer strong { font-family: 'AllkaVertexBold', sans-serif; color: #6366f1; }
+
+  @media print {
+    body { background: #fff; }
+    .page { max-width: 100%; }
+    tr { page-break-inside: avoid; }
+    .no-break { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <img src="data:image/png;base64,${logoB64}" alt="Allka" />
+    </div>
+    <div class="header-title" style="flex:1;padding:0 24px">
+      <h1>Relatório da Agência</h1>
+      <p>${agencyName}${agencyCnpj ? ` &nbsp;·&nbsp; CNPJ: ${agencyCnpj}` : ""}</p>
+    </div>
+    <div class="header-meta">
+      <strong>${today}</strong>
+      <p>${projects.length} projetos &nbsp;·&nbsp; ${tasks.length} tarefas</p>
+      <p>${invoices.length} faturas &nbsp;·&nbsp; Plano: ${planLabel}</p>
+    </div>
+  </div>
+
+  <!-- KPI Bar -->
+  <div class="kpi-bar">
+    ${kpiCard("Projetos Ativos", String(activeProjects.length), `${projects.length} total · ${completedProjects.length} concluídos`, "#6366f1")}
+    ${kpiCard("Tarefas Ativas", String(activeTasks.length), `${tasks.length} total · ${doneTasks.length} concluídas`, "#3b82f6")}
+    ${kpiCard("Total Faturado", fmtBRL(financialSummary.total), `Pago: ${fmtBRL(financialSummary.paid)}`, "#10b981")}
+    ${kpiCard("A Receber", fmtBRL(financialSummary.pending + financialSummary.overdue), `Em atraso: ${fmtBRL(financialSummary.overdue)}`, "#f59e0b")}
+    ${kpiCard("Desconto no Plano", `${planDiscount}%`, `MRR: ${fmtBRL(profile.currentMrr || 0)}`, "#7c3aed")}
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    ${section("Projetos", "📁", ["Nome", "Status", "Valor", "Início", "Entrega"], projectRows)}
+    ${section("Faturas", "💳", ["Número", "Descrição", "Valor", "Status", "Emissão", "Vencimento"], invoiceRows)}
+    ${section("Tarefas", "✅", ["Tarefa", "Projeto", "Status", "Nômade", "Entrega"], taskRows)}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>Gerado em ${today} &nbsp;·&nbsp; ${agencyName}</span>
+    <strong>allka</strong>
+    <span>© ${new Date().getFullYear()} Allka by Lamego. Todos os direitos reservados.</span>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+      const win = window.open("", "_blank");
+      if (!win) {
+        alert("Permita popups para exportar o PDF.");
+        return;
+      }
+      win.document.write(html);
+      win.document.close();
+      // Wait for fonts and images before printing
+      win.document.fonts.ready.then(() => {
+        setTimeout(() => win.print(), 400);
+      });
+    } catch (e) {
+      console.error("PDF export failed:", e);
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   // ── Early returns ─────────────────────────────────────────────────────────────
   if (loading) return <PageLoader text="Carregando painel…" />;
 
@@ -1323,16 +1592,35 @@ export default function AgenciaDashboard() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportPng}
-              disabled={exportLoading}
-              className="gap-1.5 text-xs"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {exportLoading ? "Exportando…" : "Exportar PNG"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exportLoading}
+                  className="gap-1.5 text-xs"
+                >
+                  {exportLoading ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {exportLoading ? "Exportando…" : "Exportar"}
+                  <ChevronDownIcon className="h-3 w-3 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportBrandedPdf}>
+                  <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                  <span className="text-sm">PDF com Marca</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportPng}>
+                  <Image className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                  <span className="text-sm">PNG (screenshot)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               size="sm"
               className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
