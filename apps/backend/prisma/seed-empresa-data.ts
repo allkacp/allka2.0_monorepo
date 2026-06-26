@@ -17,6 +17,8 @@ const IDS = {
   proj1:      "seed-empresa-proj-01",
   proj2:      "seed-empresa-proj-02",
   proj3:      "seed-empresa-proj-03",
+  proj4:      "seed-empresa-proj-04",
+  proj5:      "seed-empresa-proj-05",
   task01:     "seed-empresa-task-01",
   task02:     "seed-empresa-task-02",
   task03:     "seed-empresa-task-03",
@@ -27,11 +29,14 @@ const IDS = {
   task08:     "seed-empresa-task-08",
   task09:     "seed-empresa-task-09",
   task10:     "seed-empresa-task-10",
+  task11:     "seed-empresa-task-11",
+  task12:     "seed-empresa-task-12",
   inv01:      "seed-empresa-inv-01",
   inv02:      "seed-empresa-inv-02",
   inv03:      "seed-empresa-inv-03",
   inv04:      "seed-empresa-inv-04",
   inv05:      "seed-empresa-inv-05",
+  inv06:      "seed-empresa-inv-06",
 };
 
 const now = new Date();
@@ -51,11 +56,12 @@ async function main() {
     create: {
       id:      IDS.company,
       name:    "TechStart Soluções Digitais",
-      cnpj:    "00.000.000/0001-01",
+      cnpj:    "12.345.678/0001-55",
       email:   "empresa@allka.com.vc",
-      phone:   "(11) 99000-0001",
+      phone:   "(11) 9 9000-0001",
       address: "Av. Paulista, 1000 — São Paulo, SP",
       segment: "Tecnologia",
+      website: "https://www.techstart.com.br",
       status:  "ativo",
     },
   });
@@ -123,9 +129,47 @@ async function main() {
     },
   });
 
+  const proj4 = await prisma.project.upsert({
+    where:  { id: IDS.proj4 },
+    update: {},
+    create: {
+      id:          IDS.proj4,
+      title:       "App Mobile — Versão 2.0",
+      description: "Desenvolvimento da versão 2.0 do aplicativo mobile com novas funcionalidades e redesign completo da interface.",
+      client_id:   IDS.company,
+      status:      "awaiting-payment",
+      type:        "Desenvolvimento Mobile",
+      budget:      22000,
+      value:       22000,
+      progress:    0,
+      start_date:  future(7),
+      end_date:    future(97),
+    },
+  });
+
+  const proj5 = await prisma.project.upsert({
+    where:  { id: IDS.proj5 },
+    update: {},
+    create: {
+      id:          IDS.proj5,
+      title:       "Auditoria SEO + Conteúdo Q3",
+      description: "Auditoria técnica completa de SEO e planejamento de conteúdo para o terceiro trimestre.",
+      client_id:   IDS.company,
+      status:      "planning",
+      type:        "Marketing Digital",
+      budget:      4500,
+      value:       4500,
+      progress:    10,
+      start_date:  future(14),
+      end_date:    future(74),
+    },
+  });
+
   console.log(`  ✓ Projeto 1       → ${proj1.title}`);
   console.log(`  ✓ Projeto 2       → ${proj2.title}`);
   console.log(`  ✓ Projeto 3       → ${proj3.title}`);
+  console.log(`  ✓ Projeto 4       → ${proj4.title}`);
+  console.log(`  ✓ Projeto 5       → ${proj5.title}`);
 
   // ── 4. TaskExecutions ─────────────────────────────────────────────────────
   // Statuses mapeados pelo empresa-context:
@@ -229,6 +273,26 @@ async function main() {
       delivered_at: past(12),
       approved_at:  past(10),
     },
+    // Projeto 4 — App 2.0 (aguardando pagamento)
+    {
+      id:         IDS.task11,
+      project_id: IDS.proj4,
+      title:      "Levantamento de requisitos e escopo",
+      status:     "pending",
+      priority:   "high",
+      due_date:   future(10),
+      delivered_at: null,
+    },
+    // Projeto 5 — SEO (planejamento)
+    {
+      id:         IDS.task12,
+      project_id: IDS.proj5,
+      title:      "Auditoria técnica de SEO — relatório inicial",
+      status:     "pending",
+      priority:   "medium",
+      due_date:   future(20),
+      delivered_at: null,
+    },
   ] as const;
 
   for (const t of tasks) {
@@ -307,6 +371,17 @@ async function main() {
       due_date:       past(5),
       paid_at:        null,
     },
+    {
+      id:             IDS.inv06,
+      company_id:     IDS.company,
+      project_id:     IDS.proj4,
+      invoice_number: "INV-2026-006",
+      description:    "App Mobile 2.0 — Entrada 40%",
+      amount:         8800,
+      status:         "pending",
+      due_date:       future(10),
+      paid_at:        null,
+    },
   ];
 
   for (const inv of invoices) {
@@ -332,9 +407,9 @@ async function main() {
   console.log("\n✅ Seed concluído:");
   console.log(`   Empresa:   ${company.name}`);
   console.log("   Login:     empresa@allka.com.vc  /  SEED_TEST_USER_PASSWORD");
-  console.log(`   Projetos:  3  (2 em andamento, 1 concluído)`);
-  console.log(`   Tarefas:   ${tasks.length}  (4 concluídas, 3 em andamento, 3 pendentes)`);
-  console.log(`   Faturas:   ${invoices.length}  (2 pagas, 2 pendentes, 1 em atraso)`);
+  console.log(`   Projetos:  5  (2 em andamento, 1 concluído, 1 aguardando pagamento, 1 planejamento)`);
+  console.log(`   Tarefas:   ${tasks.length}  (4 concluídas, 3 em andamento, 5 pendentes)`);
+  console.log(`   Faturas:   ${invoices.length}  (2 pagas, 3 pendentes, 1 em atraso)`);
 }
 
 main()

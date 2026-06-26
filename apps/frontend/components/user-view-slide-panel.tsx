@@ -121,11 +121,30 @@ const USER_DADOS_ALL_ACCORDIONS = [
   "adicionais",
 ];
 
+interface AgencyFinancialData {
+  invoices: Array<{
+    id: string;
+    number: string;
+    description: string;
+    amount: number;
+    status: "pending" | "paid" | "overdue";
+    issuedAt: string;
+    dueDate: string;
+    paidAt?: string;
+  }>;
+  projectRevenue: number;
+  currentMrr: number;
+  plan: string;
+  planDiscount: number;
+}
+
 interface UserViewSlidePanelProps {
   open: boolean;
   onClose: () => void;
   onRefresh?: () => void;
   user: UserType | null;
+  agencyFinancial?: AgencyFinancialData;
+  viewerRole?: "admin" | "partner" | "agency" | "company" | "nomad";
 }
 
 // Return user data with safe defaults
@@ -243,6 +262,8 @@ export function UserViewSlidePanel({
   onClose,
   onRefresh,
   user,
+  agencyFinancial,
+  viewerRole = "admin",
 }: UserViewSlidePanelProps) {
   const {
     getUserById,
@@ -457,6 +478,9 @@ export function UserViewSlidePanel({
   // Header States
   const [showBalanceAllka, setShowBalanceAllka] = useState(true);
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
+
+  // Carteira (agency)
+  const [walletStatusFilter, setWalletStatusFilter] = useState("all");
 
   // Linked Entities (Permissions Tab) — derived from context
   const contextUser = user?.id ? getUserById(Number(user.id)) : null;
@@ -1778,23 +1802,29 @@ export function UserViewSlidePanel({
         >
           {/* Tab Navigation - Fixed */}
           <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
-            <TabsList className="grid w-max grid-cols-5 gap-1 bg-transparent p-0 h-auto">
-              {["visao-geral", "conta", "permissoes", "seguranca", "lgpd"].map(
-                (tab) => (
-                  <TabsTrigger
-                    key={tab}
-                    value={tab}
-                    className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                  >
-                    {tab === "visao-geral" && "Visão Geral"}
-                    {tab === "conta" && "Conta & Dados"}
-                    {tab === "permissoes" && "Permissões"}
-                    {tab === "seguranca" && "Segurança"}
-                    {tab === "lgpd" && "LGPD & Privacidade"}
-                  </TabsTrigger>
-                ),
-              )}
-            </TabsList>
+            {(() => {
+              const tabs = userAccountType === "agency" && agencyFinancial
+                ? ["visao-geral", "conta", "carteira", "seguranca"]
+                : ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"];
+              return (
+                <TabsList className={`grid w-max gap-1 bg-transparent p-0 h-auto grid-cols-${tabs.length}`}>
+                  {tabs.map((tab) => (
+                    <TabsTrigger
+                      key={tab}
+                      value={tab}
+                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                    >
+                      {tab === "visao-geral" && "Visão Geral"}
+                      {tab === "conta" && "Conta & Dados"}
+                      {tab === "carteira" && "Carteira"}
+                      {tab === "permissoes" && "Permissões"}
+                      {tab === "seguranca" && "Segurança"}
+                      {tab === "lgpd" && "LGPD & Privacidade"}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              );
+            })()}
           </div>
 
           {/* Tab Content - Scrollable */}
@@ -1847,6 +1877,50 @@ export function UserViewSlidePanel({
                 </div>
               </button>
             </div>
+
+            {/* Carteira da Agência */}
+            {userAccountType === "agency" && (
+              (() => {
+                const mrr = (fakeUser as any).currentMrr ?? 0;
+                const totalProj = (fakeUser as any).totalProjects ?? 0;
+                const lvl = (fakeUser as any).partnerLevel ?? "bronze";
+                const fmtBRL = (v: number) =>
+                  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+                const levelCfg: Record<string, { emoji: string; label: string; gradient: string; text: string }> = {
+                  bronze:   { emoji: "🥉", label: "Bronze",   gradient: "from-amber-700 to-amber-500",   text: "text-amber-100" },
+                  silver:   { emoji: "🥈", label: "Prata",    gradient: "from-slate-500 to-slate-400",   text: "text-slate-100" },
+                  gold:     { emoji: "🥇", label: "Ouro",     gradient: "from-yellow-500 to-amber-400",  text: "text-yellow-100" },
+                  platinum: { emoji: "💎", label: "Platina",  gradient: "from-cyan-600 to-teal-500",     text: "text-cyan-100" },
+                  diamond:  { emoji: "✨", label: "Diamante", gradient: "from-violet-600 to-purple-500", text: "text-violet-100" },
+                };
+                const cfg = levelCfg[lvl] ?? levelCfg.bronze;
+                return (
+                  <div className={`rounded-xl bg-gradient-to-r ${cfg.gradient} p-4 flex items-center gap-4 shadow-md`}>
+                    {/* Level badge */}
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-3xl">{cfg.emoji}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.text} opacity-80`}>{cfg.label}</span>
+                    </div>
+                    {/* Divider */}
+                    <div className="w-px h-10 bg-white/20 shrink-0" />
+                    {/* MRR */}
+                    <div className="flex-1">
+                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}>MRR Mensal</p>
+                      <p className={`text-2xl font-black ${cfg.text} leading-tight`}>{fmtBRL(mrr)}</p>
+                      <p className={`text-[10px] ${cfg.text} opacity-60`}>receita recorrente mensal</p>
+                    </div>
+                    {/* Divider */}
+                    <div className="w-px h-10 bg-white/20 shrink-0" />
+                    {/* Projects */}
+                    <div className="text-right shrink-0">
+                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}>Projetos</p>
+                      <p className={`text-2xl font-black ${cfg.text} leading-tight`}>{totalProj}</p>
+                      <p className={`text-[10px] ${cfg.text} opacity-60`}>no total</p>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
 
             {/* KPI Cards Row - 3 colunas compactas */}
             {(() => {
@@ -2229,6 +2303,159 @@ export function UserViewSlidePanel({
               </AccordionItem>
             </Accordion>
           </TabsContent>
+
+          {/* Carteira — agency only */}
+          {userAccountType === "agency" && agencyFinancial && (
+            <TabsContent
+              value="carteira"
+              className="flex-1 overflow-y-auto bg-slate-100 px-[50px] pt-6 pb-8 space-y-5 mt-0"
+            >
+              {(() => {
+                const af = agencyFinancial;
+                const fmtBRL = (v: number) =>
+                  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                const paidTotal   = af.invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+                const pendingTotal= af.invoices.filter(i => i.status === "pending" || i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+                const overdueTotal= af.invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+                const saldoLiq    = af.projectRevenue - paidTotal;
+
+                const filtered = af.invoices.filter(i => walletStatusFilter === "all" || i.status === walletStatusFilter);
+
+                const statusCfg = {
+                  pending: { label: "Pendente",  cls: "bg-amber-100 text-amber-700" },
+                  paid:    { label: "Paga",      cls: "bg-emerald-100 text-emerald-700" },
+                  overdue: { label: "Vencida",   cls: "bg-red-100 text-red-700" },
+                } as const;
+
+                return (
+                  <>
+                    {/* ── Resumo de saldos ─────────────────────────── */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Entradas */}
+                      <div className="bg-white rounded-xl border border-emerald-200 p-4 space-y-1">
+                        <div className="flex items-center gap-2 text-emerald-600 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                            <TrendingUp className="h-4 w-4" />
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-wider">Entradas</span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900">{fmtBRL(af.projectRevenue)}</p>
+                        <p className="text-xs text-slate-400">receita total de projetos</p>
+                      </div>
+                      {/* Saídas */}
+                      <div className="bg-white rounded-xl border border-red-200 p-4 space-y-1">
+                        <div className="flex items-center gap-2 text-red-500 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
+                            <CreditCard className="h-4 w-4" />
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-wider">Saídas</span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900">{fmtBRL(paidTotal)}</p>
+                        <p className="text-xs text-slate-400">faturas pagas à Allka</p>
+                      </div>
+                      {/* Saldo líquido */}
+                      <div className="bg-white rounded-xl border border-blue-200 p-4 space-y-1">
+                        <div className="flex items-center gap-2 text-blue-600 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <Wallet className="h-4 w-4" />
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-wider">Saldo estimado</span>
+                        </div>
+                        <p className={`text-2xl font-black ${saldoLiq >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtBRL(saldoLiq)}</p>
+                        <p className="text-xs text-slate-400">entradas − saídas</p>
+                      </div>
+                      {/* A vencer */}
+                      <div className="bg-white rounded-xl border border-amber-200 p-4 space-y-1">
+                        <div className="flex items-center gap-2 text-amber-600 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                            <Clock className="h-4 w-4" />
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-wider">A vencer</span>
+                        </div>
+                        <p className="text-2xl font-black text-slate-900">{fmtBRL(pendingTotal)}</p>
+                        {overdueTotal > 0 && (
+                          <p className="text-xs text-red-500 font-medium">{fmtBRL(overdueTotal)} vencido</p>
+                        )}
+                        <p className="text-xs text-slate-400">faturas pendentes</p>
+                      </div>
+                    </div>
+
+                    {/* ── MRR + Plano ──────────────────────────────── */}
+                    <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-400 mb-0.5">Consumo mensal (MRR)</p>
+                        <p className="text-xl font-black text-slate-900">{fmtBRL(af.currentMrr)}<span className="text-sm font-normal text-slate-400">/mês</span></p>
+                      </div>
+                      <div className="h-10 w-px bg-slate-100" />
+                      <div>
+                        <p className="text-xs text-slate-400 mb-1">Plano ativo</p>
+                        <span className="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full">
+                          {af.plan ? `Plano R$ ${af.plan}` : "Freemium"}
+                          {af.planDiscount > 0 && (
+                            <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">-{af.planDiscount}%</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ── Faturas ──────────────────────────────────── */}
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-slate-400" />
+                          Faturas Allka
+                        </h3>
+                        <div className="flex gap-1">
+                          {["all", "pending", "paid", "overdue"].map(s => (
+                            <button
+                              key={s}
+                              onClick={() => setWalletStatusFilter(s)}
+                              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                                walletStatusFilter === s
+                                  ? "bg-slate-800 text-white"
+                                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                              }`}
+                            >
+                              {s === "all" ? "Todas" : statusCfg[s as keyof typeof statusCfg]?.label ?? s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {filtered.length === 0 ? (
+                        <div className="py-10 text-center text-sm text-slate-400">Nenhuma fatura encontrada.</div>
+                      ) : (
+                        <div className="divide-y divide-slate-50">
+                          {filtered.map(inv => {
+                            const cfg = statusCfg[inv.status];
+                            return (
+                              <div key={inv.id} className="flex items-center px-4 py-3 gap-3 hover:bg-slate-50 transition-colors">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-xs font-mono text-slate-400">{inv.number}</span>
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg?.cls}`}>
+                                      {cfg?.label}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-medium text-slate-800 truncate">{inv.description}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Venc. {new Date(inv.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}
+                                    {inv.paidAt && ` · Pago em ${new Date(inv.paidAt).toLocaleDateString("pt-BR")}`}
+                                  </p>
+                                </div>
+                                <p className={`text-sm font-bold shrink-0 ${inv.status === "overdue" ? "text-red-600" : inv.status === "paid" ? "text-emerald-700" : "text-slate-800"}`}>
+                                  {fmtBRL(inv.amount)}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </TabsContent>
+          )}
 
           {/* Conta + Dados Unificado */}
           <TabsContent
@@ -3038,8 +3265,8 @@ export function UserViewSlidePanel({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* 7. INFORMAÇÕES ADICIONAIS */}
-                <AccordionItem
+                {/* 7. INFORMAÇÕES ADICIONAIS — visível apenas para admin e partner */}
+                {(viewerRole === "admin" || viewerRole === "partner") && <AccordionItem
                   value="adicionais"
                   className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
                 >
@@ -3106,7 +3333,7 @@ export function UserViewSlidePanel({
                       </div>
                     </div>
                   </AccordionContent>
-                </AccordionItem>
+                </AccordionItem>}
               </Accordion>
             </div>
           </TabsContent>

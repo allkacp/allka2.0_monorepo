@@ -801,17 +801,19 @@ function AssignNomadeDialog({
 
 interface AdminTarefasPageProps {
   routeBase?: string;
+  initialSearch?: string;
 }
 
 export default function AdminTarefasPage({
   routeBase = "/admin/tarefas",
+  initialSearch = "",
 }: AdminTarefasPageProps = {}) {
   const [tarefas, setTarefas] = useState<TarefaOperacional[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Search & filter
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);

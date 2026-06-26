@@ -86,6 +86,7 @@ export interface AgenciaProfile {
   currentMrr: number;
   totalProjects: number;
   totalTasks: number;
+  partnerLevel: "bronze" | "silver" | "gold" | "platinum" | "diamond";
 }
 
 // ── Context ────────────────────────────────────────────────────────────────────
@@ -162,6 +163,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
               currentMrr: source.currentMrr || 0,
               totalProjects: source.totalProjects || 0,
               totalTasks: source.totalTasks || 0,
+              partnerLevel: source.partner_level || "bronze",
             });
         }
         if (projectsRes.status === "fulfilled") {
@@ -189,15 +191,15 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
                 (typeof p.client === "object" ? p.client?.name : p.client) ||
                 p.clientName ||
                 "",
-              name: p.name || "",
+              name: p.title || p.name || "",
               category: p.type || p.category || "",
               status: p.status || "briefing",
               value: p.budget || p.value || 0,
               startDate: p.startDate || p.start_date || "",
-              deliveryDate: p.deliveryDate || p.delivery_date || "",
+              deliveryDate: p.deliveryDate || p.delivery_date || p.end_date || "",
               completedDate: p.completedDate || "",
-              tasksDone: p.tasksDone || 0,
-              tasksTotal: p.tasksTotal || 0,
+              tasksDone: p._count?.task_executions || p.tasksDone || 0,
+              tasksTotal: p._count?.task_executions || p.tasksTotal || 0,
             })),
           );
         }

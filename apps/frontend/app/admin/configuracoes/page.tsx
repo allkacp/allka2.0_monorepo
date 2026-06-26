@@ -61,6 +61,7 @@ import {
   PhoneOff,
   UserPlus,
   X,
+  Sliders,
 } from "lucide-react";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -1642,169 +1643,55 @@ export default function AdminConfiguracoesPage() {
 
         {/* ─── NOTIFICAÇÕES ──────────────────────────────────────────────────── */}
         <TabsContent value="notifications" className="space-y-4">
-          {/* Summary cards */}
+          {/* Status resumido */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              {
-                label: "Regras Ativas",
-                value: "5",
-                icon: Zap,
-                color: "text-violet-500",
-                bg: "bg-violet-50 dark:bg-violet-950/30",
-              },
-              {
-                label: "Mensagens Configuradas",
-                value: "12",
-                icon: FileText,
-                color: "text-blue-500",
-                bg: "bg-blue-50 dark:bg-blue-950/30",
-              },
-              {
-                label: "Enviadas Hoje",
-                value: "248",
-                icon: Send,
-                color: "text-emerald-500",
-                bg: "bg-emerald-50 dark:bg-emerald-950/30",
-              },
-              {
-                label: "Falhas",
-                value: "2",
-                icon: AlertCircle,
-                color: "text-red-500",
-                bg: "bg-red-50 dark:bg-red-950/30",
-              },
+              { label: "Automações ativas", value: "5", icon: Zap, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30" },
+              { label: "Modelos de mensagem", value: "12", icon: FileText, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30" },
+              { label: "Enviadas hoje", value: "248", icon: Send, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+              { label: "Falhas hoje", value: "2", icon: AlertCircle, color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/30" },
             ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div
-                key={label}
-                className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 flex items-center gap-2.5"
-              >
-                <div className={`p-1.5 rounded-lg ${bg} shrink-0`}>
-                  <Icon className={`h-3.5 w-3.5 ${color}`} />
-                </div>
+              <div key={label} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 flex items-center gap-2.5">
+                <div className={`p-1.5 rounded-lg ${bg} shrink-0`}><Icon className={`h-3.5 w-3.5 ${color}`} /></div>
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium leading-none mb-0.5">
-                    {label}
-                  </p>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">
-                    {value}
-                  </p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium leading-none mb-0.5">{label}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">{value}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Explanation + CTAs */}
+          {/* O que é + acesso direto */}
           <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
-              <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
-                <Bell className="h-4 w-4 text-slate-500" />
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="p-2 rounded-xl bg-violet-50 dark:bg-violet-950/30 shrink-0">
+                <Bell className="h-5 w-5 text-violet-500" />
               </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Sistema de Notificações
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Gerencie regras de disparo, mensagens e histórico de envios
-                </p>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Central de Notificações</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Automações, modelos de mensagem e pré-configurações por tipo de usuário</p>
               </div>
-              <Button
-                size="sm"
-                className="h-7 gap-1.5 text-xs shrink-0 btn-brand border-0"
-                onClick={() => navigate("/admin/notifications")}
-              >
-                Abrir painel <ChevronRight className="h-3 w-3" />
+              <Button size="sm" className="h-8 gap-1.5 text-xs shrink-0 btn-brand border-0" onClick={() => navigate("/admin/notifications")}>
+                Abrir <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <div className="p-5 space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                O sistema de notificações permite configurar{" "}
-                <strong>regras automáticas</strong> de disparo, criar{" "}
-                <strong>mensagens personalizadas</strong> com variáveis
-                dinâmicas e acompanhar o<strong> histórico completo</strong> de
-                envios por canal (e-mail, WhatsApp, in-app, push).
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  {
-                    icon: Zap,
-                    label: "Gerenciar Regras",
-                    desc: "Configure quando e para quem enviar",
-                    tab: "rules",
-                  },
-                  {
-                    icon: FileText,
-                    label: "Criar Mensagem",
-                    desc: "Modelos com variáveis dinâmicas",
-                    tab: "messages",
-                  },
-                  {
-                    icon: History,
-                    label: "Ver Histórico",
-                    desc: "Rastreie cada envio e falha",
-                    tab: "history",
-                  },
-                ].map(({ icon: Icon, label, desc, tab }) => (
-                  <button
-                    key={tab}
-                    onClick={() => navigate("/admin/notifications")}
-                    className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-300 transition-all text-left group"
-                  >
-                    <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/30 transition-colors">
-                      <Icon className="h-4 w-4 text-slate-500 group-hover:text-blue-500 transition-colors" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                        {label}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {desc}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500 mt-0.5 ml-auto shrink-0 transition-colors" />
-                  </button>
-                ))}
-              </div>
-
-              {/* Canais */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Canais disponíveis
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: "E-mail", color: "#3b82f6", enabled: true },
-                    { label: "WhatsApp", color: "#22c55e", enabled: true },
-                    { label: "In-App", color: "#8b5cf6", enabled: true },
-                    { label: "Push", color: "#f59e0b", enabled: true },
-                    { label: "SMS", color: "#94a3b8", enabled: false },
-                  ].map(({ label, color, enabled }) => (
-                    <span
-                      key={label}
-                      className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border"
-                      style={
-                        enabled
-                          ? {
-                              borderColor: color + "55",
-                              background: color + "15",
-                              color,
-                            }
-                          : { borderColor: "#e2e8f0", color: "#94a3b8" }
-                      }
-                    >
-                      <span
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          display: "inline-block",
-                          background: enabled ? color : "#94a3b8",
-                        }}
-                      />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { icon: Sliders, label: "Pré-configurações", desc: "Defina quais notificações cada tipo de usuário recebe por padrão", tab: "defaults", color: "text-indigo-500", bg: "bg-indigo-50" },
+                { icon: Zap, label: "Automações", desc: "Regras de disparo automático por evento, data ou condição", tab: "rules", color: "text-violet-500", bg: "bg-violet-50" },
+                { icon: FileText, label: "Modelos", desc: "Mensagens com variáveis dinâmicas por canal (e-mail, WhatsApp, push)", tab: "messages", color: "text-blue-500", bg: "bg-blue-50" },
+              ].map(({ icon: Icon, label, desc, tab, color, bg }) => (
+                <button key={tab} onClick={() => navigate("/admin/notifications")}
+                  className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-300 transition-all text-left group">
+                  <div className={`p-1.5 rounded-lg ${bg} dark:bg-slate-800 shrink-0`}>
+                    <Icon className={`h-4 w-4 ${color}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{label}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
+                  </div>
+                </button>
+              ))}
             </div>
           </Card>
         </TabsContent>

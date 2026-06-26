@@ -241,11 +241,13 @@ export function Header() {
     if (accountType === "agencias")
       return {
         users: false,
-        companies: true,
+        companies: false,
         projects: true,
+        tasks: true,
         usersPath: "",
-        companiesPath: `${base("agencia")}/empresas`,
-        projectsPath: `${base("agencia")}/projetos`,
+        companiesPath: "",
+        projectsPath: "/agency/projetos",
+        tasksPath: "/agency/tarefas",
       };
     if (accountType === "nomades")
       return {
@@ -360,6 +362,27 @@ export function Header() {
             );
         }
 
+        // Agency: busca projetos (com searchTerm) e tarefas em memória
+        if (accountType === "agencias") {
+          const q2 = q.toLowerCase();
+          agencia.tasks
+            .filter((t) =>
+              t.name.toLowerCase().includes(q2) ||
+              t.projectName.toLowerCase().includes(q2)
+            )
+            .slice(0, 5)
+            .forEach((t) =>
+              results.push({
+                type: "Tarefa",
+                label: t.name,
+                sub: t.projectName,
+                path: "/agency/tarefas",
+                icon: CheckSquare,
+                navState: { search: t.name },
+              })
+            );
+        }
+
         setSearchResults(results);
       } catch {
         setSearchResults([]);
@@ -367,7 +390,7 @@ export function Header() {
         setSearchLoading(false);
       }
     },
-    [accountType, empresa.tasks],
+    [accountType, empresa.tasks, agencia.tasks],
   );
 
   useEffect(() => {
@@ -1153,6 +1176,20 @@ export function Header() {
       <UserViewSlidePanel
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
+        viewerRole={
+          accountType === "agencias" ? "agency"
+          : accountType === "empresas" ? "company"
+          : accountType === "nomades" ? "nomad"
+          : accountType === "parceiros" ? "partner"
+          : "admin"
+        }
+        agencyFinancial={accountType === "agencias" && agencia.profile ? {
+          invoices: agencia.invoices,
+          projectRevenue: agencia.projects.reduce((s, p) => s + (p.value ?? 0), 0),
+          currentMrr: agencia.profile.currentMrr,
+          plan: agencia.profile.plan,
+          planDiscount: agencia.profile.planDiscount,
+        } : undefined}
         user={(() => {
           // Build profile object from context — each account type uses its own data source.
           if (accountType === "empresas" && empresa.profile) {
@@ -1186,6 +1223,9 @@ export function Header() {
               permissions: [],
               created_at: p.createdAt ?? "",
               updated_at: p.createdAt ?? "",
+              currentMrr: p.currentMrr,
+              totalProjects: p.totalProjects,
+              partnerLevel: p.partnerLevel,
             };
           }
           if (accountType === "parceiro" && partner.profile) {

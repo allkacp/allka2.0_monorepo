@@ -23,6 +23,8 @@ import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal";
 import { apiClient } from "@/lib/api-client";
+import { useAgencia } from "@/contexts/agencia-context";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   LayoutDashboard,
   Users,
@@ -58,6 +60,11 @@ import {
   ClipboardList,
   Play,
   RotateCcw,
+  Trophy,
+  Zap,
+  Lock,
+  CheckCircle,
+  ArrowRight,
 } from "lucide-react";
 
 const navigationConfig = {
@@ -494,6 +501,79 @@ const navigationConfig = {
   ],
 };
 
+const LEVEL_CONFIG_SIDEBAR = {
+  bronze: {
+    label: "Bronze", emoji: "🥉",
+    gradient: "from-amber-500 to-amber-700",
+    glow: "shadow-amber-500/40",
+    bar: "bg-gradient-to-r from-amber-400 to-amber-600",
+    text: "text-amber-300",
+    bg: "bg-amber-500/20",
+    border: "border-amber-400/30",
+    nextProjectsRequired: 5,
+    nextMrrRequired: 5000,
+    nextLabel: "Prata",
+    benefits: ["Acesso ao catálogo completo", "Suporte por email", "Dashboard básico"],
+    nextBenefits: ["Desconto 5% em contratações", "Suporte prioritário", "Relatórios avançados"],
+  },
+  silver: {
+    label: "Prata", emoji: "🥈",
+    gradient: "from-slate-300 to-slate-500",
+    glow: "shadow-slate-400/40",
+    bar: "bg-gradient-to-r from-slate-300 to-slate-500",
+    text: "text-slate-300",
+    bg: "bg-slate-400/20",
+    border: "border-slate-300/30",
+    nextProjectsRequired: 15,
+    nextMrrRequired: 15000,
+    nextLabel: "Ouro",
+    benefits: ["Desconto 5% em contratações", "Suporte prioritário", "Relatórios avançados"],
+    nextBenefits: ["Desconto 10% em contratações", "Gerente de conta dedicado", "API de integração"],
+  },
+  gold: {
+    label: "Ouro", emoji: "🥇",
+    gradient: "from-yellow-400 to-yellow-600",
+    glow: "shadow-yellow-500/40",
+    bar: "bg-gradient-to-r from-yellow-400 to-yellow-600",
+    text: "text-yellow-300",
+    bg: "bg-yellow-500/20",
+    border: "border-yellow-400/30",
+    nextProjectsRequired: 40,
+    nextMrrRequired: 50000,
+    nextLabel: "Platina",
+    benefits: ["Desconto 10% em contratações", "Gerente de conta dedicado", "API de integração"],
+    nextBenefits: ["Desconto 15% em contratações", "SLA garantido 24h", "White-label disponível"],
+  },
+  platinum: {
+    label: "Platina", emoji: "✨",
+    gradient: "from-cyan-400 to-sky-600",
+    glow: "shadow-cyan-500/40",
+    bar: "bg-gradient-to-r from-cyan-400 to-sky-600",
+    text: "text-cyan-300",
+    bg: "bg-cyan-500/20",
+    border: "border-cyan-400/30",
+    nextProjectsRequired: 100,
+    nextMrrRequired: 150000,
+    nextLabel: "Diamante",
+    benefits: ["Desconto 15% em contratações", "SLA garantido 24h", "White-label disponível"],
+    nextBenefits: ["Desconto 20% em contratações", "Suporte 24/7", "Acesso beta a novos recursos"],
+  },
+  diamond: {
+    label: "Diamante", emoji: "💎",
+    gradient: "from-violet-400 to-purple-600",
+    glow: "shadow-violet-500/40",
+    bar: "bg-gradient-to-r from-violet-400 to-purple-600",
+    text: "text-violet-300",
+    bg: "bg-violet-500/20",
+    border: "border-violet-400/30",
+    nextProjectsRequired: null,
+    nextMrrRequired: null,
+    nextLabel: null,
+    benefits: ["Desconto 20% em contratações", "Suporte 24/7 dedicado", "Acesso beta a novos recursos", "Co-marketing com a Allka"],
+    nextBenefits: [],
+  },
+} as const;
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [agencyModalOpen, setAgencyModalOpen] = useState(false);
@@ -541,6 +621,11 @@ export function Sidebar() {
     previewTheme,
     previewEnabled,
   } = useSidebar();
+
+  const agencia = useAgencia();
+  const agenciaLevel = (agencia.profile?.partnerLevel ?? "bronze") as keyof typeof LEVEL_CONFIG_SIDEBAR;
+  const agenciaTotalProjects = agencia.profile?.totalProjects ?? 0;
+  const agenciaMrr = agencia.profile?.currentMrr ?? 0;
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (collapsed) return;
@@ -1117,39 +1202,69 @@ export function Sidebar() {
             )}
           </div>
 
-          {accountType === "agencias" && !collapsed && (
-            <div className="relative px-2 py-2 border-b border-white/10 backdrop-blur-sm">
-              <button
-                onClick={() => setAgencyModalOpen(true)}
-                className="w-full group relative overflow-hidden rounded-xl bg-white/10 hover:bg-white/15 transition-all duration-300 p-3 border border-white/10 hover:border-white/20"
-              >
-                <div className="relative flex items-center space-x-3">
-                  <div className="relative flex-shrink-0">
-                    <Avatar className="h-12 w-12 ring-2 ring-white/20 group-hover:ring-white/30 transition-all duration-300">
-                      <AvatarImage
-                        src={agencyProfile.logo || "/placeholder.svg"}
-                        alt={agencyProfile.name}
-                      />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-600 to-pink-500 text-white">
-                        <Building2 className="h-6 w-6" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-1 -right-1 bg-gradient-to-br from-blue-500 to-pink-500 rounded-full p-1 shadow-lg">
-                      <Sparkles className="h-3 w-3 text-white" />
+          {accountType === "agencias" && !collapsed && (() => {
+            const lvl = LEVEL_CONFIG_SIDEBAR[agenciaLevel];
+            const nextReq = lvl.nextProjectsRequired;
+            const progress = nextReq
+              ? Math.min(100, Math.round((agenciaTotalProjects / nextReq) * 100))
+              : 100;
+            return (
+              <div className="relative px-2 py-2 border-b border-white/10 backdrop-blur-sm">
+                <button
+                  onClick={() => setAgencyModalOpen(true)}
+                  className="w-full group relative overflow-hidden rounded-xl bg-white/10 hover:bg-white/15 transition-all duration-300 p-3 border border-white/10 hover:border-white/20"
+                >
+                  {/* Agency name + avatar row */}
+                  <div className="relative flex items-center space-x-3 mb-2.5">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-10 w-10 ring-2 ring-white/20 group-hover:ring-white/30 transition-all duration-300">
+                        <AvatarImage src={agencyProfile.logo || "/placeholder.svg"} alt={agencyProfile.name} />
+                        <AvatarFallback className="bg-linear-to-br from-blue-600 to-pink-500 text-white">
+                          <Building2 className="h-5 w-5" />
+                        </AvatarFallback>
+                      </Avatar>
                     </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-semibold text-white truncate group-hover:text-blue-100 transition-colors">
+                        {agencyProfile.name}
+                      </p>
+                      <div className={`inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${lvl.bg} ${lvl.border} border ${lvl.text}`}>
+                        <span>{lvl.emoji}</span>
+                        <span>{lvl.label}</span>
+                      </div>
+                    </div>
+                    <Trophy className={`h-4 w-4 shrink-0 ${lvl.text} opacity-60`} />
                   </div>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-xs font-semibold text-white truncate group-hover:text-blue-100 transition-colors">
-                      {agencyProfile.name}
-                    </p>
-                    <Badge className="mt-1 bg-white/20 hover:bg-white/25 text-white border-white/20 text-xs px-2 py-0.5 transition-colors">
-                      {agencyProfile.planType}
-                    </Badge>
-                  </div>
-                </div>
-              </button>
-            </div>
-          )}
+
+                  {/* Progress bar to next level */}
+                  {nextReq ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-white/50">
+                          Progresso → {lvl.nextLabel}
+                        </span>
+                        <span className={`text-[10px] font-bold ${lvl.text}`}>{progress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${lvl.bar} transition-all duration-700`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-white/40">
+                        {agenciaTotalProjects}/{nextReq} projetos · clique para ver requisitos
+                      </p>
+                    </div>
+                  ) : (
+                    <div className={`flex items-center gap-1.5 text-[10px] ${lvl.text} font-semibold`}>
+                      <Sparkles className="h-3 w-3" />
+                      Nível máximo atingido!
+                    </div>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
 
           <nav
             ref={navRef}
@@ -1579,6 +1694,240 @@ export function Sidebar() {
         open={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
+
+      {/* Agency Level Modal */}
+      {accountType === "agencias" && (() => {
+        const lvl = LEVEL_CONFIG_SIDEBAR[agenciaLevel];
+        const levels = Object.entries(LEVEL_CONFIG_SIDEBAR) as [keyof typeof LEVEL_CONFIG_SIDEBAR, typeof LEVEL_CONFIG_SIDEBAR[keyof typeof LEVEL_CONFIG_SIDEBAR]][];
+        const currentLevelIndex = levels.findIndex(([key]) => key === agenciaLevel);
+        const nextReq = lvl.nextProjectsRequired;
+        const progressProjects = nextReq ? Math.min(100, Math.round((agenciaTotalProjects / nextReq) * 100)) : 100;
+        const nextMrrReq = lvl.nextMrrRequired;
+        const progressMrr = nextMrrReq ? Math.min(100, Math.round((agenciaMrr / nextMrrReq) * 100)) : 100;
+        const overallProgress = Math.max(progressProjects, progressMrr);
+        const fmtBRL = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : `R$ ${v.toFixed(0)}`;
+
+        return (
+          <Dialog open={agencyModalOpen} onOpenChange={setAgencyModalOpen}>
+            <DialogContent
+              className="!fixed !top-3 !bottom-3 !right-3 !translate-x-0 !translate-y-0 !max-w-none !w-auto flex flex-col p-0 overflow-hidden border-0 shadow-2xl rounded-2xl"
+              style={{ left: "calc(var(--sidebar-width, 240px) + 6px)" }}
+            >
+              {/* Hero header — fixed height */}
+              <div className={`bg-linear-to-br ${lvl.gradient} px-8 pt-8 pb-6 text-white relative overflow-hidden shrink-0`}>
+                <div className="absolute -top-8 -right-8 text-[180px] opacity-[0.07] select-none leading-none">{lvl.emoji}</div>
+                <DialogHeader className="relative">
+                  <div className="flex items-start gap-5">
+                    <div className={`w-20 h-20 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-5xl shadow-2xl ${lvl.glow} shrink-0`}>
+                      {lvl.emoji}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Nível atual</p>
+                      <DialogTitle className="text-4xl font-black text-white leading-none">{lvl.label}</DialogTitle>
+                      <p className="text-white/70 text-sm mt-1.5">{agencyProfile.name}</p>
+                    </div>
+                    {agenciaLevel !== "diamond" && (
+                      <div className="text-right shrink-0">
+                        <p className="text-white/60 text-xs mb-1">Progresso → {lvl.nextLabel}</p>
+                        <p className="text-5xl font-black text-white leading-none">{overallProgress}<span className="text-2xl text-white/50">%</span></p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress bars */}
+                  {nextReq && (
+                    <div className="grid grid-cols-2 gap-3 mt-5">
+                      <div className="bg-white/10 rounded-xl p-3.5">
+                        <div className="flex justify-between text-xs text-white/70 mb-2">
+                          <span className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> Projetos ativos</span>
+                          <span className="font-bold text-white">{agenciaTotalProjects} / {nextReq}</span>
+                        </div>
+                        <div className="h-2.5 bg-white/20 rounded-full overflow-hidden">
+                          <div className="h-full bg-white rounded-full transition-all duration-700" style={{ width: `${progressProjects}%` }} />
+                        </div>
+                        <p className="text-[10px] text-white/50 mt-1">faltam {Math.max(0, nextReq - agenciaTotalProjects)} projetos</p>
+                      </div>
+                      {nextMrrReq && (
+                        <div className="bg-white/10 rounded-xl p-3.5">
+                          <div className="flex justify-between text-xs text-white/70 mb-2">
+                            <span className="flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> MRR mensal</span>
+                            <span className="font-bold text-white">{fmtBRL(agenciaMrr)} / {fmtBRL(nextMrrReq)}</span>
+                          </div>
+                          <div className="h-2.5 bg-white/20 rounded-full overflow-hidden">
+                            <div className="h-full bg-white rounded-full transition-all duration-700" style={{ width: `${progressMrr}%` }} />
+                          </div>
+                          <p className="text-[10px] text-white/50 mt-1">faltam {fmtBRL(Math.max(0, nextMrrReq - agenciaMrr))}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {agenciaLevel === "diamond" && (
+                    <div className="mt-4 bg-white/10 rounded-xl px-5 py-3 text-sm text-white flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" /> Você está no nível máximo — parabéns!
+                    </div>
+                  )}
+                </DialogHeader>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto bg-card p-6 space-y-8">
+
+                {/* All levels — large cards */}
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Trophy className="h-3.5 w-3.5" /> Todos os níveis
+                  </p>
+                  <div className="grid grid-cols-5 gap-4">
+                    {levels.map(([key, cfg], i) => {
+                      const isUnlocked = i <= currentLevelIndex;
+                      const isCurrent = i === currentLevelIndex;
+                      const reqToReach = i === 0 ? null : {
+                        projects: levels[i - 1][1].nextProjectsRequired,
+                        mrr: levels[i - 1][1].nextMrrRequired,
+                      };
+                      const progressToThis = reqToReach?.projects
+                        ? Math.min(100, Math.round((agenciaTotalProjects / reqToReach.projects) * 100))
+                        : 0;
+
+                      return (
+                        <Tooltip key={key} delayDuration={100}>
+                          <TooltipTrigger asChild>
+                            <div className={cn(
+                              "relative rounded-2xl border-2 p-5 flex flex-col items-center gap-3 cursor-default transition-all duration-300 group",
+                              isCurrent && `border-transparent bg-gradient-to-br ${cfg.gradient} text-white shadow-xl`,
+                              isUnlocked && !isCurrent && "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 hover:shadow-md",
+                              !isUnlocked && "border-border/40 bg-muted/20 hover:bg-muted/40 hover:border-border/70 hover:shadow-md",
+                            )}>
+                              {!isUnlocked && (
+                                <div className="absolute top-3 right-3 opacity-40 group-hover:opacity-70 transition-opacity">
+                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                                </div>
+                              )}
+                              {isUnlocked && !isCurrent && (
+                                <div className="absolute top-3 right-3">
+                                  <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                </div>
+                              )}
+
+                              <span className={cn("text-4xl transition-all duration-300", !isUnlocked && "grayscale group-hover:grayscale-0")}>{cfg.emoji}</span>
+                              <span className={cn(
+                                "text-sm font-bold text-center",
+                                isCurrent ? "text-white" : "text-foreground",
+                              )}>{cfg.label}</span>
+
+                              {!isUnlocked && reqToReach?.projects && (
+                                <div className="w-full space-y-1">
+                                  <div className="h-1.5 bg-border/60 rounded-full overflow-hidden">
+                                    <div className={`h-full ${cfg.bar} rounded-full transition-all duration-700`} style={{ width: `${progressToThis}%` }} />
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground text-center">{progressToThis}% completo</p>
+                                </div>
+                              )}
+                              {isCurrent && (
+                                <span className="text-[10px] font-bold bg-white/25 text-white rounded-full px-2.5 py-0.5">Atual</span>
+                              )}
+                              {isUnlocked && !isCurrent && (
+                                <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-full px-2.5 py-0.5">✓ Desbloqueado</span>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={8} className="w-56 p-4 space-y-3">
+                            <div className="flex items-center gap-2.5 pb-2 border-b">
+                              <span className="text-2xl">{cfg.emoji}</span>
+                              <div>
+                                <p className="font-bold text-sm">{cfg.label}</p>
+                                {isUnlocked
+                                  ? <p className="text-[10px] text-emerald-600 font-semibold">✓ Desbloqueado</p>
+                                  : <p className="text-[10px] text-muted-foreground">Bloqueado</p>}
+                              </div>
+                            </div>
+                            {!isUnlocked && reqToReach && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-semibold text-foreground">Para desbloquear:</p>
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                  <div className="flex justify-between">
+                                    <span>📁 Projetos</span>
+                                    <span className="font-semibold text-foreground">{agenciaTotalProjects}/{reqToReach.projects}</span>
+                                  </div>
+                                  {reqToReach.mrr && (
+                                    <div className="flex justify-between">
+                                      <span>📈 MRR</span>
+                                      <span className="font-semibold text-foreground">{fmtBRL(agenciaMrr)}/{fmtBRL(reqToReach.mrr)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground/60 italic">Atinja qualquer um dos dois</p>
+                              </div>
+                            )}
+                            <div className="space-y-1 border-t pt-2">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Benefícios</p>
+                              {cfg.benefits.map((b, bi) => (
+                                <p key={bi} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                                  <span className="text-emerald-500 mt-0.5 shrink-0">•</span>{b}
+                                </p>
+                              ))}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Benefits grid */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-emerald-500" />
+                      Benefícios ativos — {lvl.label}
+                    </h3>
+                    <div className="space-y-2.5">
+                      {lvl.benefits.map((b, i) => (
+                        <div key={i} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          {b}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {lvl.nextBenefits.length > 0 ? (
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-5 space-y-3">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-amber-500" />
+                        O que você ganha em {lvl.nextLabel}
+                      </h3>
+                      <div className="space-y-2.5">
+                        {lvl.nextBenefits.map((b, i) => (
+                          <div key={i} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                            <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                            {b}
+                          </div>
+                        ))}
+                      </div>
+                      {nextReq && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1">
+                          Faltam {Math.max(0, nextReq - agenciaTotalProjects)} projetos ou {nextMrrReq ? fmtBRL(Math.max(0, nextMrrReq - agenciaMrr)) + " em MRR" : ""}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/20 p-5 flex flex-col items-center justify-center gap-3">
+                      <span className="text-5xl">🏆</span>
+                      <p className="text-sm font-bold text-violet-700 dark:text-violet-300 text-center">Elite Allka</p>
+                      <p className="text-xs text-muted-foreground text-center">Você é parte da elite da plataforma. Obrigado por crescer com a Allka!</p>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-center text-muted-foreground/50">
+                  Passe o mouse sobre os níveis para ver requisitos e benefícios detalhados
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </TooltipProvider>
   );
 }

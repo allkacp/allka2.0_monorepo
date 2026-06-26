@@ -362,4 +362,122 @@ router.delete("/:id/reports/:reportId", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/agencies/me/alerts — real actionable alerts for the logged-in agency
+router.get("/me/alerts", verifyToken, async (req, res, next) => {
+  try {
+    const { id: userId } = req.user!;
+    const now = new Date();
+
+    // Find the agency and its name (used as FK in Project.agency)
+    const agency = await prisma.agency.findFirst({
+      where: { user_id: userId },
+      select: { id: true, name: true },
+    });
+    if (!agency) {
+      res.json({ data: [] });
+      return;
+    }
+
+    // Find all project IDs belonging to this agency
+    const agencyProjects = await prisma.project.findMany({
+      where: { agency: agency.name },
+      select: { id: true, title: true, end_date: true, status: true },
+    });
+    const projectIds = agencyProjects.map((p) => p.id);
+
+    if (projectIds.length === 0) {
+      res.json({ data: [] });
+      return;
+    }
+
+    // Query task counts by status
+    const [agencyApproval, clientApproval, expired, overdue] = await Promise.all([
+      prisma.taskExecution.findMany({
+        where: { project_id: { in: projectIds }, status: "agency_approval" },
+        select: { id: true, title: true, project_id: true },
+        take: 10,
+      }),
+      prisma.taskExecution.findMany({
+        where: { project_id: { in: projectIds }, status: "client_approval" },
+        select: { id: true, title: true, project_id: true },
+        take: 10,
+      }),
+      prisma.taskExecution.findMany({
+        where: { project_id: { in: projectIds }, status: "expired" },
+        select: { id: true, title: true, project_id: true },
+        take: 10,
+      }),
+      agencyProjects.filter(
+        (p) => p.end_date && p.end_date < now && !["completed", "cancelled", "paid"].includes(p.status)
+      ),
+    ]);
+
+    const alerts: Array<{
+      id: string;
+      type: string;
+      severity: "error" | "warning" | "info";
+      title: string;
+      description: string;
+      count: number;
+      link: string;
+    }> = [];
+
+    if (agencyApproval.length > 0) {
+      alerts.push({
+        id: "agency_approval",
+        type: "agency_approval",
+        severity: "error",
+        title: "Aprovação pendente (agência)",
+        description: agencyApproval.length === 1
+          ? `"${agencyApproval[0].title}" aguarda sua aprovação`
+          : `${agencyApproval.length} tarefas aguardam aprovação da agência`,
+        count: agencyApproval.length,
+        link: "/agency/tarefas",
+      });
+    }
+
+    if (clientApproval.length > 0) {
+      alerts.push({
+        id: "client_approval",
+        type: "client_approval",
+        severity: "warning",
+        title: "Aguardando aprovação do cliente",
+        description: clientApproval.length === 1
+          ? `"${clientApproval[0].title}" aguarda aprovação do cliente`
+          : `${clientApproval.length} tarefas aguardam aprovação do cliente`,
+        count: clientApproval.length,
+        link: "/agency/tarefas",
+      });
+    }
+
+    if (expired.length > 0) {
+      alerts.push({
+        id: "expired_tasks",
+        type: "expired",
+        severity: "error",
+        title: "Tarefas expiradas",
+        description: `${expired.length} tarefa${expired.length > 1 ? "s" : ""} com prazo expirado sem resolução`,
+        count: expired.length,
+        link: "/agency/tarefas",
+      });
+    }
+
+    if (overdue.length > 0) {
+      alerts.push({
+        id: "overdue_projects",
+        type: "overdue",
+        severity: "warning",
+        title: "Projetos em atraso",
+        description: `${overdue.length} projeto${overdue.length > 1 ? "s" : ""} com prazo ultrapassado`,
+        count: overdue.length,
+        link: "/agency/projetos",
+      });
+    }
+
+    res.json({ data: alerts, total: alerts.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

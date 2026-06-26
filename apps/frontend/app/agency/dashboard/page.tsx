@@ -317,6 +317,12 @@ const generateDashboardData = (from?: Date, to?: Date): any => {
       contractedGrowth: 12,
       cancelled: sc(14),
       cancelledChange: -2,
+      expired: scSoft(6),
+      expiredChange: 3,
+      awaitingAgencyApproval: scSoft(9),
+      awaitingAgencyApprovalChange: -1,
+      awaitingClientApproval: scSoft(14),
+      awaitingClientApprovalChange: 5,
       slaCompliance: 91.4,
     },
     activeUsers: {
@@ -480,6 +486,8 @@ const generateDashboardData = (from?: Date, to?: Date): any => {
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { apiClient } from "@/lib/api-client";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 // Redeclaration of Alert interface removed due to linting issue.
@@ -742,6 +750,11 @@ type ManualDataEntry = {
   tasks_total?: number;
   tasks_completed?: number;
   tasks_inProgress?: number;
+  tasks_contracted?: number;
+  tasks_cancelled?: number;
+  tasks_agencyApproval?: number;
+  tasks_clientApproval?: number;
+  tasks_expired?: number;
   tasks_slaCompliance?: number;
   // Nômades & Parceiros
   nomads_total?: number;
@@ -799,12 +812,14 @@ const mergeManualData = (base: any, entry: ManualDataEntry): any => {
     };
   const tasksOverride: any = {};
   if (entry.tasks_total != null) tasksOverride.total = entry.tasks_total;
-  if (entry.tasks_completed != null)
-    tasksOverride.completed = entry.tasks_completed;
-  if (entry.tasks_inProgress != null)
-    tasksOverride.inProgress = entry.tasks_inProgress;
-  if (entry.tasks_slaCompliance != null)
-    tasksOverride.slaCompliance = entry.tasks_slaCompliance;
+  if (entry.tasks_completed != null) tasksOverride.completed = entry.tasks_completed;
+  if (entry.tasks_inProgress != null) tasksOverride.inProgress = entry.tasks_inProgress;
+  if (entry.tasks_contracted != null) tasksOverride.contracted = entry.tasks_contracted;
+  if (entry.tasks_cancelled != null) tasksOverride.cancelled = entry.tasks_cancelled;
+  if (entry.tasks_agencyApproval != null) tasksOverride.awaitingAgencyApproval = entry.tasks_agencyApproval;
+  if (entry.tasks_clientApproval != null) tasksOverride.awaitingClientApproval = entry.tasks_clientApproval;
+  if (entry.tasks_expired != null) tasksOverride.expired = entry.tasks_expired;
+  if (entry.tasks_slaCompliance != null) tasksOverride.slaCompliance = entry.tasks_slaCompliance;
   if (Object.keys(tasksOverride).length)
     m.tasks = { ...m.tasks, ...tasksOverride };
   if (entry.nomads_total != null)
@@ -899,6 +914,24 @@ export default function AdminDashboardPage() {
   const [widgetPeriods, setWidgetPeriods] = useState<WidgetPeriodOverride[]>(
     [],
   );
+
+  type AgencyAlert = {
+    id: string
+    type: string
+    severity: "error" | "warning" | "info"
+    title: string
+    description: string
+    count: number
+    link: string
+  }
+  const [agencyAlerts, setAgencyAlerts] = useState<AgencyAlert[]>([])
+  useEffect(() => {
+    apiClient.getAgencyAlerts().then((res: any) => setAgencyAlerts(res?.data ?? [])).catch(() => {})
+    const interval = setInterval(() => {
+      apiClient.getAgencyAlerts().then((res: any) => setAgencyAlerts(res?.data ?? [])).catch(() => {})
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const savedPeriod = localStorage.getItem("dashboard_global_period");
@@ -1478,7 +1511,7 @@ export default function AdminDashboardPage() {
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
     const widgetPeriod = widgetPeriods.find((wp) => wp.widgetId === widgetId);
     const isCustom = widgetPeriod?.mode === "custom";
-    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : "Global";
+    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : globalPeriod.label;
 
     return (
       <DropdownMenu>
@@ -1487,141 +1520,78 @@ export default function AdminDashboardPage() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 px-2 text-xs gap-1.5",
-              isCustom && "bg-primary/10 text-primary hover:bg-primary/20",
+              "h-7 px-2 text-xs gap-1.5 transition-all",
+              isCustom
+                ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/50"
+                : "bg-primary/8 text-primary border border-primary/20 hover:bg-primary/15",
             )}
           >
-            <Calendar className="h-3 w-3" />
-            <span className="hidden sm:inline">Período:</span>
-            {displayLabel}
-            {isCustom && (
-              <span className="text-[10px] opacity-70">(custom)</span>
+            {isCustom ? (
+              <Calendar className="h-3 w-3" />
+            ) : (
+              <Globe className="h-3 w-3" />
             )}
+            <span className="hidden sm:inline font-medium">
+              {isCustom ? "Período:" : "Global ·"}
+            </span>
+            {displayLabel}
             <ChevronDown className="h-3 w-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="text-xs">
-            Período do Widget
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "global")}
-            className="text-xs"
-          >
-            <Check
+        <DropdownMenuContent align="end" className="w-64">
+          <div className="px-3 py-2 border-b bg-muted/30">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Período deste widget
+            </p>
+          </div>
+          {/* Global option */}
+          <div className="p-1">
+            <DropdownMenuItem
+              onClick={() => setWidgetCustomPeriod(widgetId, "global")}
               className={cn(
-                "mr-2 h-3 w-3",
-                !isCustom ? "opacity-100" : "opacity-0",
+                "text-xs rounded-md flex-col items-start gap-0.5 py-2",
+                !isCustom && "bg-primary/8 text-primary",
               )}
-            />
-            Usar período global
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "today")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Hoje"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Hoje
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "7days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 7 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 7 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "30days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 30 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 30 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "thisMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Este mês"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Este mês
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "lastMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Mês passado"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Mês passado
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "90days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 90 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 90 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "365days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Último ano"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Último ano
-          </DropdownMenuItem>
+            >
+              <div className="flex items-center gap-2 w-full">
+                <Globe className={cn("h-3.5 w-3.5 shrink-0", !isCustom ? "text-primary" : "text-muted-foreground")} />
+                <span className="font-medium">Seguir período global</span>
+                {!isCustom && <Check className="h-3 w-3 ml-auto text-primary" />}
+              </div>
+              <span className="text-[10px] text-muted-foreground pl-5 font-normal">
+                Usa automaticamente: {globalPeriod.label}
+              </span>
+            </DropdownMenuItem>
+          </div>
+          <div className="px-3 py-1.5 border-t border-b bg-muted/20">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Ou escolha um período específico
+            </p>
+          </div>
+          <div className="p-1">
+            {([
+              { key: "today", label: "Hoje" },
+              { key: "7days", label: "Últimos 7 dias" },
+              { key: "30days", label: "Últimos 30 dias" },
+              { key: "thisMonth", label: "Este mês" },
+              { key: "lastMonth", label: "Mês passado" },
+              { key: "90days", label: "Últimos 90 dias" },
+              { key: "365days", label: "Último ano" },
+            ] as const).map(({ key, label }) => {
+              const isActive = widgetPeriod?.mode === "custom" && widgetPeriod?.customPeriod?.label === label;
+              return (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => setWidgetCustomPeriod(widgetId, key)}
+                  className={cn("text-xs rounded-md", isActive && "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400")}
+                >
+                  <Check className={cn("mr-2 h-3 w-3", isActive ? "opacity-100" : "opacity-0")} />
+                  {label}
+                  {isActive && <span className="ml-auto text-[10px] opacity-60">ativo</span>}
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -2347,9 +2317,9 @@ export default function AdminDashboardPage() {
         trend: revenue.totalGrowth >= 0 ? ("up" as const) : ("down" as const),
       },
       estimatedMargin: {
-        value: `R$ ${(cmv.comissoes.value / 1000).toFixed(1)}k`,
-        change: cmv.comissoes.percent,
-        trend: "up" as const,
+        value: `R$ ${((revenue.total - cmv.totalCosts) / 1000).toFixed(1)}k`,
+        change: Math.abs(cmv.variation.cmvPercent),
+        trend: cmv.variation.cmvPercent <= 0 ? ("up" as const) : ("down" as const),
       },
       pendingPayments: {
         value: `R$ ${(pendingPaymentsValue / 1000).toFixed(1)}k`,
@@ -2387,43 +2357,105 @@ export default function AdminDashboardPage() {
             id: 1,
             type: "project_created",
             title: "Projeto criado",
-            description: 'Novo projeto "Campanha Digital Q3" foi iniciado',
-            time: "10 minutos atrás",
+            description: '"Campanha Digital Q3" iniciado',
+            time: "10 min",
+            user: "Ana Beatriz",
+            userInitials: "AB",
             icon: Briefcase,
             color: "text-info",
             bgColor: "bg-info/10",
+            dotColor: "bg-info",
           },
           {
             id: 2,
             type: "briefing_sent",
             title: "Briefing enviado",
-            description:
-              'Briefing do projeto "Social Media Pack" enviado ao nômade',
-            time: "35 minutos atrás",
+            description: '"Social Media Pack" → Rafael Lima',
+            time: "35 min",
+            user: "Carlos M.",
+            userInitials: "CM",
             icon: FileText,
             color: "text-primary",
             bgColor: "bg-primary/10",
+            dotColor: "bg-primary",
           },
           {
             id: 3,
             type: "task_approved",
             title: "Tarefa aprovada",
-            description:
-              'Entrega de copy aprovada no projeto "Blog Corporativo"',
-            time: "2 horas atrás",
+            description: 'Copy aprovada — "Blog Corporativo"',
+            time: "2h",
+            user: "Ana Beatriz",
+            userInitials: "AB",
             icon: CheckCircle2,
             color: "text-success",
             bgColor: "bg-success/10",
+            dotColor: "bg-success",
           },
           {
             id: 4,
             type: "payment_made",
-            title: "Pagamento realizado",
-            description: "Pagamento de R$ 1.200 enviado ao nômade Rafael Lima",
-            time: "5 horas atrás",
+            title: "Pagamento enviado",
+            description: "R$ 1.200 → Rafael Lima",
+            time: "5h",
+            user: "Sistema",
+            userInitials: "SY",
             icon: DollarSign,
             color: "text-chart-4",
             bgColor: "bg-chart-4/10",
+            dotColor: "bg-chart-4",
+          },
+          {
+            id: 5,
+            type: "task_returned",
+            title: "Tarefa devolvida",
+            description: 'Revisão solicitada — "Logo Redesign"',
+            time: "7h",
+            user: "Mariana S.",
+            userInitials: "MS",
+            icon: FileText,
+            color: "text-warning",
+            bgColor: "bg-warning/10",
+            dotColor: "bg-warning",
+          },
+          {
+            id: 6,
+            type: "nomad_approved",
+            title: "Nômade aprovado",
+            description: "João Ferreira ativado na plataforma",
+            time: "1d",
+            user: "Admin",
+            userInitials: "AD",
+            icon: Users,
+            color: "text-violet-600",
+            bgColor: "bg-violet-100",
+            dotColor: "bg-violet-500",
+          },
+          {
+            id: 7,
+            type: "proposal_sent",
+            title: "Proposta enviada",
+            description: '"E-commerce Plus" → TechCorp',
+            time: "1d",
+            user: "Carlos M.",
+            userInitials: "CM",
+            icon: Briefcase,
+            color: "text-emerald-600",
+            bgColor: "bg-emerald-100",
+            dotColor: "bg-emerald-500",
+          },
+          {
+            id: 8,
+            type: "client_approval",
+            title: "Aprov. cliente pendente",
+            description: '"Landing Page" aguarda resposta',
+            time: "2d",
+            user: "Sistema",
+            userInitials: "SY",
+            icon: CheckCircle2,
+            color: "text-amber-600",
+            bgColor: "bg-amber-100",
+            dotColor: "bg-amber-500",
           },
         ];
 
@@ -3071,13 +3103,36 @@ export default function AdminDashboardPage() {
     approvalsPending: "Aprovações pendentes",
     proposalsAwaitingClient: "Propostas aguardando cliente",
     contractedValueMonth: "Valor contratado no mês",
-    estimatedMargin: "Comissão / margem estimada",
+    estimatedMargin: "Margem bruta estimada",
     pendingPayments: "Pagamentos pendentes",
+  };
+
+  const metricDescriptions: Record<MetricType, string> = {
+    activeProjects: "Projetos ativos no período, excluindo concluídos e cancelados. Clique para ver todos os projetos.",
+    tasksToLaunch: "Tarefas contratadas que aguardam lançamento pelos nômades. Clique para gerenciar as tarefas.",
+    tasksInProgress: "Tarefas em execução ativa pelos nômades agora. Clique para acompanhar o andamento.",
+    approvalsPending: "Projetos com entrega em atraso aguardando aprovação. Clique para ver os projetos pendentes.",
+    proposalsAwaitingClient: "Propostas enviadas aguardando resposta do cliente. Clique para ver os projetos em negociação.",
+    contractedValueMonth: "Valor total dos projetos iniciados no período. Clique para ver o resumo financeiro.",
+    estimatedMargin: "Margem bruta estimada = Receita − CMV. Indica a rentabilidade no período. Clique para ver relatórios.",
+    pendingPayments: "Total ainda a receber das faturas em aberto. Clique para ver o financeiro detalhado.",
+  };
+
+  const metricLinks: Record<MetricType, string> = {
+    activeProjects: "/agency/projetos",
+    tasksToLaunch: "/agency/tarefas",
+    tasksInProgress: "/agency/tarefas",
+    approvalsPending: "/agency/projetos",
+    proposalsAwaitingClient: "/agency/projetos",
+    contractedValueMonth: "/agency/financeiro",
+    estimatedMargin: "/agency/relatorios",
+    pendingPayments: "/agency/financeiro",
   };
 
   const renderMetricCard = (
     metricType: MetricType,
     metricsSource?: typeof metrics,
+    compact?: boolean,
   ) => {
     const metricsData = metricsSource ?? metrics;
     const metric = metricsData[metricType];
@@ -3191,7 +3246,64 @@ export default function AdminDashboardPage() {
       ),
     };
 
+    if (compact) {
+      const navTo = metricLinks[metricType];
+      const trendUp = metric.trend === "up";
+      const inner = (
+        <div className="flex items-center gap-2 px-3 py-2 h-full">
+          <div className={`bg-gradient-to-br ${cardBgGradient} rounded-lg p-1.5 shrink-0`}>
+            <Icon className="h-3.5 w-3.5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide leading-none truncate">{metricName}</p>
+            <p className="text-sm font-bold text-foreground leading-tight mt-0.5 truncate">
+              {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+            </p>
+          </div>
+          <div className={cn("flex items-center gap-0.5 text-[10px] font-semibold shrink-0", trendUp ? "text-emerald-600" : "text-rose-500")}>
+            {trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {trendUp ? "+" : "-"}{Math.abs(metric.change)}%
+          </div>
+        </div>
+      );
+      return (
+        <div
+          key={metricType}
+          className="rounded-xl border border-border/60 bg-card hover:bg-muted/30 transition-colors overflow-hidden"
+        >
+          {navTo ? <Link to={navTo} className="block h-full">{inner}</Link> : inner}
+        </div>
+      );
+    }
+
     if (metricType === "contractedValueMonth") {
+      const cardInner = (
+        <div className="flex flex-col h-full px-4 pt-3 pb-3">
+          <div className="flex items-start justify-between mb-1.5">
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+              {metricName}
+            </p>
+            <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+              <Icon className="h-4 w-4 text-white" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+            {metric.value}
+          </p>
+          <div className="flex items-center gap-2 pr-7">
+            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+              {metric.trend === "up" ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
+              {metric.trend === "up" ? "+" : "-"}
+              {Math.abs(metric.change)}%
+            </div>
+            <span className="text-[10px] text-white/60">vs. anterior</span>
+          </div>
+        </div>
+      );
       return (
         <div
           key={metricType}
@@ -3206,7 +3318,7 @@ export default function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           className={cn(
-            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+            `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -3229,36 +3341,60 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           )}
-          <div className="px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-                {metricName}
-              </p>
-              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-                <Icon className="h-4 w-4 text-white" />
-              </div>
+          {!isEditing ? (
+            <Link to={metricLinks[metricType]} className="block h-full">
+              {cardInner}
+            </Link>
+          ) : cardInner}
+          {!isEditing && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                    <Info className="h-3 w-3 text-white" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                  {metricDescriptions[metricType]}
+                </TooltipContent>
+              </Tooltip>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {metric.value}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                {metric.trend === "up" ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}%
-              </div>
-              <span className="text-[10px] text-white/60">vs. anterior</span>
-            </div>
-          </div>
+          )}
         </div>
       );
     }
 
-    // Adicionar botão de ver gráfico
+    const genericCardInner = (
+      <div className="flex flex-col h-full px-4 pt-3 pb-3">
+        <div className="flex items-start justify-between mb-1.5">
+          <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+            {metricName}
+          </p>
+          <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+        </div>
+        <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+          {typeof metric.value === "number"
+            ? metric.value.toLocaleString()
+            : metric.value}
+        </p>
+        <div className="flex items-center gap-2 pr-7">
+          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+            {metric.trend === "up" ? (
+              <TrendingUp className="h-3 w-3" />
+            ) : (
+              <TrendingDown className="h-3 w-3" />
+            )}
+            {metric.trend === "up" ? "+" : "-"}
+            {Math.abs(metric.change)}
+            {metricType === "avgRating" ? " pts" : "%"}
+          </div>
+          <span className="text-[10px] text-white/60">vs. anterior</span>
+        </div>
+      </div>
+    );
+
     return (
       <div
         key={metricType}
@@ -3266,12 +3402,14 @@ export default function AdminDashboardPage() {
         onDragStart={(e: React.DragEvent) =>
           handleMetricDragStart(e, metricType)
         }
-        onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
+        onDragOver={(e: React.DragEvent) =>
+          handleMetricDragOver(e, metricType)
+        }
         onDragLeave={handleMetricDragLeave}
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
         className={cn(
-          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+          `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -3294,36 +3432,25 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         )}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-              {metricName}
-            </p>
-            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-              <Icon className="h-4 w-4 text-white" />
-            </div>
+        {!isEditing ? (
+          <Link to={metricLinks[metricType]} className="block h-full">
+            {genericCardInner}
+          </Link>
+        ) : genericCardInner}
+        {!isEditing && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <Info className="h-3 w-3 text-white" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                {metricDescriptions[metricType]}
+              </TooltipContent>
+            </Tooltip>
           </div>
-          <p className="text-xl font-bold text-white leading-none mb-1.5">
-            {typeof metric.value === "number"
-              ? metric.value.toLocaleString()
-              : metric.value}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metric.trend === "up" ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
-              )}
-              {metric.trend === "up" ? "+" : "-"}
-              {Math.abs(metric.change)}
-              {metricType === "avgRating" ? " pts" : "%"}
-            </div>
-            <span className="text-[10px] text-white/60">
-              {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
-            </span>
-          </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -6380,69 +6507,60 @@ export default function AdminDashboardPage() {
         case "alerts":
           return (
             <div className="space-y-4">
-              {/* Priority summary */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 text-center">
-                  <AlertCircle className="h-6 w-6 text-destructive mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-destructive">
-                    {systemAlerts.filter((a) => a.priority === "high").length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Alta prioridade
-                  </p>
+              {agencyAlerts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <CheckCircle2 className="h-8 w-8 text-success mb-2" />
+                  <p className="text-sm font-medium text-muted-foreground">Nenhum alerta no momento</p>
                 </div>
-                <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
-                  <AlertTriangle className="h-6 w-6 text-warning mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-warning">
-                    {systemAlerts.filter((a) => a.priority === "medium").length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Média prioridade
-                  </p>
-                </div>
-              </div>
-              {/* Full alert list */}
-              <div className="space-y-2.5">
-                {systemAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`flex items-start gap-3 p-3 rounded-xl border ${getAlertColor(alert.type)}`}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {getAlertIcon(alert.type)}
+              ) : (
+                <>
+                  {/* Severity summary */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 text-center">
+                      <AlertCircle className="h-6 w-6 text-destructive mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-destructive">
+                        {agencyAlerts.filter((a) => a.severity === "error").length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Crítico</p>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="text-sm font-semibold">{alert.title}</p>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs shrink-0 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
+                    <div className="p-4 rounded-xl border border-warning/20 bg-warning/5 text-center">
+                      <AlertTriangle className="h-6 w-6 text-warning mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-warning">
+                        {agencyAlerts.filter((a) => a.severity === "warning").length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Atenção</p>
+                    </div>
+                  </div>
+                  {/* Full alert list */}
+                  <div className="space-y-2.5">
+                    {agencyAlerts.map((alert) => (
+                      <Link key={alert.id} to={alert.link}>
+                        <div
+                          className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${getAlertColor(alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info")}`}
                         >
-                          {alert.priority === "high" ? "Alta" : "Média"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs opacity-80">{alert.description}</p>
-                    </div>
+                          <div className="mt-0.5 shrink-0">
+                            {getAlertIcon(alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info")}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-sm font-semibold">{alert.title}</p>
+                              {alert.count > 1 && (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs shrink-0 ${alert.severity === "error" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
+                                >
+                                  {alert.count}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs opacity-80">{alert.description}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {/* System log */}
-              <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
-                <p className="text-sm font-semibold">Registro do sistema</p>
-                {systemAlertsData.map((a, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span className="text-muted-foreground truncate">
-                      {a.message}
-                    </span>
-                    <span className="text-muted-foreground shrink-0 ml-2">
-                      {a.time}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           );
 
@@ -6831,14 +6949,14 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2">
                   {(() => {
                     const widgetMetrics = getMetricsForPeriod();
                     return metricCards
                       .filter((m) => m.visible)
                       .sort((a, b) => a.order - b.order)
                       .map((metricCard) =>
-                        renderMetricCard(metricCard.id, widgetMetrics),
+                        renderMetricCard(metricCard.id, widgetMetrics, true),
                       );
                   })()}
                 </div>
@@ -7013,15 +7131,15 @@ export default function AdminDashboardPage() {
                       {getWidgetTitle(widget.type)}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas e notificações do sistema
+                      Pendências e alertas reais das tarefas
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    {systemAlertsData.length} itens
+                  <Badge
+                    variant="outline"
+                    className={cn("text-xs shrink-0", agencyAlerts.length > 0 && "bg-destructive/10 border-destructive/30 text-destructive")}
+                  >
+                    {agencyAlerts.length} {agencyAlerts.length === 1 ? "item" : "itens"}
                   </Badge>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -7029,38 +7147,47 @@ export default function AdminDashboardPage() {
                 />
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-2">
-                {systemAlertsData.map((alert, index) => (
-                  <div
-                    key={index}
-                    className={cn(
-                      "flex items-center gap-2.5 p-2.5 rounded-xl border transition-all hover:shadow-sm",
-                      alert.type === "success" &&
-                        "bg-success/5 border-success/20",
-                      alert.type === "warning" &&
-                        "bg-warning/5 border-warning/20",
-                      alert.type === "info" && "bg-info/5 border-info/20",
-                    )}
-                  >
-                    <div className="shrink-0">{getAlertIcon(alert.type)}</div>
-                    <p className="text-xs flex-1 line-clamp-1">
-                      {alert.message}
-                    </p>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] shrink-0 h-4 px-1.5",
-                        alert.type === "success" &&
-                          "bg-success/10 text-success-foreground border-success/30",
-                        alert.type === "warning" &&
-                          "bg-warning/10 text-warning-foreground border-warning/30",
-                        alert.type === "info" &&
-                          "bg-info/10 text-info-foreground border-info/30",
-                      )}
-                    >
-                      {alert.time}
-                    </Badge>
+                {agencyAlerts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">Nenhum alerta no momento</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">Todas as tarefas estão em dia</p>
                   </div>
-                ))}
+                ) : (
+                  agencyAlerts.map((alert) => (
+                    <Link key={alert.id} to={alert.link}>
+                      <div
+                        className={cn(
+                          "flex items-center gap-2.5 p-2.5 rounded-xl border transition-all hover:shadow-sm cursor-pointer",
+                          alert.severity === "error" && "bg-destructive/5 border-destructive/20 hover:bg-destructive/10",
+                          alert.severity === "warning" && "bg-warning/5 border-warning/20 hover:bg-warning/10",
+                          alert.severity === "info" && "bg-info/5 border-info/20 hover:bg-info/10",
+                        )}
+                      >
+                        <div className="shrink-0">{getAlertIcon(alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info")}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold line-clamp-1">{alert.title}</p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{alert.description}</p>
+                        </div>
+                        {alert.count > 1 && (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] shrink-0 h-5 px-1.5 font-bold",
+                              alert.severity === "error" && "bg-destructive/10 text-destructive border-destructive/30",
+                              alert.severity === "warning" && "bg-warning/10 text-warning-foreground border-warning/30",
+                              alert.severity === "info" && "bg-info/10 text-info-foreground border-info/30",
+                            )}
+                          >
+                            {alert.count}
+                          </Badge>
+                        )}
+                      </div>
+                    </Link>
+                  ))
+                )}
               </CardContent>
             </Card>
           </div>
@@ -7454,31 +7581,43 @@ export default function AdminDashboardPage() {
                   widgetTitle={getWidgetTitle(widget.type)}
                 />
               </CardHeader>
-              <CardContent className="space-y-3">
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-start space-x-3 p-3 rounded-xl hover:bg-muted/50 transition-all duration-200 hover:shadow-md border border-transparent hover:border-border/50"
-                  >
+              <CardContent className="px-4 pb-4 pt-0">
+                <div className="divide-y divide-border/50">
+                  {recentActivities.map((activity) => (
                     <div
-                      className={`p-2 rounded-xl ${activity.bgColor} shadow-sm`}
+                      key={activity.id}
+                      className="flex items-center gap-2.5 py-2 hover:bg-muted/40 -mx-1 px-1 rounded-lg transition-colors"
                     >
-                      <activity.icon className={`h-4 w-4 ${activity.color}`} />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium leading-none">
-                        {activity.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {activity.description}
-                      </p>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{activity.time}</span>
+                      {/* colored dot + icon */}
+                      <div className={`flex items-center justify-center w-6 h-6 rounded-full ${activity.bgColor} shrink-0`}>
+                        <activity.icon className={`h-3 w-3 ${activity.color}`} />
                       </div>
+                      {/* main content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xs font-semibold text-foreground leading-none truncate">
+                            {activity.title}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground/70 leading-none shrink-0">
+                            {activity.time}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 truncate">
+                          {activity.description}
+                        </p>
+                      </div>
+                      {/* user avatar */}
+                      {"user" in activity && activity.user && (
+                        <div
+                          className="flex items-center justify-center w-5 h-5 rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground shrink-0"
+                          title={activity.user as string}
+                        >
+                          {(activity.userInitials as string) ?? (activity.user as string).slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -7521,12 +7660,12 @@ export default function AdminDashboardPage() {
                       Alertas da sua agency
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    {systemAlerts.length} alertas
+                  <Badge
+                    variant="outline"
+                    className={cn("text-xs shrink-0", agencyAlerts.length > 0 && "bg-destructive/10 border-destructive/30 text-destructive")}
+                  >
+                    {agencyAlerts.length} {agencyAlerts.length === 1 ? "alerta" : "alertas"}
                   </Badge>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
                 </div>
                 <WidgetExportButton
                   widgetId={widget.type}
@@ -7534,66 +7673,67 @@ export default function AdminDashboardPage() {
                 />
               </CardHeader>
               <CardContent className="space-y-2.5 px-4 pb-4">
-                {/* Priority summary 2-per-row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl border border-destructive/20 bg-destructive/5">
-                    <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">
-                        Alta prioridade
-                      </p>
-                      <p className="text-sm font-bold text-destructive">
-                        {
-                          systemAlerts.filter((a) => a.priority === "high")
-                            .length
-                        }
-                      </p>
+                {agencyAlerts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-success" />
                     </div>
+                    <p className="text-sm font-medium text-muted-foreground">Nenhum alerta no momento</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">Todas as tarefas estão em dia</p>
                   </div>
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl border border-warning/20 bg-warning/5">
-                    <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">
-                        Média prioridade
-                      </p>
-                      <p className="text-sm font-bold text-warning">
-                        {
-                          systemAlerts.filter((a) => a.priority === "medium")
-                            .length
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Compact alert list */}
-                <div className="space-y-2">
-                  {systemAlerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${getAlertColor(alert.type)} transition-all duration-200 hover:shadow-sm`}
-                    >
-                      <div className="mt-0.5 shrink-0">
-                        {getAlertIcon(alert.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <p className="text-xs font-semibold truncate">
-                            {alert.title}
+                ) : (
+                  <>
+                    {/* Severity summary */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl border border-destructive/20 bg-destructive/5">
+                        <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Crítico</p>
+                          <p className="text-sm font-bold text-destructive">
+                            {agencyAlerts.filter((a) => a.severity === "error").length}
                           </p>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] shrink-0 h-4 px-1.5 ${alert.priority === "high" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
-                          >
-                            {alert.priority === "high" ? "Alta" : "Média"}
-                          </Badge>
                         </div>
-                        <p className="text-[10px] opacity-80 line-clamp-1">
-                          {alert.description}
-                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl border border-warning/20 bg-warning/5">
+                        <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Atenção</p>
+                          <p className="text-sm font-bold text-warning">
+                            {agencyAlerts.filter((a) => a.severity === "warning").length}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    {/* Alert list */}
+                    <div className="space-y-2">
+                      {agencyAlerts.map((alert) => (
+                        <Link key={alert.id} to={alert.link}>
+                          <div
+                            className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all duration-200 hover:shadow-sm cursor-pointer ${getAlertColor(alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info")}`}
+                          >
+                            <div className="mt-0.5 shrink-0">
+                              {getAlertIcon(alert.severity === "error" ? "error" : alert.severity === "warning" ? "warning" : "info")}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-0.5">
+                                <p className="text-xs font-semibold truncate">{alert.title}</p>
+                                {alert.count > 1 && (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] shrink-0 h-4 px-1.5 ${alert.severity === "error" ? "bg-destructive/10 text-destructive border-destructive/40" : "bg-warning/10 text-warning-foreground border-warning/40"}`}
+                                  >
+                                    {alert.count}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-[10px] opacity-80 line-clamp-1">{alert.description}</p>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -10495,7 +10635,7 @@ export default function AdminDashboardPage() {
                     Tarefas (Resumo)
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Executadas, em execução e contratadas
+                    Executadas, em andamento, aprovações e expiradas
                   </p>
                 </div>
               </div>
@@ -10526,6 +10666,24 @@ export default function AdminDashboardPage() {
                   value: wTasksW.contracted,
                   change: wTasksW.contractedGrowth,
                   color: "text-warning",
+                },
+                {
+                  label: "Aprov. Agência",
+                  value: wTasksW.awaitingAgencyApproval ?? 0,
+                  change: wTasksW.awaitingAgencyApprovalChange ?? 0,
+                  color: "text-violet-600",
+                },
+                {
+                  label: "Aprov. Cliente",
+                  value: wTasksW.awaitingClientApproval ?? 0,
+                  change: wTasksW.awaitingClientApprovalChange ?? 0,
+                  color: "text-blue-600",
+                },
+                {
+                  label: "Expiradas",
+                  value: wTasksW.expired ?? 0,
+                  change: wTasksW.expiredChange ?? 0,
+                  color: "text-rose-600",
                 },
                 {
                   label: "Canceladas",
@@ -11159,36 +11317,63 @@ export default function AdminDashboardPage() {
         )}
       >
         {/* Dashboard Header */}
-        <div
-          className={cn(
-            "flex items-center gap-3",
-            isHeaderCompact ? "py-2" : "pt-0 pb-5",
-          )}
-        >
-          <div className="overflow-hidden shrink-0">
-            <h1
-              className={cn(
-                "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
-                isHeaderCompact ? "text-base" : "text-3xl",
-              )}
-            >
-              Dashboard da Agency
-            </h1>
-            <p
-              className={cn(
-                "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
-                isHeaderCompact
-                  ? "max-h-0 opacity-0 mt-0 mb-0"
-                  : "max-h-[24px] opacity-100 mt-0.5",
-              )}
-            >
-              Resumo dos seus projetos, tarefas, aprovações e contratações.
-            </p>
+        <div className={cn("flex flex-col", isHeaderCompact ? "py-2 gap-1.5" : "pt-0 pb-4 gap-3")}>
+          {/* Row 1: Title */}
+          <div className="flex items-center gap-3">
+            <div className="overflow-hidden shrink-0">
+              <h1
+                className={cn(
+                  "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                  isHeaderCompact ? "text-base" : "text-3xl",
+                )}
+              >
+                Dashboard da Agency
+              </h1>
+              <p
+                className={cn(
+                  "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
+                  isHeaderCompact
+                    ? "max-h-0 opacity-0 mt-0 mb-0"
+                    : "max-h-[24px] opacity-100 mt-0.5",
+                )}
+              >
+                Resumo dos seus projetos, tarefas, aprovações e contratações.
+              </p>
+            </div>
           </div>
 
-          {/* Period Controls */}
-          <div className="flex items-center gap-2 mx-3">
-            <div className="flex items-center gap-0.5 bg-muted/50 dark:bg-muted/30 rounded-xl p-1 border border-border/50 shadow-sm">
+          {/* Row 2: Period Controls + Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Global badge + info */}
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 border border-primary/25 rounded-full">
+                  <Globe className="h-3 w-3 text-primary" />
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider leading-none">
+                    Global
+                  </span>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors">
+                      <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                    <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      O período selecionado aqui é aplicado automaticamente a <strong>todos os widgets</strong> do dashboard.
+                    </p>
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Para ajustar o período de um widget específico, clique em <strong>"Período"</strong> no cabeçalho de cada widget.
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+            <div className="flex items-center gap-0.5 bg-background border border-border rounded-xl p-1 shadow-sm ring-1 ring-primary/10">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
               {(
                 [
@@ -11213,8 +11398,8 @@ export default function AdminDashboardPage() {
                   className={cn(
                     "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
                     globalPeriod.type === type
-                      ? "bg-background shadow-sm text-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                   )}
                 >
                   {label}
@@ -11235,8 +11420,8 @@ export default function AdminDashboardPage() {
                 className={cn(
                   "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
                   globalPeriod.label === "Últimos 90 dias"
-                    ? "bg-background shadow-sm text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                 )}
               >
                 90d
@@ -11365,14 +11550,13 @@ export default function AdminDashboardPage() {
               </Popover>
             </div>
             {/* Period label badge */}
-            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
+            <span className="text-xs font-medium text-primary/80 hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary/8 rounded-full border border-primary/15">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block animate-pulse" />
               {globalPeriod.label}
             </span>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Dashboard selector dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -11575,13 +11759,14 @@ export default function AdminDashboardPage() {
               <Edit2 className="h-3.5 w-3.5" />
               Editar
             </Button>
-          </div>
-        </div>
-      </div>
+          </div>{/* end Action Buttons */}
+          </div>{/* end Row 2 */}
+        </div>{/* end Dashboard Header */}
+      </div>{/* end Sticky Header */}
       {/* Export capture area: metrics + widgets */}
       <div id="dashboard-export-area" className="flex flex-col gap-4">
         {/* Metrics Cards */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3" style={{ gridAutoRows: '130px' }}>
           {metricCards
             .filter((m) => m.visible)
             .sort((a, b) => a.order - b.order)

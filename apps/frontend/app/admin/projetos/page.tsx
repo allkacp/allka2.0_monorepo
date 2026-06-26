@@ -137,11 +137,13 @@ import {
 interface ProjectsPageViewProps {
   scope?: "admin" | "agency";
   agencyName?: string;
+  initialSearch?: string;
 }
 
 export default function AdminProjetosPage({
   scope = "admin",
   agencyName,
+  initialSearch = "",
 }: ProjectsPageViewProps = {}) {
   const {
     projects: apiProjects,
@@ -150,7 +152,7 @@ export default function AdminProjetosPage({
     refetch: refetchProjects,
     setProjects: setApiProjects,
   } = useProjects(scope === "agency" && agencyName ? { agencyName } : {});
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterPaymentStatus, setFilterPaymentStatus] = useState("all");

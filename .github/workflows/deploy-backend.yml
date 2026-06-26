@@ -218,6 +218,16 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
              docker image prune -f"
 
+      # ── Seed dados reais (Agency / Empresa / Líder) ────────────────────────────
+      # Os seeds de agency e empresa rodam via endpoint admin-seed (compilado no
+      # backend). Após um deploy inicial ou reset de banco, chame:
+      #   POST /api/admin/seed/agency-real   (cria Agency "Lamego Teste Agency")
+      #   POST /api/admin/seed/empresa-real  (cria Company "TechStart Soluções Digitais")
+      #   POST /api/admin/seed/lider-real    (cria LiderArea, nômades e 15 ProjectTasks)
+      #   POST /api/admin/seed/company-test  (cria Company "Company Test" — mock local)
+      # Todos requerem Bearer token de admin. São idempotentes (upsert).
+      # ────────────────────────────────────────────────────────────────────────────
+
       - name: Reset users password on VPS
         if: ${{ env.RUN_RESET_USERS_PASSWORD == 'true' }}
         shell: bash

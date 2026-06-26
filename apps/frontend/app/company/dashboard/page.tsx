@@ -3184,8 +3184,29 @@ export default function AdminDashboardPage() {
       approvalsPending: "/company/tarefas",
       contractedValueMonth: "/company/faturas",
       pendingPayments: "/company/faturas",
+      revenue: "/company/faturas",
+      estimatedMargin: "/company/relatorios",
+      proposalsAwaitingClient: "/company/projetos",
     };
+
+    const metricDescriptions: Partial<Record<MetricType, string>> = {
+      activeProjects: "Projetos ativos no período. Clique para ver todos os projetos.",
+      tasksToLaunch: "Tarefas contratadas aguardando lançamento. Clique para gerenciar as tarefas.",
+      tasksInProgress: "Tarefas em execução ativa. Clique para acompanhar o andamento.",
+      approvalsPending: "Projetos com entrega aguardando aprovação. Clique para ver pendências.",
+      proposalsAwaitingClient: "Propostas enviadas aguardando resposta do cliente. Clique para ver negociações.",
+      contractedValueMonth: "Valor total contratado no período. Clique para ver o financeiro.",
+      estimatedMargin: "Margem bruta estimada = Receita − CMV. Indica a rentabilidade. Clique para ver relatórios.",
+      pendingPayments: "Total a receber das faturas em aberto. Clique para ver o financeiro detalhado.",
+      revenue: "Receita total gerada no período. Clique para ver o resumo financeiro.",
+      avgRating: "Avaliação média dos projetos e entregas no período.",
+      totalUsers: "Total de usuários ativos na plataforma.",
+      activeUsers: "Usuários que acessaram a plataforma no período.",
+      companies: "Empresas ativas na plataforma.",
+    };
+
     const navDest = metricNav[metricType];
+    const cardDescription = metricDescriptions[metricType];
 
     const cardProps = {
       draggable: isEditing,
@@ -3208,151 +3229,144 @@ export default function AdminDashboardPage() {
     };
 
     if (metricType === "contractedValueMonth") {
+      const cardInner = (
+        <div className="flex flex-col h-full px-4 pt-3 pb-3">
+          <div className="flex items-start justify-between mb-1.5">
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+              {metricName}
+            </p>
+            <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+              <Icon className="h-4 w-4 text-white" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+            {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+          </p>
+          <div className="flex items-center gap-2 pr-7">
+            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+              {metric.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
+            </div>
+            <span className="text-[10px] text-white/60">vs. anterior</span>
+          </div>
+        </div>
+      );
       return (
         <div
           key={metricType}
           draggable={isEditing}
-          onDragStart={(e: React.DragEvent) =>
-            handleMetricDragStart(e, metricType)
-          }
-          onDragOver={(e: React.DragEvent) =>
-            handleMetricDragOver(e, metricType)
-          }
+          onDragStart={(e: React.DragEvent) => handleMetricDragStart(e, metricType)}
+          onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
           onDragLeave={handleMetricDragLeave}
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
-          onClick={() => { if (!isEditing && navDest) navigate(navDest); }}
-          aria-label={navDest ? `Ver ${metricName}` : undefined}
-          role={navDest && !isEditing ? "button" : undefined}
           className={cn(
-            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+            `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
-            !isEditing && navDest && "cursor-pointer",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
-            !isDragging &&
-              !isDragOver &&
-              !isEditing &&
-              "hover:shadow-xl hover:scale-[1.02]",
+            !isDragging && !isDragOver && !isEditing && "hover:shadow-xl hover:scale-[1.02]",
           )}
         >
           {isEditing && (
             <div className="absolute top-1.5 right-1.5 z-10">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMetricVisibility(metricType);
-                }}
-                className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
-              >
+              <button onClick={(e) => { e.stopPropagation(); toggleMetricVisibility(metricType); }}
+                className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors">
                 <EyeOff className="h-3 w-3 text-white" />
               </button>
             </div>
           )}
-          <div className="px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-                {metricName}
-              </p>
-              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-                <Icon className="h-4 w-4 text-white" />
-              </div>
+          {!isEditing && navDest ? (
+            <Link to={navDest} className="block h-full">{cardInner}</Link>
+          ) : cardInner}
+          {!isEditing && cardDescription && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                      <Info className="h-3 w-3 text-white" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                    {cardDescription}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {typeof metric.value === "number"
-                ? metric.value.toLocaleString()
-                : metric.value}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                {metric.trend === "up" ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}
-                {metricType === "avgRating" ? " pts" : "%"}
-              </div>
-              <span className="text-[10px] text-white/60">
-                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       );
     }
 
-    // Adicionar botão de ver gráfico
+    const genericCardInner = (
+      <div className="flex flex-col h-full px-4 pt-3 pb-3">
+        <div className="flex items-start justify-between mb-1.5">
+          <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+            {metricName}
+          </p>
+          <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+        </div>
+        <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+          {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+        </p>
+        <div className="flex items-center gap-2 pr-7">
+          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+            {metric.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
+          </div>
+          <span className="text-[10px] text-white/60">
+            {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+          </span>
+        </div>
+      </div>
+    );
     return (
       <div
         key={metricType}
         draggable={isEditing}
-        onDragStart={(e: React.DragEvent) =>
-          handleMetricDragStart(e, metricType)
-        }
+        onDragStart={(e: React.DragEvent) => handleMetricDragStart(e, metricType)}
         onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
         onDragLeave={handleMetricDragLeave}
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
-        onClick={() => { if (!isEditing && navDest) navigate(navDest); }}
-        aria-label={navDest ? `Ver ${metricName}` : undefined}
-        role={navDest && !isEditing ? "button" : undefined}
         className={cn(
-          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+          `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
-          !isEditing && navDest && "cursor-pointer",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
-          !isDragging &&
-            !isDragOver &&
-            !isEditing &&
-            "hover:shadow-xl hover:scale-[1.02]",
+          !isDragging && !isDragOver && !isEditing && "hover:shadow-xl hover:scale-[1.02]",
         )}
       >
         {isEditing && (
           <div className="absolute top-1.5 right-1.5 z-10">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMetricVisibility(metricType);
-              }}
-              className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
-            >
+            <button onClick={(e) => { e.stopPropagation(); toggleMetricVisibility(metricType); }}
+              className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors">
               <EyeOff className="h-3 w-3 text-white" />
             </button>
           </div>
         )}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-              {metricName}
-            </p>
-            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-              <Icon className="h-4 w-4 text-white" />
-            </div>
+        {!isEditing && navDest ? (
+          <Link to={navDest} className="block h-full">{genericCardInner}</Link>
+        ) : genericCardInner}
+        {!isEditing && cardDescription && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                    <Info className="h-3 w-3 text-white" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                  {cardDescription}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <p className="text-xl font-bold text-white leading-none mb-1.5">
-            {typeof metric.value === "number"
-              ? metric.value.toLocaleString()
-              : metric.value}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metric.trend === "up" ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
-              )}
-              {metric.trend === "up" ? "+" : "-"}
-              {Math.abs(metric.change)}
-              %
-            </div>
-            <span className="text-[10px] text-white/60">
-              vs. anterior
-            </span>
-          </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -11031,35 +11045,33 @@ export default function AdminDashboardPage() {
         )}
       >
         {/* Dashboard Header */}
-        <div
-          className={cn(
-            "flex items-center gap-3",
-            isHeaderCompact ? "py-2" : "pt-0 pb-5",
-          )}
-        >
-          <div className="overflow-hidden shrink-0">
-            <h1
-              className={cn(
-                "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
-                isHeaderCompact ? "text-base" : "text-3xl",
-              )}
-            >
-              Dashboard
-            </h1>
-            <p
-              className={cn(
-                "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
-                isHeaderCompact
-                  ? "max-h-0 opacity-0 mt-0 mb-0"
-                  : "max-h-[24px] opacity-100 mt-0.5",
-              )}
-            >
-              Resumo dos seus projetos, tarefas, aprovações e contratações.
-            </p>
+        <div className={cn("flex flex-col", isHeaderCompact ? "py-2 gap-1.5" : "pt-0 pb-4 gap-3")}>
+          {/* Row 1: Title + Actions */}
+          <div className="flex items-center gap-3">
+            <div className="overflow-hidden shrink-0">
+              <h1
+                className={cn(
+                  "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                  isHeaderCompact ? "text-base" : "text-3xl",
+                )}
+              >
+                Dashboard
+              </h1>
+              <p
+                className={cn(
+                  "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
+                  isHeaderCompact
+                    ? "max-h-0 opacity-0 mt-0 mb-0"
+                    : "max-h-[24px] opacity-100 mt-0.5",
+                )}
+              >
+                Resumo dos seus projetos, tarefas, aprovações e contratações.
+              </p>
+            </div>
           </div>
 
-          {/* Period Controls */}
-          <div className="flex items-center gap-2 mx-3">
+          {/* Row 2: Period Controls + Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Global badge + info */}
             <TooltipProvider delayDuration={200}>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -11270,12 +11282,12 @@ export default function AdminDashboardPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block animate-pulse" />
               {globalPeriod.label}
             </span>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Dashboard selector dropdown */}
-            <DropdownMenu>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              {/* Dashboard selector dropdown */}
+              <DropdownMenu>
+
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
@@ -11476,13 +11488,14 @@ export default function AdminDashboardPage() {
               <Edit2 className="h-3.5 w-3.5" />
               Editar
             </Button>
-          </div>
-        </div>
-      </div>
+            </div>{/* end Action Buttons */}
+          </div>{/* end Row 2 */}
+        </div>{/* end Dashboard Header */}
+      </div>{/* end sticky header */}
       {/* Export capture area: metrics + widgets */}
       <div id="dashboard-export-area" className="flex flex-col gap-4">
         {/* Metrics Cards */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3" style={{ gridAutoRows: '130px' }}>
           {metricCards
             .filter((m) => m.visible)
             .sort((a, b) => a.order - b.order)

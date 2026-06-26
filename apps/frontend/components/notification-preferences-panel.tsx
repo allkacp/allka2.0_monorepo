@@ -1,30 +1,18 @@
 // @ts-nocheck
 import { useState } from "react"
 import {
-  Bell,
-  Mail,
-  MessageSquare,
-  Smartphone,
-  CheckCircle2,
-  AlertCircle,
-  Users,
-  UserPlus,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  FolderOpen,
-  CheckCheck,
+  Bell, Mail, MessageSquare, Smartphone, CheckCircle2, AlertCircle,
+  UserPlus, Settings, FolderOpen, CheckCheck, Zap, Info, Plus,
+  Users, Play, Pause, Trash2, Edit,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
 import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 
+/* ─── Types ─────────────────────────────────────────────────────────────── */
 interface NotifItem {
   id: string
   type: "task" | "system" | "user" | "project" | "approval"
@@ -35,78 +23,22 @@ interface NotifItem {
 }
 
 const MOCK_NOTIFICATIONS: NotifItem[] = [
-  {
-    id: "ni-1",
-    type: "task",
-    title: "Tarefa aprovada",
-    body: "A tarefa 'Campanha Meta – Junho' foi aprovada com sucesso.",
-    date: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-    read: false,
-  },
-  {
-    id: "ni-2",
-    type: "task",
-    title: "Nova tarefa para qualificar",
-    body: "Você tem uma tarefa aguardando qualificação: 'SEO On-page – Cliente X'.",
-    date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    read: false,
-  },
-  {
-    id: "ni-3",
-    type: "system",
-    title: "Atualização da plataforma",
-    body: "A plataforma foi atualizada para a versão 2.1.0 com melhorias de performance.",
-    date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: "ni-4",
-    type: "task",
-    title: "Tarefa devolvida",
-    body: "'Google Ads – E-commerce' foi devolvida com observações do líder.",
-    date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: "ni-5",
-    type: "task",
-    title: "Entrega recebida",
-    body: "Carla Souza enviou a entrega da tarefa 'Relatório Performance – Maio'.",
-    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: "ni-6",
-    type: "user",
-    title: "Novo nômade cadastrado",
-    body: "João Silva se cadastrou como nômade na área de Performance.",
-    date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: "ni-7",
-    type: "project",
-    title: "Novo projeto criado",
-    body: "O projeto 'Marketing Digital Q3 – Allka' foi associado à sua área.",
-    date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: "ni-8",
-    type: "approval",
-    title: "Aprovação pendente",
-    body: "'Campanha Instagram – Verão' aguarda sua aprovação há 2 dias.",
-    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
+  { id: "ni-1", type: "task",     title: "Tarefa aprovada",          body: "A tarefa 'Campanha Meta – Junho' foi aprovada com sucesso.",                         date: new Date(Date.now() - 25 * 60 * 1000).toISOString(),          read: false },
+  { id: "ni-2", type: "task",     title: "Nova tarefa para qualificar", body: "Você tem uma tarefa aguardando qualificação: 'SEO On-page – Cliente X'.",         date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),      read: false },
+  { id: "ni-3", type: "system",   title: "Atualização da plataforma", body: "A plataforma foi atualizada para a versão 2.1.0 com melhorias de performance.",    date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),      read: true  },
+  { id: "ni-4", type: "task",     title: "Tarefa devolvida",          body: "'Google Ads – E-commerce' foi devolvida com observações do líder.",                  date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),     read: true  },
+  { id: "ni-5", type: "task",     title: "Entrega recebida",          body: "Carla Souza enviou a entrega da tarefa 'Relatório Performance – Maio'.",             date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
+  { id: "ni-6", type: "user",     title: "Novo nômade cadastrado",    body: "João Silva se cadastrou como nômade na área de Performance.",                       date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
+  { id: "ni-7", type: "project",  title: "Novo projeto criado",       body: "O projeto 'Marketing Digital Q3 – Allka' foi associado à sua área.",                date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
+  { id: "ni-8", type: "approval", title: "Aprovação pendente",        body: "'Campanha Instagram – Verão' aguarda sua aprovação há 2 dias.",                     date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
 ]
 
-const NOTIF_ICON_CFG: Record<NotifItem["type"], { Icon: any; bg: string; text: string }> = {
-  task: { Icon: CheckCircle2, bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-600 dark:text-green-400" },
-  system: { Icon: AlertCircle, bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
-  user: { Icon: UserPlus, bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
-  project: { Icon: FolderOpen, bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
-  approval: { Icon: CheckCircle2, bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
+const NOTIF_ICON_CFG = {
+  task:     { Icon: CheckCircle2, bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-600" },
+  system:   { Icon: AlertCircle,  bg: "bg-blue-100 dark:bg-blue-900/30",       text: "text-blue-600" },
+  user:     { Icon: UserPlus,     bg: "bg-purple-100 dark:bg-purple-900/30",   text: "text-purple-600" },
+  project:  { Icon: FolderOpen,   bg: "bg-amber-100 dark:bg-amber-900/30",     text: "text-amber-600" },
+  approval: { Icon: CheckCircle2, bg: "bg-orange-100 dark:bg-orange-900/30",   text: "text-orange-600" },
 }
 
 function timeAgo(dateStr: string): string {
@@ -121,39 +53,44 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("pt-BR")
 }
 
-interface NotificationPreference {
-  id: string
-  label: string
-  description: string
-  enabled: boolean
-  category: "system" | "users" | "projects" | "approvals"
-  recipients: {
-    userIds: string[]
-    groupIds: string[]
-    sendToAll: boolean
-  }
-}
+const PREF_GROUPS = [
+  { key: "tarefas",   label: "Tarefas",    color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500",
+    items: [
+      { id: "task-assigned", label: "Tarefa atribuída",       desc: "Quando uma tarefa é atribuída a mim" },
+      { id: "task-approved", label: "Tarefa aprovada",         desc: "Quando minha entrega é aprovada" },
+      { id: "task-returned", label: "Tarefa devolvida",        desc: "Entrega devolvida com observações" },
+      { id: "task-due",      label: "Prazo se aproximando",    desc: "24h antes do vencimento" },
+    ]},
+  { key: "projetos",  label: "Projetos",   color: "bg-violet-50 text-violet-700",  dot: "bg-violet-500",
+    items: [
+      { id: "proj-new",    label: "Novo projeto",              desc: "Projeto criado para minha agência" },
+      { id: "proj-update", label: "Atualização de projeto",    desc: "Mudança de status no projeto" },
+    ]},
+  { key: "financeiro",label: "Financeiro", color: "bg-blue-50 text-blue-700",      dot: "bg-blue-500",
+    items: [
+      { id: "inv-due",  label: "Fatura próxima do vencimento", desc: "3 dias antes do vencimento" },
+      { id: "inv-paid", label: "Pagamento confirmado",          desc: "Quando pagamento é registrado" },
+    ]},
+  { key: "sistema",   label: "Sistema",    color: "bg-slate-100 text-slate-600",   dot: "bg-slate-400",
+    items: [
+      { id: "sys-update", label: "Atualizações da plataforma", desc: "Novidades e manutenções" },
+      { id: "sys-level",  label: "Evolução de nível",          desc: "Quando sua agência sobe de nível" },
+    ]},
+]
 
-interface UserGroup {
-  id: string
-  name: string
-  description: string
-  userCount: number
-  color: string
-}
+const MOCK_RULES = [
+  { id: "r1", name: "Tarefa atrasada → WhatsApp", desc: "Quando uma tarefa passa do prazo, avisa via WhatsApp", enabled: true,  trigger: "Prazo expirado",    channels: ["WhatsApp"] },
+  { id: "r2", name: "Novo projeto → E-mail",      desc: "Quando um novo projeto é aberto, envia e-mail",       enabled: true,  trigger: "Projeto criado",    channels: ["E-mail"] },
+  { id: "r3", name: "Aprovação pendente → Push",  desc: "Lembrete diário de aprovações pendentes",             enabled: false, trigger: "Diário (9h)",      channels: ["Push"] },
+]
 
-interface DistributionRule {
-  id: string
-  name: string
-  description: string
-  notificationTypes: string[]
-  recipients: {
-    userIds: string[]
-    groupIds: string[]
-  }
-  enabled: boolean
-}
+const MOCK_GROUPS = [
+  { id: "g1", name: "Líderes de Projeto",  desc: "Responsáveis por aprovar entregas e gerir projetos", members: 3, color: "bg-violet-100 text-violet-700" },
+  { id: "g2", name: "Equipe Financeira",   desc: "Responsáveis por faturas e cobranças",                members: 2, color: "bg-blue-100 text-blue-700" },
+  { id: "g3", name: "Toda a Agência",      desc: "Todos os membros ativos da agência",                  members: 8, color: "bg-emerald-100 text-emerald-700" },
+]
 
+/* ─── Component ──────────────────────────────────────────────────────────── */
 interface NotificationPreferencesPanelProps {
   open?: boolean
   onClose?: () => void
@@ -162,1113 +99,378 @@ interface NotificationPreferencesPanelProps {
 }
 
 export function NotificationPreferencesPanel({
-  open = false,
-  onClose,
-  embedded = false,
-  initialTab = "inbox",
+  open = false, onClose, embedded = false, initialTab = "inbox",
 }: NotificationPreferencesPanelProps) {
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [expandedPreference, setExpandedPreference] = useState<string | null>(null)
   const [readSet, setReadSet] = useState<Set<string>>(
-    new Set(MOCK_NOTIFICATIONS.filter((n) => n.read).map((n) => n.id)),
+    new Set(MOCK_NOTIFICATIONS.filter(n => n.read).map(n => n.id))
   )
-  const unreadCount = MOCK_NOTIFICATIONS.filter((n) => !readSet.has(n.id)).length
+  const unreadCount = MOCK_NOTIFICATIONS.filter(n => !readSet.has(n.id)).length
 
-  const [userGroups] = useState<UserGroup[]>([
-    {
-      id: "admins",
-      name: "Administradores",
-      description: "Usuários com acesso administrativo",
-      userCount: 5,
-      color: "bg-red-100 text-red-700",
-    },
-    {
-      id: "managers",
-      name: "Gestores",
-      description: "Gestores de projetos e equipes",
-      userCount: 12,
-      color: "bg-blue-100 text-blue-700",
-    },
-    {
-      id: "finance",
-      name: "Financeiro",
-      description: "Equipe financeira",
-      userCount: 8,
-      color: "bg-green-100 text-green-700",
-    },
-    {
-      id: "developers",
-      name: "Desenvolvedores",
-      description: "Equipe de desenvolvimento",
-      userCount: 25,
-      color: "bg-purple-100 text-purple-700",
-    },
-    {
-      id: "clients",
-      name: "Clientes",
-      description: "Clientes da plataforma",
-      userCount: 150,
-      color: "bg-orange-100 text-orange-700",
-    },
-  ])
+  const [channels, setChannels] = useState({ email: true, push: true, inApp: true, whatsapp: true })
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(
+    Object.fromEntries(PREF_GROUPS.flatMap(g => g.items.map(i => [i.id, true])))
+  )
+  const [rules, setRules] = useState(MOCK_RULES)
 
-  const [distributionRules, setDistributionRules] = useState<DistributionRule[]>([
-    {
-      id: "rule-1",
-      name: "Alertas Críticos para Admins",
-      description: "Todos os alertas de sistema vão para administradores",
-      notificationTypes: ["system-alerts", "system-security"],
-      recipients: { userIds: [], groupIds: ["admins"] },
-      enabled: true,
-    },
-    {
-      id: "rule-2",
-      name: "Aprovações para Gestores",
-      description: "Notificações de aprovação para gestores e financeiro",
-      notificationTypes: ["approval-pending", "approval-approved", "approval-rejected"],
-      recipients: { userIds: [], groupIds: ["managers", "finance"] },
-      enabled: true,
-    },
-  ])
-
-  const [preferences, setPreferences] = useState<NotificationPreference[]>([
-    // System notifications
-    {
-      id: "system-updates",
-      label: "Atualizações do Sistema",
-      description: "Notificações sobre atualizações e manutenções",
-      enabled: true,
-      category: "system",
-      recipients: { userIds: [], groupIds: [], sendToAll: true },
-    },
-    {
-      id: "system-alerts",
-      label: "Alertas de Sistema",
-      description: "Alertas críticos e avisos importantes",
-      enabled: true,
-      category: "system",
-      recipients: { userIds: [], groupIds: ["admins"], sendToAll: false },
-    },
-    {
-      id: "system-security",
-      label: "Segurança",
-      description: "Notificações sobre segurança e acessos",
-      enabled: true,
-      category: "system",
-      recipients: { userIds: [], groupIds: ["admins"], sendToAll: false },
-    },
-
-    // User notifications
-    {
-      id: "user-new",
-      label: "Novos Usuários",
-      description: "Quando um novo usuário se cadastra",
-      enabled: true,
-      category: "users",
-      recipients: { userIds: [], groupIds: ["admins", "managers"], sendToAll: false },
-    },
-    {
-      id: "user-login",
-      label: "Logins de Usuários",
-      description: "Quando usuários fazem login no sistema",
-      enabled: false,
-      category: "users",
-      recipients: { userIds: [], groupIds: [], sendToAll: false },
-    },
-    {
-      id: "user-changes",
-      label: "Alterações de Perfil",
-      description: "Quando usuários atualizam seus perfis",
-      enabled: true,
-      category: "users",
-      recipients: { userIds: [], groupIds: ["admins"], sendToAll: false },
-    },
-
-    // Project notifications
-    {
-      id: "project-new",
-      label: "Novos Projetos",
-      description: "Quando novos projetos são criados",
-      enabled: true,
-      category: "projects",
-      recipients: { userIds: [], groupIds: ["managers", "developers"], sendToAll: false },
-    },
-    {
-      id: "project-updates",
-      label: "Atualizações de Projetos",
-      description: "Quando projetos são atualizados",
-      enabled: true,
-      category: "projects",
-      recipients: { userIds: [], groupIds: [], sendToAll: true },
-    },
-    {
-      id: "project-completed",
-      label: "Projetos Concluídos",
-      description: "Quando projetos são finalizados",
-      enabled: true,
-      category: "projects",
-      recipients: { userIds: [], groupIds: ["managers", "clients"], sendToAll: false },
-    },
-
-    // Approval notifications
-    {
-      id: "approval-pending",
-      label: "Aprovações Pendentes",
-      description: "Quando há aprovações aguardando",
-      enabled: true,
-      category: "approvals",
-      recipients: { userIds: [], groupIds: ["managers", "finance"], sendToAll: false },
-    },
-    {
-      id: "approval-approved",
-      label: "Aprovações Concedidas",
-      description: "Quando aprovações são concedidas",
-      enabled: true,
-      category: "approvals",
-      recipients: { userIds: [], groupIds: ["managers", "finance"], sendToAll: false },
-    },
-    {
-      id: "approval-rejected",
-      label: "Aprovações Rejeitadas",
-      description: "Quando aprovações são rejeitadas",
-      enabled: true,
-      category: "approvals",
-      recipients: { userIds: [], groupIds: ["managers", "finance"], sendToAll: false },
-    },
-  ])
-
-  const [channels, setChannels] = useState({
-    email: true,
-    push: true,
-    inApp: true,
-    sms: false,
-  })
-
-  const handleTogglePreference = (id: string) => {
-    setPreferences((prev) => prev.map((pref) => (pref.id === id ? { ...pref, enabled: !pref.enabled } : pref)))
-  }
-
-  const handleToggleChannel = (channel: keyof typeof channels) => {
-    setChannels((prev) => ({ ...prev, [channel]: !prev[channel] }))
-  }
-
-  const handleToggleSendToAll = (prefId: string) => {
-    setPreferences((prev) =>
-      prev.map((pref) =>
-        pref.id === prefId
-          ? { ...pref, recipients: { ...pref.recipients, sendToAll: !pref.recipients.sendToAll } }
-          : pref,
-      ),
-    )
-  }
-
-  const handleToggleGroup = (prefId: string, groupId: string) => {
-    setPreferences((prev) =>
-      prev.map((pref) => {
-        if (pref.id === prefId) {
-          const groupIds = pref.recipients.groupIds.includes(groupId)
-            ? pref.recipients.groupIds.filter((id) => id !== groupId)
-            : [...pref.recipients.groupIds, groupId]
-          return { ...pref, recipients: { ...pref.recipients, groupIds } }
-        }
-        return pref
-      }),
-    )
-  }
-
-  const handleToggleRule = (ruleId: string) => {
-    setDistributionRules((prev) =>
-      prev.map((rule) => (rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule)),
-    )
-  }
+  const totalActive = Object.values(prefs).filter(Boolean).length
+  const totalPrefs  = Object.values(prefs).length
 
   const handleSave = async () => {
     setSaving(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise(r => setTimeout(r, 800))
     setSaving(false)
     setShowSuccess(true)
-    setTimeout(() => {
-      setShowSuccess(false)
-      if (!embedded) {
-        onClose()
-      }
-    }, 1500)
+    setTimeout(() => { setShowSuccess(false); if (!embedded) onClose?.() }, 1500)
   }
 
-  const getCategoryLabel = (category: string) => {
-    const labels = {
-      system: "Sistema",
-      users: "Usuários",
-      projects: "Projetos",
-      approvals: "Aprovações",
-    }
-    return labels[category as keyof typeof labels] || category
-  }
+  if (!embedded && !open) return null
 
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      system: "bg-blue-100 text-blue-700",
-      users: "bg-green-100 text-green-700",
-      projects: "bg-purple-100 text-purple-700",
-      approvals: "bg-orange-100 text-orange-700",
-    }
-    return colors[category as keyof typeof colors] || "bg-gray-100 text-gray-700"
-  }
+  /* ── Tab bodies ──────────────────────────────────────────────────────── */
 
-  const groupedPreferences = preferences.reduce(
-    (acc, pref) => {
-      if (!acc[pref.category]) {
-        acc[pref.category] = []
-      }
-      acc[pref.category].push(pref)
-      return acc
-    },
-    {} as Record<string, NotificationPreference[]>,
-  )
+  return embedded ? (
+    /* ── Embedded mode (inside a page) ─────────────────────────────────── */
+    <div className="space-y-4">
+      {showSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span className="text-sm font-medium text-emerald-900">Preferências salvas!</span>
+        </div>
+      )}
+      <Tabs defaultValue="notifications">
+        <TabsList>
+          <TabsTrigger value="notifications"><Bell className="h-3.5 w-3.5 mr-1.5" />Notificações</TabsTrigger>
+          <TabsTrigger value="notifications"><Settings className="h-3.5 w-3.5 mr-1.5" />Preferências</TabsTrigger>
+          <TabsTrigger value="rules"><Zap className="h-3.5 w-3.5 mr-1.5" />Regras</TabsTrigger>
+          <TabsTrigger value="groups"><Users className="h-3.5 w-3.5 mr-1.5" />Grupos</TabsTrigger>
+        </TabsList>
+        <TabsContent value="notifications" className="pt-2">
+          <InboxTab notifications={MOCK_NOTIFICATIONS} readSet={readSet} setReadSet={setReadSet} />
+        </TabsContent>
+        <TabsContent value="notifications" className="pt-2">
+          <PrefsTab channels={channels} toggleChannel={k => setChannels(c => ({...c, [k]: !c[k]}))} prefs={prefs} togglePref={id => setPrefs(p => ({...p, [id]: !p[id]}))} />
+        </TabsContent>
+        <TabsContent value="rules" className="pt-2">
+          <RulesTab rules={rules} setRules={setRules} />
+        </TabsContent>
+        <TabsContent value="groups" className="pt-2">
+          <GroupsTab />
+        </TabsContent>
+      </Tabs>
+      <div className="flex items-center justify-between pt-3 border-t">
+        <p className="text-xs text-slate-400">{totalActive} de {totalPrefs} notificações ativas</p>
+        <Button onClick={handleSave} disabled={saving} className="h-8 text-xs btn-brand border-0">
+          {saving ? "Salvando..." : "Salvar"}
+        </Button>
+      </div>
+    </div>
+  ) : (
+    /* ── Modal / slide-in panel ─────────────────────────────────────────── */
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div
+        className="fixed top-0 bottom-0 right-0 z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl"
+        style={{ left: "var(--sidebar-width, 240px)" }}
+      >
+        <ModalBrandHeader
+          title="Central de Notificações"
+          subtitle="Notificações e preferências da plataforma"
+          icon={<Bell />}
+          onClose={onClose}
+        />
 
-  if (embedded) {
-    return (
-      <div className="space-y-6">
-        {/* Success Message */}
         {showSuccess && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <span className="text-sm font-medium text-green-900">Preferências salvas com sucesso!</span>
+          <div className="mx-5 mt-3 mb-1 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-3 shrink-0">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span className="text-sm font-medium text-emerald-900 dark:text-emerald-300">Preferências salvas!</span>
           </div>
         )}
 
-        <Tabs defaultValue="notifications" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="notifications" className="flex items-center space-x-2">
-              <Bell className="h-4 w-4" />
-              <span>Notificações</span>
-            </TabsTrigger>
-            <TabsTrigger value="rules" className="flex items-center space-x-2">
-              <Settings className="h-4 w-4" />
-              <span>Regras de Distribuição</span>
-            </TabsTrigger>
-            <TabsTrigger value="groups" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span>Grupos</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Notifications Tab */}
-          <TabsContent value="notifications" className="space-y-6">
-            {/* Notification Channels */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <AlertCircle className="h-5 w-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-foreground">Canais de Notificação</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Selecione os canais pelos quais os usuários receberão notificações
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <Label htmlFor="channel-email" className="font-medium cursor-pointer">
-                        E-mail
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Notificações por e-mail</p>
-                    </div>
-                  </div>
-                  <Switch
-                    id="channel-email"
-                    checked={channels.email}
-                    onCheckedChange={() => handleToggleChannel("email")}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <Bell className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <Label htmlFor="channel-push" className="font-medium cursor-pointer">
-                        Push
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Notificações push</p>
-                    </div>
-                  </div>
-                  <Switch
-                    id="channel-push"
-                    checked={channels.push}
-                    onCheckedChange={() => handleToggleChannel("push")}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <Label htmlFor="channel-inApp" className="font-medium cursor-pointer">
-                        In-App
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Notificações no app</p>
-                    </div>
-                  </div>
-                  <Switch
-                    id="channel-inApp"
-                    checked={channels.inApp}
-                    onCheckedChange={() => handleToggleChannel("inApp")}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <Smartphone className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <Label htmlFor="channel-sms" className="font-medium cursor-pointer">
-                        SMS
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Notificações por SMS</p>
-                    </div>
-                  </div>
-                  <Switch id="channel-sms" checked={channels.sms} onCheckedChange={() => handleToggleChannel("sms")} />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Notification Types with Recipients */}
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Tipos de Notificação e Destinatários</h3>
-                <p className="text-sm text-muted-foreground">Configure quem receberá cada tipo de notificação</p>
-              </div>
-
-              {Object.entries(groupedPreferences).map(([category, prefs]) => (
-                <div key={category} className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Badge className={`${getCategoryColor(category)} text-xs font-medium`}>
-                      {getCategoryLabel(category)}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {prefs.filter((p) => p.enabled).length} de {prefs.length} ativas
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {prefs.map((pref) => (
-                      <div key={pref.id} className="border rounded-lg overflow-hidden">
-                        <div className="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors">
-                          <div className="flex items-center space-x-3 flex-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => setExpandedPreference(expandedPreference === pref.id ? null : pref.id)}
-                            >
-                              {expandedPreference === pref.id ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <div className="flex-1">
-                              <Label htmlFor={pref.id} className="font-medium cursor-pointer">
-                                {pref.label}
-                              </Label>
-                              <p className="text-sm text-muted-foreground mt-1">{pref.description}</p>
-                              <div className="flex items-center space-x-2 mt-2">
-                                {pref.recipients.sendToAll ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    <Users className="h-3 w-3 mr-1" />
-                                    Todos os usuários
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs">
-                                    <Users className="h-3 w-3 mr-1" />
-                                    {pref.recipients.groupIds.length} grupo(s)
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <Switch
-                            id={pref.id}
-                            checked={pref.enabled}
-                            onCheckedChange={() => handleTogglePreference(pref.id)}
-                          />
-                        </div>
-
-                        {expandedPreference === pref.id && (
-                          <div className="border-t bg-gray-50 p-4 space-y-4">
-                            <div>
-                              <h4 className="text-sm font-semibold text-foreground mb-3">Destinatários</h4>
-
-                              {/* Send to All Toggle */}
-                              <div className="flex items-center justify-between p-3 bg-white border rounded-lg mb-3">
-                                <div className="flex items-center space-x-2">
-                                  <Users className="h-4 w-4 text-muted-foreground" />
-                                  <Label htmlFor={`${pref.id}-all`} className="font-medium cursor-pointer">
-                                    Enviar para todos os usuários
-                                  </Label>
-                                </div>
-                                <Switch
-                                  id={`${pref.id}-all`}
-                                  checked={pref.recipients.sendToAll}
-                                  onCheckedChange={() => handleToggleSendToAll(pref.id)}
-                                />
-                              </div>
-
-                              {/* Group Selection */}
-                              {!pref.recipients.sendToAll && (
-                                <div className="space-y-2">
-                                  <p className="text-xs text-muted-foreground mb-2">
-                                    Selecione os grupos que receberão esta notificação:
-                                  </p>
-                                  {userGroups.map((group) => (
-                                    <div
-                                      key={group.id}
-                                      className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-accent/40 transition-colors"
-                                    >
-                                      <div className="flex items-center space-x-3">
-                                        <Checkbox
-                                          id={`${pref.id}-${group.id}`}
-                                          checked={pref.recipients.groupIds.includes(group.id)}
-                                          onCheckedChange={() => handleToggleGroup(pref.id, group.id)}
-                                        />
-                                        <div>
-                                          <Label
-                                            htmlFor={`${pref.id}-${group.id}`}
-                                            className="font-medium cursor-pointer"
-                                          >
-                                            {group.name}
-                                          </Label>
-                                          <p className="text-xs text-muted-foreground">{group.description}</p>
-                                        </div>
-                                      </div>
-                                      <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="rules" className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Regras de Distribuição</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Crie regras para automatizar a distribuição de notificações
-                  </p>
-                </div>
-                <Button size="sm" className="btn-brand">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Nova Regra
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {distributionRules.map((rule) => (
-                  <div key={rule.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="font-semibold text-foreground">{rule.name}</h4>
-                          <Badge variant={rule.enabled ? "default" : "secondary"} className="text-xs">
-                            {rule.enabled ? "Ativa" : "Inativa"}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{rule.description}</p>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Bell className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {rule.notificationTypes.length} tipo(s) de notificação
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {rule.recipients.groupIds.length} grupo(s) de destinatários
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <Switch checked={rule.enabled} onCheckedChange={() => handleToggleRule(rule.id)} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <h4 className="font-semibold text-foreground mb-2">Crie Regras Personalizadas</h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Configure regras automáticas para distribuir notificações específicas para grupos de usuários
-                </p>
-                <Button variant="outline" size="sm">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Criar Nova Regra
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="groups" className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Grupos de Usuários</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Gerencie grupos para facilitar a distribuição de notificações
-                  </p>
-                </div>
-                <Button size="sm" className="btn-brand">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Novo Grupo
-                </Button>
-              </div>
-
-              <div className="grid gap-4">
-                {userGroups.map((group) => (
-                  <div key={group.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <Users className="h-5 w-5 text-muted-foreground" />
-                          <h4 className="font-semibold text-foreground">{group.name}</h4>
-                          <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{group.description}</p>
-                      </div>
-                      <Button variant="ghost" size="sm">
-                        Editar
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <h4 className="font-semibold text-foreground mb-2">Organize Seus Usuários</h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Crie grupos personalizados para facilitar o gerenciamento de permissões e notificações
-                </p>
-                <Button variant="outline" size="sm">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Criar Novo Grupo
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* Footer for embedded mode */}
-        <div className="flex items-center justify-between px-6 py-4 border-t shrink-0">
-          <p className="text-sm text-muted-foreground">
-            {preferences.filter((p) => p.enabled).length} de {preferences.length} notificações ativas
-          </p>
-          <Button onClick={handleSave} disabled={saving} className="btn-brand">
-            {saving ? "Salvando..." : "Salvar Preferências"}
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!open) return null
-
-  return (
-    <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300" onClick={onClose} />
-
-      {/* Panel */}
-      <div
-        className={`fixed top-0 right-0 h-[calc(100vh-32px)] w-200 bg-white dark:bg-background shadow-2xl z-50 transform transition-all duration-300 ease-out ${
-          open ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          <ModalBrandHeader
-            title="Central de Notificações"
-            subtitle="Notificações e preferências da plataforma"
-            icon={<Bell />}
-            onClose={onClose}
-          />
-
-          {/* Success Message */}
-          {showSuccess && (
-            <div className="mx-6 mt-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center space-x-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-green-900 dark:text-green-300">Preferências salvas com sucesso!</span>
-            </div>
-          )}
-
-          <Tabs defaultValue={initialTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="mx-6 mt-4 shrink-0">
-              <TabsTrigger value="inbox" className="flex items-center gap-1.5">
-                <Bell className="h-4 w-4" />
-                <span>Notificações</span>
+        {/* Tabs — flex-1 min-h-0 so it shrinks properly */}
+        <Tabs defaultValue={initialTab} className="flex-1 min-h-0 flex flex-col">
+          <div className="px-5 pt-4 pb-1 shrink-0">
+            <TabsList className="w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-auto gap-1">
+              <TabsTrigger value="inbox"
+                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
+                <Bell className="h-3.5 w-3.5" />
+                Notificações
                 {unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold">
                     {unreadCount}
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="notifications" className="flex items-center space-x-2">
-                <Settings className="h-4 w-4" />
-                <span>Configurações</span>
+              <TabsTrigger value="notifications"
+                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
+                <Settings className="h-3.5 w-3.5" />Preferências
               </TabsTrigger>
-              <TabsTrigger value="rules" className="flex items-center space-x-2">
-                <Settings className="h-4 w-4" />
-                <span>Regras</span>
+              <TabsTrigger value="rules"
+                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
+                <Zap className="h-3.5 w-3.5" />Regras
               </TabsTrigger>
-              <TabsTrigger value="groups" className="flex items-center space-x-2">
-                <Users className="h-4 w-4" />
-                <span>Grupos</span>
+              <TabsTrigger value="groups"
+                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
+                <Users className="h-3.5 w-3.5" />Grupos
               </TabsTrigger>
             </TabsList>
-
-            {/* ── Inbox Tab ─────────────────────────────────────────── */}
-            <TabsContent value="inbox" className="flex-1 overflow-y-auto mt-0">
-              {/* inbox header */}
-              <div className="flex items-center justify-between px-6 py-3 border-b bg-background sticky top-0 z-10">
-                <span className="text-sm font-semibold text-foreground">
-                  {unreadCount > 0
-                    ? `${unreadCount} não ${unreadCount === 1 ? "lida" : "lidas"}`
-                    : "Tudo lido"}
-                </span>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={() =>
-                      setReadSet(new Set(MOCK_NOTIFICATIONS.map((n) => n.id)))
-                    }
-                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    Marcar todas como lidas
-                  </button>
-                )}
-              </div>
-
-              {/* notification list */}
-              <div className="divide-y divide-border">
-                {MOCK_NOTIFICATIONS.map((n) => {
-                  const isRead = readSet.has(n.id)
-                  const cfg = NOTIF_ICON_CFG[n.type]
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() =>
-                        setReadSet((prev) => new Set([...prev, n.id]))
-                      }
-                      className={cn(
-                        "w-full flex items-start gap-3 px-6 py-4 text-left hover:bg-muted/50 transition-colors",
-                        !isRead && "bg-blue-50/60 dark:bg-blue-950/15",
-                      )}
-                    >
-                      {/* unread dot */}
-                      <div className="mt-2 shrink-0">
-                        <div
-                          className={cn(
-                            "h-2 w-2 rounded-full",
-                            !isRead ? "bg-blue-500" : "bg-transparent",
-                          )}
-                        />
-                      </div>
-                      {/* icon */}
-                      <div
-                        className={cn(
-                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
-                          cfg.bg,
-                        )}
-                      >
-                        <cfg.Icon className={cn("h-4 w-4", cfg.text)} />
-                      </div>
-                      {/* text */}
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={cn(
-                            "text-sm leading-snug",
-                            !isRead
-                              ? "font-semibold text-foreground"
-                              : "font-medium text-foreground/80",
-                          )}
-                        >
-                          {n.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
-                          {n.body}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground/60 mt-1">
-                          {timeAgo(n.date)}
-                        </p>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {MOCK_NOTIFICATIONS.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <Bell className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">Sem notificações</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Você está em dia!</p>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* ── Preferences Tab (existing content) ────────────────── */}
-            <TabsContent value="notifications" className="flex-1 overflow-y-auto p-6 space-y-6 mt-0">
-              {/* Notification Channels */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-foreground">Canais de Notificação</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Selecione os canais pelos quais os usuários receberão notificações
-                </p>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <Label htmlFor="channel-email" className="font-medium cursor-pointer">
-                          E-mail
-                        </Label>
-                        <p className="text-xs text-muted-foreground">Notificações por e-mail</p>
-                      </div>
-                    </div>
-                    <Switch
-                      id="channel-email"
-                      checked={channels.email}
-                      onCheckedChange={() => handleToggleChannel("email")}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <Bell className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <Label htmlFor="channel-push" className="font-medium cursor-pointer">
-                          Push
-                        </Label>
-                        <p className="text-xs text-muted-foreground">Notificações push</p>
-                      </div>
-                    </div>
-                    <Switch
-                      id="channel-push"
-                      checked={channels.push}
-                      onCheckedChange={() => handleToggleChannel("push")}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <Label htmlFor="channel-inApp" className="font-medium cursor-pointer">
-                          In-App
-                        </Label>
-                        <p className="text-xs text-muted-foreground">Notificações no app</p>
-                      </div>
-                    </div>
-                    <Switch
-                      id="channel-inApp"
-                      checked={channels.inApp}
-                      onCheckedChange={() => handleToggleChannel("inApp")}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/40 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <Smartphone className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <Label htmlFor="channel-sms" className="font-medium cursor-pointer">
-                          SMS
-                        </Label>
-                        <p className="text-xs text-muted-foreground">Notificações por SMS</p>
-                      </div>
-                    </div>
-                    <Switch
-                      id="channel-sms"
-                      checked={channels.sms}
-                      onCheckedChange={() => handleToggleChannel("sms")}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Notification Types with Recipients */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2">Tipos de Notificação e Destinatários</h3>
-                  <p className="text-sm text-muted-foreground">Configure quem receberá cada tipo de notificação</p>
-                </div>
-
-                {Object.entries(groupedPreferences).map(([category, prefs]) => (
-                  <div key={category} className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={`${getCategoryColor(category)} text-xs font-medium`}>
-                        {getCategoryLabel(category)}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {prefs.filter((p) => p.enabled).length} de {prefs.length} ativas
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {prefs.map((pref) => (
-                        <div key={pref.id} className="border rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors">
-                            <div className="flex items-center space-x-3 flex-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => setExpandedPreference(expandedPreference === pref.id ? null : pref.id)}
-                              >
-                                {expandedPreference === pref.id ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <div className="flex-1">
-                                <Label htmlFor={pref.id} className="font-medium cursor-pointer">
-                                  {pref.label}
-                                </Label>
-                                <p className="text-sm text-muted-foreground mt-1">{pref.description}</p>
-                                <div className="flex items-center space-x-2 mt-2">
-                                  {pref.recipients.sendToAll ? (
-                                    <Badge variant="outline" className="text-xs">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      Todos os usuários
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-xs">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      {pref.recipients.groupIds.length} grupo(s)
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <Switch
-                              id={pref.id}
-                              checked={pref.enabled}
-                              onCheckedChange={() => handleTogglePreference(pref.id)}
-                            />
-                          </div>
-
-                          {expandedPreference === pref.id && (
-                            <div className="border-t bg-muted/30 p-4 space-y-4">
-                              <div>
-                                <h4 className="text-sm font-semibold text-foreground mb-3">Destinatários</h4>
-
-                                {/* Send to All Toggle */}
-                                <div className="flex items-center justify-between p-3 bg-card border rounded-lg mb-3">
-                                  <div className="flex items-center space-x-2">
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                    <Label htmlFor={`${pref.id}-all`} className="font-medium cursor-pointer">
-                                      Enviar para todos os usuários
-                                    </Label>
-                                  </div>
-                                  <Switch
-                                    id={`${pref.id}-all`}
-                                    checked={pref.recipients.sendToAll}
-                                    onCheckedChange={() => handleToggleSendToAll(pref.id)}
-                                  />
-                                </div>
-
-                                {/* Group Selection */}
-                                {!pref.recipients.sendToAll && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-muted-foreground mb-2">
-                                      Selecione os grupos que receberão esta notificação:
-                                    </p>
-                                    {userGroups.map((group) => (
-                                      <div
-                                        key={group.id}
-                                        className="flex items-center justify-between p-3 bg-card border rounded-lg hover:bg-accent/40 transition-colors"
-                                      >
-                                        <div className="flex items-center space-x-3">
-                                          <Checkbox
-                                            id={`${pref.id}-${group.id}`}
-                                            checked={pref.recipients.groupIds.includes(group.id)}
-                                            onCheckedChange={() => handleToggleGroup(pref.id, group.id)}
-                                          />
-                                          <div>
-                                            <Label
-                                              htmlFor={`${pref.id}-${group.id}`}
-                                              className="font-medium cursor-pointer"
-                                            >
-                                              {group.name}
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground">{group.description}</p>
-                                          </div>
-                                        </div>
-                                        <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="rules" className="flex-1 overflow-y-auto p-6 space-y-6 mt-0">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">Regras de Distribuição</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Crie regras para automatizar a distribuição de notificações
-                    </p>
-                  </div>
-                  <Button size="sm" className="btn-brand">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Nova Regra
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  {distributionRules.map((rule) => (
-                    <div key={rule.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h4 className="font-semibold text-foreground">{rule.name}</h4>
-                            <Badge variant={rule.enabled ? "default" : "secondary"} className="text-xs">
-                              {rule.enabled ? "Ativa" : "Inativa"}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-3">{rule.description}</p>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <Bell className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">
-                                {rule.notificationTypes.length} tipo(s) de notificação
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">
-                                {rule.recipients.groupIds.length} grupo(s) de destinatários
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <Switch checked={rule.enabled} onCheckedChange={() => handleToggleRule(rule.id)} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <h4 className="font-semibold text-foreground mb-2">Crie Regras Personalizadas</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Configure regras automáticas para distribuir notificações específicas para grupos de usuários
-                  </p>
-                  <Button variant="outline" size="sm">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Criar Nova Regra
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="groups" className="flex-1 overflow-y-auto p-6 space-y-6 mt-0">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">Grupos de Usuários</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Gerencie grupos para facilitar a distribuição de notificações
-                    </p>
-                  </div>
-                  <Button size="sm" className="btn-brand">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Novo Grupo
-                  </Button>
-                </div>
-
-                <div className="grid gap-4">
-                  {userGroups.map((group) => (
-                    <div key={group.id} className="border rounded-lg p-4 hover:bg-accent/40 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <Users className="h-5 w-5 text-muted-foreground" />
-                            <h4 className="font-semibold text-foreground">{group.name}</h4>
-                            <Badge className={`${group.color} text-xs`}>{group.userCount} usuários</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{group.description}</p>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          Editar
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <h4 className="font-semibold text-foreground mb-2">Organize Seus Usuários</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Crie grupos personalizados para facilitar o gerenciamento de permissões e notificações
-                  </p>
-                  <Button variant="outline" size="sm">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Criar Novo Grupo
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          {/* Footer */}
-          <div className="border-t px-6 py-4 bg-background shrink-0">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={onClose} disabled={saving}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={saving} className="btn-brand">
-                {saving ? "Salvando..." : "Salvar Preferências"}
-              </Button>
-              <p className="text-sm text-muted-foreground ml-2">
-                {preferences.filter((p) => p.enabled).length} de {preferences.length} notificações ativas
-              </p>
-            </div>
           </div>
+
+          {/* Each TabsContent scrolls independently */}
+          <TabsContent value="inbox" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <InboxTab notifications={MOCK_NOTIFICATIONS} readSet={readSet} setReadSet={setReadSet} />
+          </TabsContent>
+
+          <TabsContent value="notifications" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <PrefsTab
+              channels={channels}
+              toggleChannel={k => setChannels(c => ({...c, [k]: !c[k]}))}
+              prefs={prefs}
+              togglePref={id => setPrefs(p => ({...p, [id]: !p[id]}))}
+            />
+          </TabsContent>
+
+          <TabsContent value="rules" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <RulesTab rules={rules} setRules={setRules} />
+          </TabsContent>
+
+          <TabsContent value="groups" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <GroupsTab />
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-4 shrink-0 flex items-center gap-3">
+          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving} className="h-9 text-sm btn-brand border-0">
+            {saving ? "Salvando..." : "Salvar Preferências"}
+          </Button>
+          <p className="text-xs text-slate-400 ml-auto">{totalActive} de {totalPrefs} notificações ativas</p>
         </div>
       </div>
     </>
+  )
+}
+
+/* ─── Sub-components ─────────────────────────────────────────────────────── */
+
+function InboxTab({ notifications, readSet, setReadSet }) {
+  const unreadCount = notifications.filter(n => !readSet.has(n.id)).length
+  return (
+    <div>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <span className="text-sm font-semibold text-slate-800 dark:text-white">
+          {unreadCount > 0 ? `${unreadCount} não ${unreadCount === 1 ? "lida" : "lidas"}` : "Tudo lido"}
+        </span>
+        {unreadCount > 0 && (
+          <button onClick={() => setReadSet(new Set(notifications.map(n => n.id)))}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium">
+            <CheckCheck className="h-3.5 w-3.5" />Marcar todas como lidas
+          </button>
+        )}
+      </div>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        {notifications.map(n => {
+          const isRead = readSet.has(n.id)
+          const cfg = NOTIF_ICON_CFG[n.type]
+          return (
+            <button key={n.id}
+              onClick={() => setReadSet(prev => new Set([...prev, n.id]))}
+              className={cn(
+                "w-full flex items-start gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors",
+                !isRead && "bg-blue-50/60 dark:bg-blue-950/15"
+              )}>
+              <div className="mt-2 shrink-0">
+                <div className={cn("h-2 w-2 rounded-full", !isRead ? "bg-blue-500" : "bg-transparent")} />
+              </div>
+              <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", cfg.bg)}>
+                <cfg.Icon className={cn("h-4 w-4", cfg.text)} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-sm leading-snug", !isRead ? "font-semibold text-slate-900 dark:text-white" : "font-medium text-slate-600 dark:text-slate-300")}>
+                  {n.title}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
+                <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.date)}</p>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PrefsTab({ channels, toggleChannel, prefs, togglePref }) {
+  return (
+    <div className="p-5 space-y-6">
+      {/* Channels */}
+      <div>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Canais de recebimento</p>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { key: "email",    label: "E-mail",   Icon: Mail,          color: "#3b82f6" },
+            { key: "whatsapp", label: "WhatsApp", Icon: MessageSquare, color: "#22c55e" },
+            { key: "push",     label: "Push",     Icon: Bell,          color: "#8b5cf6" },
+            { key: "inApp",    label: "In-App",   Icon: Smartphone,    color: "#f59e0b" },
+          ].map(({ key, label, Icon, color }) => (
+            <button key={key} onClick={() => toggleChannel(key)}
+              className={cn(
+                "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
+                channels[key]
+                  ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
+                  : "border-dashed border-slate-200 dark:border-slate-700 opacity-50"
+              )}>
+              <div className="p-1.5 rounded-lg shrink-0" style={{ background: color + "20" }}>
+                <Icon className="h-3.5 w-3.5" style={{ color }} />
+              </div>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex-1">{label}</span>
+              <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all shrink-0",
+                channels[key] ? "border-emerald-500 bg-emerald-500" : "border-slate-300 dark:border-slate-600"
+              )}>
+                {channels[key] && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Notification type groups */}
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipos de notificação</p>
+        {PREF_GROUPS.map(group => (
+          <div key={group.key}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.color}`}>{group.label}</span>
+              <span className="text-[10px] text-slate-400">{group.items.filter(i => prefs[i.id]).length}/{group.items.length} ativas</span>
+            </div>
+            <div className="space-y-1.5">
+              {group.items.map(item => (
+                <div key={item.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-200 transition-colors">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", group.dot)} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-none">{item.label}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                  <Switch checked={prefs[item.id]} onCheckedChange={() => togglePref(item.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+        <Info className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+        <p className="text-[10px] text-slate-400 leading-relaxed">
+          Alguns eventos essenciais (faturas, segurança) são enviados pelo sistema e não podem ser desativados.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function RulesTab({ rules, setRules }) {
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-800/40">
+        <Info className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+          <strong>Regras</strong> são automações pessoais: você define o gatilho (ex: "tarefa atrasada") e o canal de aviso (WhatsApp, e-mail). Cada regra roda automaticamente para sua agência.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{rules.length} regras criadas</p>
+        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0"><Plus className="h-3.5 w-3.5" />Nova Regra</Button>
+      </div>
+
+      <div className="space-y-2">
+        {rules.map(rule => (
+          <div key={rule.id}
+            className={cn(
+              "flex items-start gap-3 p-4 rounded-xl border transition-colors",
+              rule.enabled
+                ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                : "border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 opacity-70"
+            )}>
+            <div className={cn("p-1.5 rounded-lg shrink-0 mt-0.5", rule.enabled ? "bg-violet-100" : "bg-slate-100")}>
+              <Zap className={cn("h-3.5 w-3.5", rule.enabled ? "text-violet-600" : "text-slate-400")} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-white">{rule.name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{rule.desc}</p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">
+                  Gatilho: {rule.trigger}
+                </span>
+                {rule.channels.map(ch => (
+                  <span key={ch} className="text-[10px] bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{ch}</span>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Switch checked={rule.enabled} onCheckedChange={() => setRules(prev => prev.map(r => r.id === rule.id ? {...r, enabled: !r.enabled} : r))} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {rules.length === 0 && (
+        <div className="border border-dashed border-slate-200 rounded-xl py-10 flex flex-col items-center gap-3 text-slate-400">
+          <Zap className="h-8 w-8" />
+          <p className="text-sm">Nenhuma regra criada</p>
+          <Button size="sm" variant="outline" className="text-xs">Criar primeira regra</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GroupsTab() {
+  const [groups, setGroups] = useState(MOCK_GROUPS)
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-800/40">
+        <Info className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
+          <strong>Grupos</strong> organizam os membros da sua agência. Ao criar uma regra, você pode escolher notificar um grupo inteiro em vez de pessoas uma a uma.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{groups.length} grupos criados</p>
+        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0"><Plus className="h-3.5 w-3.5" />Novo Grupo</Button>
+      </div>
+
+      <div className="space-y-2">
+        {groups.map(group => (
+          <div key={group.id}
+            className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 transition-colors">
+            <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", group.color)}>
+              <Users className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-white">{group.name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{group.desc}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{group.members}</span>
+              <span className="text-[10px] text-slate-400">membros</span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg"><Edit className="h-3.5 w-3.5" /></Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-8 flex flex-col items-center gap-2 text-center">
+        <Users className="h-7 w-7 text-slate-300" />
+        <p className="text-xs font-medium text-slate-500">Crie grupos para facilitar o envio de notificações à sua equipe</p>
+        <Button size="sm" variant="outline" className="text-xs mt-1"><Plus className="h-3.5 w-3.5 mr-1.5" />Criar Grupo</Button>
+      </div>
+    </div>
   )
 }

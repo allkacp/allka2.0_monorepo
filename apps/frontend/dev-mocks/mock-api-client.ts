@@ -2925,6 +2925,26 @@ class MockApiClient {
     if (cycleIdx !== -1) this._squadCycles[cycleIdx].total_consumed += data.amount;
     return { success: true, balance_after: wallet.balance, credit_available: Math.max(0, squad.credit_limit + wallet.balance) };
   }
+
+  async getSystemAlerts(filters?: Record<string, any>) {
+    await delay();
+    return { data: [], total: 0 };
+  }
+
+  async markSystemAlertRead(id: string) {
+    await delay();
+    return { success: true };
+  }
+
+  async markAllSystemAlertsRead() {
+    await delay();
+    return { success: true };
+  }
+
+  async getAgencyAlerts() {
+    await delay();
+    return { data: [], total: 0 };
+  }
 }
 
 export const mockApiClient = new MockApiClient();
