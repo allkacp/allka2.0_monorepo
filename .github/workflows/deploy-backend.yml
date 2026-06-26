@@ -216,16 +216,16 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml up -d mysql && \
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
+             docker compose --env-file .env -f docker-compose.yml run --rm --no-deps backend npm run db:seed:real:prod && \
              docker image prune -f"
 
       # ── Seed dados reais (Agency / Empresa / Líder) ────────────────────────────
-      # Os seeds de agency e empresa rodam via endpoint admin-seed (compilado no
-      # backend). Após um deploy inicial ou reset de banco, chame:
-      #   POST /api/admin/seed/agency-real   (cria Agency "Lamego Teste Agency")
-      #   POST /api/admin/seed/empresa-real  (cria Company "TechStart Soluções Digitais")
-      #   POST /api/admin/seed/lider-real    (cria LiderArea, nômades e 15 ProjectTasks)
-      #   POST /api/admin/seed/company-test  (cria Company "Company Test" — mock local)
-      # Todos requerem Bearer token de admin. São idempotentes (upsert).
+      # O seed roda AUTOMÁTICO no bloco de deploy acima, logo após o migrate:
+      #   npm run db:seed:real:prod  →  node prisma/seed-real.cjs
+      # Script prod-safe (Node puro, sem tsx; só @prisma/client + bcryptjs).
+      # Idempotente (upsert) — cria/atualiza Agency, Empresa e Líder e nunca apaga.
+      # Alternativa manual via endpoints admin (requerem Bearer token de admin):
+      #   POST /api/admin/seed/agency-real | empresa-real | lider-real
       # ────────────────────────────────────────────────────────────────────────────
 
       - name: Reset users password on VPS

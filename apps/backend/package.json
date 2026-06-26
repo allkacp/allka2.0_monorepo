@@ -20,6 +20,7 @@
     "db:seed:empresa": "tsx prisma/seed-empresa-data.ts",
     "db:seed:lider": "tsx prisma/seed-lider-tasks.ts",
     "db:seed:real": "npm run db:seed:agencia && npm run db:seed:empresa && npm run db:seed:lider",
+    "db:seed:real:prod": "node prisma/seed-real.cjs",
     "db:audit:products": "tsx src/scripts/audit-products.ts",
     "db:repair:product-structure": "tsx src/scripts/repair-product-structure.ts",
     "db:seed:project-tasks": "node seed-in-progress.cjs",
