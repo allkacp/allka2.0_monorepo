@@ -63,6 +63,22 @@ Detalhes em [docs/arquitetura.md](./docs/arquitetura.md) e [docs/banco.md](./doc
 
 ## Deploy resumido
 
+> ⚠️ **IMPORTANTE — para onde subir (push) para fazer deploy**
+>
+> O deploy é feito **sempre** a partir do repositório **monorepo**:
+>
+> ```
+> https://github.com/allkacp/allka2.0_monorepo
+> ```
+>
+> Para publicar, faça push para o remote **`allka2`** (e não para `origin`):
+>
+> ```powershell
+> git push allka2 HEAD:main
+> ```
+>
+> O remote `origin` (`allka_2.0_frontend`) e o `ui` (`allka-user-interface`) **NÃO** disparam deploy — subir para eles não muda nada em produção. Confira com `git remote -v`.
+
 O deploy principal de desenvolvimento roda no Hostinger KVM com containers separados:
 
 | Serviço      | Imagem/infra                                    | Domínio                         |

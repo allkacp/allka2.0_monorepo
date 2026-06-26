@@ -6,7 +6,10 @@ import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 
-const API_BASE = "/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_URL) ||
+  "/api";
 const PAGE_SIZE = 20;
 
 function getToken() {

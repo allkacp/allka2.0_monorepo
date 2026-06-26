@@ -5,7 +5,10 @@ import { useState, useEffect } from "react";
 import { AlertTriangle, Loader2, User, Mail, Briefcase, Phone, Tag } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 
-const API_BASE = "/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_URL) ||
+  "/api";
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }

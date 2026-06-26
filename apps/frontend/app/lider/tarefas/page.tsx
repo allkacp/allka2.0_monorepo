@@ -26,7 +26,10 @@ const FILTER_CONFIG: Record<string, { status: string; title: string; description
   },
 };
 
-const API_BASE = "/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_URL) ||
+  "/api";
 const PAGE_SIZE = 20;
 
 function getToken() {

@@ -32,7 +32,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
-const API_BASE = "/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_URL) ||
+  "/api";
 const PAGE_SIZE = 20;
 
 function getToken() {
