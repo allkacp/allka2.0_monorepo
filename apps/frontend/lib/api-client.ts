@@ -325,6 +325,19 @@ class ApiClient {
     return this.get("/tasks", { my: "true", limit: "10" });
   }
 
+  // ─── Líder (área-scoped) ──────────────────────────────────────────────────
+  async getLiderTaskCounts() {
+    return this.get("/lider/tasks/counts");
+  }
+
+  async getLiderTasks(filters?: Record<string, any>) {
+    return this.get("/lider/tasks", filters);
+  }
+
+  async getLiderNomades(filters?: Record<string, any>) {
+    return this.get("/lider/nomades", filters);
+  }
+
   // ─── Nomades ──────────────────────────────────────────────────────────────
   async getNomades(filters?: Record<string, any>) {
     return this.get("/nomades", filters);

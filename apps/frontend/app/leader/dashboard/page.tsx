@@ -3,7 +3,7 @@ import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { LEADER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,7 @@ import {
   History,
   Database,
   Eye,
+  RefreshCw,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -87,6 +88,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,7 +115,12 @@ import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
 import { useDashboard } from "@/hooks/useDashboard";
+import { apiClient } from "@/lib/api-client";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
+// NOTA (Leader): este gerador NÃO é a fonte dos números do Dashboard do Leader.
+// Para o Leader, os slices são substituídos por dados reais de /lider/* via
+// `withLeaderReal()` / `genData()` (ver dentro do componente). Quando não há
+// dados reais, os slices do Leader são zerados — nunca mostramos mock.
 const generateDashboardData = (from?: Date, to?: Date): any => {
   const now = new Date();
   const f =
@@ -879,6 +891,165 @@ export default function AdminDashboardPage() {
     refetch: refetchDashboard,
   } = useDashboard();
 
+  // ─── Dados reais do Leader (área-scoped) — substituem o mock por /lider/* ────
+  // Fonte única de verdade dos números do Dashboard do Leader. Nunca usa mock:
+  // enquanto carrega ou se vier vazio, os slices do Leader ficam zerados.
+  const [leaderReal, setLeaderReal] = useState<any>(null);
+  const [leaderLoading, setLeaderLoading] = useState(true);
+  const [leaderError, setLeaderError] = useState<string | null>(null);
+
+  const loadLeaderReal = useCallback(async () => {
+    setLeaderLoading(true);
+    setLeaderError(null);
+    try {
+      const [countsRes, briefRes, entrRes, apprRes, recentRes, nomRes]: any =
+        await Promise.all([
+          apiClient.getLiderTaskCounts(),
+          apiClient.getLiderTasks({ status: "LANCAMENTO_ENVIADO_PARA_ANALISE", limit: "1" }),
+          apiClient.getLiderTasks({ status: "ENTREGA_PENDENTE", limit: "1" }),
+          apiClient.getLiderTasks({ status: "APROVADA", limit: "100" }),
+          apiClient.getLiderTasks({ limit: "20" }),
+          apiClient.getLiderNomades({ limit: "100" }),
+        ]);
+      const counts = {
+        paraLancamento: countsRes?.paraLancamento ?? 0,
+        emExecucao: countsRes?.emExecucao ?? 0,
+        atrasadas: countsRes?.atrasadas ?? 0,
+        aprovadas: countsRes?.aprovadas ?? 0,
+        devolvidas: countsRes?.devolvidas ?? 0,
+      };
+      const approvedList = apprRes?.tasks ?? [];
+      const startToday = new Date();
+      startToday.setHours(0, 0, 0, 0);
+      const approvalsToday = approvedList.filter((t: any) => {
+        const d = t.completed_at || t.data_conclusao || t.updated_at;
+        return d && new Date(d) >= startToday;
+      }).length;
+      const nomList = nomRes?.nomades ?? [];
+      const nomTotal = nomRes?.total ?? nomList.length;
+      const avg = (arr: number[]) =>
+        arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      setLeaderReal({
+        counts,
+        briefings: briefRes?.total ?? 0,
+        entregas: entrRes?.total ?? 0,
+        approvalsToday,
+        recentTasks: recentRes?.tasks ?? [],
+        nomades: { total: nomTotal, active: nomList.length },
+        indicators: {
+          deliveryRate:
+            Math.round(avg(nomList.map((n: any) => (n.performance_on_time ?? 0) * 100)) * 10) / 10,
+          avgRating:
+            Math.round(avg(nomList.map((n: any) => n.performance_avg_rating ?? 0)) * 10) / 10,
+          avgTimePerTask: 0,
+          certified: nomList.filter((n: any) =>
+            ["gold", "platinum", "diamond"].includes(n.level),
+          ).length,
+          retention90d: 0,
+        },
+        performers: [...nomList]
+          .sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0))
+          .map((n: any) => ({
+            id: String(n.id),
+            name: n.name ?? "—",
+            avatar: String(n.name ?? "?")
+              .split(" ")
+              .map((p: string) => p[0])
+              .slice(0, 2)
+              .join("")
+              .toUpperCase(),
+            rating: n.performance_avg_rating ?? 0,
+            projects: n.tasks_completed_total ?? 0,
+            tasks: n.tasks_completed_total ?? 0,
+            specialty: n.level
+              ? String(n.level).charAt(0).toUpperCase() + String(n.level).slice(1)
+              : "Nômade",
+            badge: n.level ?? "bronze",
+            revenue: "",
+          })),
+        slaCompliance:
+          counts.aprovadas + counts.devolvidas > 0
+            ? Math.round((counts.aprovadas / (counts.aprovadas + counts.devolvidas)) * 1000) / 10
+            : 0,
+      });
+    } catch (e: any) {
+      setLeaderError(e?.message ?? "Erro ao carregar dados do líder");
+      setLeaderReal(null);
+    } finally {
+      setLeaderLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLeaderReal();
+  }, [loadLeaderReal]);
+
+  // Aplica os dados reais do Leader sobre o shape esperado pelos widgets do motor.
+  // Sem dados reais → slices do Leader zerados (jamais expõe números mock).
+  const withLeaderReal = (base: any) => {
+    const r = leaderReal;
+    const c = r?.counts;
+    const z = (v: number) => (r ? v : 0);
+    return {
+      ...base,
+      tasks: {
+        ...base.tasks,
+        total: z(
+          (c?.paraLancamento ?? 0) +
+            (c?.emExecucao ?? 0) +
+            (c?.aprovadas ?? 0) +
+            (c?.devolvidas ?? 0) +
+            (c?.atrasadas ?? 0),
+        ),
+        completed: z(c?.aprovadas ?? 0),
+        completedGrowth: 0,
+        inProgress: z(c?.emExecucao ?? 0),
+        inProgressGrowth: 0,
+        contracted: z(c?.paraLancamento ?? 0),
+        contractedGrowth: 0,
+        cancelled: z(c?.devolvidas ?? 0),
+        cancelledChange: 0,
+        slaCompliance: r?.slaCompliance ?? 0,
+        items: r?.recentTasks ?? [],
+      },
+      nomads: {
+        ...base.nomads,
+        total: z(r?.nomades.total ?? 0),
+        growth: 0,
+        active: z(r?.nomades.active ?? 0),
+        activeGrowth: 0,
+        inactive: z((r?.nomades.total ?? 0) - (r?.nomades.active ?? 0)),
+        inactiveChange: 0,
+        newInPeriod: 0,
+        churn: 0,
+      },
+      nomadsIndicators: r
+        ? r.indicators
+        : { deliveryRate: 0, avgRating: 0, avgTimePerTask: 0, certified: 0, retention90d: 0 },
+      performers: r ? r.performers : [],
+      statusOverview: {
+        ...base.statusOverview,
+        projects: {
+          ongoing: z(c?.emExecucao ?? 0),
+          approved: z(r?.approvalsToday ?? 0),
+          completed: z(c?.aprovadas ?? 0),
+          cancelled: z(c?.devolvidas ?? 0),
+          delayed: z(c?.atrasadas ?? 0),
+        },
+        tasks: {
+          contracted: z(c?.paraLancamento ?? 0),
+          inProgress: z(c?.emExecucao ?? 0),
+          completed: z(c?.aprovadas ?? 0),
+          archived: z(c?.devolvidas ?? 0),
+        },
+        leads: { new: 0, contacted: 0, proposal: 0, won: 0, lost: 0 },
+      },
+    };
+  };
+
+  const genData = (from?: Date, to?: Date) =>
+    withLeaderReal(generateDashboardData(from, to));
+
   const [globalPeriod, setGlobalPeriod] = useState<{
     type:
       | "today"
@@ -1005,7 +1176,7 @@ export default function AdminDashboardPage() {
       globalPeriod.from,
       globalPeriod.to,
     );
-    const base = generateDashboardData(from, to);
+    const base = genData(from, to);
     // Merge manual data if the period covers exactly one calendar month
     if (
       from.getFullYear() === to.getFullYear() &&
@@ -1017,7 +1188,7 @@ export default function AdminDashboardPage() {
     }
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to, historicalData]);
+  }, [globalPeriod.type, globalPeriod.from, globalPeriod.to, historicalData, leaderReal]);
 
   // Convenience aliases used throughout widget JSX
   const rv = dashboardData.revenue;
@@ -1483,7 +1654,7 @@ export default function AdminDashboardPage() {
   const WidgetPeriodSelector = ({ widgetId }: { widgetId: string }) => {
     const widgetPeriod = widgetPeriods.find((wp) => wp.widgetId === widgetId);
     const isCustom = widgetPeriod?.mode === "custom";
-    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : "Área";
+    const displayLabel = isCustom ? widgetPeriod.customPeriod?.label : globalPeriod.label;
 
     return (
       <DropdownMenu>
@@ -1492,141 +1663,78 @@ export default function AdminDashboardPage() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 px-2 text-xs gap-1.5",
-              isCustom && "bg-primary/10 text-primary hover:bg-primary/20",
+              "h-7 px-2 text-xs gap-1.5 transition-all",
+              isCustom
+                ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/50"
+                : "bg-primary/8 text-primary border border-primary/20 hover:bg-primary/15",
             )}
           >
-            <Calendar className="h-3 w-3" />
-            <span className="hidden sm:inline">Período:</span>
-            {displayLabel}
-            {isCustom && (
-              <span className="text-[10px] opacity-70">(custom)</span>
+            {isCustom ? (
+              <Calendar className="h-3 w-3" />
+            ) : (
+              <Globe className="h-3 w-3" />
             )}
+            <span className="hidden sm:inline font-medium">
+              {isCustom ? "Período:" : "Global ·"}
+            </span>
+            {displayLabel}
             <ChevronDown className="h-3 w-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="text-xs">
-            Período do Widget
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "global")}
-            className="text-xs"
-          >
-            <Check
+        <DropdownMenuContent align="end" className="w-64">
+          <div className="px-3 py-2 border-b bg-muted/30">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Período deste widget
+            </p>
+          </div>
+          {/* Global option */}
+          <div className="p-1">
+            <DropdownMenuItem
+              onClick={() => setWidgetCustomPeriod(widgetId, "global")}
               className={cn(
-                "mr-2 h-3 w-3",
-                !isCustom ? "opacity-100" : "opacity-0",
+                "text-xs rounded-md flex-col items-start gap-0.5 py-2",
+                !isCustom && "bg-primary/8 text-primary",
               )}
-            />
-            Usar período global
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "today")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Hoje"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Hoje
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "7days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 7 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 7 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "30days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 30 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 30 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "thisMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Este mês"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Este mês
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "lastMonth")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Mês passado"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Mês passado
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "90days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Últimos 90 dias"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Últimos 90 dias
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setWidgetCustomPeriod(widgetId, "365days")}
-            className="text-xs"
-          >
-            <Check
-              className={cn(
-                "mr-2 h-3 w-3",
-                widgetPeriod?.mode === "custom" &&
-                  widgetPeriod?.customPeriod?.label === "Último ano"
-                  ? "opacity-100"
-                  : "opacity-0",
-              )}
-            />
-            Último ano
-          </DropdownMenuItem>
+            >
+              <div className="flex items-center gap-2 w-full">
+                <Globe className={cn("h-3.5 w-3.5 shrink-0", !isCustom ? "text-primary" : "text-muted-foreground")} />
+                <span className="font-medium">Seguir período global</span>
+                {!isCustom && <Check className="h-3 w-3 ml-auto text-primary" />}
+              </div>
+              <span className="text-[10px] text-muted-foreground pl-5 font-normal">
+                Usa automaticamente: {globalPeriod.label}
+              </span>
+            </DropdownMenuItem>
+          </div>
+          <div className="px-3 py-1.5 border-t border-b bg-muted/20">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Ou escolha um período específico
+            </p>
+          </div>
+          <div className="p-1">
+            {([
+              { key: "today", label: "Hoje" },
+              { key: "7days", label: "Últimos 7 dias" },
+              { key: "30days", label: "Últimos 30 dias" },
+              { key: "thisMonth", label: "Este mês" },
+              { key: "lastMonth", label: "Mês passado" },
+              { key: "90days", label: "Últimos 90 dias" },
+              { key: "365days", label: "Último ano" },
+            ] as const).map(({ key, label }) => {
+              const isActive = widgetPeriod?.mode === "custom" && widgetPeriod?.customPeriod?.label === label;
+              return (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => setWidgetCustomPeriod(widgetId, key)}
+                  className={cn("text-xs rounded-md", isActive && "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400")}
+                >
+                  <Check className={cn("mr-2 h-3 w-3", isActive ? "opacity-100" : "opacity-0")} />
+                  {label}
+                  {isActive && <span className="ml-auto text-[10px] opacity-60">ativo</span>}
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -2439,6 +2547,25 @@ export default function AdminDashboardPage() {
     periodTypeOverride?: string,
     widgetPeriodKey?: string,
   ) => {
+    // ── KPIs reais do Leader (/lider/tasks/counts + /lider/tasks + /lider/nomades) ──
+    // Os counts são estado atual da área (o backend não expõe recorte por período),
+    // por isso os deltas ficam neutros (0) — nunca inventamos variação fake.
+    {
+      const r = leaderReal;
+      const v = (n: any) => String(n ?? 0);
+      const flat = { change: 0, trend: "up" as const };
+      return {
+        qualificationTasks: { value: v(r?.counts.paraLancamento), ...flat },
+        briefingsToReview: { value: v(r?.briefings), ...flat },
+        deliveriesAwaitingAnalysis: { value: v(r?.entregas), ...flat },
+        tasksInExecution: { value: v(r?.counts.emExecucao), ...flat },
+        tasksReturned: { value: v(r?.counts.devolvidas), ...flat },
+        tasksOverdue: { value: v(r?.counts.atrasadas), ...flat },
+        approvalsToday: { value: v(r?.approvalsToday), ...flat },
+        activeNomadsArea: { value: v(r?.nomades.active), ...flat },
+      } as any;
+    }
+    // ── Código legado (mock) mantido inerte — inalcançável após o return acima. ──
     const tasks = dashboardData.tasks;
     const nomads = dashboardData.nomads;
     const statusOverview = dashboardData.statusOverview;
@@ -2642,115 +2769,90 @@ export default function AdminDashboardPage() {
     return getMetricsForPeriod();
   })();
 
-  // Recent activities from API (fallback to empty)
-  // Recent activities (leader area-scoped mock)
-  const recentActivities =
-    apiActivities.length > 0
-      ? apiActivities.map((a, i) => ({
-          id: i + 1,
-          type: a.type || "info",
-          title: a.title,
-          description: a.subtitle || "",
-          time: a.date ? new Date(a.date).toLocaleDateString("pt-BR") : "",
-          icon:
-            a.type === "project"
-              ? Briefcase
-              : a.type === "nomade" || a.type === "user"
-                ? Users
-                : a.type === "task"
-                  ? CheckCircle2
-                  : a.type === "client"
-                    ? Building2
-                    : Activity,
-          color: "text-primary",
-          bgColor: "bg-primary/10",
-          to:
-            a.type === "nomade" || a.type === "user"
-              ? "/leader/nomades"
-              : a.type === "task" || a.type === "project"
-                ? "/leader/tarefas"
-                : null,
-        }))
-      : [
-          {
-            id: 1,
-            type: "briefing_received",
-            title: "Briefing enviado para análise",
-            description: 'Tarefa "Copy Landing Page" aguarda sua revisão',
-            time: "15 minutos atrás",
-            icon: FileText,
-            color: "text-info",
-            bgColor: "bg-info/10",
-            to: "/leader/tarefas?filter=briefings",
-          },
-          {
-            id: 2,
-            type: "delivery_received",
-            title: "Entrega recebida",
-            description: 'Nômade Rafael Lima entregou "Artigo SEO Performance"',
-            time: "1 hora atrás",
-            icon: CheckCircle2,
-            color: "text-success",
-            bgColor: "bg-success/10",
-            to: "/leader/tarefas?filter=entregas",
-          },
-          {
-            id: 3,
-            type: "task_approved",
-            title: "Tarefa aprovada",
-            description:
-              'Você aprovou a entrega "Script de Anuncio" com nota 9',
-            time: "2 horas atrás",
-            icon: UserCheck,
-            color: "text-primary",
-            bgColor: "bg-primary/10",
-            to: "/leader/historico?filter=aprovacoes",
-          },
-          {
-            id: 4,
-            type: "task_returned",
-            title: "Tarefa devolvida",
-            description:
-              'Tarefa "Post Institucional" devolvida para ajuste ao nômade',
-            time: "4 horas atrás",
-            icon: AlertCircle,
-            color: "text-warning",
-            bgColor: "bg-warning/10",
-            to: "/leader/devolvidas",
-          },
-        ];
+  // ── Atividades recentes REAIS — derivadas de /lider/tasks (leaderReal.recentTasks) ──
+  // Nunca usa apiActivities (admin) nem mock. Vazio → estado vazio real no widget.
+  const recentActivities = (() => {
+    const STATUS_ACTIVITY: Record<
+      string,
+      { label: string; icon: any; color: string; bgColor: string; to: string }
+    > = {
+      PARA_LANCAMENTO: { label: "Tarefa para qualificação", icon: FileText, color: "text-info", bgColor: "bg-info/10", to: "/leader/qualificacao" },
+      LANCAMENTO_ENVIADO_PARA_ANALISE: { label: "Briefing para revisar", icon: FileText, color: "text-info", bgColor: "bg-info/10", to: "/leader/tarefas?filter=briefings" },
+      EM_EXECUCAO: { label: "Tarefa em execução", icon: Activity, color: "text-primary", bgColor: "bg-primary/10", to: "/leader/tarefas" },
+      ENTREGA_PENDENTE: { label: "Entrega aguardando análise", icon: CheckCircle2, color: "text-success", bgColor: "bg-success/10", to: "/leader/tarefas?filter=entregas" },
+      ENTREGA_ATRASADA: { label: "Tarefa atrasada", icon: AlertCircle, color: "text-warning", bgColor: "bg-warning/10", to: "/leader/tarefas?filter=atrasadas" },
+      REPROVADA: { label: "Tarefa devolvida", icon: AlertCircle, color: "text-warning", bgColor: "bg-warning/10", to: "/leader/devolvidas" },
+      APROVADA: { label: "Tarefa aprovada", icon: UserCheck, color: "text-primary", bgColor: "bg-primary/10", to: "/leader/historico" },
+    };
+    return (leaderReal?.recentTasks ?? []).map((t: any, i: number) => {
+      const cfg = STATUS_ACTIVITY[t.status] ?? {
+        label: "Atividade da área",
+        icon: Activity,
+        color: "text-muted-foreground",
+        bgColor: "bg-muted",
+        to: "/leader/tarefas",
+      };
+      const when = t.updated_at || t.created_at || t.due_date;
+      return {
+        id: t.id ?? i + 1,
+        type: t.status,
+        title: cfg.label,
+        description:
+          [t.task_code ?? t.code_snapshot, t.title ?? t.name_snapshot]
+            .filter(Boolean)
+            .join(" · ") || "—",
+        time: when ? new Date(when).toLocaleDateString("pt-BR") : "",
+        icon: cfg.icon,
+        color: cfg.color,
+        bgColor: cfg.bgColor,
+        to: cfg.to,
+      };
+    });
+  })();
 
-  // Leader area-scoped alerts
-  const systemAlerts = [
-    {
-      id: 1,
-      type: "warning",
-      title: "Briefing aguardando revisão",
-      description: "3 briefings da área ainda não foram revisados",
-      priority: "high",
-    },
-    {
-      id: 2,
-      type: "warning",
-      title: "Entrega aguardando qualificação",
-      description: "2 entregas recebidas aguardam sua avaliação",
-      priority: "high",
-    },
-    {
-      id: 3,
-      type: "warning",
-      title: "Tarefa atrasada",
-      description: 'Tarefa "Roteiro de vídeo" está 1 dia atrasada',
-      priority: "medium",
-    },
-    {
-      id: 4,
-      type: "info",
-      title: "Nômade sem entrega",
-      description: "Nômade Carla Mendes não enviou entrega nas últimas 48h",
-      priority: "medium",
-    },
-  ];
+  // ── Alertas REAIS — derivados de /lider/tasks/counts + /lider/nomades ──────────
+  // Sem fonte mock. Sem alerta real → array vazio → estado vazio no widget.
+  const systemAlerts = (
+    leaderReal
+      ? [
+          leaderReal.counts.atrasadas > 0 && {
+            id: "alert-atrasadas",
+            type: "warning",
+            title: "Tarefas atrasadas",
+            description: `${leaderReal.counts.atrasadas} tarefa(s) com entrega atrasada na sua área`,
+            priority: "high",
+          },
+          leaderReal.entregas > 0 && {
+            id: "alert-entregas",
+            type: "warning",
+            title: "Entregas aguardando análise",
+            description: `${leaderReal.entregas} entrega(s) aguardam sua avaliação`,
+            priority: "high",
+          },
+          leaderReal.briefings > 0 && {
+            id: "alert-briefings",
+            type: "warning",
+            title: "Briefings para revisar",
+            description: `${leaderReal.briefings} briefing(s) aguardando revisão`,
+            priority: "medium",
+          },
+          leaderReal.counts.devolvidas > 0 && {
+            id: "alert-devolvidas",
+            type: "info",
+            title: "Tarefas devolvidas",
+            description: `${leaderReal.counts.devolvidas} tarefa(s) devolvida(s) para correção`,
+            priority: "medium",
+          },
+          leaderReal.nomades.active === 0 && {
+            id: "alert-sem-nomades",
+            type: "info",
+            title: "Sem nômades ativos",
+            description: "Nenhum nômade ativo encontrado na sua área",
+            priority: "medium",
+          },
+        ].filter(Boolean)
+      : []
+  ) as Array<{ id: string; type: string; title: string; description: string; priority: string }>;
 
   // Period-aware top performers
   const topPerformers = dashboardData.performers;
@@ -3383,6 +3485,17 @@ export default function AdminDashboardPage() {
     activeNomadsArea: "Nômades ativos da área",
   };
 
+  const metricDescriptions: Partial<Record<MetricType, string>> = {
+    qualificationTasks: "Tarefas aguardando qualificação — prontas para serem lançadas pelo líder. Clique para gerenciar.",
+    briefingsToReview: "Briefings enviados pelos nômades aguardando revisão e aprovação do líder.",
+    deliveriesAwaitingAnalysis: "Entregas submetidas pelos nômades aguardando análise e aprovação da área.",
+    tasksInExecution: "Tarefas atualmente em andamento ativo pelos nômades da área.",
+    tasksReturned: "Tarefas reprovadas e devolvidas para correção pelos nômades. Clique para revisar.",
+    tasksOverdue: "Tarefas com prazo de entrega vencido na área — requerem atenção imediata.",
+    approvalsToday: "Total de tarefas aprovadas pelo líder no dia de hoje.",
+    activeNomadsArea: "Total de nômades com projetos ativos vinculados a esta área.",
+  };
+
   const renderMetricCard = (
     metricType: MetricType,
     metricsSource?: typeof metrics,
@@ -3499,6 +3612,8 @@ export default function AdminDashboardPage() {
       ),
     };
 
+    const cardDescription = metricDescriptions[metricType];
+
     if (metricType === "activeNomadsArea") {
       return (
         <div
@@ -3514,6 +3629,19 @@ export default function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           onClick={!isEditing && METRIC_NAV[metricType] ? () => navigate(METRIC_NAV[metricType]) : undefined}
+          role={!isEditing && METRIC_NAV[metricType] ? "button" : undefined}
+          tabIndex={!isEditing && METRIC_NAV[metricType] ? 0 : undefined}
+          aria-label={METRIC_NAV[metricType] ? `Abrir ${metricName}` : undefined}
+          onKeyDown={
+            !isEditing && METRIC_NAV[metricType]
+              ? (e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(METRIC_NAV[metricType]);
+                  }
+                }
+              : undefined
+          }
           className={cn(
             `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
@@ -3566,6 +3694,25 @@ export default function AdminDashboardPage() {
               </span>
             </div>
           </div>
+          {!isEditing && cardDescription && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help"
+                    >
+                      <Info className="h-3 w-3 text-white" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                    {cardDescription}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
         </div>
       );
     }
@@ -3583,6 +3730,19 @@ export default function AdminDashboardPage() {
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
         onClick={!isEditing && METRIC_NAV[metricType] ? () => navigate(METRIC_NAV[metricType]) : undefined}
+        role={!isEditing && METRIC_NAV[metricType] ? "button" : undefined}
+        tabIndex={!isEditing && METRIC_NAV[metricType] ? 0 : undefined}
+        aria-label={METRIC_NAV[metricType] ? `Abrir ${metricName}` : undefined}
+        onKeyDown={
+          !isEditing && METRIC_NAV[metricType]
+            ? (e: React.KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate(METRIC_NAV[metricType]);
+                }
+              }
+            : undefined
+        }
         className={cn(
           `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
@@ -3638,6 +3798,25 @@ export default function AdminDashboardPage() {
             </span>
           </div>
         </div>
+        {!isEditing && cardDescription && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help"
+                  >
+                    <Info className="h-3 w-3 text-white" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                  {cardDescription}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
       </div>
     );
   };
@@ -3658,7 +3837,9 @@ export default function AdminDashboardPage() {
           periodKey: undefined as string | undefined,
         };
     const modalPeriodKey = (modalPeriod as any).periodKey as string | undefined;
-    const mData = generateDashboardData(modalPeriod.from, modalPeriod.to);
+    // genData aplica os dados reais do Leader (withLeaderReal) também no modal de
+    // detalhes — assim nenhuma seção de widget do Leader exibe número mock.
+    const mData = genData(modalPeriod.from, modalPeriod.to);
     const mPaW = mData.platformActivities;
     const mArW = mData.accountsReceivable;
 
@@ -6849,9 +7030,12 @@ export default function AdminDashboardPage() {
                     { key: "90days", label: "Últimos 90 dias" },
                     { key: "365days", label: "Último ano" },
                   ];
+                  // Quando o widget herda o período global, espelha o label real
+                  // do topo (ex.: "Últimos 90 dias") em vez de "Período global",
+                  // evitando o conflito visual topo × card.
                   const activeLabel = isCustom
                     ? wp!.customPeriod!.label
-                    : "Período global";
+                    : globalPeriod.label;
                   return (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -7108,73 +7292,9 @@ export default function AdminDashboardPage() {
                             renderMetricCard(metricCard.id, widgetMetrics),
                           )}
 
-                        <div className="grid grid-cols-2 gap-2.5">
-                          {[
-                            {
-                              type: "Agências",
-                              count: auW.agencias,
-                              growth: `+${auW.agenciasGrowth}%`,
-                              percentage: Math.round((auW.agencias / auW.total) * 100),
-                              bg: "bg-success/5 border-success/20",
-                              text: "text-success",
-                              bar: "bg-success",
-                            },
-                            {
-                              type: "Nômades",
-                              count: auW.nomades,
-                              growth: `+${auW.nomadesGrowth}%`,
-                              percentage: Math.round((auW.nomades / auW.total) * 100),
-                              bg: "bg-chart-4/5 border-chart-4/20",
-                              text: "text-chart-4",
-                              bar: "bg-chart-4",
-                            },
-                            {
-                              type: "Admins",
-                              count: auW.admins,
-                              growth: `+${auW.adminsGrowth}%`,
-                              percentage: Math.round((auW.admins / auW.total) * 100),
-                              bg: "bg-warning/5 border-warning/20",
-                              text: "text-warning",
-                              bar: "bg-warning",
-                            },
-                          ].map((ut) => (
-                            <div
-                              key={ut.type}
-                              className={`p-2.5 rounded-xl border ${ut.bg} space-y-1.5`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <p className={`text-xs font-semibold ${ut.text}`}>
-                                  {ut.type}
-                                </p>
-                                <span className="text-[10px] font-medium text-success">
-                                  {ut.growth}
-                                </span>
-                              </div>
-                              <p className={`text-xl font-bold ${ut.text}`}>
-                                {ut.count.toLocaleString()}
-                              </p>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground mb-1">
-                                  {ut.percentage}% do total
-                                </p>
-                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${ut.bar}`}
-                                    style={{ width: `${ut.percentage}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">
-                            Total registrado
-                          </p>
-                          <p className="text-sm font-bold">
-                            {auW.total.toLocaleString("pt-BR")}
-                          </p>
-                        </div>
+                        {/* Sub-bloco "Agências/Nômades/Admins" removido do Leader:
+                            era distribuição de contas (mock/admin), não métrica de
+                            área. Os KPIs do Leader acima já vêm de /lider/*. */}
                       </>
                     );
                   })()}
@@ -7642,7 +7762,7 @@ export default function AdminDashboardPage() {
                       Atividades recentes da área
                     </p>
                   </div>
-                  <Link to="/leader/atividades" className="shrink-0">
+                  <Link to="/leader/historico" className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -7705,6 +7825,18 @@ export default function AdminDashboardPage() {
                     </div>
                   );
                 })}
+                {recentActivities.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <Activity className="h-7 w-7 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      {leaderError
+                        ? "Não foi possível carregar a atividade da área."
+                        : leaderLoading
+                          ? "Carregando atividade…"
+                          : "Nenhuma atividade recente na sua área."}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -7819,6 +7951,18 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   ))}
+                  {systemAlerts.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <CheckCircle2 className="h-7 w-7 text-success/60 mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        {leaderError
+                          ? "Não foi possível carregar os alertas da área."
+                          : leaderLoading
+                            ? "Carregando alertas…"
+                            : "Nenhum alerta no momento. Tudo em dia! 🎉"}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -10008,7 +10152,7 @@ export default function AdminDashboardPage() {
       }
 
       case "nomadsRanking": {
-        const wPerfW = generateDashboardData(
+        const wPerfW = genData(
           effectivePeriod.from,
           effectivePeriod.to,
         ).performers;
@@ -10330,7 +10474,7 @@ export default function AdminDashboardPage() {
       }
 
       case "statusOverview": {
-        const wSoW = generateDashboardData(
+        const wSoW = genData(
           effectivePeriod.from,
           effectivePeriod.to,
         ).statusOverview;
@@ -10716,7 +10860,7 @@ export default function AdminDashboardPage() {
       }
 
       case "tasks": {
-        const wTasksW = generateDashboardData(
+        const wTasksW = genData(
           effectivePeriod.from,
           effectivePeriod.to,
         ).tasks;
@@ -10813,7 +10957,7 @@ export default function AdminDashboardPage() {
       }
 
       case "nomadsIndicators": {
-        const wNiW = generateDashboardData(
+        const wNiW = genData(
           effectivePeriod.from,
           effectivePeriod.to,
         ).nomadsIndicators;
@@ -11390,417 +11534,414 @@ export default function AdminDashboardPage() {
             isHeaderCompact ? "py-2" : "pt-0 pb-5",
           )}
         >
-          <div className="overflow-hidden shrink-0">
-            <h1
-              className={cn(
-                "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
-                isHeaderCompact ? "text-base" : "text-3xl",
-              )}
-            >
-              Dashboard
-            </h1>
-            <p
-              className={cn(
-                "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
-                isHeaderCompact
-                  ? "max-h-0 opacity-0 mt-0 mb-0"
-                  : "max-h-[24px] opacity-100 mt-0.5",
-              )}
-            >
-              Acompanhe as tarefas, qualificações e entregas da sua área.
-            </p>
-          </div>
+          {/* ── Unified toolbar (inclui o título) ───────────────────────────── */}
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
 
-          {/* Period Controls */}
-          <div className="flex items-center gap-2 mx-3">
-            <div className="flex items-center gap-0.5 bg-muted/50 dark:bg-muted/30 rounded-xl p-1 border border-border/50 shadow-sm">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
-              {(
-                [
-                  {
-                    type: "last_7_days" as const,
-                    label: "7d",
-                    fullLabel: "Últimos 7 dias",
-                  },
-                  {
-                    type: "last_30_days" as const,
-                    label: "30d",
-                    fullLabel: "Últimos 30 dias",
-                  },
-                ] as const
-              ).map(({ type, label, fullLabel }) => (
-                <button
-                  key={type}
-                  onClick={() => {
-                    const { from, to } = getDateRangeFromPeriod(type);
-                    setGlobalPeriod({ type, from, to, label: fullLabel });
-                  }}
+            {/* Título + info */}
+            <div className="flex items-center gap-1 shrink-0 mr-2">
+              <div className="overflow-hidden">
+                <h1
                   className={cn(
-                    "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                    globalPeriod.type === type
-                      ? "bg-background shadow-sm text-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
+                    "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                    isHeaderCompact ? "text-base" : "text-2xl sm:text-3xl lg:text-4xl xl:text-[46px]",
                   )}
                 >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={() => {
-                  const today = new Date();
-                  const ninetyDaysAgo = new Date(today);
-                  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-                  setGlobalPeriod({
-                    type: "custom",
-                    from: ninetyDaysAgo,
-                    to: today,
-                    label: "Últimos 90 dias",
-                  });
-                }}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                  globalPeriod.label === "Últimos 90 dias"
-                    ? "bg-background shadow-sm text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                90d
-              </button>
-              <Popover
-                open={isPeriodPickerOpen}
-                onOpenChange={setIsPeriodPickerOpen}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5",
-                      !["last_7_days", "last_30_days"].includes(
-                        globalPeriod.type,
-                      ) && globalPeriod.label !== "Últimos 90 dias"
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {!["last_7_days", "last_30_days"].includes(
-                      globalPeriod.type,
-                    ) && globalPeriod.label !== "Últimos 90 dias" ? (
-                      <span className="max-w-[130px] truncate">
-                        {globalPeriod.label}
+                  Dashboard
+                </h1>
+              </div>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
+                      <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                    <p className="font-semibold text-xs mb-1.5">Dashboard do Líder</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Acompanhe as tarefas, qualificações e entregas da área em tempo real.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+
+            {/* GLOBAL pill — hover shows gradient; hovering badge or info shows tooltip */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <div className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/60 hover:border-transparent overflow-hidden transition-all">
+                      <span className="absolute inset-0 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <Globe className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                      <span className="relative z-10 text-[11px] font-medium uppercase tracking-wider leading-none bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                        GLOBAL
                       </span>
-                    ) : (
-                      <>
-                        <SlidersHorizontal className="h-3 w-3" />
-                        Personalizar
-                      </>
-                    )}
-                    <ChevronDown className="h-2.5 w-2.5" />
+                    </div>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    O período selecionado aqui é aplicado automaticamente a <strong>todos os widgets</strong> do dashboard.
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Para ajustar o período de um widget específico, clique em <strong>"Global"</strong> no cabeçalho de cada widget.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+
+            {/* Período: label + pill + info tooltip */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Período:</span>
+                      <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all">
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Calendar className="relative z-10 h-3 w-3 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold max-w-[140px] truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      {globalPeriod.label}
+                    </span>
+                    <ChevronDown className="relative z-10 h-3 w-3 shrink-0 text-[#c81a7f] group-hover:text-white transition-colors" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent
-                  className="w-72 p-0 overflow-hidden"
-                  align="start"
-                >
-                  <div className="px-3 py-2.5 border-b bg-muted/30">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      Período de dados
-                    </p>
+                <PopoverContent className="w-48 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60" align="start">
+                  {/* Header */}
+                  <div className="px-3 py-2 border-b border-border/50">
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Período</p>
                   </div>
-                  <div className="p-1.5">
+                  {/* Options */}
+                  <div className="p-1">
                     {periodOptions
                       .filter((o) => o.type !== "custom")
-                      .map((option) => (
+                      .map((option) => {
+                        const isActive = globalPeriod.type === option.type && globalPeriod.label !== "Últimos 90 dias";
+                        return (
+                          <button
+                            key={option.type}
+                            onClick={() => handlePeriodChange(option.type, option.label)}
+                            className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
+                          >
+                            <span className={cn(
+                              "text-xs font-medium transition-colors",
+                              isActive
+                                ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                            )}>
+                              {option.label}
+                            </span>
+                            {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
+                          </button>
+                        );
+                      })}
+                    {(() => {
+                      const isActive = globalPeriod.label === "Últimos 90 dias";
+                      return (
                         <button
-                          key={option.type}
-                          onClick={() =>
-                            handlePeriodChange(option.type, option.label)
-                          }
-                          className={cn(
-                            "w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all hover:bg-accent text-left",
-                            globalPeriod.type === option.type &&
-                              globalPeriod.label !== "Últimos 90 dias" &&
-                              "bg-primary/10 text-primary font-medium",
-                          )}
+                          onClick={() => {
+                            const today = new Date();
+                            const d = new Date(today);
+                            d.setDate(d.getDate() - 90);
+                            setGlobalPeriod({ type: "custom", from: d, to: today, label: "Últimos 90 dias" });
+                            setIsPeriodPickerOpen(false);
+                          }}
+                          className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
                         >
-                          {option.label}
-                          {globalPeriod.type === option.type &&
-                            globalPeriod.label !== "Últimos 90 dias" && (
-                              <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                            )}
+                          <span className={cn(
+                            "text-xs font-medium transition-colors",
+                            isActive
+                              ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                              : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                          )}>
+                            Últimos 90 dias
+                          </span>
+                          {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
                         </button>
-                      ))}
+                      );
+                    })()}
                   </div>
-                  <div className="border-t p-3 space-y-2.5 bg-muted/20">
-                    <p className="text-xs font-semibold">
-                      Intervalo personalizado
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[10px] text-muted-foreground font-medium">
-                          De
-                        </label>
+                  {/* Custom interval */}
+                  <div className="border-t border-border/50 p-2.5 space-y-2 bg-muted/20">
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Personalizado</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">De</label>
                         <input
                           type="date"
-                          value={
-                            customPeriodFrom
-                              ? format(customPeriodFrom, "yyyy-MM-dd")
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomPeriodFrom(
-                              e.target.value
-                                ? new Date(e.target.value + "T00:00:00")
-                                : undefined,
-                            )
-                          }
-                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          value={customPeriodFrom ? format(customPeriodFrom, "yyyy-MM-dd") : ""}
+                          onChange={(e) => setCustomPeriodFrom(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
+                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
                         />
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[10px] text-muted-foreground font-medium">
-                          Até
-                        </label>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">Até</label>
                         <input
                           type="date"
-                          value={
-                            customPeriodTo
-                              ? format(customPeriodTo, "yyyy-MM-dd")
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomPeriodTo(
-                              e.target.value
-                                ? new Date(e.target.value + "T00:00:00")
-                                : undefined,
-                            )
-                          }
-                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          value={customPeriodTo ? format(customPeriodTo, "yyyy-MM-dd") : ""}
+                          onChange={(e) => setCustomPeriodTo(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
+                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
                         />
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      className="w-full h-7 text-xs"
+                    <button
                       disabled={!customPeriodFrom || !customPeriodTo}
                       onClick={applyCustomPeriod}
+                      className="relative w-full h-7 rounded-lg overflow-hidden text-[11px] font-semibold text-white transition-opacity disabled:opacity-40"
                     >
-                      Aplicar período
-                    </Button>
+                      <span className="absolute inset-0" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="relative z-10">Aplicar</span>
+                    </button>
                   </div>
                 </PopoverContent>
-              </Popover>
-            </div>
-            {/* Period label badge */}
-            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
-              {globalPeriod.label}
-            </span>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Dashboard selector dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                  <span className="truncate">
-                    {savedDashboards.find((d) => d.id === currentDashboardId)
-                      ?.name ?? "Selecionar dashboard"}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0 opacity-50 ml-auto" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">
-                  Dashboards salvos
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {savedDashboards.map((db) => (
-                  <div
-                    key={db.id}
-                    className="flex items-center px-1 py-0.5 rounded hover:bg-muted/60 group"
-                  >
-                    <button
-                      className="flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded text-xs"
-                      onClick={() => {
-                        handleLoadDashboard(db.id);
-                        toast({
-                          title: `Dashboard carregado`,
-                          description: db.name,
-                        });
-                      }}
-                    >
-                      <LayoutGrid
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0",
-                          currentDashboardId === db.id
-                            ? "text-violet-500"
-                            : "text-muted-foreground",
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "truncate font-medium",
-                          currentDashboardId === db.id &&
-                            "text-violet-600 dark:text-violet-400",
-                        )}
-                      >
-                        {db.name}
-                      </span>
-                      {currentDashboardId === db.id && (
-                        <Check className="h-3 w-3 text-violet-500 shrink-0 ml-auto" />
-                      )}
-                    </button>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-                      <button
-                        onClick={() => handleSetDefaultDashboard(db.id)}
-                        className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                        title={
-                          db.isDefault
-                            ? "Dashboard padrão"
-                            : "Definir como padrão"
-                        }
-                      >
-                        <Star
-                          className={cn(
-                            "h-3.5 w-3.5",
-                            db.isDefault
-                              ? "fill-amber-400 text-amber-400"
-                              : "text-muted-foreground hover:text-amber-400",
-                          )}
-                        />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeletingDashboardId(db.id);
-                          setShowDeleteDashboardDialog(true);
-                        }}
-                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        title="Excluir dashboard"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                      </button>
+                      </Popover>
                     </div>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
                   </div>
-                ))}
-                {savedDashboards.length === 0 && (
-                  <p className="px-3 py-3 text-xs text-muted-foreground text-center">
-                    Nenhum dashboard salvo
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    O período selecionado aqui é aplicado a <strong>todos os widgets</strong> do dashboard.
                   </p>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setDraftWidgets([]);
-                    setEditHeaderName("");
-                    setIsEditingHeaderName(true);
-                    setEditModalMode("adicionar");
-                    setIsNewDashboardMode(true);
-                    setIsEditDashboardModalOpen(true);
-                  }}
-                  className="text-xs text-violet-600 dark:text-violet-400 font-medium cursor-pointer gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Criar novo dashboard
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Para ajustar um widget específico, clique em <strong>"Global"</strong> no cabeçalho do widget.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-            {/* Export dropdown */}
-            <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-                  disabled={isExporting}
-                >
-                  {isExporting ? (
-                    <>
-                      <Download className="h-3.5 w-3.5 animate-pulse" />
-                      Exportando...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-3.5 w-3.5" />
-                      Exportar
-                      <ChevronDown className="h-2.5 w-2.5" />
-                    </>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-1.5" align="end">
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    handleExportAs("pdf");
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                >
-                  <FileText className="h-3.5 w-3.5 text-red-500" />
-                  Exportar como PDF
-                </button>
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    handleExportAs("png");
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                >
-                  <ImageDown className="h-3.5 w-3.5 text-blue-500" />
-                  Exportar como PNG
-                </button>
-              </PopoverContent>
-            </Popover>
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* Dados Históricos */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openHistoricalModal()}
-              className="h-8 px-3 gap-1.5 text-xs font-medium border-amber-200 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-500 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400"
-            >
-              <History className="h-3.5 w-3.5" />
-              Histórico
-              {Object.keys(historicalData).length > 0 && (
-                <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] h-4 w-4 flex items-center justify-center shrink-0">
-                  {Object.keys(historicalData).length}
-                </span>
-              )}
-            </Button>
+            {/* Dashboard selector */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]">
+                          <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                          <LayoutGrid className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                          <span className="relative z-10 text-xs font-semibold truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                            {savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
+                          </span>
+                          <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-colors" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
+                        {/* Header */}
+                        <div className="px-3 py-2 border-b border-border/50">
+                          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Dashboards salvos</p>
+                        </div>
+                        {/* Dashboard list */}
+                        <div className="p-1">
+                          {savedDashboards.map((db) => {
+                            const isActive = currentDashboardId === db.id;
+                            return (
+                              <div key={db.id} className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
+                                <button
+                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                  onClick={() => {
+                                    handleLoadDashboard(db.id);
+                                    toast({ title: "Dashboard carregado", description: db.name });
+                                  }}
+                                >
+                                  <LayoutGrid className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isActive ? "text-[#7d1b6a]" : "text-muted-foreground group-hover:text-[#7d1b6a]")} />
+                                  <span className={cn(
+                                    "text-xs font-medium transition-colors",
+                                    isActive
+                                      ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                      : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                  )}>
+                                    {db.name}
+                                  </span>
+                                  {isActive && <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />}
+                                </button>
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleSetDefaultDashboard(db.id)}
+                                    className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                    title={db.isDefault ? "Dashboard padrão" : "Definir como padrão"}
+                                  >
+                                    <Star className={cn("h-3 w-3", db.isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400")} />
+                                  </button>
+                                  <button
+                                    onClick={() => { setDeletingDashboardId(db.id); setShowDeleteDashboardDialog(true); }}
+                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    title="Excluir dashboard"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {savedDashboards.length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">Nenhum dashboard salvo</p>
+                          )}
+                        </div>
+                        {/* Footer action */}
+                        <div className="border-t border-border/50 p-1">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setDraftWidgets([]);
+                              setEditHeaderName("");
+                              setIsEditingHeaderName(true);
+                              setEditModalMode("adicionar");
+                              setIsNewDashboardMode(true);
+                              setIsEditDashboardModalOpen(true);
+                            }}
+                            className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
+                          >
+                            <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
+                            <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
+                              Criar novo dashboard
+                            </span>
+                          </DropdownMenuItem>
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Selecionar dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Escolha entre os dashboards salvos para alternar a <strong>visão geral da área</strong>.
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Use <strong>"Criar novo dashboard"</strong> para organizar diferentes configurações de widgets.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-            {/* Compartilhar Dashboard */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openDashboardPublicShare}
-              className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Compartilhar
-            </Button>
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* Editar Dashboard */}
-            <Button
-              onClick={() => {
-                setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
-                const currentDb = savedDashboards.find(
-                  (d) => d.id === currentDashboardId,
-                );
-                setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
-                setIsEditingHeaderName(false);
-                setIsEditDashboardModalOpen(true);
-              }}
-              className="h-8 px-3 gap-1.5 text-xs font-medium btn-brand shadow-sm rounded-lg"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-              Editar
-            </Button>
-          </div>
+            {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile */}
+            <div className="flex items-center gap-1 shrink-0 xl:ml-auto">
+
+            {/* Export */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
+                  <PopoverTrigger asChild>
+                    <TooltipTrigger asChild>
+                      <button
+                        disabled={isExporting}
+                        className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                      >
+                        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                        <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", isExporting && "animate-pulse")} />
+                      </button>
+                    </TooltipTrigger>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-1.5" align="end">
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportAs("pdf"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-red-500" />
+                      Exportar como PDF
+                    </button>
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportAs("png"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                    >
+                      <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                      Exportar como PNG
+                    </button>
+                  </PopoverContent>
+                </Popover>
+                <TooltipContent side="bottom" sideOffset={6}>Exportar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Histórico */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => openHistoricalModal()}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <History className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    {Object.keys(historicalData).length > 0 && (
+                      <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
+                        {Object.keys(historicalData).length}
+                      </span>
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Histórico</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Compartilhar */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={openDashboardPublicShare}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Compartilhar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Editar */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
+                      const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
+                      setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
+                      setIsEditingHeaderName(false);
+                      setIsEditDashboardModalOpen(true);
+                    }}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Pencil className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      Editar
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Personalizar widgets</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            </div>{/* fim ações */}
+
+          </div>{/* fim toolbar */}
         </div>
       </div>
       {/* Export capture area: metrics + widgets */}
@@ -11812,6 +11953,32 @@ export default function AdminDashboardPage() {
             .sort((a, b) => a.order - b.order)
             .map((metric) => renderMetricCard(metric.id))}
         </div>
+
+        {/* Estado dos dados reais do Leader (/lider/*) — erro / carregando */}
+        {leaderError ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span className="text-sm font-medium">
+                Não foi possível carregar os dados do líder agora.
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadLeaderReal()}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Tentar novamente
+            </Button>
+          </div>
+        ) : leaderLoading ? (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/40 px-4 py-2.5 text-muted-foreground">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            <span className="text-xs">Atualizando dados da área…</span>
+          </div>
+        ) : null}
 
         {/* Widgets Grid */}
         <div
