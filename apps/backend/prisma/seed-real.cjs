@@ -215,14 +215,45 @@ async function seedEmpresa() {
 // ── Líder ────────────────────────────────────────────────────────────────────
 async function seedLider() {
   const LIDER_EMAIL = "lider@allka.com.vc";
+  const LIDER_EMAIL_ALT = "lider.performance@allka.test";
+  const LIDER_USER_ID = "seed-lider-user-01";
   const CATEGORY = "Performance e Anúncios Patrocinados";
   const AREA = "Performance";
   const CONSULTOR = "Líder Allka";
 
-  const liderUser = await prisma.user.findFirst({ where: { email: LIDER_EMAIL }, select: { id: true } });
-  if (!liderUser) {
-    console.warn(`[seed-real] lider: usuário ${LIDER_EMAIL} não existe — pulando.`);
-    return;
+  const password = process.env.SEED_TEST_USER_PASSWORD || "Test@2026!";
+  const hash = await bcrypt.hash(password, 10);
+
+  // Resolve o líder por prioridade: email canônico → email de teste (.test) →
+  // qualquer usuário com papel de líder. Só cria um usuário seed se NENHUM existir.
+  let liderUser =
+    (await prisma.user.findFirst({ where: { email: LIDER_EMAIL }, select: { id: true, email: true } })) ||
+    (await prisma.user.findFirst({ where: { email: LIDER_EMAIL_ALT }, select: { id: true, email: true } })) ||
+    (await prisma.user.findFirst({
+      where: { OR: [{ account_type: "lider" }, { role: "lider" }] },
+      select: { id: true, email: true },
+    }));
+
+  if (liderUser) {
+    console.log(`[seed-real] lider: usando usuário ${liderUser.email}`);
+  } else {
+    // Fallback seguro: cria um usuário seed controlado (mesmo padrão de seed-lider-tasks.ts).
+    // Idempotente por id fixo; email canônico só é criado porque a busca acima confirmou que não existe.
+    liderUser = await prisma.user.upsert({
+      where: { id: LIDER_USER_ID },
+      update: { password_hash: hash },
+      create: {
+        id: LIDER_USER_ID,
+        email: LIDER_EMAIL,
+        password_hash: hash,
+        name: "Líder Performance Seed",
+        role: "lider",
+        account_type: "lider",
+        is_active: true,
+      },
+      select: { id: true, email: true },
+    });
+    console.log(`[seed-real] lider: usuário seed criado ${liderUser.email}`);
   }
   const liderUserId = liderUser.id;
 
@@ -245,9 +276,6 @@ async function seedLider() {
     { userId: "seed-nomade-user-02", nomadeId: "seed-nomade-02", habId: "seed-hab-02", email: "nomade.seed2@allka.com.vc", name: "Bruno Lima", level: "silver", score: 430 },
     { userId: "seed-nomade-user-03", nomadeId: "seed-nomade-03", habId: "seed-hab-03", email: "nomade.seed3@allka.com.vc", name: "Carla Souza", level: "bronze", score: 180 },
   ];
-
-  const password = process.env.SEED_TEST_USER_PASSWORD || "Test@2026!";
-  const hash = await bcrypt.hash(password, 10);
 
   for (const n of nomadeData) {
     await prisma.user.upsert({
