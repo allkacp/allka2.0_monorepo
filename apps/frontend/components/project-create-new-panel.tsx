@@ -3523,53 +3523,51 @@ export function ProjectCreateNewPanel({
                 </div>
 
                 {/* ── Footer Actions ── */}
-                <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3">
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    {/* Left group */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={handleCloseReview}
-                        className="h-9 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
-                      >
-                        <ArrowLeft className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Voltar</span>
-                      </button>
-                      <button
-                        onClick={() => setShowEditProducts(true)}
-                        className="h-9 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
-                      >
-                        <Package className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">
-                          Editar Produtos
-                        </span>
-                      </button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExportPresentation}
-                        disabled={exportingPDF || !!exportBlockReason}
-                        title={
-                          !exportingPDF && exportBlockReason
-                            ? exportBlockReason
-                            : undefined
-                        }
-                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
-                      >
-                        {exportingPDF ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <FileDown className="h-3.5 w-3.5" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {exportingPDF ? "Gerando..." : "Exportar"}
-                        </span>
-                      </Button>
-                    </div>
+                <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3 space-y-2">
+                  {/* Row 1: secondary actions */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={handleCloseReview}
+                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Voltar
+                    </button>
+                    <button
+                      onClick={() => setShowEditProducts(true)}
+                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                      Editar Produtos
+                    </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportPresentation}
+                      disabled={exportingPDF || !!exportBlockReason}
+                      title={!exportingPDF && exportBlockReason ? exportBlockReason : undefined}
+                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      {exportingPDF ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                      {exportingPDF ? "Gerando..." : "Exportar"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSaveDraftNow}
+                      disabled={loading || !!draftBlockReason}
+                      title={draftBlockReason ?? undefined}
+                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      {loadingAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      {loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}
+                    </Button>
+                  </div>
 
-                    <div className="flex items-center gap-1.5 flex-1 mx-1">
-                      <span className="text-[10px] font-semibold text-slate-500 shrink-0 hidden sm:block">
-                        Checkout:
-                      </span>
+                  {/* Row 2: payer selector + primary CTA */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 mr-auto">
+                      <span className="text-[10px] font-semibold text-slate-400 shrink-0">Pagar via:</span>
                       <button
                         onClick={() => setCheckoutPayerMode("agency")}
                         title="Agência processa o pagamento pelo preço base"
@@ -3586,80 +3584,41 @@ export function ProjectCreateNewPanel({
                       <button
                         onClick={() => setCheckoutPayerMode("client")}
                         disabled={calculateClientPayTotal() === 0}
-                        title={
-                          calculateClientPayTotal() === 0
-                            ? "Nenhum produto com pagamento do cliente"
-                            : "Cliente processa o pagamento pelo preço final"
-                        }
+                        title={calculateClientPayTotal() === 0 ? "Nenhum produto com pagamento do cliente" : "Cliente processa o pagamento pelo preço final"}
                         className={cn(
                           "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
                           checkoutPayerMode === "client"
                             ? "bg-emerald-600 text-white border-emerald-600"
                             : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300",
-                          calculateClientPayTotal() === 0 &&
-                            "opacity-40 cursor-not-allowed",
+                          calculateClientPayTotal() === 0 && "opacity-40 cursor-not-allowed",
                         )}
                       >
                         <User className="h-3 w-3" />
                         Cliente
                       </button>
                     </div>
-
-                    {/* Right group */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSaveDraftNow}
-                        disabled={loading || !!draftBlockReason}
-                        title={draftBlockReason ?? undefined}
-                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
-                      >
-                        {loadingAction === "draft" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Save className="h-3.5 w-3.5" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {loadingAction === "draft"
-                            ? "Salvando..."
-                            : "Salvar Rascunho"}
-                        </span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowNextStepModal(true)}
-                        title="Exportar, revisar ou enviar para aprovação"
-                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Mais opções</span>
-                      </Button>
-                      <button
-                        disabled={!!checkoutBlockReason || loading}
-                        title={checkoutBlockReason ?? undefined}
-                        onClick={handleProceedToCheckout}
-                        className="h-9 px-5 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
-                          boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
-                        }}
-                      >
-                        {loading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <CreditCard className="h-4 w-4" />
-                        )}
-                        {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
-                        {!loading && (
-                          <ChevronRight className="h-3.5 w-3.5 opacity-70" />
-                        )}
+                    <button
+                      disabled={!!checkoutBlockReason || loading}
+                      title={checkoutBlockReason ?? undefined}
+                      onClick={handleProceedToCheckout}
+                      className="h-10 px-6 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
+                      style={{
+                        background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                        boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
+                      }}
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-4 w-4" />
+                      )}
+                      {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
+                      {!loading && (
+                        <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                      )}
                       </button>
                     </div>
                   </div>
-                </div>
               </div>
             </div>
           )}

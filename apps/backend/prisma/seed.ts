@@ -145,12 +145,26 @@ async function main() {
     },
   });
 
+  // ─── Usuário Líder ────────────────────────────────────────────────────────
+  await prisma.user.upsert({
+    where: { email: "lider@allka.com.vc" },
+    update: { password_hash: sharedPassword, is_active: true },
+    create: {
+      email: "lider@allka.com.vc",
+      password_hash: sharedPassword,
+      name: "Líder Dev",
+      role: "lider",
+      account_type: "lider",
+      is_active: true,
+    },
+  });
+
   const companyUser = await prisma.user.upsert({
     where: { email: "empresa@exemplo.com" },
     update: {},
     create: {
       email: "empresa@exemplo.com",
-      password_hash: userPassword,
+      password_hash: sharedPassword,
       name: "João Silva",
       role: "company_admin",
       account_type: "empresas",
@@ -163,7 +177,7 @@ async function main() {
     update: {},
     create: {
       email: "parceiro@exemplo.com",
-      password_hash: userPassword,
+      password_hash: sharedPassword,
       name: "Carlos Mendonça",
       role: "partner",
       account_type: "parceiro",
@@ -176,7 +190,7 @@ async function main() {
     update: {},
     create: {
       email: "agencia@exemplo.com",
-      password_hash: userPassword,
+      password_hash: sharedPassword,
       name: "Agência Digital",
       role: "agency_admin",
       account_type: "agencias",
@@ -212,7 +226,7 @@ async function main() {
       update: {},
       create: {
         email: nomadeEmails[i],
-        password_hash: userPassword,
+        password_hash: sharedPassword,
         name: nomadeNames[i],
         role: "nomad",
         account_type: "nomades",
@@ -481,6 +495,7 @@ async function main() {
 
   // ─── Qualifications ────────────────────────────────────────────────────────
   await prisma.qualification.createMany({
+    skipDuplicates: true,
     data: [
       {
         nomade_id: nomades[0].id,

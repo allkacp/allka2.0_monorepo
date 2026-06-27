@@ -17,6 +17,116 @@ const now = new Date();
 const past = (d) => new Date(now.getTime() - d * 86_400_000);
 const future = (d) => new Date(now.getTime() + d * 86_400_000);
 
+// ── Base Users (admin + role accounts) ──────────────────────────────────────
+// Garante que todos os usuários necessários existam no banco antes dos seeds
+// específicos. Usa upsert — não apaga, não duplica. Senha: env ou fallback.
+async function seedBaseUsers() {
+  const password = process.env.SEED_TEST_USER_PASSWORD || "Test@2026!";
+  const hash = await bcrypt.hash(password, 10);
+
+  // Admin master (conta real de acesso ao painel admin)
+  await prisma.user.upsert({
+    where: { email: "cp@lamego.com.vc" },
+    update: { password_hash: hash, is_active: true },
+    create: {
+      email: "cp@lamego.com.vc",
+      password_hash: hash,
+      name: "Vinicius Guardia",
+      role: "admin",
+      account_type: "admin",
+      is_active: true,
+    },
+  });
+
+  // Agência (precisa existir antes de seedAgencia criar Agency e projetos)
+  await prisma.user.upsert({
+    where: { email: "agencia@allka.com.vc" },
+    update: { password_hash: hash, is_active: true },
+    create: {
+      email: "agencia@allka.com.vc",
+      password_hash: hash,
+      name: "Lamego Teste Agency",
+      role: "agency_admin",
+      account_type: "agencias",
+      is_active: true,
+    },
+  });
+
+  // Empresa (precisa existir antes de seedEmpresa criar Company e projetos)
+  await prisma.user.upsert({
+    where: { email: "empresa@allka.com.vc" },
+    update: { password_hash: hash, is_active: true },
+    create: {
+      email: "empresa@allka.com.vc",
+      password_hash: hash,
+      name: "TechStart Soluções Digitais",
+      role: "company_admin",
+      account_type: "empresas",
+      is_active: true,
+    },
+  });
+
+  // Nômade (conta dev para a tela /nomades)
+  await prisma.user.upsert({
+    where: { email: "nomade@allka.com.vc" },
+    update: { password_hash: hash, is_active: true },
+    create: {
+      email: "nomade@allka.com.vc",
+      password_hash: hash,
+      name: "Nômade Dev",
+      role: "nomad",
+      account_type: "nomades",
+      is_active: true,
+    },
+  });
+
+  // Parceiro (conta dev para a tela /parceiro)
+  await prisma.user.upsert({
+    where: { email: "parceiro@allka.com.vc" },
+    update: { password_hash: hash, is_active: true },
+    create: {
+      email: "parceiro@allka.com.vc",
+      password_hash: hash,
+      name: "Parceiro Dev",
+      role: "partner",
+      account_type: "parceiro",
+      is_active: true,
+    },
+  });
+
+  // Company Test (conta company com dados completos criados no seed.ts)
+  // O seed-real não cria os dados desta company — apenas garante o login existe.
+  const CT_COMPANY_ID = "cmqgqm0u3000a13ogmj3z2i6c";
+  await prisma.company.upsert({
+    where: { id: CT_COMPANY_ID },
+    update: {},
+    create: {
+      id: CT_COMPANY_ID,
+      name: "Company Test",
+      cnpj: "00.000.001/0001-99",
+      email: "company@allka.test",
+      phone: "(11) 90000-0001",
+      status: "ativo",
+      segment: "Tecnologia",
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: "company@allka.test" },
+    update: { password_hash: hash, company_id: CT_COMPANY_ID, is_active: true },
+    create: {
+      email: "company@allka.test",
+      password_hash: hash,
+      name: "Company Test",
+      role: "company_admin",
+      account_type: "empresas",
+      company_id: CT_COMPANY_ID,
+      is_active: true,
+    },
+  });
+
+  console.log("[seed-real] base users OK: admin · agencia · empresa · nomade · parceiro · company@allka.test");
+}
+
 // ── Agency ───────────────────────────────────────────────────────────────────
 async function seedAgencia() {
   const AGENCY_NAME = "Lamego Teste Agency";
@@ -381,7 +491,7 @@ async function seedLider() {
 // ── Runner ───────────────────────────────────────────────────────────────────
 async function main() {
   console.log("[seed-real] iniciando seed prod-safe (upsert idempotente)…");
-  for (const [name, fn] of [["agencia", seedAgencia], ["empresa", seedEmpresa], ["lider", seedLider]]) {
+  for (const [name, fn] of [["base-users", seedBaseUsers], ["agencia", seedAgencia], ["empresa", seedEmpresa], ["lider", seedLider]]) {
     try {
       await fn();
     } catch (err) {

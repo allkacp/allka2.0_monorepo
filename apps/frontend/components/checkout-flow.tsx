@@ -1364,553 +1364,305 @@ export function CheckoutFlow({
           </div>
         )}
 
-        {payerMode === "self" ? (
+        {payerMode === "self" || checkoutMode === "agency" ? (
           <>
-            <RadioGroup
-              value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as "single" | "split")}
-            >
-              <div className="flex items-center space-x-2 mb-3">
-                <RadioGroupItem value="single" id="single-payment" />
-                <Label htmlFor="single-payment" className="cursor-pointer">
+            {/* Single vs split toggle — only when not locked to checkoutMode */}
+            {!checkoutMode && (
+              <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("single")}
+                  className={`flex-1 py-2 font-semibold transition-all ${paymentMethod === "single" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                >
                   Pagamento único
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="split" id="split-payment" />
-                <Label htmlFor="split-payment" className="cursor-pointer">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("split")}
+                  className={`flex-1 py-2 font-semibold transition-all border-l border-slate-200 dark:border-slate-700 ${paymentMethod === "split" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                >
                   Dividir pagamento
-                </Label>
+                </button>
               </div>
-            </RadioGroup>
+            )}
 
-            <ScrollArea className="h-[320px]">
-              <div className="space-y-4 pr-4">
-                {paymentMethod === "single" ? (
-                  <>
-                    <Select
-                      value={selectedPaymentType}
-                      onValueChange={(v) => {
-                        setSelectedPaymentType(v as any);
-                        setSelectedSavedCardId(null);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o método de pagamento" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="credit_card">
-                          <div className="flex items-center space-x-2">
-                            <CreditCard className="h-4 w-4" />
-                            <span>Cartão de Crédito</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="pix">
-                          <div className="flex items-center space-x-2">
-                            <Smartphone className="h-4 w-4" />
-                            <span>Pix</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="boleto">
-                          <div className="flex items-center space-x-2">
-                            <FileText className="h-4 w-4" />
-                            <span>Boleto Bancário</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="credits">
-                          <div className="flex items-center space-x-2">
-                            <Wallet className="h-4 w-4" />
-                            <span>
-                              Créditos da Plataforma (
-                              {formatCurrency(userBalances.credits)})
-                            </span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="allkoins">
-                          <div className="flex items-center space-x-2">
-                            <Coins className="h-4 w-4" />
-                            <span>Allkoins ({userBalances.allkoins} AK)</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+            {paymentMethod === "single" ? (
+              <div className="space-y-4">
+                {/* Visual method picker tiles */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Forma de pagamento</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {([
+                      { type: "credit_card" as const, label: "Cartão",   sublabel: "Crédito/Débito",                    Icon: CreditCard, ac: "border-blue-500 bg-blue-50 dark:bg-blue-900/25",      ic: "text-blue-600 dark:text-blue-400" },
+                      { type: "pix" as const,         label: "Pix",      sublabel: "Instantâneo",                       Icon: Smartphone,  ac: "border-green-500 bg-green-50 dark:bg-green-900/25",   ic: "text-green-600 dark:text-green-400" },
+                      { type: "boleto" as const,      label: "Boleto",   sublabel: "3 dias úteis",                      Icon: FileText,    ac: "border-orange-500 bg-orange-50 dark:bg-orange-900/25", ic: "text-orange-500 dark:text-orange-400" },
+                      { type: "credits" as const,     label: "Créditos", sublabel: formatCurrency(userBalances.credits), Icon: Wallet,      ac: "border-purple-500 bg-purple-50 dark:bg-purple-900/25", ic: "text-purple-600 dark:text-purple-400" },
+                      { type: "allkoins" as const,    label: "Allkoins", sublabel: `${userBalances.allkoins} AK`,        Icon: Coins,       ac: "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/25", ic: "text-yellow-600 dark:text-yellow-400" },
+                    ] as const).map(({ type, label, sublabel, Icon, ac, ic }) => {
+                      const isActive = selectedPaymentType === type;
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentType(type);
+                            if (type !== "credit_card") setSelectedSavedCardId(null);
+                          }}
+                          className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border-2 text-center transition-all ${
+                            isActive ? ac : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                          }`}
+                        >
+                          <Icon className={`h-5 w-5 ${isActive ? ic : "text-slate-400 dark:text-slate-500"}`} />
+                          <span className={`text-xs font-bold leading-tight ${isActive ? ic : "text-slate-600 dark:text-slate-400"}`}>{label}</span>
+                          <span className="text-[9px] leading-tight text-slate-400 dark:text-slate-500">{sublabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                    {selectedPaymentType === "credit_card" && (
-                      <div className="space-y-3 mt-4">
-                        {allSavedCards.length > 0 && (
-                          <div className="space-y-2">
-                            <Label className="text-xs text-gray-500 dark:text-gray-400">
-                              Cartões salvos
-                            </Label>
-                            <div className="space-y-2">
-                              {allSavedCards.map((card) => (
-                                <button
-                                  key={card.id}
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedSavedCardId(
-                                      selectedSavedCardId === card.id
-                                        ? null
-                                        : card.id,
-                                    )
-                                  }
-                                  className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
-                                    selectedSavedCardId === card.id
-                                      ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                      : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
-                                  }`}
-                                >
-                                  <CreditCard className="h-4 w-4 shrink-0 text-gray-500" />
-                                  <div className="flex-1">
-                                    <p className="font-medium text-gray-900 dark:text-white">
-                                      {card.brand} ⬢⬢⬢⬢ {card.lastDigits}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {card.holder} · {card.expiry}
-                                    </p>
-                                  </div>
-                                  {selectedSavedCardId === card.id && (
-                                    <Check className="h-4 w-4 text-blue-600 shrink-0" />
-                                  )}
-                                </button>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => setSelectedSavedCardId(null)}
-                                className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
-                                  selectedSavedCardId === null
-                                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                    : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
-                                }`}
-                              >
-                                <CreditCard className="h-4 w-4 shrink-0 text-gray-500" />
-                                <span className="font-medium text-gray-700 dark:text-gray-300">
-                                  + Novo cartão
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {selectedSavedCardId === null && (
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <Label htmlFor="card-number">
-                                Número do Cartão *
-                              </Label>
-                              <Input
-                                id="card-number"
-                                value={creditCard.cardNumber}
-                                onChange={(e) =>
-                                  setCreditCard({
-                                    ...creditCard,
-                                    cardNumber: e.target.value,
-                                  })
-                                }
-                                placeholder="0000 0000 0000 0000"
-                                maxLength={19}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="card-name">
-                                Nome no Cartão *
-                              </Label>
-                              <Input
-                                id="card-name"
-                                value={creditCard.cardName}
-                                onChange={(e) =>
-                                  setCreditCard({
-                                    ...creditCard,
-                                    cardName: e.target.value,
-                                  })
-                                }
-                                placeholder="Nome como está no cartão"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-2">
-                                <Label htmlFor="expiry">Validade *</Label>
-                                <Input
-                                  id="expiry"
-                                  value={creditCard.expiryDate}
-                                  onChange={(e) =>
-                                    setCreditCard({
-                                      ...creditCard,
-                                      expiryDate: e.target.value,
-                                    })
-                                  }
-                                  placeholder="MM/AA"
-                                  maxLength={5}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="cvv">CVV *</Label>
-                                <Input
-                                  id="cvv"
-                                  value={creditCard.cvv}
-                                  onChange={(e) =>
-                                    setCreditCard({
-                                      ...creditCard,
-                                      cvv: e.target.value,
-                                    })
-                                  }
-                                  placeholder="123"
-                                  maxLength={4}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedPaymentType === "pix" && (
-                      <Card className="p-4 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 mt-4">
-                        <div className="flex items-start space-x-3">
-                          <Smartphone className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                              Pagamento via Pix
-                            </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              Após confirmar, você receberá um QR Code para
-                              realizar o pagamento instantaneamente.
-                            </p>
-                          </div>
-                        </div>
-                      </Card>
-                    )}
-
-                    {selectedPaymentType === "boleto" && (
-                      <Card className="p-4 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 mt-4">
-                        <div className="flex items-start space-x-3">
-                          <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                              Boleto Bancário
-                            </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              O boleto será gerado após a confirmação. Prazo de
-                              vencimento: 3 dias úteis.
-                            </p>
-                          </div>
-                        </div>
-                      </Card>
-                    )}
-
-                    {selectedPaymentType === "credits" && (
-                      <Card className="p-4 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 mt-4">
-                        <div className="flex items-start space-x-3">
-                          <Wallet className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                              Créditos da Plataforma
-                            </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                              Saldo disponível:{" "}
-                              {formatCurrency(userBalances.credits)}
-                            </p>
-                            {totalPrice > userBalances.credits && (
-                              <p className="text-xs text-red-600 dark:text-red-400">
-                                Saldo insuficiente. Considere dividir o
-                                pagamento.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    )}
-
-                    {selectedPaymentType === "allkoins" && (
-                      <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 mt-4">
-                        <div className="flex items-start space-x-3">
-                          <Coins className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">
-                              Allkoins
-                            </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                              Saldo disponível: {userBalances.allkoins} AK (�0�{" "}
-                              {formatCurrency(userBalances.allkoins * 1)})
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              Taxa de conversão: 1 AK = R$ 1,00
-                            </p>
-                          </div>
-                        </div>
-                      </Card>
-                    )}
-                  </>
-                ) : (
+                {selectedPaymentType === "credit_card" && (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      Combine diferentes métodos de pagamento para completar o
-                      valor total.
-                    </p>
-
-                    {/* Credit Card Split */}
-                    <Card className="p-3">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <Checkbox
-                          id="split-credit-card"
-                          checked={splitPayments.credit_card.enabled}
-                          onCheckedChange={(checked) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              credit_card: {
-                                ...splitPayments.credit_card,
-                                enabled: !!checked,
-                              },
-                            })
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Cartão</p>
+                    <div className="space-y-2">
+                      {allSavedCards.map((card) => (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedSavedCardId(
+                              selectedSavedCardId === card.id ? null : card.id,
+                            )
                           }
-                        />
-                        <Label
-                          htmlFor="split-credit-card"
-                          className="flex items-center space-x-2 cursor-pointer flex-1"
+                          className={`w-full flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left text-sm transition-all ${
+                            selectedSavedCardId === card.id
+                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                              : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                          }`}
                         >
-                          <CreditCard className="h-4 w-4" />
-                          <span>Cartão de Crédito</span>
-                        </Label>
-                      </div>
-                      {splitPayments.credit_card.enabled && (
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-800 to-violet-900 flex items-center justify-center shrink-0">
+                            <CreditCard className="h-4 w-4 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-white text-xs">{card.brand} •••• {card.lastDigits}</p>
+                            <p className="text-[10px] text-slate-500">{card.holder} · {card.expiry}</p>
+                          </div>
+                          {selectedSavedCardId === card.id && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSavedCardId(null)}
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-sm transition-all ${
+                          selectedSavedCardId === null
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <CreditCard className="h-4 w-4 text-slate-400" />
+                        <span className="font-medium text-slate-600 dark:text-slate-400">+ Novo cartão</span>
+                      </button>
+                    </div>
+                    {selectedSavedCardId === null && (
+                      <div className="space-y-3 pt-1">
                         <Input
-                          type="number"
-                          value={splitPayments.credit_card.amount || ""}
-                          onChange={(e) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              credit_card: {
-                                ...splitPayments.credit_card,
-                                amount: Number(e.target.value),
-                              },
-                            })
-                          }
-                          placeholder="Valor"
-                          className="mt-2"
+                          value={creditCard.cardNumber}
+                          onChange={(e) => setCreditCard({ ...creditCard, cardNumber: e.target.value })}
+                          placeholder="0000 0000 0000 0000"
+                          maxLength={19}
                         />
-                      )}
-                    </Card>
-
-                    {/* Pix Split */}
-                    <Card className="p-3">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <Checkbox
-                          id="split-pix"
-                          checked={splitPayments.pix.enabled}
-                          onCheckedChange={(checked) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              pix: { ...splitPayments.pix, enabled: !!checked },
-                            })
-                          }
-                        />
-                        <Label
-                          htmlFor="split-pix"
-                          className="flex items-center space-x-2 cursor-pointer flex-1"
-                        >
-                          <Smartphone className="h-4 w-4" />
-                          <span>Pix</span>
-                        </Label>
-                      </div>
-                      {splitPayments.pix.enabled && (
                         <Input
-                          type="number"
-                          value={splitPayments.pix.amount || ""}
-                          onChange={(e) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              pix: {
-                                ...splitPayments.pix,
-                                amount: Number(e.target.value),
-                              },
-                            })
-                          }
-                          placeholder="Valor"
-                          className="mt-2"
+                          value={creditCard.cardName}
+                          onChange={(e) => setCreditCard({ ...creditCard, cardName: e.target.value })}
+                          placeholder="Nome como está no cartão"
                         />
-                      )}
-                    </Card>
-
-                    {/* Credits Split */}
-                    <Card className="p-3">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <Checkbox
-                          id="split-credits"
-                          checked={splitPayments.credits.enabled}
-                          onCheckedChange={(checked) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              credits: {
-                                ...splitPayments.credits,
-                                enabled: !!checked,
-                              },
-                            })
-                          }
-                        />
-                        <Label
-                          htmlFor="split-credits"
-                          className="flex items-center space-x-2 cursor-pointer flex-1"
-                        >
-                          <Wallet className="h-4 w-4" />
-                          <span>
-                            Créditos ({formatCurrency(userBalances.credits)})
-                          </span>
-                        </Label>
-                      </div>
-                      {splitPayments.credits.enabled && (
-                        <Input
-                          type="number"
-                          value={splitPayments.credits.amount || ""}
-                          onChange={(e) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              credits: {
-                                ...splitPayments.credits,
-                                amount: Math.min(
-                                  Number(e.target.value),
-                                  userBalances.credits,
-                                ),
-                              },
-                            })
-                          }
-                          placeholder="Valor"
-                          max={userBalances.credits}
-                          className="mt-2"
-                        />
-                      )}
-                    </Card>
-
-                    {/* Allkoins Split */}
-                    <Card className="p-3">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <Checkbox
-                          id="split-allkoins"
-                          checked={splitPayments.allkoins.enabled}
-                          onCheckedChange={(checked) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              allkoins: {
-                                ...splitPayments.allkoins,
-                                enabled: !!checked,
-                              },
-                            })
-                          }
-                        />
-                        <Label
-                          htmlFor="split-allkoins"
-                          className="flex items-center space-x-2 cursor-pointer flex-1"
-                        >
-                          <Coins className="h-4 w-4" />
-                          <span>Allkoins ({userBalances.allkoins} AK)</span>
-                        </Label>
-                      </div>
-                      {splitPayments.allkoins.enabled && (
-                        <Input
-                          type="number"
-                          value={splitPayments.allkoins.amount || ""}
-                          onChange={(e) =>
-                            setSplitPayments({
-                              ...splitPayments,
-                              allkoins: {
-                                ...splitPayments.allkoins,
-                                amount: Math.min(
-                                  Number(e.target.value),
-                                  userBalances.allkoins,
-                                ),
-                              },
-                            })
-                          }
-                          placeholder="Valor"
-                          max={userBalances.allkoins}
-                          className="mt-2"
-                        />
-                      )}
-                    </Card>
-
-                    {/* Split Summary */}
-                    <Card
-                      className={`p-3 ${remaining === 0 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"}`}
-                    >
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Total:
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(totalPrice)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Alocado:
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(totalSplit)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t pt-1">
-                          <span className="font-semibold">Restante:</span>
-                          <span
-                            className={`font-bold ${remaining === 0 ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}`}
-                          >
-                            {formatCurrency(remaining)}
-                          </span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input
+                            value={creditCard.expiryDate}
+                            onChange={(e) => setCreditCard({ ...creditCard, expiryDate: e.target.value })}
+                            placeholder="MM/AA"
+                            maxLength={5}
+                          />
+                          <Input
+                            value={creditCard.cvv}
+                            onChange={(e) => setCreditCard({ ...creditCard, cvv: e.target.value })}
+                            placeholder="CVV"
+                            maxLength={4}
+                          />
                         </div>
                       </div>
-                    </Card>
+                    )}
+                  </div>
+                )}
+
+                {selectedPaymentType === "pix" && (
+                  <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 flex items-start gap-3">
+                    <Smartphone className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-green-800 dark:text-green-300">Pix — pagamento instantâneo</p>
+                      <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">Após confirmar, você receberá um QR Code para realizar o pagamento.</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedPaymentType === "boleto" && (
+                  <div className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 px-4 py-3 flex items-start gap-3">
+                    <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">Boleto bancário</p>
+                      <p className="text-xs text-orange-700 dark:text-orange-400 mt-0.5">O boleto será gerado após a confirmação. Vencimento: 3 dias úteis.</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedPaymentType === "credits" && (
+                  <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 px-4 py-3 flex items-start gap-3">
+                    <Wallet className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-purple-800 dark:text-purple-300">Créditos da plataforma</p>
+                      <p className="text-xs text-purple-700 dark:text-purple-400 mt-0.5">Saldo disponível: {formatCurrency(userBalances.credits)}</p>
+                      {totalPrice > userBalances.credits && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">Saldo insuficiente. Considere dividir o pagamento.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {selectedPaymentType === "allkoins" && (
+                  <div className="rounded-xl border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 flex items-start gap-3">
+                    <Coins className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">Allkoins</p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">Saldo: {userBalances.allkoins} AK · Conversão: 1 AK = R$ 1,00</p>
+                    </div>
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Combine métodos para cobrir {formatCurrency(totalPrice)}
+                </p>
+
+                {/* Credit Card Split */}
+                <Card className="p-3">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Checkbox id="split-credit-card" checked={splitPayments.credit_card.enabled}
+                      onCheckedChange={(checked) => setSplitPayments({ ...splitPayments, credit_card: { ...splitPayments.credit_card, enabled: !!checked } })}
+                    />
+                    <Label htmlFor="split-credit-card" className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <CreditCard className="h-4 w-4" /><span>Cartão de Crédito</span>
+                    </Label>
+                  </div>
+                  {splitPayments.credit_card.enabled && (
+                    <Input type="number" value={splitPayments.credit_card.amount || ""} placeholder="Valor" className="mt-2"
+                      onChange={(e) => setSplitPayments({ ...splitPayments, credit_card: { ...splitPayments.credit_card, amount: Number(e.target.value) } })}
+                    />
+                  )}
+                </Card>
+
+                {/* Pix Split */}
+                <Card className="p-3">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Checkbox id="split-pix" checked={splitPayments.pix.enabled}
+                      onCheckedChange={(checked) => setSplitPayments({ ...splitPayments, pix: { ...splitPayments.pix, enabled: !!checked } })}
+                    />
+                    <Label htmlFor="split-pix" className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <Smartphone className="h-4 w-4" /><span>Pix</span>
+                    </Label>
+                  </div>
+                  {splitPayments.pix.enabled && (
+                    <Input type="number" value={splitPayments.pix.amount || ""} placeholder="Valor" className="mt-2"
+                      onChange={(e) => setSplitPayments({ ...splitPayments, pix: { ...splitPayments.pix, amount: Number(e.target.value) } })}
+                    />
+                  )}
+                </Card>
+
+                {/* Credits Split */}
+                <Card className="p-3">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Checkbox id="split-credits" checked={splitPayments.credits.enabled}
+                      onCheckedChange={(checked) => setSplitPayments({ ...splitPayments, credits: { ...splitPayments.credits, enabled: !!checked } })}
+                    />
+                    <Label htmlFor="split-credits" className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <Wallet className="h-4 w-4" /><span>Créditos ({formatCurrency(userBalances.credits)})</span>
+                    </Label>
+                  </div>
+                  {splitPayments.credits.enabled && (
+                    <Input type="number" value={splitPayments.credits.amount || ""} placeholder="Valor" max={userBalances.credits} className="mt-2"
+                      onChange={(e) => setSplitPayments({ ...splitPayments, credits: { ...splitPayments.credits, amount: Math.min(Number(e.target.value), userBalances.credits) } })}
+                    />
+                  )}
+                </Card>
+
+                {/* Allkoins Split */}
+                <Card className="p-3">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Checkbox id="split-allkoins" checked={splitPayments.allkoins.enabled}
+                      onCheckedChange={(checked) => setSplitPayments({ ...splitPayments, allkoins: { ...splitPayments.allkoins, enabled: !!checked } })}
+                    />
+                    <Label htmlFor="split-allkoins" className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <Coins className="h-4 w-4" /><span>Allkoins ({userBalances.allkoins} AK)</span>
+                    </Label>
+                  </div>
+                  {splitPayments.allkoins.enabled && (
+                    <Input type="number" value={splitPayments.allkoins.amount || ""} placeholder="Valor" max={userBalances.allkoins} className="mt-2"
+                      onChange={(e) => setSplitPayments({ ...splitPayments, allkoins: { ...splitPayments.allkoins, amount: Math.min(Number(e.target.value), userBalances.allkoins) } })}
+                    />
+                  )}
+                </Card>
+
+                {/* Split Summary */}
+                <Card className={`p-3 ${remaining === 0 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"}`}>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Total:</span><span className="font-medium">{formatCurrency(totalPrice)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Alocado:</span><span className="font-medium">{formatCurrency(totalSplit)}</span></div>
+                    <div className="flex justify-between border-t pt-1">
+                      <span className="font-semibold">Restante:</span>
+                      <span className={`font-bold ${remaining === 0 ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}`}>{formatCurrency(remaining)}</span>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Selecione o método de pagamento disponível para o cliente:
-            </p>
-            <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Método de pagamento do cliente</p>
+            <div className="grid grid-cols-3 gap-2">
               {(["credit_card", "pix", "boleto"] as const).map((type) => {
-                const icons = {
-                  credit_card: CreditCard,
-                  pix: Smartphone,
-                  boleto: FileText,
-                };
-                const labels = {
-                  credit_card: "Cartão de Crédito",
-                  pix: "Pix",
-                  boleto: "Boleto Bancário",
-                };
+                const icons = { credit_card: CreditCard, pix: Smartphone, boleto: FileText };
+                const labels = { credit_card: "Cartão", pix: "Pix", boleto: "Boleto" };
+                const sublabels = { credit_card: "Crédito/Débito", pix: "Instantâneo", boleto: "3 dias úteis" };
+                const aColors = { credit_card: "border-blue-500 bg-blue-50 dark:bg-blue-900/25", pix: "border-green-500 bg-green-50 dark:bg-green-900/25", boleto: "border-orange-500 bg-orange-50 dark:bg-orange-900/25" };
+                const iColors = { credit_card: "text-blue-600 dark:text-blue-400", pix: "text-green-600 dark:text-green-400", boleto: "text-orange-500 dark:text-orange-400" };
                 const Icon = icons[type];
+                const isActive = selectedPaymentType === type;
                 return (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setSelectedPaymentType(type)}
-                    className={`w-full flex items-center gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors ${
-                      selectedPaymentType === type
-                        ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                        : "border-gray-200 dark:border-slate-700 hover:border-gray-300"
+                    className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border-2 text-center transition-all ${
+                      isActive ? aColors[type] : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
                     }`}
                   >
-                    <Icon className="h-4 w-4 shrink-0 text-gray-500" />
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {labels[type]}
-                    </span>
-                    {selectedPaymentType === type && (
-                      <Check className="h-4 w-4 text-purple-600 ml-auto shrink-0" />
-                    )}
+                    <Icon className={`h-5 w-5 ${isActive ? iColors[type] : "text-slate-400 dark:text-slate-500"}`} />
+                    <span className={`text-xs font-bold ${isActive ? iColors[type] : "text-slate-600 dark:text-slate-400"}`}>{labels[type]}</span>
+                    <span className="text-[9px] text-slate-400 dark:text-slate-500">{sublabels[type]}</span>
                   </button>
                 );
               })}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              O cliente receberá um link de pagamento seguro com o método
-              selecionado.
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              O cliente receberá um link de pagamento seguro com o método selecionado.
             </p>
           </div>
         )}
       </div>
     );
   };
+
 
   const renderStep5 = () => {
     const project =
