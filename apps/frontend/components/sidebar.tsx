@@ -574,6 +574,14 @@ const LEVEL_CONFIG_SIDEBAR = {
   },
 } as const;
 
+const LEVEL_CONFIG_NOMAD_SIDEBAR = {
+  bronze:   { label: "Bronze",   emoji: "🥉", gradient: "from-amber-500 to-amber-700",   bar: "bg-gradient-to-r from-amber-400 to-amber-600",   text: "text-amber-300",  bg: "bg-amber-500/20",  border: "border-amber-400/30",  nextLabel: "Silver",   nextTasksRequired: 20  },
+  silver:   { label: "Silver",   emoji: "🥈", gradient: "from-slate-300 to-slate-500",   bar: "bg-gradient-to-r from-slate-300 to-slate-500",   text: "text-slate-300",  bg: "bg-slate-400/20",  border: "border-slate-300/30",  nextLabel: "Gold",     nextTasksRequired: 50  },
+  gold:     { label: "Gold",     emoji: "🥇", gradient: "from-yellow-400 to-yellow-600", bar: "bg-gradient-to-r from-yellow-400 to-yellow-600", text: "text-yellow-300", bg: "bg-yellow-500/20", border: "border-yellow-400/30", nextLabel: "Platinum", nextTasksRequired: 100 },
+  platinum: { label: "Platinum", emoji: "✨", gradient: "from-sky-300 to-sky-500",       bar: "bg-gradient-to-r from-sky-300 to-sky-500",       text: "text-sky-300",    bg: "bg-sky-500/20",    border: "border-sky-300/30",    nextLabel: "Diamond",  nextTasksRequired: 200 },
+  diamond:  { label: "Diamond",  emoji: "💎", gradient: "from-violet-400 to-purple-600", bar: "bg-gradient-to-r from-violet-400 to-purple-600", text: "text-violet-300", bg: "bg-violet-500/20", border: "border-violet-400/30", nextLabel: null,       nextTasksRequired: null },
+};
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [agencyModalOpen, setAgencyModalOpen] = useState(false);
@@ -626,6 +634,15 @@ export function Sidebar() {
   const agenciaLevel = (agencia.profile?.partnerLevel ?? "bronze") as keyof typeof LEVEL_CONFIG_SIDEBAR;
   const agenciaTotalProjects = agencia.profile?.totalProjects ?? 0;
   const agenciaMrr = agencia.profile?.currentMrr ?? 0;
+
+  const [nomadUser, setNomadUser] = useState<{ name?: string; level?: string; nivel?: string; doneTasks?: number } | null>(null);
+  useEffect(() => {
+    if (accountType !== "nomades") return;
+    try {
+      const u = JSON.parse(localStorage.getItem("allka_user") || "{}");
+      setNomadUser(u);
+    } catch { setNomadUser({}); }
+  }, [accountType]);
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (collapsed) return;
@@ -1201,6 +1218,59 @@ export function Sidebar() {
               </div>
             )}
           </div>
+
+          {accountType === "nomades" && !collapsed && nomadUser && (() => {
+            const rawLevel = (nomadUser.level ?? nomadUser.nivel ?? "bronze").toLowerCase();
+            const lvl = LEVEL_CONFIG_NOMAD_SIDEBAR[rawLevel as keyof typeof LEVEL_CONFIG_NOMAD_SIDEBAR] ?? LEVEL_CONFIG_NOMAD_SIDEBAR.bronze;
+            const doneTasks = nomadUser.doneTasks ?? 0;
+            const nextReq = lvl.nextTasksRequired;
+            const progress = nextReq ? Math.min(100, Math.round((doneTasks / nextReq) * 100)) : 100;
+            const nomadName = nomadUser.name ?? nomadUser.nome ?? "Nômade";
+            const initials = nomadName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+            return (
+              <div className="relative px-2 py-2 border-b border-white/10 backdrop-blur-sm">
+                <Link
+                  to="/nomad/dashboard"
+                  className="w-full group relative overflow-hidden rounded-xl bg-white/10 hover:bg-white/15 transition-all duration-300 p-3 border border-white/10 hover:border-white/20 block"
+                >
+                  <div className="relative flex items-center space-x-3 mb-2.5">
+                    <div className="relative shrink-0">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm text-white bg-gradient-to-br ${lvl.gradient} ring-2 ring-white/20`}>
+                        {initials}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-semibold text-white truncate group-hover:text-blue-100 transition-colors">
+                        {nomadName}
+                      </p>
+                      <div className={`inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${lvl.bg} ${lvl.border} border ${lvl.text}`}>
+                        <span>{lvl.emoji}</span>
+                        <span>{lvl.label}</span>
+                      </div>
+                    </div>
+                    <Trophy className={`h-4 w-4 shrink-0 ${lvl.text} opacity-60`} />
+                  </div>
+                  {nextReq ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-white/50">Progresso → {lvl.nextLabel}</span>
+                        <span className={`text-[10px] font-bold ${lvl.text}`}>{progress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${lvl.bar} transition-all duration-700`} style={{ width: `${progress}%` }} />
+                      </div>
+                      <p className="text-[10px] text-white/40">{doneTasks}/{nextReq} tarefas · ver dashboard</p>
+                    </div>
+                  ) : (
+                    <div className={`flex items-center gap-1.5 text-[10px] ${lvl.text} font-semibold`}>
+                      <Sparkles className="h-3 w-3" />
+                      Nível máximo atingido!
+                    </div>
+                  )}
+                </Link>
+              </div>
+            );
+          })()}
 
           {accountType === "agencias" && !collapsed && (() => {
             const lvl = LEVEL_CONFIG_SIDEBAR[agenciaLevel];

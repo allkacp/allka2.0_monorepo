@@ -173,7 +173,10 @@ const LEVEL_CONFIG: Record<
   string,
   {
     label: string;
+    emoji: string;
     color: string;
+    textMuted: string;
+    barColor: string;
     bonus: number;
     nextLevel?: string;
     tasksNeeded: number;
@@ -181,35 +184,50 @@ const LEVEL_CONFIG: Record<
 > = {
   bronze: {
     label: "Bronze",
-    color: "from-amber-400 to-amber-600",
+    emoji: "🥉",
+    color: "from-amber-500 to-amber-700",
+    textMuted: "text-amber-200",
+    barColor: "bg-amber-300",
     bonus: 0,
     nextLevel: "silver",
     tasksNeeded: 20,
   },
   silver: {
     label: "Silver",
-    color: "from-slate-300 to-slate-500",
+    emoji: "🥈",
+    color: "from-slate-400 to-slate-600",
+    textMuted: "text-slate-200",
+    barColor: "bg-slate-300",
     bonus: 5,
     nextLevel: "gold",
     tasksNeeded: 50,
   },
   gold: {
     label: "Gold",
-    color: "from-yellow-400 to-yellow-600",
+    emoji: "🥇",
+    color: "from-yellow-500 to-yellow-700",
+    textMuted: "text-yellow-200",
+    barColor: "bg-yellow-300",
     bonus: 10,
     nextLevel: "platinum",
     tasksNeeded: 100,
   },
   platinum: {
     label: "Platinum",
-    color: "from-sky-300 to-sky-500",
+    emoji: "✨",
+    color: "from-sky-400 to-sky-700",
+    textMuted: "text-sky-200",
+    barColor: "bg-sky-300",
     bonus: 15,
     nextLevel: "diamond",
     tasksNeeded: 200,
   },
   diamond: {
     label: "Diamond",
-    color: "from-violet-400 to-violet-600",
+    emoji: "💎",
+    color: "from-violet-500 to-purple-700",
+    textMuted: "text-violet-200",
+    barColor: "bg-violet-300",
     bonus: 20,
     tasksNeeded: 999,
   },
@@ -869,70 +887,68 @@ export default function NomadeDashboardPage() {
         <div
           key={w.id}
           className={cn(
-            "bg-linear-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-sm",
+            "bg-linear-to-br rounded-2xl p-4 text-white shadow-md",
+            lvlCfg.color,
             w.colSpan === 2 ? "col-span-2" : "col-span-1",
           )}
         >
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-xl shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-base shrink-0">
                 {initials(userName)}
               </div>
-              <div>
-                <p className="text-emerald-200 text-sm font-medium">Nômade</p>
-                <h2 className="text-2xl font-bold">{userName}</h2>
-                <p className="text-emerald-200 text-sm">{userEmail}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("text-[10px] font-bold uppercase tracking-wider", lvlCfg.textMuted)}>Nômade</span>
+                  <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 border border-white/30 text-white")}>
+                    {lvlCfg.emoji} {lvlCfg.label}
+                  </span>
+                </div>
+                <h2 className="text-base font-bold leading-tight truncate">{userName}</h2>
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2">
-              <span
-                className={cn(
-                  "bg-linear-to-r text-white px-3 py-1 rounded-full text-sm font-semibold capitalize shadow-sm",
-                  lvlCfg.color,
-                )}
-              >
-                {lvlCfg.label}
-              </span>
+            <div className="flex flex-col items-end gap-1 shrink-0">
               {userRating > 0 && (
-                <div className="flex items-center gap-1 text-yellow-300">
-                  <Star className="h-4 w-4 fill-yellow-300" />
-                  <span className="text-sm font-semibold">
-                    {userRating.toFixed(1)}
-                  </span>
+                <div className="flex items-center gap-0.5 text-yellow-300">
+                  <Star className="h-3.5 w-3.5 fill-yellow-300" />
+                  <span className="text-xs font-semibold">{userRating.toFixed(1)}</span>
                 </div>
               )}
+              <span className={cn("text-[10px]", lvlCfg.textMuted)}>
+                bônus {lvlCfg.bonus}%
+              </span>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-4">
-            <div className="bg-white/10 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold">{doneTasks.length}</p>
-              <p className="text-emerald-200 text-xs mt-0.5">Concluídas</p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold leading-none">{doneTasks.length}</p>
+              <p className={cn("text-[10px] mt-0.5", lvlCfg.textMuted)}>Concluídas</p>
             </div>
-            <div className="bg-white/10 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold">{activeTasks.length}</p>
-              <p className="text-emerald-200 text-xs mt-0.5">Em execução</p>
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold leading-none">{activeTasks.length}</p>
+              <p className={cn("text-[10px] mt-0.5", lvlCfg.textMuted)}>Em execução</p>
             </div>
-            <div className="bg-white/10 rounded-xl p-3 text-center">
-              <p className="text-lg font-bold">{fmtBRL(totalEarned)}</p>
-              <p className="text-emerald-200 text-xs mt-0.5">Total ganho</p>
+            <div className="bg-white/10 rounded-lg p-2 text-center">
+              <p className="text-sm font-bold leading-none">{fmtBRL(totalEarned)}</p>
+              <p className={cn("text-[10px] mt-0.5", lvlCfg.textMuted)}>Total ganho</p>
             </div>
           </div>
 
           {lvlCfg.nextLevel && (
-            <div className="mt-4">
+            <div className="mt-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-emerald-200">
-                  Progresso para {LEVEL_CONFIG[lvlCfg.nextLevel]?.label}
+                <span className={cn("text-[10px]", lvlCfg.textMuted)}>
+                  Progresso → {LEVEL_CONFIG[lvlCfg.nextLevel]?.label}
                 </span>
-                <span className="text-xs text-white font-medium">
-                  {completedCount}/{nextThreshold} tarefas
+                <span className="text-[10px] text-white font-semibold">
+                  {completedCount}/{nextThreshold}
                 </span>
               </div>
-              <div className="w-full bg-white/20 rounded-full h-2">
+              <div className="w-full bg-white/20 rounded-full h-1.5">
                 <div
-                  className="h-2 rounded-full bg-white transition-all"
+                  className={cn("h-1.5 rounded-full transition-all", lvlCfg.barColor)}
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
