@@ -2354,14 +2354,14 @@ export function ProjectCreateNewPanel({
                 </AccordionContent>
               </AccordionItem>
 
-              {/* ── SEÇÃO 4: ORÇAMENTO ── */}
+              {/* ── SEÇÃO 2: ORÇAMENTO ── */}
               <AccordionItem
                 value="orcamento"
                 className="border border-slate-200 rounded-lg overflow-hidden"
               >
                 <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-orange-100 text-orange-700">4</Badge>
+                    <Badge className="bg-orange-100 text-orange-700">2</Badge>
                     Orçamento
                   </div>
                 </AccordionTrigger>
@@ -2387,14 +2387,14 @@ export function ProjectCreateNewPanel({
                 </AccordionContent>
               </AccordionItem>
 
-              {/* ── SEÇÃO 5: CONFIGURAÇÕES ── */}
+              {/* ── SEÇÃO 3: CONFIGURAÇÕES ── */}
               <AccordionItem
                 value="config"
                 className="border border-slate-200 rounded-lg overflow-hidden"
               >
                 <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-indigo-100 text-indigo-700">5</Badge>
+                    <Badge className="bg-indigo-100 text-indigo-700">3</Badge>
                     Configurações &amp; Descrição
                   </div>
                 </AccordionTrigger>
