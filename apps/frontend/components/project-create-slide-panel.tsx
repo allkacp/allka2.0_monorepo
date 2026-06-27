@@ -181,12 +181,6 @@ export function ProjectCreateSlidePanel({
   const [productSearch, setProductSearch] = useState("");
   const [productCategory, setProductCategory] = useState("Todos");
   const [activeTab, setActiveTab] = useState("info");
-  const [formLifecycle, setFormLifecycle] = useState<
-    "Avulso" | "Mensal" | "Outro"
-  >("Avulso");
-  const [formBillingDay, setFormBillingDay] = useState<number>(15);
-  const [customProjectType, setCustomProjectType] = useState("");
-
   const [showProductModal, setShowProductModal] = useState(false);
 
   const [vaultCredentials, setVaultCredentials] = useState<
@@ -349,10 +343,6 @@ export function ProjectCreateSlidePanel({
     setLoading(true);
 
     try {
-      // ── Normalise lifecycle to the lowercase values the backend expects
-      const lifecycleNorm: "avulso" | "mensal" =
-        formLifecycle === "Mensal" ? "mensal" : "avulso";
-
       const projectData = {
         // Backend uses `title`, not `name`
         title: formData.name,
@@ -364,14 +354,8 @@ export function ProjectCreateSlidePanel({
         // Project starts as draft; status moves to "awaiting-payment" only
         // when the user explicitly proceeds to checkout.
         status: "draft",
-        lifecycle: lifecycleNorm,
-        type:
-          customProjectType ||
-          (formLifecycle !== "Avulso" && formLifecycle !== "Mensal"
-            ? formLifecycle
-            : undefined),
+        lifecycle: "avulso" as const,
         value: calculateTotal(),
-        billing_day: formLifecycle === "Mensal" ? formBillingDay : undefined,
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
         budget: formData.budget
@@ -950,16 +934,13 @@ export function ProjectCreateSlidePanel({
   const handleConfirmDraft = async () => {
     setLoading(true);
     try {
-      const lifecycleNorm: "avulso" | "mensal" =
-        formLifecycle === "Mensal" ? "mensal" : "avulso";
-
       const draftData = {
         title: formData.name,
         description: formData.description,
         client_id: formData.client_id || undefined,
         consultant: formData.manager_id || undefined,
         status: "draft" as const,
-        lifecycle: lifecycleNorm,
+        lifecycle: "avulso" as const,
         value: calculateTotal(),
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
@@ -1508,37 +1489,11 @@ export function ProjectCreateSlidePanel({
                           );
                         })}
                       </div>
-                      <div className="border-t border-slate-200 pt-2 space-y-1">
-                        {formLifecycle === "Mensal" ? (
-                          <>
-                            <div className="flex justify-between text-xs text-slate-500">
-                              <span>Tipo de cobrança</span>
-                              <span className="font-medium text-blue-600">
-                                Recorrente Mensal
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-xs text-slate-500">
-                              <span>Dia de cobrança</span>
-                              <span>Dia {formBillingDay}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex justify-between text-xs text-slate-500">
-                            <span>Tipo</span>
-                            <span className="font-medium text-slate-700">
-                              Pagamento Único
-                            </span>
-                          </div>
-                        )}
+                      <div className="border-t border-slate-200 pt-2">
                         <div className="flex justify-between text-base font-bold text-slate-900 pt-1">
                           <span>Total</span>
                           <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
                             {formatCurrency(calculateTotal())}
-                            {formLifecycle === "Mensal" && (
-                              <span className="text-xs font-normal text-slate-500">
-                                /mês
-                              </span>
-                            )}
                           </span>
                         </div>
                       </div>
@@ -1786,78 +1741,6 @@ export function ProjectCreateSlidePanel({
                               />
                             </div>
 
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
-                                Tipo de Projeto
-                              </Label>
-                              <div className="flex gap-2">
-                                {(["Avulso", "Mensal", "Outro"] as const).map(
-                                  (lc) => (
-                                    <button
-                                      key={lc}
-                                      type="button"
-                                      onClick={() => setFormLifecycle(lc)}
-                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-                                        formLifecycle === lc
-                                          ? "bg-violet-600 text-white border-violet-600"
-                                          : "bg-white border-slate-300 text-slate-600 hover:border-violet-400"
-                                      }`}
-                                    >
-                                      {lc === "Mensal" && (
-                                        <RefreshCw className="h-3 w-3" />
-                                      )}
-                                      {lc}
-                                    </button>
-                                  ),
-                                )}
-                              </div>
-                            </div>
-                            {formLifecycle === "Outro" && (
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
-                                  Nome do tipo personalizado
-                                </Label>
-                                <Input
-                                  type="text"
-                                  value={customProjectType}
-                                  onChange={(e) =>
-                                    setCustomProjectType(e.target.value)
-                                  }
-                                  placeholder="Ex: Consultoria, Implantação..."
-                                  className="h-9 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
-                                />
-                              </div>
-                            )}
-                            {formLifecycle === "Mensal" && (
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-green-900 dark:text-green-100">
-                                  Dia mensal de cobrança
-                                </Label>
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    max={28}
-                                    value={formBillingDay}
-                                    onChange={(e) =>
-                                      setFormBillingDay(
-                                        Math.min(
-                                          28,
-                                          Math.max(
-                                            1,
-                                            parseInt(e.target.value) || 1,
-                                          ),
-                                        ),
-                                      )
-                                    }
-                                    className="h-9 w-20 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
-                                  />
-                                  <span className="text-xs text-slate-500">
-                                    de cada mês
-                                  </span>
-                                </div>
-                              </div>
-                            )}
                           </CardContent>
                         </Card>
 

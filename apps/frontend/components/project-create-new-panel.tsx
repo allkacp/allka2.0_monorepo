@@ -176,19 +176,6 @@ const STATUS_OPTIONS = Object.entries(PROJECT_STATUS_CONFIG) as [
 ][];
 
 // ── Project types ──────────────────────────────────────────────────────────────
-const PROJECT_TYPES = [
-  "Marketing Digital",
-  "Desenvolvimento Web",
-  "Desenvolvimento Mobile",
-  "Design",
-  "Consultoria",
-  "E-commerce",
-  "Identidade Visual",
-  "SEO / Tráfego",
-  "Produção de Conteúdo",
-  "Outro",
-];
-
 const PROJECT_COMPANY_TYPE_OPTIONS = [
   { value: "all", label: "Todas as empresas" },
   { value: "company", label: "Empresa Company" },
@@ -358,11 +345,6 @@ export function ProjectCreateNewPanel({
   >([]);
   const [loadingConsultants, setLoadingConsultants] = useState(false);
   const [showCreateConsultant, setShowCreateConsultant] = useState(false);
-
-  // Custom project types added inline
-  const [localProjectTypes, setLocalProjectTypes] = useState<string[]>([]);
-  const [showNewTypeForm, setShowNewTypeForm] = useState(false);
-  const [newTypeName, setNewTypeName] = useState("");
 
   // Company creation
   const [showCreateCompany, setShowCreateCompany] = useState(false);
@@ -770,7 +752,6 @@ export function ProjectCreateNewPanel({
     if (!formData.nome.trim()) e.nome = "Nome do projeto é obrigatório";
     else if (nameCheckState === "duplicate")
       e.nome = "Já existe um projeto com esse nome para esta empresa.";
-    if (!formData.tipo) e.tipo = "Tipo é obrigatório";
     // Empresa required only when allowCompanySelect is true (must pick one)
     if (allowCompanySelect && !resolvedCompanyId)
       e.agencia = "Empresa é obrigatória";
@@ -1675,7 +1656,7 @@ export function ProjectCreateNewPanel({
 
   // ── Error counts ──
   const sectionErrors = {
-    dados: [errors.nome, errors.tipo, errors.agencia, errors.cliente].filter(
+    dados: [errors.nome, errors.agencia, errors.cliente].filter(
       Boolean,
     ).length,
     responsavel: [errors.consultor, errors.emailConsultor].filter(Boolean)
@@ -2023,74 +2004,6 @@ export function ProjectCreateNewPanel({
                           <p className="text-xs text-slate-400">
                             Verificando nome...
                           </p>
-                        )}
-                      </div>
-
-                      {/* Tipo */}
-                      <div className="col-span-2 space-y-1">
-                        <Label className="text-xs font-medium text-slate-600">
-                          Tipo de Projeto *
-                        </Label>
-                        {!showNewTypeForm ? (
-                          <SearchableSelect
-                            items={[...PROJECT_TYPES, ...localProjectTypes].map(
-                              (t) => ({ value: t, label: t }),
-                            )}
-                            value={formData.tipo}
-                            onValueChange={(v) => updateField("tipo", v)}
-                            placeholder="Selecione o tipo"
-                            searchPlaceholder="Pesquisar tipo..."
-                            emptyMessage="Nenhum tipo encontrado."
-                            className={cn(
-                              "h-8 text-xs",
-                              errors.tipo && "border-red-400",
-                            )}
-                            onAddNew={() => setShowNewTypeForm(true)}
-                            addNewLabel="Adicionar tipo"
-                          />
-                        ) : (
-                          <div className="space-y-1.5 p-2.5 bg-violet-50 rounded-lg border border-violet-200">
-                            <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">
-                              Novo tipo
-                            </p>
-                            <Input
-                              placeholder="Nome do tipo *"
-                              value={newTypeName}
-                              onChange={(e) => setNewTypeName(e.target.value)}
-                              className="h-7 text-xs"
-                            />
-                            <div className="flex gap-1.5 pt-0.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!newTypeName.trim()) return;
-                                  setLocalProjectTypes((prev) => [
-                                    ...prev,
-                                    newTypeName.trim(),
-                                  ]);
-                                  updateField("tipo", newTypeName.trim());
-                                  setNewTypeName("");
-                                  setShowNewTypeForm(false);
-                                }}
-                                className="flex-1 h-7 rounded-md btn-brand text-xs font-semibold"
-                              >
-                                Adicionar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShowNewTypeForm(false);
-                                  setNewTypeName("");
-                                }}
-                                className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 hover:bg-slate-50"
-                              >
-                                <XIcon className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {errors.tipo && (
-                          <p className="text-xs text-red-500">{errors.tipo}</p>
                         )}
                       </div>
 
@@ -3146,15 +3059,6 @@ export function ProjectCreateNewPanel({
                             </p>
                             <p className="text-sm font-bold text-slate-900 truncate">
                               {formData.nome || "—"}
-                            </p>
-                          </div>
-                          {/* Tipo */}
-                          <div>
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
-                              Tipo
-                            </p>
-                            <p className="text-sm font-semibold text-slate-800">
-                              {formData.tipo || "—"}
                             </p>
                           </div>
                           {/* Status — reflete o momento real do fluxo */}
