@@ -2007,41 +2007,6 @@ export function ProjectCreateNewPanel({
                         )}
                       </div>
 
-                        {allowCompanySelect && (
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs font-medium text-slate-600">
-                              Tipo de Empresa
-                            </Label>
-                            <SearchableSelect
-                              items={PROJECT_COMPANY_TYPE_OPTIONS.map((option) => ({
-                                value: option.value,
-                                label: option.label,
-                              }))}
-                              value={formData.companyType}
-                              onValueChange={(v) => {
-                                const nextType = v as FormData["companyType"];
-                                updateField("companyType", nextType);
-                                setResolvedCompanyId(null);
-                                setResolvedCompanyName("");
-                                updateField("agencia", "");
-                                updateField("cliente", "");
-                                updateField("clienteCnpj", "");
-                                updateField("consultor", "");
-                                updateField("emailConsultor", "");
-                                setLocalClients([]);
-                                setLocalConsultants([]);
-                              }}
-                              placeholder="Todas as empresas"
-                              searchPlaceholder="Filtrar tipo..."
-                              emptyMessage="Nenhum tipo encontrado."
-                              className="h-8 text-xs"
-                            />
-                            <p className="text-[11px] text-slate-400">
-                              O tipo filtra os responsáveis exibidos para o projeto.
-                            </p>
-                          </div>
-                        )}
-
                       {/* Empresa */}
                       <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">
@@ -2383,53 +2348,6 @@ export function ProjectCreateNewPanel({
                             Não obrigatório no momento.
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ── SEÇÃO 2: DATAS ── */}
-              <AccordionItem
-                value="datas"
-                className="border border-slate-200 rounded-lg overflow-hidden"
-              >
-                <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-purple-100 text-purple-700">2</Badge>
-                    Datas
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3 grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        Data de Início
-                      </Label>
-                      <div className="relative">
-                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                        <Input
-                          type="date"
-                          value={formData.dataInicio}
-                          onChange={(e) =>
-                            updateField("dataInicio", e.target.value)
-                          }
-                          className="h-8 text-xs pl-8"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        Prazo / Entrega
-                      </Label>
-                      <div className="relative">
-                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                        <Input
-                          type="date"
-                          value={formData.prazo}
-                          onChange={(e) => updateField("prazo", e.target.value)}
-                          className="h-8 text-xs pl-8"
-                        />
                       </div>
                     </div>
                   </div>
@@ -3139,37 +3057,6 @@ export function ProjectCreateNewPanel({
                                   {formData.emailConsultor}
                                 </p>
                               </div>
-                            </div>
-                          )}
-                          {/* Datas */}
-                          {(formData.dataInicio || formData.prazo) && (
-                            <div className="col-span-2 grid grid-cols-2 gap-5">
-                              {formData.dataInicio && (
-                                <div>
-                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
-                                    Data de Início
-                                  </p>
-                                  <div className="flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    <p className="text-sm font-semibold text-slate-800">
-                                      {formData.dataInicio}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                              {formData.prazo && (
-                                <div>
-                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
-                                    Prazo Final
-                                  </p>
-                                  <div className="flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    <p className="text-sm font-semibold text-slate-800">
-                                      {formData.prazo}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>

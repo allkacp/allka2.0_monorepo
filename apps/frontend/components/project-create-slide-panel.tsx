@@ -1684,44 +1684,6 @@ export function ProjectCreateSlidePanel({
                               )}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label
-                                  htmlFor="start_date"
-                                  className="text-xs font-semibold text-green-900 dark:text-green-100"
-                                >
-                                  Data de Início
-                                </Label>
-                                <Input
-                                  id="start_date"
-                                  type="date"
-                                  value={formData.start_date}
-                                  onChange={(e) =>
-                                    updateField("start_date", e.target.value)
-                                  }
-                                  className="h-9 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
-                                />
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <Label
-                                  htmlFor="end_date"
-                                  className="text-xs font-semibold text-green-900 dark:text-green-100"
-                                >
-                                  Data de Término
-                                </Label>
-                                <Input
-                                  id="end_date"
-                                  type="date"
-                                  value={formData.end_date}
-                                  onChange={(e) =>
-                                    updateField("end_date", e.target.value)
-                                  }
-                                  className="h-9 bg-white dark:bg-gray-900 border-green-200 dark:border-green-800"
-                                />
-                              </div>
-                            </div>
-
                             <div className="space-y-1.5">
                               <Label
                                 htmlFor="budget"
@@ -2921,10 +2883,6 @@ export function ProjectCreateSlidePanel({
                     {formData.name || ""}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-400">Tipo</p>
-                  <p className="font-medium text-slate-900">{formLifecycle}</p>
-                </div>
                 {formData.client_id && (
                   <div>
                     <p className="text-xs text-slate-400">Cliente</p>
@@ -2932,16 +2890,6 @@ export function ProjectCreateSlidePanel({
                       {apiClients.find(
                         (c) => String(c.id) === formData.client_id,
                       )?.name || ""}
-                    </p>
-                  </div>
-                )}
-                {formData.start_date && (
-                  <div>
-                    <p className="text-xs text-slate-400">Início</p>
-                    <p className="font-medium text-slate-900">
-                      {new Date(
-                        formData.start_date + "T00:00:00",
-                      ).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                 )}
@@ -3014,31 +2962,10 @@ export function ProjectCreateSlidePanel({
                 })}
               </div>
               <div className="border-t border-blue-200 pt-2 space-y-1.5">
-                {formLifecycle === "Mensal" ? (
-                  <>
-                    <div className="flex justify-between text-xs text-blue-700">
-                      <span>Cobranças mensais</span>
-                      <span className="font-medium">
-                        Dia {formBillingDay} de cada mês
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-base font-bold text-blue-900">
-                      <span>Total/mês</span>
-                      <span>{formatCurrency(calculateTotal())}/mês</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-xs text-blue-700">
-                      <span>Tipo de pagamento</span>
-                      <span className="font-medium">Pagamento Único</span>
-                    </div>
-                    <div className="flex justify-between text-base font-bold text-blue-900">
-                      <span>Total</span>
-                      <span>{formatCurrency(calculateTotal())}</span>
-                    </div>
-                  </>
-                )}
+                <div className="flex justify-between text-base font-bold text-blue-900">
+                  <span>Total</span>
+                  <span>{formatCurrency(calculateTotal())}</span>
+                </div>
               </div>
             </div>
           </div>
