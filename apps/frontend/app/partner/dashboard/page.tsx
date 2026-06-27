@@ -1,4 +1,10 @@
 ﻿// @ts-nocheck
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { PARTNER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
@@ -10925,417 +10931,414 @@ export default function AdminDashboardPage() {
             isHeaderCompact ? "py-2" : "pt-0 pb-5",
           )}
         >
-          <div className="overflow-hidden shrink-0">
-            <h1
-              className={cn(
-                "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
-                isHeaderCompact ? "text-base" : "text-3xl",
-              )}
-            >
-              Dashboard
-            </h1>
-            <p
-              className={cn(
-                "text-sm text-slate-500 dark:text-slate-400 transition-all duration-300 overflow-hidden",
-                isHeaderCompact
-                  ? "max-h-0 opacity-0 mt-0 mb-0"
-                  : "max-h-[24px] opacity-100 mt-0.5",
-              )}
-            >
-              Acompanhe suas indicações, clientes, conversões e comissões.
-            </p>
-          </div>
+          {/* ── Unified toolbar (inclui o título) ───────────────────────────── */}
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
 
-          {/* Period Controls */}
-          <div className="flex items-center gap-2 mx-3">
-            <div className="flex items-center gap-0.5 bg-muted/50 dark:bg-muted/30 rounded-xl p-1 border border-border/50 shadow-sm">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground ml-1.5 mr-0.5" />
-              {(
-                [
-                  {
-                    type: "last_7_days" as const,
-                    label: "7d",
-                    fullLabel: "Últimos 7 dias",
-                  },
-                  {
-                    type: "last_30_days" as const,
-                    label: "30d",
-                    fullLabel: "Últimos 30 dias",
-                  },
-                ] as const
-              ).map(({ type, label, fullLabel }) => (
-                <button
-                  key={type}
-                  onClick={() => {
-                    const { from, to } = getDateRangeFromPeriod(type);
-                    setGlobalPeriod({ type, from, to, label: fullLabel });
-                  }}
+            {/* Título + info */}
+            <div className="flex items-center gap-1 shrink-0 mr-2">
+              <div className="overflow-hidden">
+                <h1
                   className={cn(
-                    "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                    globalPeriod.type === type
-                      ? "bg-background shadow-sm text-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
+                    "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                    isHeaderCompact ? "text-base" : "text-2xl sm:text-3xl lg:text-4xl xl:text-[46px]",
                   )}
                 >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={() => {
-                  const today = new Date();
-                  const ninetyDaysAgo = new Date(today);
-                  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-                  setGlobalPeriod({
-                    type: "custom",
-                    from: ninetyDaysAgo,
-                    to: today,
-                    label: "Últimos 90 dias",
-                  });
-                }}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                  globalPeriod.label === "Últimos 90 dias"
-                    ? "bg-background shadow-sm text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                90d
-              </button>
-              <Popover
-                open={isPeriodPickerOpen}
-                onOpenChange={setIsPeriodPickerOpen}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5",
-                      !["last_7_days", "last_30_days"].includes(
-                        globalPeriod.type,
-                      ) && globalPeriod.label !== "Últimos 90 dias"
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {!["last_7_days", "last_30_days"].includes(
-                      globalPeriod.type,
-                    ) && globalPeriod.label !== "Últimos 90 dias" ? (
-                      <span className="max-w-[130px] truncate">
-                        {globalPeriod.label}
+                  Dashboard
+                </h1>
+              </div>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
+                      <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                    <p className="font-semibold text-xs mb-1.5">Dashboard do Parceiro</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Acompanhe suas indicações, clientes, conversões e comissões.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+
+            {/* GLOBAL pill — hover shows gradient; hovering badge or info shows tooltip */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <div className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/60 hover:border-transparent overflow-hidden transition-all">
+                      <span className="absolute inset-0 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <Globe className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                      <span className="relative z-10 text-[11px] font-medium uppercase tracking-wider leading-none bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                        GLOBAL
                       </span>
-                    ) : (
-                      <>
-                        <SlidersHorizontal className="h-3 w-3" />
-                        Personalizar
-                      </>
-                    )}
-                    <ChevronDown className="h-2.5 w-2.5" />
+                    </div>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    O período selecionado aqui é aplicado automaticamente a <strong>todos os widgets</strong> do dashboard.
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Para ajustar o período de um widget específico, clique em <strong>"Global"</strong> no cabeçalho de cada widget.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+
+            {/* Período: label + pill + info tooltip */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Período:</span>
+                      <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all">
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Calendar className="relative z-10 h-3 w-3 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold max-w-[140px] truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      {globalPeriod.label}
+                    </span>
+                    <ChevronDown className="relative z-10 h-3 w-3 shrink-0 text-[#c81a7f] group-hover:text-white transition-colors" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent
-                  className="w-72 p-0 overflow-hidden"
-                  align="start"
-                >
-                  <div className="px-3 py-2.5 border-b bg-muted/30">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      Período de dados
-                    </p>
+                <PopoverContent className="w-48 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60" align="start">
+                  {/* Header */}
+                  <div className="px-3 py-2 border-b border-border/50">
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Período</p>
                   </div>
-                  <div className="p-1.5">
+                  {/* Options */}
+                  <div className="p-1">
                     {periodOptions
                       .filter((o) => o.type !== "custom")
-                      .map((option) => (
+                      .map((option) => {
+                        const isActive = globalPeriod.type === option.type && globalPeriod.label !== "Últimos 90 dias";
+                        return (
+                          <button
+                            key={option.type}
+                            onClick={() => handlePeriodChange(option.type, option.label)}
+                            className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
+                          >
+                            <span className={cn(
+                              "text-xs font-medium transition-colors",
+                              isActive
+                                ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                            )}>
+                              {option.label}
+                            </span>
+                            {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
+                          </button>
+                        );
+                      })}
+                    {(() => {
+                      const isActive = globalPeriod.label === "Últimos 90 dias";
+                      return (
                         <button
-                          key={option.type}
-                          onClick={() =>
-                            handlePeriodChange(option.type, option.label)
-                          }
-                          className={cn(
-                            "w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all hover:bg-accent text-left",
-                            globalPeriod.type === option.type &&
-                              globalPeriod.label !== "Últimos 90 dias" &&
-                              "bg-primary/10 text-primary font-medium",
-                          )}
+                          onClick={() => {
+                            const today = new Date();
+                            const d = new Date(today);
+                            d.setDate(d.getDate() - 90);
+                            setGlobalPeriod({ type: "custom", from: d, to: today, label: "Últimos 90 dias" });
+                            setIsPeriodPickerOpen(false);
+                          }}
+                          className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
                         >
-                          {option.label}
-                          {globalPeriod.type === option.type &&
-                            globalPeriod.label !== "Últimos 90 dias" && (
-                              <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                            )}
+                          <span className={cn(
+                            "text-xs font-medium transition-colors",
+                            isActive
+                              ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                              : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                          )}>
+                            Últimos 90 dias
+                          </span>
+                          {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
                         </button>
-                      ))}
+                      );
+                    })()}
                   </div>
-                  <div className="border-t p-3 space-y-2.5 bg-muted/20">
-                    <p className="text-xs font-semibold">
-                      Intervalo personalizado
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[10px] text-muted-foreground font-medium">
-                          De
-                        </label>
+                  {/* Custom interval */}
+                  <div className="border-t border-border/50 p-2.5 space-y-2 bg-muted/20">
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Personalizado</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">De</label>
                         <input
                           type="date"
-                          value={
-                            customPeriodFrom
-                              ? format(customPeriodFrom, "yyyy-MM-dd")
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomPeriodFrom(
-                              e.target.value
-                                ? new Date(e.target.value + "T00:00:00")
-                                : undefined,
-                            )
-                          }
-                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          value={customPeriodFrom ? format(customPeriodFrom, "yyyy-MM-dd") : ""}
+                          onChange={(e) => setCustomPeriodFrom(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
+                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
                         />
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[10px] text-muted-foreground font-medium">
-                          Até
-                        </label>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">Até</label>
                         <input
                           type="date"
-                          value={
-                            customPeriodTo
-                              ? format(customPeriodTo, "yyyy-MM-dd")
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomPeriodTo(
-                              e.target.value
-                                ? new Date(e.target.value + "T00:00:00")
-                                : undefined,
-                            )
-                          }
-                          className="w-full h-7 px-2 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          value={customPeriodTo ? format(customPeriodTo, "yyyy-MM-dd") : ""}
+                          onChange={(e) => setCustomPeriodTo(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
+                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
                         />
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      className="w-full h-7 text-xs"
+                    <button
                       disabled={!customPeriodFrom || !customPeriodTo}
                       onClick={applyCustomPeriod}
+                      className="relative w-full h-7 rounded-lg overflow-hidden text-[11px] font-semibold text-white transition-opacity disabled:opacity-40"
                     >
-                      Aplicar período
-                    </Button>
+                      <span className="absolute inset-0" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="relative z-10">Aplicar</span>
+                    </button>
                   </div>
                 </PopoverContent>
-              </Popover>
-            </div>
-            {/* Period label badge */}
-            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/60 inline-block" />
-              {globalPeriod.label}
-            </span>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Dashboard selector dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 gap-1.5 text-xs font-medium max-w-52 border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                  <span className="truncate">
-                    {savedDashboards.find((d) => d.id === currentDashboardId)
-                      ?.name ?? "Selecionar dashboard"}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0 opacity-50 ml-auto" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">
-                  Dashboards salvos
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {savedDashboards.map((db) => (
-                  <div
-                    key={db.id}
-                    className="flex items-center px-1 py-0.5 rounded hover:bg-muted/60 group"
-                  >
-                    <button
-                      className="flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded text-xs"
-                      onClick={() => {
-                        handleLoadDashboard(db.id);
-                        toast({
-                          title: `Dashboard carregado`,
-                          description: db.name,
-                        });
-                      }}
-                    >
-                      <LayoutGrid
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0",
-                          currentDashboardId === db.id
-                            ? "text-violet-500"
-                            : "text-muted-foreground",
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "truncate font-medium",
-                          currentDashboardId === db.id &&
-                            "text-violet-600 dark:text-violet-400",
-                        )}
-                      >
-                        {db.name}
-                      </span>
-                      {currentDashboardId === db.id && (
-                        <Check className="h-3 w-3 text-violet-500 shrink-0 ml-auto" />
-                      )}
-                    </button>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-                      <button
-                        onClick={() => handleSetDefaultDashboard(db.id)}
-                        className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                        title={
-                          db.isDefault
-                            ? "Dashboard padrão"
-                            : "Definir como padrão"
-                        }
-                      >
-                        <Star
-                          className={cn(
-                            "h-3.5 w-3.5",
-                            db.isDefault
-                              ? "fill-amber-400 text-amber-400"
-                              : "text-muted-foreground hover:text-amber-400",
-                          )}
-                        />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeletingDashboardId(db.id);
-                          setShowDeleteDashboardDialog(true);
-                        }}
-                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        title="Excluir dashboard"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                      </button>
+                      </Popover>
                     </div>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
                   </div>
-                ))}
-                {savedDashboards.length === 0 && (
-                  <p className="px-3 py-3 text-xs text-muted-foreground text-center">
-                    Nenhum dashboard salvo
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    O período selecionado aqui é aplicado a <strong>todos os widgets</strong> do dashboard.
                   </p>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setDraftWidgets([]);
-                    setEditHeaderName("");
-                    setIsEditingHeaderName(true);
-                    setEditModalMode("adicionar");
-                    setIsNewDashboardMode(true);
-                    setIsEditDashboardModalOpen(true);
-                  }}
-                  className="text-xs text-violet-600 dark:text-violet-400 font-medium cursor-pointer gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Criar novo dashboard
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Para ajustar um widget específico, clique em <strong>"Global"</strong> no cabeçalho do widget.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-            {/* Export dropdown */}
-            <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-                  disabled={isExporting}
-                >
-                  {isExporting ? (
-                    <>
-                      <Download className="h-3.5 w-3.5 animate-pulse" />
-                      Exportando...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-3.5 w-3.5" />
-                      Exportar
-                      <ChevronDown className="h-2.5 w-2.5" />
-                    </>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-1.5" align="end">
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    handleExportAs("pdf");
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                >
-                  <FileText className="h-3.5 w-3.5 text-red-500" />
-                  Exportar como PDF
-                </button>
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    handleExportAs("png");
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                >
-                  <ImageDown className="h-3.5 w-3.5 text-blue-500" />
-                  Exportar como PNG
-                </button>
-              </PopoverContent>
-            </Popover>
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* Dados Históricos */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openHistoricalModal()}
-              className="h-8 px-3 gap-1.5 text-xs font-medium border-amber-200 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-500 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400"
-            >
-              <History className="h-3.5 w-3.5" />
-              Histórico
-              {Object.keys(historicalData).length > 0 && (
-                <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] h-4 w-4 flex items-center justify-center shrink-0">
-                  {Object.keys(historicalData).length}
-                </span>
-              )}
-            </Button>
+            {/* Dashboard selector */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]">
+                          <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                          <LayoutGrid className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                          <span className="relative z-10 text-xs font-semibold truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                            {savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
+                          </span>
+                          <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-colors" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
+                        {/* Header */}
+                        <div className="px-3 py-2 border-b border-border/50">
+                          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Dashboards salvos</p>
+                        </div>
+                        {/* Dashboard list */}
+                        <div className="p-1">
+                          {savedDashboards.map((db) => {
+                            const isActive = currentDashboardId === db.id;
+                            return (
+                              <div key={db.id} className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
+                                <button
+                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                  onClick={() => {
+                                    handleLoadDashboard(db.id);
+                                    toast({ title: "Dashboard carregado", description: db.name });
+                                  }}
+                                >
+                                  <LayoutGrid className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isActive ? "text-[#7d1b6a]" : "text-muted-foreground group-hover:text-[#7d1b6a]")} />
+                                  <span className={cn(
+                                    "text-xs font-medium transition-colors",
+                                    isActive
+                                      ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                      : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                  )}>
+                                    {db.name}
+                                  </span>
+                                  {isActive && <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />}
+                                </button>
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleSetDefaultDashboard(db.id)}
+                                    className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                    title={db.isDefault ? "Dashboard padrão" : "Definir como padrão"}
+                                  >
+                                    <Star className={cn("h-3 w-3", db.isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400")} />
+                                  </button>
+                                  <button
+                                    onClick={() => { setDeletingDashboardId(db.id); setShowDeleteDashboardDialog(true); }}
+                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    title="Excluir dashboard"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {savedDashboards.length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">Nenhum dashboard salvo</p>
+                          )}
+                        </div>
+                        {/* Footer action */}
+                        <div className="border-t border-border/50 p-1">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setDraftWidgets([]);
+                              setEditHeaderName("");
+                              setIsEditingHeaderName(true);
+                              setEditModalMode("adicionar");
+                              setIsNewDashboardMode(true);
+                              setIsEditDashboardModalOpen(true);
+                            }}
+                            className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
+                          >
+                            <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
+                            <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
+                              Criar novo dashboard
+                            </span>
+                          </DropdownMenuItem>
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Selecionar dashboard</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Escolha entre os dashboards salvos para alternar a <strong>visão geral da área</strong>.
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Use <strong>"Criar novo dashboard"</strong> para organizar diferentes configurações de widgets.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-            {/* Compartilhar Dashboard */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openDashboardPublicShare}
-              className="h-8 px-3 gap-1.5 text-xs font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Compartilhar
-            </Button>
+            {/* Divider */}
+            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* Editar Dashboard */}
-            <Button
-              onClick={() => {
-                setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
-                const currentDb = savedDashboards.find(
-                  (d) => d.id === currentDashboardId,
-                );
-                setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
-                setIsEditingHeaderName(false);
-                setIsEditDashboardModalOpen(true);
-              }}
-              className="h-8 px-3 gap-1.5 text-xs font-medium btn-brand shadow-sm rounded-lg"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-              Editar
-            </Button>
-          </div>
+            {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile */}
+            <div className="flex items-center gap-1 shrink-0 xl:ml-auto">
+
+            {/* Export */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
+                  <PopoverTrigger asChild>
+                    <TooltipTrigger asChild>
+                      <button
+                        disabled={isExporting}
+                        className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                      >
+                        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                        <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", isExporting && "animate-pulse")} />
+                      </button>
+                    </TooltipTrigger>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-1.5" align="end">
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportAs("pdf"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-red-500" />
+                      Exportar como PDF
+                    </button>
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportAs("png"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                    >
+                      <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                      Exportar como PNG
+                    </button>
+                  </PopoverContent>
+                </Popover>
+                <TooltipContent side="bottom" sideOffset={6}>Exportar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Histórico */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => openHistoricalModal()}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <History className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    {Object.keys(historicalData).length > 0 && (
+                      <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
+                        {Object.keys(historicalData).length}
+                      </span>
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Histórico</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Compartilhar */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={openDashboardPublicShare}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Compartilhar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Editar */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
+                      const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
+                      setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
+                      setIsEditingHeaderName(false);
+                      setIsEditDashboardModalOpen(true);
+                    }}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Pencil className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      Editar
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Personalizar widgets</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            </div>{/* fim ações */}
+
+          </div>{/* fim toolbar */}
         </div>
       </div>
       {/* Export capture area: metrics + widgets */}
