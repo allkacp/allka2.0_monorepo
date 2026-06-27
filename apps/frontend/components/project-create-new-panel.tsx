@@ -782,7 +782,8 @@ export function ProjectCreateNewPanel({
       setSubmitAttempted(true);
       return;
     }
-    setShowNextStepModal(true);
+    // Go to product catalog first — user must add at least one product before finalizing
+    setShowProductsStep(true);
   };
 
   const buildProject = (
@@ -3624,6 +3625,16 @@ export function ProjectCreateNewPanel({
                             ? "Salvando..."
                             : "Salvar Rascunho"}
                         </span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowNextStepModal(true)}
+                        title="Exportar, revisar ou enviar para aprovação"
+                        className="h-9 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Mais opções</span>
                       </Button>
                       <button
                         disabled={!!checkoutBlockReason || loading}
