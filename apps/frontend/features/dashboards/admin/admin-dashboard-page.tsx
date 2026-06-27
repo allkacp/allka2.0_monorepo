@@ -1425,7 +1425,7 @@ export function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards");
+    const savedMetrics = localStorage.getItem("admin-dashboard-metric-cards");
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -1434,13 +1434,13 @@ export function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size");
+    const savedSize = localStorage.getItem("admin-dashboard-widget-size");
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods");
+    const savedWidgetPeriods = localStorage.getItem("admin-dashboard-widget-periods");
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -1570,11 +1570,11 @@ export function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size", widgetSize);
+    localStorage.setItem("admin-dashboard-metric-cards", JSON.stringify(metricCards));
+    localStorage.setItem("admin-dashboard-widget-size", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods",
+      "admin-dashboard-widget-periods",
       JSON.stringify(widgetPeriods),
     );
 
@@ -2697,6 +2697,25 @@ export function AdminDashboardPage() {
     avgRating: "Avaliação Média",
   };
 
+
+  const metricDescriptions: Record<MetricType, string> = {
+    totalUsers: "Total de usuários cadastrados na plataforma no período selecionado.",
+    activeUsers: "Usuários que realizaram login ou ação nos últimos 30 dias.",
+    companies: "Total de empresas com conta ativa na plataforma.",
+    activeProjects: "Projetos com status ativo ou em andamento no momento.",
+    revenue: "Receita total gerada pela plataforma no período selecionado.",
+    avgRating: "Média de avaliação dos nômades pelas empresas em tarefas concluídas.",
+  };
+
+  const metricLinks: Record<MetricType, string> = {
+    totalUsers: "/admin/usuarios",
+    activeUsers: "/admin/usuarios",
+    companies: "/admin/empresas",
+    activeProjects: "/admin/projetos",
+    revenue: "/admin/financeiro",
+    avgRating: "/admin/relatorios",
+  };
+
   const renderMetricCard = (
     metricType: MetricType,
     metricsSource?: typeof metrics,
@@ -2814,7 +2833,7 @@ export function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           className={cn(
-            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+            `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -2837,31 +2856,75 @@ export function AdminDashboardPage() {
               </button>
             </div>
           )}
-          <div className="px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-                {metricName}
+          {!isEditing ? (
+            <Link to={metricLinks[metricType]} className="block h-full">
+              <div className="flex flex-col h-full px-4 pt-3 pb-3">
+                <div className="flex items-start justify-between mb-1.5">
+                  <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                    {metricName}
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                    <Icon className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                  {metric.value}
+                </p>
+                <div className="flex items-center gap-2 pr-7">
+                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                    {metric.trend === "up" ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    {metric.trend === "up" ? "+" : "-"}
+                    {Math.abs(metric.change)}%
+                  </div>
+                  <span className="text-[10px] text-white/60">vs. anterior</span>
+                </div>
+              </div>
+            </Link>
+          ) : (
+            <div className="flex flex-col h-full px-4 pt-3 pb-3">
+              <div className="flex items-start justify-between mb-1.5">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                  {metricName}
+                </p>
+                <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                {metric.value}
               </p>
-              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-                <Icon className="h-4 w-4 text-white" />
+              <div className="flex items-center gap-2 pr-7">
+                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                  {metric.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {metric.trend === "up" ? "+" : "-"}
+                  {Math.abs(metric.change)}%
+                </div>
+                <span className="text-[10px] text-white/60">vs. anterior</span>
               </div>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-1.5">
-              {metric.value}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                {metric.trend === "up" ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {metric.trend === "up" ? "+" : "-"}
-                {Math.abs(metric.change)}%
-              </div>
-              <span className="text-[10px] text-white/60">vs. anterior</span>
+          )}
+          {!isEditing && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                    <Info className="h-3 w-3 text-white" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                  {metricDescriptions[metricType]}
+                </TooltipContent>
+              </Tooltip>
             </div>
-          </div>
+          )}
         </div>
       );
     }
@@ -2879,7 +2942,7 @@ export function AdminDashboardPage() {
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
         className={cn(
-          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+          `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -2902,36 +2965,85 @@ export function AdminDashboardPage() {
             </button>
           </div>
         )}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-              {metricName}
+        {!isEditing ? (
+          <Link to={metricLinks[metricType]} className="block h-full">
+            <div className="flex flex-col h-full px-4 pt-3 pb-3">
+              <div className="flex items-start justify-between mb-1.5">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                  {metricName}
+                </p>
+                <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                {typeof metric.value === "number"
+                  ? metric.value.toLocaleString()
+                  : metric.value}
+              </p>
+              <div className="flex items-center gap-2 pr-7">
+                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                  {metric.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {metric.trend === "up" ? "+" : "-"}
+                  {Math.abs(metric.change)}
+                  {metricType === "avgRating" ? " pts" : "%"}
+                </div>
+                <span className="text-[10px] text-white/60">
+                  {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+                </span>
+              </div>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex flex-col h-full px-4 pt-3 pb-3">
+            <div className="flex items-start justify-between mb-1.5">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                {metricName}
+              </p>
+              <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                <Icon className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+              {typeof metric.value === "number"
+                ? metric.value.toLocaleString()
+                : metric.value}
             </p>
-            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-              <Icon className="h-4 w-4 text-white" />
+            <div className="flex items-center gap-2 pr-7">
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                {metric.trend === "up" ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
+                {metric.trend === "up" ? "+" : "-"}
+                {Math.abs(metric.change)}
+                {metricType === "avgRating" ? " pts" : "%"}
+              </div>
+              <span className="text-[10px] text-white/60">
+                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+              </span>
             </div>
           </div>
-          <p className="text-xl font-bold text-white leading-none mb-1.5">
-            {typeof metric.value === "number"
-              ? metric.value.toLocaleString()
-              : metric.value}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metric.trend === "up" ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
-              )}
-              {metric.trend === "up" ? "+" : "-"}
-              {Math.abs(metric.change)}
-              {metricType === "avgRating" ? " pts" : "%"}
-            </div>
-            <span className="text-[10px] text-white/60">
-              {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
-            </span>
+        )}
+        {!isEditing && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <Info className="h-3 w-3 text-white" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                {metricDescriptions[metricType]}
+              </TooltipContent>
+            </Tooltip>
           </div>
-        </div>
+        )}
       </div>
     );
   };

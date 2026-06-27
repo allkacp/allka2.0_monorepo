@@ -1,4 +1,9 @@
-﻿// @ts-nocheck
+// @ts-nocheck
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import {
   NOMAD_PRESETS,
@@ -3655,6 +3660,33 @@ export default function AdminDashboardPage() {
     return { current, previous, next };
   };
 
+
+  const metricDescriptions: Record<MetricType, string> = {
+    availableTasks: "Tarefas disponíveis para aceitar no catálogo neste momento.",
+    myTasks: "Total de tarefas aceitas e em sua responsabilidade.",
+    inProgressTasks: "Tarefas em execução ativa neste momento.",
+    pendingDeliveries: "Entregas aguardando upload ou confirmação do cliente.",
+    awaitingQualification: "Tarefas entregues aguardando aprovação e avaliação.",
+    monthlyEarnings: "Valor total ganho com tarefas concluídas neste mês.",
+    paymentsToReceive: "Pagamentos aprovados ainda não transferidos para sua conta.",
+    avgRating: "Sua avaliação média pelos clientes em tarefas concluídas.",
+    pointsLevel: "Seus pontos acumulados e nível atual na plataforma. Mais pontos = maior nível = mais oportunidades.",
+    levelProgress: "Progresso até o próximo nível baseado nos seus pontos acumulados no período.",
+  };
+
+  const metricLinks: Record<MetricType, string> = {
+    availableTasks: "/nomad/tarefas",
+    myTasks: "/nomad/tarefas",
+    inProgressTasks: "/nomad/tarefas",
+    pendingDeliveries: "/nomad/tarefas",
+    awaitingQualification: "/nomad/tarefas",
+    monthlyEarnings: "/nomad/financeiro",
+    paymentsToReceive: "/nomad/financeiro",
+    avgRating: "/nomad/perfil",
+    pointsLevel: "/nomad/perfil",
+    levelProgress: "/nomad/perfil",
+  };
+
   const renderMetricCard = (
     metricType: MetricType,
     metricsSource?: typeof metrics,
@@ -3754,7 +3786,7 @@ export default function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           className={cn(
-            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+            `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -3777,16 +3809,16 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           )}
-          <div className="px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
+          <div className="flex flex-col h-full px-4 pt-3 pb-3">
+            <div className="flex items-start justify-between mb-1.5">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
                 {metricName}
               </p>
-              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
+              <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
                 <Icon className="h-4 w-4 text-white" />
               </div>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-1.5">
+            <p className="text-2xl font-bold text-white leading-none mb-1.5">
               {nextThreshold
                 ? `${remaining} pts para ${nextLabel}`
                 : "Nível máximo"}
@@ -3827,7 +3859,7 @@ export default function AdminDashboardPage() {
         onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
         onDragEnd={handleMetricDragEnd}
         className={cn(
-          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+          `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
           isEditing && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-40 scale-95",
           isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
@@ -3850,36 +3882,85 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         )}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-              {metricName}
+        {!isEditing ? (
+          <Link to={metricLinks[metricType]} className="block h-full">
+            <div className="flex flex-col h-full px-4 pt-3 pb-3">
+              <div className="flex items-start justify-between mb-1.5">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                  {metricName}
+                </p>
+                <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                {typeof metric.value === "number"
+                  ? metric.value.toLocaleString()
+                  : metric.value}
+              </p>
+              <div className="flex items-center gap-2 pr-7">
+                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                  {metric.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {metric.trend === "up" ? "+" : "-"}
+                  {Math.abs(metric.change)}
+                  {metricType === "avgRating" ? " pts" : "%"}
+                </div>
+                <span className="text-[10px] text-white/60">
+                  {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+                </span>
+              </div>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex flex-col h-full px-4 pt-3 pb-3">
+            <div className="flex items-start justify-between mb-1.5">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                {metricName}
+              </p>
+              <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                <Icon className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+              {typeof metric.value === "number"
+                ? metric.value.toLocaleString()
+                : metric.value}
             </p>
-            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-              <Icon className="h-4 w-4 text-white" />
+            <div className="flex items-center gap-2 pr-7">
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                {metric.trend === "up" ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
+                {metric.trend === "up" ? "+" : "-"}
+                {Math.abs(metric.change)}
+                {metricType === "avgRating" ? " pts" : "%"}
+              </div>
+              <span className="text-[10px] text-white/60">
+                {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+              </span>
             </div>
           </div>
-          <p className="text-xl font-bold text-white leading-none mb-1.5">
-            {typeof metric.value === "number"
-              ? metric.value.toLocaleString()
-              : metric.value}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metric.trend === "up" ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
-              )}
-              {metric.trend === "up" ? "+" : "-"}
-              {Math.abs(metric.change)}
-              {metricType === "avgRating" ? " pts" : "%"}
-            </div>
-            <span className="text-[10px] text-white/60">
-              {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
-            </span>
+        )}
+        {!isEditing && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <Info className="h-3 w-3 text-white" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                {metricDescriptions[metricType]}
+              </TooltipContent>
+            </Tooltip>
           </div>
-        </div>
+        )}
       </div>
     );
   };

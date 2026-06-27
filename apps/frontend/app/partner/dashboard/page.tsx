@@ -2095,7 +2095,7 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards");
+    const savedMetrics = localStorage.getItem("partner-dashboard-metric-cards");
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -2104,13 +2104,13 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size");
+    const savedSize = localStorage.getItem("partner-dashboard-widget-size");
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods");
+    const savedWidgetPeriods = localStorage.getItem("partner-dashboard-widget-periods");
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -2189,11 +2189,11 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size", widgetSize);
+    localStorage.setItem("partner-dashboard-metric-cards", JSON.stringify(metricCards));
+    localStorage.setItem("partner-dashboard-widget-size", widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods",
+      "partner-dashboard-widget-periods",
       JSON.stringify(widgetPeriods),
     );
 
@@ -3051,6 +3051,29 @@ export default function AdminDashboardPage() {
     partnerLevel: "Nível Partner",
   };
 
+
+  const metricDescriptions: Record<MetricType, string> = {
+    invitesSent: "Total de convites enviados para novos clientes no período selecionado.",
+    clientsConverted: "Clientes que aceitaram o convite e se tornaram ativos na plataforma.",
+    activeClients: "Clientes com projetos ou contratos em andamento neste momento.",
+    commissionsGenerated: "Valor total de comissões geradas pelas indicações no período.",
+    commissionsToReceive: "Comissões aprovadas ainda não pagas pela plataforma.",
+    commissionPaidMonth: "Valor de comissões já recebidas neste mês.",
+    conversionRate: "Percentual de convidados que se converteram em clientes ativos.",
+    partnerLevel: "Seu nível atual como parceiro Allka, baseado em performance e indicações.",
+  };
+
+  const metricLinks: Record<MetricType, string> = {
+    invitesSent: "/partner/relatorios",
+    clientsConverted: "/partner/relatorios",
+    activeClients: "/partner/relatorios",
+    commissionsGenerated: "/partner/relatorios",
+    commissionsToReceive: "/partner/relatorios",
+    commissionPaidMonth: "/partner/relatorios",
+    conversionRate: "/partner/relatorios",
+    partnerLevel: "/partner/relatorios",
+  };
+
   const renderMetricCard = (
     metricType: MetricType,
     metricsSource?: typeof metrics,
@@ -3182,14 +3205,14 @@ export default function AdminDashboardPage() {
           onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
           onDragEnd={handleMetricDragEnd}
           className={cn(
-            `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+            `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
             isEditing && "cursor-grab active:cursor-grabbing",
             isDragging && "opacity-40 scale-95",
             isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
             !isDragging &&
               !isDragOver &&
               !isEditing &&
-              "hover:shadow-lg hover:-translate-y-0.5",
+              "hover:shadow-xl hover:scale-[1.02]",
           )}
         >
           {isEditing && (
@@ -3205,21 +3228,198 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           )}
-          <div className="px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
+          {!isEditing ? (
+            <Link to={metricLinks[metricType]} className="block h-full">
+              <div className="flex flex-col h-full px-4 pt-3 pb-3">
+                <div className="flex items-start justify-between mb-1.5">
+                  <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                    {metricName}
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                    <Icon className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                  {typeof metric.value === "number"
+                    ? metric.value.toLocaleString()
+                    : metric.value}
+                </p>
+                <div className="flex items-center gap-2 pr-7">
+                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                    {metricType === "partnerLevel" ? (
+                      <Award className="h-3 w-3" />
+                    ) : metric.trend === "up" ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    {metricType === "partnerLevel"
+                      ? "Nível atual"
+                      : metric.trend === "up"
+                        ? "+"
+                        : "-"}
+                    {metricType === "partnerLevel"
+                      ? metric.value
+                      : Math.abs(metric.change)}
+                    {metricType === "conversionRate" ? "%" : ""}
+                  </div>
+                  <span className="text-[10px] text-white/60">
+                    {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
+                  </span>
+                </div>
+              </div>
+            </Link>
+          ) : (
+            <div className="flex flex-col h-full px-4 pt-3 pb-3">
+              <div className="flex items-start justify-between mb-1.5">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                  {metricName}
+                </p>
+                <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                {typeof metric.value === "number"
+                  ? metric.value.toLocaleString()
+                  : metric.value}
+              </p>
+              <div className="flex items-center gap-2 pr-7">
+                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                  {metricType === "partnerLevel" ? (
+                    <Award className="h-3 w-3" />
+                  ) : metric.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {metricType === "partnerLevel"
+                    ? "Nível atual"
+                    : metric.trend === "up"
+                      ? "+"
+                      : "-"}
+                  {metricType === "partnerLevel"
+                    ? metric.value
+                    : Math.abs(metric.change)}
+                  {metricType === "conversionRate" ? "%" : ""}
+                </div>
+                <span className="text-[10px] text-white/60">
+                  {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
+                </span>
+              </div>
+            </div>
+          )}
+          {!isEditing && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                    <Info className="h-3 w-3 text-white" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                  {metricDescriptions[metricType]}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Adicionar botão de ver gráfico
+    return (
+      <div
+        key={metricType}
+        draggable={isEditing}
+        onDragStart={(e: React.DragEvent) =>
+          handleMetricDragStart(e, metricType)
+        }
+        onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
+        onDragLeave={handleMetricDragLeave}
+        onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
+        onDragEnd={handleMetricDragEnd}
+        className={cn(
+          `relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
+          isEditing && "cursor-grab active:cursor-grabbing",
+          isDragging && "opacity-40 scale-95",
+          isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
+          !isDragging &&
+            !isDragOver &&
+            !isEditing &&
+            "hover:shadow-xl hover:scale-[1.02]",
+        )}
+      >
+        {isEditing && (
+          <div className="absolute top-1.5 right-1.5 z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMetricVisibility(metricType);
+              }}
+              className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
+            >
+              <EyeOff className="h-3 w-3 text-white" />
+            </button>
+          </div>
+        )}
+        {!isEditing ? (
+          <Link to={metricLinks[metricType]} className="block h-full">
+            <div className="flex flex-col h-full px-4 pt-3 pb-3">
+              <div className="flex items-start justify-between mb-1.5">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                  {metricName}
+                </p>
+                <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                {typeof metric.value === "number"
+                  ? metric.value.toLocaleString()
+                  : metric.value}
+              </p>
+              <div className="flex items-center gap-2 pr-7">
+                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
+                  {metricType === "partnerLevel" ? (
+                    <Award className="h-3 w-3" />
+                  ) : metric.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {metricType === "partnerLevel"
+                    ? "Nível atual"
+                    : metric.trend === "up"
+                      ? "+"
+                      : "-"}
+                  {metricType === "partnerLevel"
+                    ? metric.value
+                    : Math.abs(metric.change)}
+                  {metricType === "conversionRate" ? "%" : ""}
+                </div>
+                <span className="text-[10px] text-white/60">
+                  {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
+                </span>
+              </div>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex flex-col h-full px-4 pt-3 pb-3">
+            <div className="flex items-start justify-between mb-1.5">
+              <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
                 {metricName}
               </p>
-              <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
+              <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
                 <Icon className="h-4 w-4 text-white" />
               </div>
             </div>
-            <p className="text-xl font-bold text-white leading-none mb-1.5">
+            <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
               {typeof metric.value === "number"
                 ? metric.value.toLocaleString()
                 : metric.value}
             </p>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 pr-7">
               <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
                 {metricType === "partnerLevel" ? (
                   <Award className="h-3 w-3" />
@@ -3243,84 +3443,21 @@ export default function AdminDashboardPage() {
               </span>
             </div>
           </div>
-        </div>
-      );
-    }
-
-    // Adicionar botão de ver gráfico
-    return (
-      <div
-        key={metricType}
-        draggable={isEditing}
-        onDragStart={(e: React.DragEvent) =>
-          handleMetricDragStart(e, metricType)
-        }
-        onDragOver={(e: React.DragEvent) => handleMetricDragOver(e, metricType)}
-        onDragLeave={handleMetricDragLeave}
-        onDrop={(e: React.DragEvent) => handleMetricDrop(e, metricType)}
-        onDragEnd={handleMetricDragEnd}
-        className={cn(
-          `relative rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-gradient-to-br ${cardBgGradient} ${borderClass} ${shadowClass}`,
-          isEditing && "cursor-grab active:cursor-grabbing",
-          isDragging && "opacity-40 scale-95",
-          isDragOver && "ring-2 ring-white ring-offset-2 scale-[1.02]",
-          !isDragging &&
-            !isDragOver &&
-            !isEditing &&
-            "hover:shadow-xl hover:scale-[1.02]",
         )}
-      >
-        {isEditing && (
-          <div className="absolute top-1.5 right-1.5 z-10">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMetricVisibility(metricType);
-              }}
-              className="bg-white/25 hover:bg-white/40 rounded-md p-0.5 transition-colors"
-            >
-              <EyeOff className="h-3 w-3 text-white" />
-            </button>
+        {!isEditing && (
+          <div className="absolute bottom-2 right-2 z-20">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <Info className="h-3 w-3 text-white" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                {metricDescriptions[metricType]}
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
-              {metricName}
-            </p>
-            <div className="bg-white/20 rounded-lg p-1 flex-shrink-0 ml-2">
-              <Icon className="h-4 w-4 text-white" />
-            </div>
-          </div>
-          <p className="text-xl font-bold text-white leading-none mb-1.5">
-            {typeof metric.value === "number"
-              ? metric.value.toLocaleString()
-              : metric.value}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-              {metricType === "partnerLevel" ? (
-                <Award className="h-3 w-3" />
-              ) : metric.trend === "up" ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
-              )}
-              {metricType === "partnerLevel"
-                ? "Nível atual"
-                : metric.trend === "up"
-                  ? "+"
-                  : "-"}
-              {metricType === "partnerLevel"
-                ? metric.value
-                : Math.abs(metric.change)}
-              {metricType === "conversionRate" ? "%" : ""}
-            </div>
-            <span className="text-[10px] text-white/60">
-              {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
-            </span>
-          </div>
-        </div>
       </div>
     );
   };
