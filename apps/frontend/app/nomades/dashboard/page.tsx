@@ -34,6 +34,7 @@ import {
   Medal,
   FileText,
   RotateCcw,
+  Info,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +43,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toPng } from "html-to-image";
 import { useTasks } from "@/hooks/useTasks";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -942,33 +949,41 @@ export default function NomadeDashboardPage() {
           label: "Tarefas Concluídas",
           value: doneTasks.length,
           icon: CheckCircle2,
-          color: "text-emerald-600",
-          bg: "bg-emerald-50",
+          gradient: "from-emerald-500 to-teal-600",
+          border: "border-2 border-emerald-300/70",
           sub: `+${returnedTasks.length > 0 ? returnedTasks.length + " devolvidas" : "0 devolvidas"}`,
+          desc: "Total de tarefas finalizadas com sucesso no período.",
+          link: "/nomades/minhastarefas",
         },
         {
           label: "Em Execução",
           value: activeTasks.length,
           icon: Clock,
-          color: "text-yellow-600",
-          bg: "bg-yellow-50",
+          gradient: "from-amber-500 to-orange-600",
+          border: "border-2 border-amber-300/70",
           sub: `${fmtBRL(activeEarnings)} em aberto`,
+          desc: "Tarefas que você está executando ativamente agora.",
+          link: "/nomades/minhastarefas",
         },
         {
           label: "Disponíveis",
           value: availableTasks.length,
           icon: Zap,
-          color: "text-blue-600",
-          bg: "bg-blue-50",
+          gradient: "from-blue-500 to-indigo-700",
+          border: "border-2 border-blue-300/70",
           sub: "prontas para aceitar",
+          desc: "Tarefas abertas no catálogo que você pode aceitar agora.",
+          link: "/nomades/tarefasdisponiveis",
         },
         {
           label: "Total Ganho",
           value: fmtBRL(totalEarned),
           icon: Wallet,
-          color: "text-violet-600",
-          bg: "bg-violet-50",
+          gradient: "from-violet-500 to-purple-700",
+          border: "border-2 border-violet-300/70",
           sub: `bônus ${levelCfg.bonus}% (nível)`,
+          desc: "Valor total recebido por tarefas concluídas, incluindo bônus de nível.",
+          link: "/nomades/ganhos",
         },
       ];
 
@@ -976,26 +991,51 @@ export default function NomadeDashboardPage() {
         <div
           key={w.id}
           className={cn(
-            "grid grid-cols-2 sm:grid-cols-4 gap-4",
+            "grid grid-cols-2 sm:grid-cols-4 gap-3",
             w.colSpan === 2 ? "col-span-2" : "col-span-1",
           )}
         >
           {kpis.map((k) => (
             <div
               key={k.label}
-              className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm"
+              className={cn(
+                "relative h-full rounded-2xl overflow-hidden shadow-lg transition-all duration-200 bg-linear-to-br hover:shadow-xl hover:scale-[1.02]",
+                k.gradient,
+                k.border,
+              )}
             >
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center mb-3",
-                  k.bg,
-                )}
-              >
-                <k.icon className={cn("h-4 w-4", k.color)} />
+              <Link to={k.link} className="block h-full">
+                <div className="flex flex-col h-full px-4 pt-3 pb-3">
+                  <div className="flex items-start justify-between mb-1.5">
+                    <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider leading-tight flex-1 min-w-0 pr-1 line-clamp-2">
+                      {k.label}
+                    </p>
+                    <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
+                      <k.icon className="h-4 w-4 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
+                    {k.value}
+                  </p>
+                  <div className="flex items-center gap-2 pr-5">
+                    <span className="text-[10px] text-white/60 truncate">{k.sub}</span>
+                  </div>
+                </div>
+              </Link>
+              <div className="absolute bottom-2 right-2 z-20">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                        <Info className="h-3 w-3 text-white" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="end" className="max-w-50 bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                      {k.desc}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
-              <p className="text-xs text-slate-500 mb-1">{k.label}</p>
-              <p className={cn("text-xl font-bold", k.color)}>{k.value}</p>
-              <p className="text-[10px] text-slate-400 mt-1">{k.sub}</p>
             </div>
           ))}
         </div>
@@ -1478,47 +1518,81 @@ export default function NomadeDashboardPage() {
   return (
     <>
       <div className="p-6 space-y-6" ref={dashboardRef}>
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Bem-vindo, {userName}!
-            </p>
+        {/* Dashboard Header — unified toolbar */}
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
+          {/* Title + info tooltip */}
+          <div className="flex items-center gap-1 shrink-0 mr-2">
+            <div className="overflow-hidden">
+              <h1 className="font-bold text-slate-900 dark:text-white tracking-tight text-2xl sm:text-3xl lg:text-4xl xl:text-[46px] transition-all duration-300">
+                Dashboard
+              </h1>
+            </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                  <p className="font-semibold text-xs mb-1.5">Dashboard do Nômade</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Acompanhe suas tarefas, ganhos, entregas e nível em tempo real.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 shrink-0 xl:ml-auto">
             {error && (
-              <span className="text-xs text-red-500">
-                Erro ao carregar tarefas
-              </span>
+              <span className="text-xs text-red-500 mr-1">Erro ao carregar tarefas</span>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetch}
-              className="gap-1.5 text-xs"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Atualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportPng}
-              disabled={exportLoading}
-              className="gap-1.5 text-xs"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {exportLoading ? "Exportando…" : "Exportar PNG"}
-            </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+            {/* Atualizar */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={refetch}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Atualizar dados</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Exportar PNG */}
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={exportPng}
+                    disabled={exportLoading}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>{exportLoading ? "Exportando…" : "Exportar PNG"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Personalizar */}
+            <button
               onClick={() => setShowCustomize(true)}
+              className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
             >
-              <Settings className="h-3.5 w-3.5" />
-              Personalizar
-            </Button>
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+              <Settings className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+              <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                Personalizar
+              </span>
+            </button>
           </div>
         </div>
 
