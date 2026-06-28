@@ -196,7 +196,7 @@ export default function AdminEspecialidadesPage() {
       />
 
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Total",      value: kpi.total,          icon: Briefcase,    color: "text-blue-500",    bg: "bg-blue-50 dark:bg-blue-950/30" },
           { label: "Ativas",     value: kpi.active,         icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
@@ -255,8 +255,8 @@ export default function AdminEspecialidadesPage() {
             })}
           </div>
         </div>
-        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 24rem)" }}>
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto" style={{ maxHeight: "calc(100vh - 24rem)" }}>
+          <table className="w-full text-sm min-w-[600px]">
             <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">

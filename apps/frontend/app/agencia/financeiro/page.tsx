@@ -123,7 +123,7 @@ export default function AgenciaFinanceiro() {
     .reduce((s, i) => s + i.amount, 0);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <PageHeader
         title="Financeiro"
         description="Consumo mensal, descontos do plano e histórico de faturas"
@@ -187,7 +187,7 @@ export default function AgenciaFinanceiro() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-slate-900">Faturas</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {["all", "pending", "paid", "overdue"].map((s) => (
               <Button
                 key={s}

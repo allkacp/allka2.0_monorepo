@@ -95,7 +95,7 @@ export default function ComissionamentosPage() {
   }
 
   return (
-    <div className="pt-6 px-6 space-y-6">
+    <div className="pt-4 sm:pt-6 px-4 sm:px-6 space-y-6">
       <PageHeader
         title="Gestão de Comissionamentos"
         description="Configure remuneração e comissões dos líderes por categoria."
@@ -340,7 +340,7 @@ export default function ComissionamentosPage() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-150">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left p-3"><SortableHeader label="Líder" field="leader" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>

@@ -2137,7 +2137,7 @@ export default function EmpresaProjetosPage() {
           <>
             <Card className="border border-slate-200/70 shadow-sm overflow-hidden">
               {/* ── Toolbar ── */}
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+              <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
                 {/* View mode tabs */}
                 <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
                   <Button

@@ -1222,7 +1222,7 @@ export default function EmpresasPage() {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Total de Empresas"
           value={stats.total}
@@ -1268,7 +1268,7 @@ export default function EmpresasPage() {
       {/* Main Table Card */}
       <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
         {/* Card Top Bar */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
+        <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
           {/* Search */}
           <div className="flex-1 relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

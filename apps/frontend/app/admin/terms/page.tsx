@@ -169,7 +169,7 @@ export default function TermsManagementPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <PageHeader
         title="Gestão de Termos"
         description="Gerencie todos os termos e documentos legais da plataforma"
@@ -235,7 +235,7 @@ export default function TermsManagementPage() {
           <CardDescription>Gerencie todos os termos e suas condições de exibição</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -251,7 +251,8 @@ export default function TermsManagementPage() {
             </Button>
           </div>
 
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-150">
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
@@ -340,6 +341,7 @@ export default function TermsManagementPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

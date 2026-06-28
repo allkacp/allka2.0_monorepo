@@ -890,7 +890,7 @@ export default function AdminFinanceiroPage() {
       />
 
       {/* ── KPI Cards — estilo idêntico a Projetos ─────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">Receita Recebida</p>
@@ -1319,7 +1319,7 @@ export default function AdminFinanceiroPage() {
         {activeTab === "faturas" && (
           <Card className="overflow-hidden">
             <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 26rem)" }}>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
@@ -1480,7 +1480,7 @@ export default function AdminFinanceiroPage() {
             </div>
 
             <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1637,7 +1637,7 @@ export default function AdminFinanceiroPage() {
               </div>
 
               <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
@@ -1765,7 +1765,7 @@ export default function AdminFinanceiroPage() {
             </div>
 
             {/* ── 1. Resumo Geral ────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 { label: "Saldo Total",    value: walletStats?.totalBalance  ?? 0, sub: `${walletStats?.walletCount ?? 0} carteiras`, from: "from-blue-600",   to: "to-indigo-800",  icon: <Wallet className="h-4 w-4 text-white/60" /> },
                 { label: "Saldo Bloqueado",value: walletStats?.blockedBalance ?? 0, sub: "Em análise/restrição",                       from: "from-amber-500",  to: "to-orange-700",  icon: <Info className="h-4 w-4 text-white/60" /> },
@@ -1926,7 +1926,7 @@ export default function AdminFinanceiroPage() {
             {/* Wallet table */}
             <Card className="overflow-hidden">
               <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Titular</th>
@@ -2064,7 +2064,7 @@ export default function AdminFinanceiroPage() {
             {/* Squad table */}
             <Card className="overflow-hidden">
               <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 32rem)" }}>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Empresa</th>
@@ -2274,7 +2274,7 @@ export default function AdminFinanceiroPage() {
             {/* Tabela de conciliação */}
             <Card className="overflow-hidden">
               <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 36rem)" }}>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Data/Hora</th>

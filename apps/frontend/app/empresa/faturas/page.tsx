@@ -78,7 +78,7 @@ export default function EmpresaFaturas() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <PageHeader title="Faturas" description="Histórico de cobranças e pagamentos" />
 
       {/* Summary */}

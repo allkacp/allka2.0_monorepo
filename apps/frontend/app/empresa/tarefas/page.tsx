@@ -67,7 +67,7 @@ export default function EmpresaTarefas() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <PageHeader title="Tarefas" description="Acompanhe todas as tarefas dos seus projetos" />
 
       {/* Summary */}

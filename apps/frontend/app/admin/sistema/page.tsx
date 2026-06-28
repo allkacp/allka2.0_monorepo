@@ -632,7 +632,7 @@ export default function AdminSistemaPage() {
         </>}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Status Geral",    value: overallOk ? "Operacional" : "Atenção", icon: Server,       color: overallOk ? "text-emerald-500" : "text-amber-500",  bg: overallOk ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-amber-50 dark:bg-amber-950/30" },
           { label: "Nômades",         value: loading ? "…" : (stats?.nomades?.total ?? "—"),   icon: Users,        color: "text-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/30" },

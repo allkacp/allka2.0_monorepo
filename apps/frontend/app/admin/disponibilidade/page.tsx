@@ -621,7 +621,7 @@ export default function AdminDisponibilidadePage() {
             className="overflow-auto"
             style={{ maxHeight: "calc(100vh - 28rem)" }}
           >
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
                   <th className={TH}>Status</th>
@@ -754,7 +754,7 @@ export default function AdminDisponibilidadePage() {
             className="overflow-auto"
             style={{ maxHeight: "calc(100vh - 28rem)" }}
           >
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
                   <th className={TH}>Status</th>

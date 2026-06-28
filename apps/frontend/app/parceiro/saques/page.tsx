@@ -98,7 +98,7 @@ export default function PartnerSaques() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
       <PageHeader title="Saques" description="Solicite a transferência do seu saldo para sua chave PIX" />
 
@@ -208,7 +208,8 @@ export default function PartnerSaques() {
                 Histórico de Saques
               </h2>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-150">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -278,6 +279,7 @@ export default function PartnerSaques() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

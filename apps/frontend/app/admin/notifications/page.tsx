@@ -368,7 +368,7 @@ export default function NotificationsManagementPage() {
                             <Info className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <p className="text-[11px] text-slate-400">Eventos marcados como <strong>Fixo</strong> não podem ser alterados pelo usuário. <strong>Personalizável</strong> = o usuário pode ligar/desligar nas próprias configurações.</p>
                           </div>
-                          <table className="w-full text-xs">
+                          <div className="overflow-x-auto"><table className="w-full text-xs min-w-[600px]">
                             <thead>
                               <tr className="border-t border-slate-100">
                                 <th className="text-left px-5 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-1/2">Evento</th>
@@ -395,7 +395,7 @@ export default function NotificationsManagementPage() {
                                 </tr>
                               ))}
                             </tbody>
-                          </table>
+                          </table></div>
                           <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
                             <Button size="sm" className="h-7 text-xs btn-brand border-0">Salvar alterações</Button>
                           </div>
@@ -608,7 +608,7 @@ export default function NotificationsManagementPage() {
               </div>
 
               {/* Summary stats */}
-              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-3 gap-3">
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: "Total hoje", value: "247" },
                   { label: "Esta semana", value: "1.842" },
