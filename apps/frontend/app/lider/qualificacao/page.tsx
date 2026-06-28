@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/page-header";
 import {
   Dialog,
   DialogContent,
@@ -259,26 +260,16 @@ export default function LiderQualificacaoPage() {
   return (
     <div className="space-y-5 p-4 md:p-6">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Para Qualificar
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Tarefas aguardando qualificação da sua área.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={load}
-          disabled={loading}
-          className="h-9 gap-2 shrink-0"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Para Qualificar"
+        description="Tarefas aguardando qualificação da sua área."
+        actions={
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 gap-2 shrink-0">
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            Atualizar
+          </Button>
+        }
+      />
 
       {/* ── Stat cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

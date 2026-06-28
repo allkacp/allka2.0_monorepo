@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 import {
   Search,
   RefreshCw,
@@ -379,17 +380,15 @@ export function ReportListPage({ profileType }: { profileType?: ProfileType }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatórios</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {accessibleCount} de {totalCount} relatórios disponíveis para o seu perfil
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={loadAvailable} className="h-8 gap-1.5 text-xs">
-          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Relatórios"
+        description={`${accessibleCount} de ${totalCount} relatórios disponíveis para o seu perfil`}
+        actions={
+          <Button variant="outline" size="sm" onClick={loadAvailable} className="h-8 gap-1.5 text-xs">
+            <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+          </Button>
+        }
+      />
 
       {/* Live KPI strip — shows indicators scoped to this profile */}
       {profileType && <ProfileKpiStrip profileType={profileType} />}

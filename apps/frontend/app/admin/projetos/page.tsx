@@ -10,6 +10,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
+import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1676,27 +1677,22 @@ export default function AdminProjetosPage({
 
   return (
     <div className="space-y-5" ref={pageRef}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Gestão de Projetos
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Centralize, acompanhe e otimize todos os seus projetos em um só
-            lugar.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportButton pageRef={pageRef} filename="projetos" />
-          <Button
-            onClick={() => setShowProjectCreate(true)}
-            className="h-9 gap-2 btn-brand shadow-md border-0"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Projeto
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Gestão de Projetos"
+        description="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
+        actions={
+          <>
+            <ExportButton pageRef={pageRef} filename="projetos" />
+            <Button
+              onClick={() => setShowProjectCreate(true)}
+              className="h-9 gap-2 btn-brand shadow-md border-0"
+            >
+              <Plus className="h-4 w-4" />
+              Novo Projeto
+            </Button>
+          </>
+        }
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

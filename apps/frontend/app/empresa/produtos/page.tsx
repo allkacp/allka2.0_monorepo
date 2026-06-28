@@ -13,6 +13,7 @@ import {
 import { ProjectCreateSlidePanel } from "@/components/project-create-slide-panel";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/page-header";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -86,15 +87,10 @@ export default function EmpresaProdutos() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Produtos</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Explore o catálogo e contrate serviços para seus projetos
-          </p>
-        </div>
-
-        {cartCount > 0 && (
+      <PageHeader
+        title="Produtos"
+        description="Explore o catálogo e contrate serviços para seus projetos"
+        actions={cartCount > 0 ? (
           <Button
             onClick={() => setCartOpen(true)}
             className="relative bg-violet-600 hover:bg-violet-700 text-white shrink-0"
@@ -105,8 +101,8 @@ export default function EmpresaProdutos() {
               {cartCount}
             </span>
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* Catalog */}
       <ProductCatalogView

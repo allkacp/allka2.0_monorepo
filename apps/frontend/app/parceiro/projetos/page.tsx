@@ -8,6 +8,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -79,14 +80,7 @@ export default function PartnerProjetos() {
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-          Projetos Indicados
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Projetos contratados por empresas através do seu link
-        </p>
-      </div>
+      <PageHeader title="Projetos Indicados" description="Projetos contratados por empresas através do seu link" />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

@@ -96,6 +96,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
@@ -1413,28 +1414,22 @@ export default function AdminTarefasPage({
     <TooltipProvider>
       <div className="space-y-5 p-4 md:p-6">
         {/* ── Header ─────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Tarefas
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Acompanhe todas as tarefas operacionais da plataforma.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchTarefas}
-            disabled={loading}
-            className="h-9 gap-2 shrink-0"
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", loading && "animate-spin")}
-            />
-            Atualizar
-          </Button>
-        </div>
+        <PageHeader
+          title="Tarefas"
+          description="Acompanhe todas as tarefas operacionais da plataforma."
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchTarefas}
+              disabled={loading}
+              className="h-9 gap-2 shrink-0"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              Atualizar
+            </Button>
+          }
+        />
 
         {/* ── Stat Cards ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">

@@ -14,6 +14,7 @@ import {
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/page-header";
 import { Label } from "@/components/ui/label";
 
 function fmtBRL(n: number) {
@@ -99,14 +100,7 @@ export default function PartnerSaques() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-          Saques
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Solicite a transferência do seu saldo para sua chave PIX
-        </p>
-      </div>
+      <PageHeader title="Saques" description="Solicite a transferência do seu saldo para sua chave PIX" />
 
       <div className="grid grid-cols-3 gap-5">
         {/* Left: Balance + Form */}

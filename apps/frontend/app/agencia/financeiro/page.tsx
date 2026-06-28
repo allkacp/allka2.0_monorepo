@@ -15,6 +15,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -123,12 +124,10 @@ export default function AgenciaFinanceiro() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Financeiro</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Consumo mensal, descontos do plano e histórico de faturas
-        </p>
-      </div>
+      <PageHeader
+        title="Financeiro"
+        description="Consumo mensal, descontos do plano e histórico de faturas"
+      />
 
       {/* Plan highlight */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">

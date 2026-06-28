@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 import { apiClient } from "@/lib/api-client";
 import type { LedAgency, AgencyReport } from "@/types/partner";
 
@@ -772,19 +773,15 @@ export default function ParceiroAgencias() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Agências Lideradas</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Acompanhe o desempenho e relatórios das agências sob sua liderança
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
+      <PageHeader
+        title="Agências Lideradas"
+        description="Acompanhe o desempenho e relatórios das agências sob sua liderança"
+        actions={
           <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-3 py-1 font-medium">
             {ledAgencies.length} agência{ledAgencies.length !== 1 ? "s" : ""}
           </span>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
