@@ -334,7 +334,7 @@ function CategorySection({
 
 // ─── Main shared page ─────────────────────────────────────────────────────────
 
-export function ReportListPage({ profileType }: { profileType?: ProfileType }) {
+export function ReportListPage({ profileType, description }: { profileType?: ProfileType; description?: string }) {
   useSidebar();
 
   const [available, setAvailable] = useState<AvailableReport[]>([]);
@@ -388,7 +388,7 @@ export function ReportListPage({ profileType }: { profileType?: ProfileType }) {
       {/* Header */}
       <PageHeader
         title="Relatórios"
-        description={`${accessibleCount} de ${totalCount} relatórios disponíveis para o seu perfil`}
+        description={description ?? `${accessibleCount} de ${totalCount} relatórios disponíveis para o seu perfil`}
         actions={
           <TooltipProvider delayDuration={400}>
             <Tooltip>

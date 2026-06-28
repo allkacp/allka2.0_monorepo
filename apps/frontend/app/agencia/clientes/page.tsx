@@ -14,21 +14,14 @@ import {
   Phone,
   Mail,
   Tag,
-  Plus,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -70,11 +63,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("pt-BR");
-}
-
-export default function AdminClientesPage() {
+export default function AgenciaClientesPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -121,41 +110,16 @@ export default function AdminClientesPage() {
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Clientes"
-        description="Todas as empresas clientes cadastradas na plataforma"
-        actions={
-          <>
-            <ExportButton pageRef={pageRef} filename="clientes" />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href="/admin/empresas"
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all no-underline"
-                  >
-                    <span
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                      style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                    />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Nova Empresa
-                    </span>
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Cadastrar nova empresa</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </>
-        }
+        description="Empresas atendidas pela sua agência"
+        actions={<ExportButton pageRef={pageRef} filename="clientes-agencia" />}
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {[
-          { label: "Total de Clientes",   value: total,                                                        icon: Building2, color: "text-blue-600"    },
-          { label: "Projetos Vinculados", value: clients.reduce((s, c) => s + (c._count?.projects ?? 0), 0),  icon: FolderOpen, color: "text-violet-600" },
-          { label: "Usuários Vinculados", value: clients.reduce((s, c) => s + (c._count?.users ?? 0), 0),     icon: Users,     color: "text-emerald-600" },
-          { label: "Faturas Emitidas",    value: clients.reduce((s, c) => s + (c._count?.invoices ?? 0), 0),  icon: Tag,       color: "text-amber-600"   },
+          { label: "Total de Clientes",    value: total,                  icon: Building2, color: "text-blue-600"    },
+          { label: "Projetos Vinculados",  value: clients.reduce((s, c) => s + (c._count?.projects ?? 0), 0), icon: FolderOpen, color: "text-violet-600" },
+          { label: "Usuários Vinculados",  value: clients.reduce((s, c) => s + (c._count?.users ?? 0), 0),   icon: Users,     color: "text-emerald-600" },
         ].map((s) => (
           <div key={s.label} className="bg-background border border-border/70 rounded-xl px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
@@ -168,8 +132,8 @@ export default function AdminClientesPage() {
       </div>
 
       {/* Search + count */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8 h-8 text-sm"
@@ -180,7 +144,7 @@ export default function AdminClientesPage() {
         </div>
         {total > 0 && (
           <span className="text-xs text-muted-foreground ml-auto">
-            {total} cliente{total !== 1 ? "s" : ""} no total
+            {total} cliente{total !== 1 ? "s" : ""}
           </span>
         )}
       </div>
@@ -201,10 +165,11 @@ export default function AdminClientesPage() {
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
             <Building2 className="h-8 w-8 opacity-40" />
             <span className="text-sm">Nenhum cliente encontrado</span>
+            <span className="text-xs">Os clientes aparecerão aqui quando tiverem projetos vinculados à sua agência.</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
                   <th className="text-left py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Empresa</th>
@@ -212,9 +177,7 @@ export default function AdminClientesPage() {
                   <th className="text-left py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Contato</th>
                   <th className="text-center py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Projetos</th>
                   <th className="text-center py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Usuários</th>
-                  <th className="text-center py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Faturas</th>
                   <th className="text-left py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Cadastro</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -249,7 +212,7 @@ export default function AdminClientesPage() {
                         {c.website && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Globe className="h-3 w-3 shrink-0" />
-                            <a href={c.website} target="_blank" rel="noopener noreferrer" className="truncate max-w-[130px] hover:underline">
+                            <a href={c.website} target="_blank" rel="noopener noreferrer" className="truncate max-w-[140px] hover:underline">
                               {c.website.replace(/^https?:\/\//, "")}
                             </a>
                           </div>
@@ -268,14 +231,8 @@ export default function AdminClientesPage() {
                         {c._count?.users ?? 0}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center font-medium text-sm">
-                      {c._count?.invoices ?? 0}
-                    </td>
                     <td className="py-3 px-4">
                       <StatusBadge status={c.status ?? "ativo"} />
-                    </td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">
-                      {c.created_at ? fmtDate(c.created_at) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -297,7 +254,7 @@ export default function AdminClientesPage() {
             Anterior
           </button>
           <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages} · {total} no total
+            Página {page} de {totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

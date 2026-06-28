@@ -162,15 +162,21 @@ const navigationConfig = {
       current: true,
     },
     {
-      name: "Catálogo",
-      href: "/agency/catalogo",
-      icon: Package,
+      name: "Clientes",
+      href: "/agency/clientes",
+      icon: Building2,
       current: false,
     },
     {
       name: "Projetos",
       href: "/agency/projetos",
       icon: FolderOpen,
+      current: false,
+    },
+    {
+      name: "Catálogo",
+      href: "/agency/catalogo",
+      icon: Package,
       current: false,
     },
     {
@@ -282,6 +288,12 @@ const navigationConfig = {
       current: true,
     },
     {
+      name: "Projetos",
+      href: "/leader/projetos",
+      icon: FolderOpen,
+      current: false,
+    },
+    {
       name: "Para Qualificar",
       href: "/leader/qualificacao",
       icon: CheckSquare,
@@ -342,6 +354,12 @@ const navigationConfig = {
       icon: Users,
       current: false,
       subitems: [
+        {
+          name: "Clientes",
+          href: "/admin/clientes",
+          icon: Building2,
+          current: false,
+        },
         {
           name: "Empresas",
           href: "/admin/empresas",

@@ -52,6 +52,9 @@ router.get("/me", verifyToken, async (req, res, next) => {
           take: 20,
           include: { campaign: { select: { id: true, name: true } } },
         },
+        referred_companies: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -60,7 +63,19 @@ router.get("/me", verifyToken, async (req, res, next) => {
       return;
     }
 
-    res.json(partner);
+    // Fetch projects of companies referred by this partner
+    const referredCompanyIds = partner.referred_companies.map((c: any) => c.id);
+    const projects =
+      referredCompanyIds.length > 0
+        ? await prisma.project.findMany({
+            where: { client_id: { in: referredCompanyIds } },
+            include: { client: { select: { id: true, name: true } } },
+            orderBy: { created_at: "desc" },
+          })
+        : [];
+
+    const { referred_companies, ...partnerData } = partner as any;
+    res.json({ ...partnerData, projects });
   } catch (err) {
     next(err);
   }

@@ -213,6 +213,9 @@ const AgencyCatalogoPage = React.lazy(
 const AgencyRelatoriosPage = React.lazy(
   () => import("@/app/agency/relatorios/page"),
 );
+const AgencyClientesPage = React.lazy(
+  () => import("@/app/agencia/clientes/page"),
+);
 
 // ─── Login Pages ─────────────────────────────────────────────────────────
 const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
@@ -242,6 +245,7 @@ const LiderHistoricoPage = React.lazy(
 const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
 const LiderNomadesPage = React.lazy(() => import("@/app/lider/nomades/page"));
 const LiderCatalogoPage = React.lazy(() => import("@/app/lider/catalogo/page"));
+const LiderProjetosPage = React.lazy(() => import("@/app/lider/projetos/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -950,6 +954,10 @@ export default function App() {
                     path="/agency/relatorios"
                     element={<AgencyRelatoriosPage />}
                   />
+                  <Route
+                    path="/agency/clientes"
+                    element={<AgencyClientesPage />}
+                  />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
                   <Route
@@ -987,6 +995,10 @@ export default function App() {
                   <Route
                     path="/agencia/relatorios"
                     element={<RedirectToAgency />}
+                  />
+                  <Route
+                    path="/agencia/clientes"
+                    element={<Navigate to="/agency/clientes" replace />}
                   />
 
                   {/* ─── Leader (novo) ────────────────────────────────────── */}
@@ -1026,6 +1038,10 @@ export default function App() {
                     path="/leader/catalogo"
                     element={<LiderCatalogoPage />}
                   />
+                  <Route
+                    path="/leader/projetos"
+                    element={<LiderProjetosPage />}
+                  />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
                   <Route
@@ -1063,6 +1079,10 @@ export default function App() {
                   <Route
                     path="/lider/catalogo"
                     element={<Navigate to="/leader/catalogo" replace />}
+                  />
+                  <Route
+                    path="/lider/projetos"
+                    element={<Navigate to="/leader/projetos" replace />}
                   />
 
                   {/* Fallback — redireciona para o dashboard do perfil ativo */}

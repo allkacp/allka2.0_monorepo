@@ -14,6 +14,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -78,12 +79,7 @@ export default function EmpresaFaturas() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Faturas</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Histórico de cobranças e pagamentos
-        </p>
-      </div>
+      <PageHeader title="Faturas" description="Histórico e status das suas faturas" />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

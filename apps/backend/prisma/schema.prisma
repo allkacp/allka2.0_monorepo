@@ -91,6 +91,8 @@ model Company {
   financial_contact_notes             String?  @db.LongText
   financial_contact_user_id           String?  // FK to User (optional link to financial user)
   use_master_as_financial_fallback    Boolean  @default(true)
+  referred_by_partner_id              String?  // FK to PartnerProfile (who referred this company)
+  referred_by_partner                 PartnerProfile? @relation(fields: [referred_by_partner_id], references: [id], onDelete: SetNull)
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -1040,9 +1042,10 @@ model PartnerProfile {
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 
-  commissions PartnerCommission[]
-  led_agencies AgencyLeadership[]
+  commissions    PartnerCommission[]
+  led_agencies   AgencyLeadership[]
   agency_reports AgencyReport[]
+  referred_companies Company[]
 
   @@map("partner_profiles")
 }

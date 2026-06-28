@@ -61,6 +61,63 @@ router.get("/", verifyToken, async (req, res, next) => {
       return;
     }
 
+    // Agency users see only companies that have projects linked to their agency
+    if (account_type === "agencias") {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { agency: { select: { name: true } } },
+      });
+      const agencyName = user?.agency?.name;
+      if (!agencyName) {
+        res.json({ data: [], total: 0, page: 1, limit: 20 });
+        return;
+      }
+      const { page, limit, skip } = parsePagination(req.query);
+      const search = req.query.search as string | undefined;
+
+      // Get distinct client_ids from projects of this agency
+      const agencyProjects = await prisma.project.findMany({
+        where: { agency: agencyName, client_id: { not: null } },
+        select: { client_id: true },
+        distinct: ["client_id"],
+      });
+      const clientIds = agencyProjects.map((p) => p.client_id as string);
+
+      if (clientIds.length === 0) {
+        res.json({ data: [], total: 0, page: 1, limit });
+        return;
+      }
+
+      const where: Record<string, unknown> = { id: { in: clientIds } };
+      if (search) {
+        where["AND"] = [
+          { id: { in: clientIds } },
+          {
+            OR: [
+              { name: { contains: search } },
+              { email: { contains: search } },
+              { cnpj: { contains: search } },
+            ],
+          },
+        ];
+        delete where["id"];
+      }
+
+      const [total, data] = await Promise.all([
+        prisma.company.count({ where }),
+        prisma.company.findMany({
+          where,
+          include: COMPANY_COUNT_SELECT,
+          skip,
+          take: limit,
+          orderBy: { name: "asc" },
+        }),
+      ]);
+
+      res.json({ data, total, page, limit });
+      return;
+    }
+
     // Non-admin, non-company accounts cannot list companies
     if (role !== "admin") {
       res.status(403).json({ error: "Acesso não autorizado" });
