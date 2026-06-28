@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Search, Plus, Edit, Trash2, Mail, Phone, Shield, UserCheck, Clock, Award } from "lucide-react"
+import { PageHeader } from "@/components/page-header"
 
 interface InternalUser {
   id: string
@@ -131,87 +132,84 @@ export default function UsuariosInternosPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-transparent dark:via-transparent dark:to-transparent p-6 bg-muted py-0 px-0">
       <div className="max-w-7xl space-y-6 bg-slate-200 dark:bg-transparent mx-0 my-0 px-0 py-0">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Usuários Internos
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie os usuários internos da plataforma</p>
-          </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="btn-brand">
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Usuário
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Adicionar Novo Usuário Interno</DialogTitle>
-                <DialogDescription>Preencha os dados do novo usuário</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome Completo</Label>
-                    <Input id="name" placeholder="Ex: Ana Silva" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="usuario@allka.com" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Telefone</Label>
-                    <Input id="phone" placeholder="+55 11 98765-4321" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Cargo</Label>
-                    <Input id="role" placeholder="Ex: Gerente de Operações" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Departamento</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o departamento" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="operations">Operações</SelectItem>
-                        <SelectItem value="technology">Tecnologia</SelectItem>
-                        <SelectItem value="finance">Financeiro</SelectItem>
-                        <SelectItem value="marketing">Marketing</SelectItem>
-                        <SelectItem value="hr">Recursos Humanos</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permissions">Permissões</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione as permissões" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Administrador</SelectItem>
-                        <SelectItem value="manager">Gerente</SelectItem>
-                        <SelectItem value="user">Usuário</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancelar
+        <PageHeader
+          title="Usuários Internos"
+          description="Gerencie os usuários internos da plataforma"
+          actions={<>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="btn-brand">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Usuário
                 </Button>
-                <Button className="btn-brand">Adicionar Usuário</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Adicionar Novo Usuário Interno</DialogTitle>
+                  <DialogDescription>Preencha os dados do novo usuário</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nome Completo</Label>
+                      <Input id="name" placeholder="Ex: Ana Silva" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" type="email" placeholder="usuario@allka.com" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Telefone</Label>
+                      <Input id="phone" placeholder="+55 11 98765-4321" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="role">Cargo</Label>
+                      <Input id="role" placeholder="Ex: Gerente de Operações" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Departamento</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o departamento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="operations">Operações</SelectItem>
+                          <SelectItem value="technology">Tecnologia</SelectItem>
+                          <SelectItem value="finance">Financeiro</SelectItem>
+                          <SelectItem value="marketing">Marketing</SelectItem>
+                          <SelectItem value="hr">Recursos Humanos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permissions">Permissões</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione as permissões" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Administrador</SelectItem>
+                          <SelectItem value="manager">Gerente</SelectItem>
+                          <SelectItem value="user">Usuário</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button className="btn-brand">Adicionar Usuário</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

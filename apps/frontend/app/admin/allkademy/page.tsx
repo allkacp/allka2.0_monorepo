@@ -50,6 +50,7 @@ import {
   Lock,
   DollarSign,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -405,21 +406,18 @@ export default function AdminAllkademyPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Allkademy</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plataforma de cursos e aprendizado</p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Allkademy"
+        description="Plataforma de cursos e aprendizado"
+        actions={<>
           <Button variant="outline" size="sm" onClick={load} className="h-8 gap-1.5 text-xs">
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </Button>
           <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" /> Novo Curso
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">

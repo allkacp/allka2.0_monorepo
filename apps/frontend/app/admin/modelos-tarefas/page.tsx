@@ -100,6 +100,7 @@ import {
   ButtonLoader,
   InlineLoader,
 } from "@/components/ui/loading";
+import { PageHeader } from "@/components/page-header";
 
 // --- Types --------------------------------------------------------------------
 
@@ -1608,23 +1609,10 @@ export default function AdminModelosTarefasPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 space-y-5 p-4 md:p-8">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4 min-w-0">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 flex items-center justify-center shadow-lg shrink-0">
-              <ClipboardList className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-                Modelos de Tarefas
-              </h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Gerencie modelos reutilizáveis vinculados aos produtos da
-                plataforma.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+        <PageHeader
+          title="Modelos de Tarefas"
+          description="Gerencie modelos reutilizáveis vinculados aos produtos da plataforma."
+          actions={<>
             <Button
               variant="outline"
               size="sm"
@@ -1645,8 +1633,8 @@ export default function AdminModelosTarefasPage() {
               <Plus className="h-4 w-4" />
               Novo Modelo
             </Button>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* Error */}
         {error && (

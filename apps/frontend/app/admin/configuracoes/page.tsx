@@ -63,6 +63,7 @@ import {
   X,
   Sliders,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -631,15 +632,10 @@ export default function AdminConfiguracoesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-          Configurações
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Gerencie as configurações gerais da plataforma
-        </p>
-      </div>
+      <PageHeader
+        title="Configurações"
+        description="Gerencie as configurações gerais da plataforma"
+      />
 
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList className="h-auto flex-wrap gap-0.5 text-xs">

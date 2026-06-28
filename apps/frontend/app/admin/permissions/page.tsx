@@ -12,6 +12,7 @@ import {
   Search, Plus, Users, Shield, Settings, BarChart3, Edit, Trash2,
   Building2, Briefcase, Compass, Store, DollarSign, Lock, FileText, LayoutDashboard, Minus,
 } from "lucide-react"
+import { PageHeader } from "@/components/page-header"
 
 // ─── Shared module/action meta (mirrors slide panel) ─────────────────────────────
 type Scope = "none" | "own" | "all"
@@ -169,12 +170,10 @@ export default function PermissionsPage() {
 
   return (
     <div className="space-y-3" ref={pageRef}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Permissões</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure perfis de acesso e permissões granulares</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Gestão de Permissões"
+        description="Configure perfis de acesso e permissões granulares"
+        actions={<>
           <ExportButton pageRef={pageRef} filename="permissoes" />
           <Button
             onClick={handleCreateProfile}
@@ -183,8 +182,8 @@ export default function PermissionsPage() {
             <Plus className="h-4 w-4 mr-2" />
             Novo Perfil
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <Accordion type="single" collapsible className="mb-1">
         <AccordionItem value="stats" className="border-none">

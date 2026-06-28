@@ -71,6 +71,7 @@ import {
   Image,
   UserPlus,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 // Types
 type AccountTypeRestriction = "empresas" | "agencias" | "nomades";
@@ -1021,18 +1022,10 @@ export default function CampanhasPage() {
 
   return (
     <div className="space-y-5" ref={pageRef}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Campanhas e Promoções
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Gerencie campanhas de indicação, cupons de desconto e ações
-            promocionais
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Campanhas e Promoções"
+        description="Gerencie campanhas de indicação, cupons de desconto e ações promocionais"
+        actions={<>
           <ExportButton
             pageRef={pageRef}
             filename="campanhas"
@@ -1061,8 +1054,8 @@ export default function CampanhasPage() {
             <Plus className="h-4 w-4" />
             Nova Campanha
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

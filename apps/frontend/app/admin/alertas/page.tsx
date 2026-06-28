@@ -41,6 +41,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PageHeader } from "@/components/page-header"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1085,29 +1086,11 @@ export default function AlertasPage() {
   return (
     <>
       <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 dark:bg-red-950/50">
-            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Central de Atenções
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {counts.open} aberto{counts.open !== 1 ? "s" : ""}
-              {counts.pending_approval > 0 && (
-                <span className="ml-2 text-amber-600 font-medium">
-                  • {counts.pending_approval} aguardando aprovação
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Sort dropdown */}
-        <DropdownMenu>
+      <PageHeader
+        title="Central de Atenções"
+        description={<>{counts.open} aberto{counts.open !== 1 ? "s" : ""}{counts.pending_approval > 0 && (<span className="ml-2 text-amber-600 font-medium">• {counts.pending_approval} aguardando aprovação</span>)}</>}
+        actions={<>
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2 text-sm">
               <ArrowUpDown className="h-4 w-4" />
@@ -1133,7 +1116,8 @@ export default function AlertasPage() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+        </>}
+      />
 
       {/* Priority legend */}
       <div className="flex items-center gap-2 flex-wrap">

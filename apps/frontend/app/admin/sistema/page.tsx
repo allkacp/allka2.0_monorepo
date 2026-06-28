@@ -27,6 +27,7 @@ import {
   CreditCard, Mail, ChevronDown, ChevronUp, EyeOff,
   AlertCircle, CheckCircle, FileText, Search,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 function GaugeBar({ value, thresholds = [60, 80] }) {
   const [low, high] = thresholds;
@@ -621,15 +622,15 @@ export default function AdminSistemaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Sistema</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Monitoramento, conectores e configurações da infraestrutura</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={refreshMetrics} disabled={refreshing} className="h-8 gap-1.5 text-xs">
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Sistema"
+        description="Monitoramento, conectores e configurações da infraestrutura"
+        actions={<>
+          <Button variant="outline" size="sm" onClick={refreshMetrics} disabled={refreshing} className="h-8 gap-1.5 text-xs">
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
+          </Button>
+        </>}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[

@@ -29,6 +29,7 @@ import {
 import { useAgencies } from "@/hooks/useAgencies"
 import { apiClient } from "@/lib/api-client"
 import { useToast } from "@/components/ui/use-toast"
+import { PageHeader } from "@/components/page-header"
 
 interface ApiAgency {
   id: string
@@ -233,21 +234,16 @@ export default function AgenciasPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-transparent dark:via-transparent dark:to-transparent p-6 bg-slate-200 dark:bg-transparent px-0 py-0">
       <div className="max-w-7xl mx-auto bg-slate-200 dark:bg-transparent px-0 py-0 space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Gestão de Agências
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Gerencie todas as agências parceiras da plataforma
-            </p>
-          </div>
-          <Button className="btn-brand" onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Agência
-          </Button>
-        </div>
+        <PageHeader
+          title="Gestão de Agências"
+          description="Gerencie todas as agências parceiras da plataforma"
+          actions={<>
+            <Button className="btn-brand" onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Agência
+            </Button>
+          </>}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

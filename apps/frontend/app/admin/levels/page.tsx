@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Edit, Plus, Trash2, Trophy } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
+import { PageHeader } from "@/components/page-header"
 
 export default function LevelsManagementPage() {
   const [agencyLevels, setAgencyLevels] = useState<any[]>([])
@@ -80,14 +81,10 @@ export default function LevelsManagementPage() {
 
   return (
     <div className="container mx-auto pt-6 px-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Gerenciamento de Níveis
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure os níveis dos programas de incentivo para agências e partners</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Gerenciamento de Níveis"
+        description="Configure os níveis dos programas de incentivo para agências e partners"
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>

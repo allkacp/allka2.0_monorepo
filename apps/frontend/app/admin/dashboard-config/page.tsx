@@ -24,6 +24,7 @@ import {
   PieChart,
 } from "lucide-react"
 import type { DashboardWidget, DashboardLayout } from "@/types/dashboard"
+import { PageHeader } from "@/components/page-header"
 
 const widgetTypes = [
   { value: "stats", label: "Estatísticas", icon: BarChart3 },
@@ -182,13 +183,10 @@ export default function DashboardConfigPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Configuração de Dashboard</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure widgets e layouts para cada tipo de conta</p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Configuração de Dashboard"
+        description="Configure widgets e layouts para cada tipo de conta"
+        actions={<>
           <Button variant="outline">
             <Settings className="h-4 w-4 mr-2" />
             Configurações Globais
@@ -310,8 +308,8 @@ export default function DashboardConfigPage() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Layout Selection */}
       <Card>

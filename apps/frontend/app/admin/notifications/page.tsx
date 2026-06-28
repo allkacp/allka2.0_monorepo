@@ -38,6 +38,7 @@ import { NotificationMessageModal } from "@/components/admin/notification-messag
 import { NotificationRuleModal } from "@/components/admin/notification-rule-modal"
 import { NotificationHistoryModal } from "@/components/admin/notification-history-modal"
 import type { NotificationMessage, NotificationRule, NotificationHistory } from "@/types/terms"
+import { PageHeader } from "@/components/page-header"
 
 const DEFAULT_PRECONFIGS = {
   agency: {
@@ -250,24 +251,19 @@ export default function NotificationsManagementPage() {
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950">
       {/* ── Header gradient ───────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-        <div className="px-6 py-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/25">
-              <Bell className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Central de Notificações</h1>
-              <p className="text-xs text-slate-400 mt-0.5">Automações, modelos e pré-configurações por tipo de usuário</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setShowHistoryModal(true)}>
-              <Calendar className="h-3.5 w-3.5" />Histórico
-            </Button>
-            <Button size="sm" className="h-8 text-xs gap-1.5 btn-brand border-0" onClick={() => setShowMessageModal(true)}>
-              <Plus className="h-3.5 w-3.5" />Novo Modelo
-            </Button>
-          </div>
+        <div className="px-6 py-5">
+          <PageHeader
+            title="Central de Notificações"
+            description="Automações, modelos e pré-configurações por tipo de usuário"
+            actions={<>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setShowHistoryModal(true)}>
+                <Calendar className="h-3.5 w-3.5" />Histórico
+              </Button>
+              <Button size="sm" className="h-8 text-xs gap-1.5 btn-brand border-0" onClick={() => setShowMessageModal(true)}>
+                <Plus className="h-3.5 w-3.5" />Novo Modelo
+              </Button>
+            </>}
+          />
         </div>
 
         {/* KPI strip */}

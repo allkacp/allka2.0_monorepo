@@ -37,6 +37,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PageHeader } from "@/components/page-header";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -332,30 +333,21 @@ export default function AdminTarefasExecucaoPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 space-y-5 p-4 md:p-8">
-        {/* Header */}
-        <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg shrink-0">
-            <CheckSquare2 className="h-6 w-6 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Tarefas
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Tarefas reais em execução geradas a partir dos produtos vinculados
-              aos projetos.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchTasks}
-            className="shrink-0 gap-2 h-9"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Atualizar
-          </Button>
-        </div>
+        <PageHeader
+          title="Tarefas"
+          description="Tarefas reais em execução geradas a partir dos produtos vinculados aos projetos."
+          actions={<>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchTasks}
+              className="shrink-0 gap-2 h-9"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Atualizar
+            </Button>
+          </>}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

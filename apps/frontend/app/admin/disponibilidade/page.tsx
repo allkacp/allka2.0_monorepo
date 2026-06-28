@@ -23,6 +23,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -425,17 +426,10 @@ export default function AdminDisponibilidadePage() {
 
   return (
     <div className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Disponibilidade
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Monitoramento em tempo real de nômades e tarefas
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Disponibilidade"
+        description="Monitoramento em tempo real de nômades e tarefas"
+        actions={<>
           <Button
             variant="outline"
             size="sm"
@@ -453,8 +447,8 @@ export default function AdminDisponibilidadePage() {
             {refreshing ? "Atualizando…" : "Atualizar"}
           </Button>
           <ExportButton filename="disponibilidade" />
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── KPI gradient cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">

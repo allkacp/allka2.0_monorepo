@@ -17,6 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DollarSign, Users, TrendingUp, Settings, Plus, Edit, Save, X } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
+import { PageHeader } from "@/components/page-header"
 
 const categories = [
   {
@@ -95,17 +96,16 @@ export default function ComissionamentosPage() {
 
   return (
     <div className="pt-6 px-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Comissionamentos</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure remuneração e comissões dos líderes por categoria.</p>
-        </div>
-        <Button onClick={() => setIsEditingGlobal(true)} className="btn-brand">
-          <Settings className="h-4 w-4 mr-2" />
-          Configurações Globais
-        </Button>
-      </div>
+      <PageHeader
+        title="Gestão de Comissionamentos"
+        description="Configure remuneração e comissões dos líderes por categoria."
+        actions={<>
+          <Button onClick={() => setIsEditingGlobal(true)} className="btn-brand">
+            <Settings className="h-4 w-4 mr-2" />
+            Configurações Globais
+          </Button>
+        </>}
+      />
 
       {/* Global Settings Summary */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">

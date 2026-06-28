@@ -76,6 +76,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
 import { apiClient } from "@/lib/api-client";
+import { PageHeader } from "@/components/page-header";
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900":
@@ -1205,17 +1206,10 @@ export default function EmpresasPage() {
 
   return (
     <div className="space-y-5" ref={pageRef}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Empresas
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Gerencie todas as empresas cadastradas na plataforma
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Empresas"
+        description="Gerencie todas as empresas cadastradas na plataforma"
+        actions={<>
           <ExportButton pageRef={pageRef} filename="empresas" />
           <Button
             onClick={() => setCreatePanelOpen(true)}
@@ -1224,8 +1218,8 @@ export default function EmpresasPage() {
             <Plus className="h-4 w-4" />
             Nova Empresa
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

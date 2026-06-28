@@ -10,6 +10,7 @@ import { Plus, Search, MoreHorizontal, Edit, Trash2, FileText, Users, Calendar, 
 import { TermManagementModal } from "@/components/admin/term-management-modal"
 import { TermAcceptanceHistory } from "@/components/admin/term-acceptance-history"
 import type { Term } from "@/types/terms"
+import { PageHeader } from "@/components/page-header"
 
 export default function TermsManagementPage() {
   const [terms, setTerms] = useState<Term[]>([])
@@ -169,17 +170,16 @@ export default function TermsManagementPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão de Termos</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie todos os termos e documentos legais da plataforma</p>
-        </div>
-        <Button onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Termo
-        </Button>
-      </div>
+      <PageHeader
+        title="Gestão de Termos"
+        description="Gerencie todos os termos e documentos legais da plataforma"
+        actions={<>
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Termo
+          </Button>
+        </>}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

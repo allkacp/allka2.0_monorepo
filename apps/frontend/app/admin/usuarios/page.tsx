@@ -95,6 +95,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { PageHeader } from "@/components/page-header";
 
 // ── Inactivity bucket helper ───────────────────────────────────────────────
 function computeInactivityBucket(lastLogin?: string | null): string {
@@ -1096,17 +1097,10 @@ export default function UsuariosPage() {
 
   return (
     <div className="space-y-5" ref={pageRef}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Usuários
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Gerencie todos os usuários da plataforma
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Usuários"
+        description="Gerencie todos os usuários da plataforma"
+        actions={<>
           <ExportButton pageRef={pageRef} filename="usuarios" />
           <Button
             onClick={() => setShowCreateUser(true)}
@@ -1115,8 +1109,8 @@ export default function UsuariosPage() {
             <Plus className="h-4 w-4" />
             Novo Usuário
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

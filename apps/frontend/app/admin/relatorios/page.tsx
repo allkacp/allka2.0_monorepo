@@ -50,6 +50,7 @@ import { ReportIndicatorLibrary } from "@/features/reports/components/report-ind
 import { ReportConfigsTable } from "@/features/reports/components/report-configs-table";
 import { ReportBuilderSheet } from "@/features/reports/components/report-builder-sheet";
 import type { ReportConfig } from "@/features/reports/types";
+import { PageHeader } from "@/components/page-header";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -438,15 +439,10 @@ export default function AdminRelatoriosPage() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatórios</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {totalReports} relatórios em {CATEGORIES.length} categorias
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Relatórios"
+        description={`${totalReports} relatórios em ${CATEGORIES.length} categorias`}
+        actions={<>
           <Button variant="outline" size="sm" onClick={loadData} className="h-8 gap-1.5 text-xs">
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </Button>
@@ -459,8 +455,8 @@ export default function AdminRelatoriosPage() {
               <Plus className="h-3.5 w-3.5" /> Nova configuração
             </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── KPI strip — estilo idêntico ao Financeiro ────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

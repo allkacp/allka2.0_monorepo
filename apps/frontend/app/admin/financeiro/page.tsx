@@ -41,6 +41,7 @@ import { AdvancedDateFilter } from "@/components/advanced-date-filter";
 import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import type { DateRange } from "react-day-picker";
+import { PageHeader } from "@/components/page-header";
 import {
   CheckCircle2,
   XCircle,
@@ -871,13 +872,10 @@ export default function AdminFinanceiroPage() {
   return (
     <div ref={pageRef} className="space-y-4">
 
-      {/* ── Header — igual ao de Projetos ──────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Gestão Financeira</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie faturas, recebimentos e saques da plataforma.</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Gestão Financeira"
+        description="Gerencie faturas, recebimentos e saques da plataforma."
+        actions={<>
           <ExportButton pageRef={pageRef} filename="financeiro" />
           {activeTab === "despesas" ? (
             <Button onClick={openCreateExpenseSheet} className="h-9 gap-2 btn-brand shadow-md border-0">
@@ -888,8 +886,8 @@ export default function AdminFinanceiroPage() {
               <Plus className="h-4 w-4" /> Nova Fatura
             </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── KPI Cards — estilo idêntico a Projetos ─────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

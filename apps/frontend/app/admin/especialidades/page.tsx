@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
 
 // === AI Providers ============================================================
 
@@ -180,15 +181,10 @@ export default function AdminEspecialidadesPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-blue-500" /> Especialidades
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Gerencie especialidades, valores e integrações de IA</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Especialidades"
+        description="Gerencie especialidades, valores e integrações de IA"
+        actions={<>
           <Button variant="outline" size="sm" onClick={load} className="h-9 gap-1.5 text-xs">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
@@ -196,8 +192,8 @@ export default function AdminEspecialidadesPage() {
           <Button size="sm" onClick={openCreate} className="h-9 gap-2 btn-brand shadow-md border-0">
             <Plus className="h-4 w-4" /> Nova Especialidade
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
