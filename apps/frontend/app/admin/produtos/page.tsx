@@ -1852,14 +1852,23 @@ export default function AdminProdutosPage() {
         title="Cadastro de Produtos"
         description="Cadastre, edite e organize os produtos e serviços da plataforma"
         actions={
-          <Button
-            onClick={handleOpenProductSheet}
-            size="sm"
-            className="btn-brand border-0"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Novo Produto
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleOpenProductSheet}
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Novo Produto
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Criar novo produto</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         }
       />
 

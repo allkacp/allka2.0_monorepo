@@ -878,13 +878,41 @@ export default function AdminFinanceiroPage() {
         actions={<>
           <ExportButton pageRef={pageRef} filename="financeiro" />
           {activeTab === "despesas" ? (
-            <Button onClick={openCreateExpenseSheet} className="h-9 gap-2 btn-brand shadow-md border-0">
-              <Plus className="h-4 w-4" /> Nova Despesa
-            </Button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={openCreateExpenseSheet}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      Nova Despesa
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Criar nova despesa</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : (
-            <Button onClick={openCreateSheet} className="h-9 gap-2 btn-brand shadow-md border-0">
-              <Plus className="h-4 w-4" /> Nova Fatura
-            </Button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={openCreateSheet}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      Nova Fatura
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Criar nova fatura</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </>}
       />

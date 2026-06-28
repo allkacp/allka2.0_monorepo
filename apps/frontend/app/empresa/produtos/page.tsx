@@ -4,6 +4,12 @@
 import { useState, useMemo } from "react";
 import { ShoppingCart, X, Trash2, Minus, Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { useProducts, type Product } from "@/lib/contexts/product-context";
 import {
@@ -91,16 +97,26 @@ export default function EmpresaProdutos() {
         title="Produtos"
         description="Explore o catálogo e contrate serviços para seus projetos"
         actions={cartCount > 0 ? (
-          <Button
-            onClick={() => setCartOpen(true)}
-            className="relative bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Carrinho
-            <span className="ml-2 bg-white text-violet-700 rounded-full text-xs font-bold px-2 py-0.5">
-              {cartCount}
-            </span>
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <ShoppingCart className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Carrinho
+                  </span>
+                  <span className="relative z-10 ml-1 bg-[#7d1b6a] group-hover:bg-white/30 text-white rounded-full text-xs font-bold px-1.5 py-0.5 transition-colors">
+                    {cartCount}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Ver carrinho</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : undefined}
       />
 

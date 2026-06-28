@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PageHeader } from "@/components/page-header"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type HistItem = {
   id: number; title: string; client: string; category: string
@@ -75,9 +81,22 @@ export default function NomadesHistoricoPage() {
         title="Histórico"
         subtitle="Todas as tarefas concluídas e seus resultados"
         actions={
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Download className="h-4 w-4" /> Exportar
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <Download className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Exportar
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Exportar histórico</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         }
       />
 

@@ -28,6 +28,7 @@ import {
   AlertCircle, CheckCircle, FileText, Search,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 function GaugeBar({ value, thresholds = [60, 80] }) {
   const [low, high] = thresholds;
@@ -626,9 +627,21 @@ export default function AdminSistemaPage() {
         title="Sistema"
         description="Monitoramento, conectores e configurações da infraestrutura"
         actions={<>
-          <Button variant="outline" size="sm" onClick={refreshMetrics} disabled={refreshing} className="h-8 gap-1.5 text-xs">
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={refreshMetrics}
+                  disabled={refreshing}
+                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <RefreshCw className={`relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors ${refreshing ? "animate-spin" : ""}`} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </>}
       />
 

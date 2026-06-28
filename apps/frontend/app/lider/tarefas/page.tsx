@@ -25,6 +25,12 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import { PageHeader } from "@/components/page-header";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const FILTER_CONFIG: Record<string, { status: string; title: string; description: string }> = {
   briefings: {
@@ -245,10 +251,21 @@ export default function LiderTarefasPage() {
         title={pageTitle}
         description={pageDescription}
         actions={
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 gap-2 shrink-0">
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-            Atualizar
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={load}
+                  disabled={loading}
+                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <RefreshCw className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", loading && "animate-spin")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         }
       />
 

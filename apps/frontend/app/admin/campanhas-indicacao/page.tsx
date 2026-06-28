@@ -72,6 +72,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Types
 type AccountTypeRestriction = "empresas" | "agencias" | "nomades";
@@ -1026,34 +1027,58 @@ export default function CampanhasPage() {
         title="Campanhas e Promoções"
         description="Gerencie campanhas de indicação, cupons de desconto e ações promocionais"
         actions={<>
-          <ExportButton
-            pageRef={pageRef}
-            filename="campanhas"
-            onlyImageFormats
-          />
-          <Button
-            onClick={() => setReportOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs px-2.5 font-medium border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm"
-          >
-            <BarChart2 className="h-3.5 w-3.5 text-violet-500" />
-            <span className="text-slate-600">Relatório</span>
-          </Button>
-          <Button
-            onClick={openNewCoupon}
-            className="h-9 gap-2 btn-brand shadow-md border-0"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Cupom
-          </Button>
-          <Button
-            onClick={openNewCampaign}
-            className="h-9 gap-2 btn-brand shadow-md border-0"
-          >
-            <Plus className="h-4 w-4" />
-            Nova Campanha
-          </Button>
+          <ExportButton pageRef={pageRef} filename="campanhas" />
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <BarChart2 className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Relatório
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Ver relatório</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={openNewCoupon}
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Novo Cupom
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Criar novo cupom</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={openNewCampaign}
+                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    Nova Campanha
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Criar nova campanha</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </>}
       />
 

@@ -24,6 +24,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -430,22 +431,21 @@ export default function AdminDisponibilidadePage() {
         title="Disponibilidade"
         description="Monitoramento em tempo real de nômades e tarefas"
         actions={<>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={load}
-            disabled={refreshing}
-            className={`h-9 gap-1.5 text-xs transition-all duration-300 ${
-              refreshing
-                ? "border-blue-400 text-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                : ""
-            }`}
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-blue-500" : ""}`}
-            />
-            {refreshing ? "Atualizando…" : "Atualizar"}
-          </Button>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={load}
+                  disabled={refreshing}
+                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                >
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <RefreshCw className={`relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors ${refreshing ? "animate-spin" : ""}`} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <ExportButton filename="disponibilidade" />
         </>}
       />

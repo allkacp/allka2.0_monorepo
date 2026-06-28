@@ -337,15 +337,20 @@ export default function AdminTarefasExecucaoPage() {
           title="Tarefas"
           description="Tarefas reais em execução geradas a partir dos produtos vinculados aos projetos."
           actions={<>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchTasks}
-              className="shrink-0 gap-2 h-9"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Atualizar
-            </Button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={fetchTasks}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </>}
         />
 

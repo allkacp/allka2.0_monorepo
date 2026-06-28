@@ -1,7 +1,6 @@
 // @ts-nocheck
 "use client";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +8,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Download,
   FileSpreadsheet,
@@ -23,6 +28,7 @@ interface ExportButtonProps {
   pageRef: React.RefObject<HTMLElement>;
   filename?: string;
   onlyImageFormats?: boolean;
+  iconOnly?: boolean;
 }
 
 function dateStr() {
@@ -45,6 +51,7 @@ export function ExportButton({
   pageRef,
   filename = "export",
   onlyImageFormats = false,
+  iconOnly = false,
 }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
@@ -175,59 +182,55 @@ export function ExportButton({
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs px-3 font-medium border-violet-200 dark:border-violet-600 hover:border-violet-400 dark:hover:border-violet-300 dark:hover:bg-violet-950/40"
-          data-export-button
-          disabled={isExporting}
-        >
-          {isExporting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          {isExporting ? "Exportando…" : "Exportar"}
-        </Button>
-      </DropdownMenuTrigger>
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <TooltipTrigger asChild>
+              <button
+                data-export-button
+                disabled={isExporting}
+                className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                {isExporting ? (
+                  <Loader2 className="relative z-10 h-4 w-4 text-[#7d1b6a] animate-spin group-hover:text-white transition-colors" />
+                ) : (
+                  <Download className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                )}
+              </button>
+            </TooltipTrigger>
+          </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem
-          className="gap-2 cursor-pointer"
-          onClick={exportAsPng}
-        >
-          <Image className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-          <span className="text-sm">PNG</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2 cursor-pointer"
-          onClick={exportAsPdf}
-        >
-          <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
-          <span className="text-sm">PDF</span>
-        </DropdownMenuItem>
-        {!onlyImageFormats && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2 cursor-pointer"
-              onClick={exportAsExcel}
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span className="text-sm">Excel (.xls)</span>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsPng}>
+              <Image className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+              <span className="text-sm">PNG</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 cursor-pointer"
-              onClick={exportAsDoc}
-            >
-              <FileDown className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-              <span className="text-sm">Word (.doc)</span>
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsPdf}>
+              <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
+              <span className="text-sm">PDF</span>
             </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {!onlyImageFormats && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsExcel}>
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-sm">Excel (.xls)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={exportAsDoc}>
+                  <FileDown className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                  <span className="text-sm">Word (.doc)</span>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <TooltipContent side="bottom" sideOffset={6}>Exportar</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

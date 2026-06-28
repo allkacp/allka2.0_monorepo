@@ -42,6 +42,7 @@ import {
   Crown,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNomadeLevels } from "@/hooks/useNomadeLevels";
 import { useNomades } from "@/hooks/useNomades";
 import { apiClient } from "@/lib/api-client";
@@ -728,10 +729,23 @@ export default function NiveisNomadesPage() {
         description="Configure os níveis de gamificação dos nômades com critérios de performance, bônus e benefícios"
         actions={
           activeTab === "config" ? (
-            <Button onClick={() => openEditDialog()} className="btn-brand">
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Nível
-            </Button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => openEditDialog()}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  >
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      Novo Nível
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Criar novo nível</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : undefined
         }
       />

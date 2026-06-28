@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PageHeader } from "@/components/page-header"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1092,11 +1093,21 @@ export default function AlertasPage() {
         actions={<>
           <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 text-sm">
-              <ArrowUpDown className="h-4 w-4" />
-              {sortLabel[sortBy]}
-              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-            </Button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all">
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <ArrowUpDown className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      {sortLabel[sortBy]}
+                    </span>
+                    <ChevronDown className="relative z-10 h-3.5 w-3.5 text-[#7d1b6a] group-hover:text-white transition-colors opacity-60" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Ordenar alertas</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
