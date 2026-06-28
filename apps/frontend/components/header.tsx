@@ -43,7 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
@@ -132,6 +132,7 @@ export function Header() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { accountType, unlockAccountType, previewUserName, previewUserEmail } =
     useAccountType();
   const { userProfile, updateUserProfile } = useSidebar();
@@ -141,25 +142,42 @@ export function Header() {
   const agencia = useAgencia();
   const basket = useProjectBasket();
 
+  const closeMobileSidebar = useCallback(() => {
+    const sidebar = document.getElementById("mobile-sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    if (sidebar && overlay) {
+      sidebar.classList.add("-translate-x-full");
+      overlay.classList.add("hidden");
+    }
+    setMobileMenuOpen(false);
+  }, []);
+
   const toggleMobileSidebar = () => {
     const sidebar = document.getElementById("mobile-sidebar");
     const overlay = document.getElementById("sidebar-overlay");
     if (sidebar && overlay) {
       if (mobileMenuOpen) {
-        sidebar.classList.add("-translate-x-full");
-        overlay.classList.add("hidden");
+        closeMobileSidebar();
       } else {
         sidebar.classList.remove("-translate-x-full");
         overlay.classList.remove("hidden");
+        setMobileMenuOpen(true);
       }
-      setMobileMenuOpen(!mobileMenuOpen);
     }
   };
 
+  // Fecha o sidebar mobile ao clicar no overlay
   useEffect(() => {
     const overlay = document.getElementById("sidebar-overlay");
-    if (overlay) overlay.addEventListener("click", toggleMobileSidebar);
-  }, []);
+    if (!overlay) return;
+    overlay.addEventListener("click", closeMobileSidebar);
+    return () => overlay.removeEventListener("click", closeMobileSidebar);
+  }, [closeMobileSidebar]);
+
+  // Fecha o sidebar mobile ao navegar para outra rota
+  useEffect(() => {
+    closeMobileSidebar();
+  }, [location.pathname, closeMobileSidebar]);
 
   // Fetch authenticated user to show real name in greeting
   useEffect(() => {
