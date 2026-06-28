@@ -1110,7 +1110,7 @@ export function Header() {
         </div>
 
         {/* === BOTTOM ROW: quick stats pills === */}
-        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto pb-2 pt-0.5">
+        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto no-scrollbar pt-0.5">
           {ctx.level && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
               <div className="h-6 w-6 rounded-lg bg-yellow-400/20 flex items-center justify-center shrink-0">
