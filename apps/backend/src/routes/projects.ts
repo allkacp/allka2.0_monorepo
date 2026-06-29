@@ -241,15 +241,34 @@ router.get("/", verifyToken, async (req, res, next) => {
         );
         for (const r of rows) seqMap[r.id] = Number(r.seq);
       } catch {
-        // fallback: assign local positions if window function unsupported
         data.forEach((p, i) => { seqMap[p.id] = i + 1; });
+      }
+    }
+
+    // Build set of client_ids that belong to partner-referred companies (direct DB query, no join dependency)
+    const clientIdsInPage = [...new Set(data.map((p) => p.client_id).filter(Boolean))] as string[];
+    const partnerReferredSet = new Set<string>();
+    const partnerOwnerMap = new Map<string, string>(); // client_id → partner user name
+    if (clientIdsInPage.length > 0) {
+      const referredCompanies = await prisma.company.findMany({
+        where: { id: { in: clientIdsInPage }, referred_by_partner_id: { not: null } },
+        select: {
+          id: true,
+          referred_by_partner: { select: { user: { select: { name: true } } } },
+        },
+      });
+      for (const c of referredCompanies) {
+        partnerReferredSet.add(c.id);
+        if (c.referred_by_partner?.user?.name) {
+          partnerOwnerMap.set(c.id, c.referred_by_partner.user.name);
+        }
       }
     }
 
     const enriched = data.map((p) => {
       const ownerType: "agency" | "company" | "partner" | null = p.agency
         ? "agency"
-        : (p.client as any)?.referred_by_partner_id
+        : partnerReferredSet.has(p.client_id ?? "")
           ? "partner"
           : p.client_id
             ? "company"
@@ -257,9 +276,9 @@ router.get("/", verifyToken, async (req, res, next) => {
 
       const ownerName: string | null = p.agency
         ? p.agency
-        : (p.client as any)?.referred_by_partner?.user?.name ??
-          (p.client as any)?.name ??
-          null;
+        : ownerType === "partner"
+          ? (partnerOwnerMap.get(p.client_id!) ?? (p.client as any)?.name ?? null)
+          : (p.client as any)?.name ?? null;
 
       return {
         ...p,
