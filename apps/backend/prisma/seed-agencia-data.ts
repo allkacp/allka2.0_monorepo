@@ -1,9 +1,11 @@
 /**
- * Seed: Dados reais para a agência agencia@allka.test
- * Cria: Agency profile, 5 clientes (Companies), 510 Projetos com todos os statuses
+ * Seed: Dados reais para agencia@allka.test ("Lamego Teste Agency")
+ * - Atualiza nome da agência no banco para "Lamego Teste Agency" (igual ao dev-mock)
+ * - Upsert de 10 empresas-clientes reais
+ * - Upsert de 10 projetos espelhando dev-mocks/data/projects.ts
  *
  * Execução:  cd apps/backend && npx tsx prisma/seed-agencia-data.ts
- * Idempotente: usa upsert com IDs fixos — pode ser re-executado sem duplicar dados
+ * Idempotente: usa upsert com IDs fixos
  */
 
 import "dotenv/config";
@@ -11,327 +13,106 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// ── Configuração ──────────────────────────────────────────────────────────────
+const AGENCY_NAME  = "Lamego Teste Agency";
 const AGENCY_EMAIL = "agencia@allka.test";
 
 const IDS = {
-  agency: "seed-ag-test-profile-01",
-  clients: [
-    "seed-ag-client-01",
-    "seed-ag-client-02",
-    "seed-ag-client-03",
-    "seed-ag-client-04",
-    "seed-ag-client-05",
-  ],
+  clientCocaCola:  "seed-ag-client-coca-cola",
+  clientStarbucks: "seed-ag-client-starbucks",
+  clientGoogle:    "seed-ag-client-google",
+  clientMagazine:  "seed-ag-client-magazine-luiza",
+  clientNubank:    "seed-ag-client-nubank",
+  clientNatura:    "seed-ag-client-natura",
+  clientTesla:     "seed-ag-client-tesla",
+  clientAmbev:     "seed-ag-client-ambev",
+  clientIfood:     "seed-ag-client-ifood",
+  clientEmbraer:   "seed-ag-client-embraer",
+  proj01: "seed-ag-real-proj-01",
+  proj02: "seed-ag-real-proj-02",
+  proj03: "seed-ag-real-proj-03",
+  proj04: "seed-ag-real-proj-04",
+  proj05: "seed-ag-real-proj-05",
+  proj06: "seed-ag-real-proj-06",
+  proj07: "seed-ag-real-proj-07",
+  proj08: "seed-ag-real-proj-08",
+  proj09: "seed-ag-real-proj-09",
+  proj10: "seed-ag-real-proj-10",
 };
-
-// 510 projetos distribuídos entre 9 statuses
-const STATUS_COUNTS: Record<string, number> = {
-  "draft":            45,
-  "negotiation":      40,
-  "pending-approval": 30,
-  "awaiting-payment": 35,
-  "planning":         60,
-  "in-progress":     125,
-  "paused":           25,
-  "completed":       130,
-  "cancelled":        20,
-};
-// Total: 510
-
-const CLIENTS_DATA = [
-  {
-    id:      IDS.clients[0],
-    name:    "TechNova Solutions",
-    cnpj:    "11.222.333/0001-01",
-    email:   "contato@technova.com.br",
-    phone:   "(11) 3000-1001",
-    segment: "Tecnologia",
-    website: "https://www.technova.com.br",
-    address: "Av. Brigadeiro Faria Lima, 3000 — São Paulo, SP",
-  },
-  {
-    id:      IDS.clients[1],
-    name:    "Grupo Meridian",
-    cnpj:    "22.333.444/0001-02",
-    email:   "ti@grupomeridian.com.br",
-    phone:   "(21) 3100-2002",
-    segment: "Consultoria",
-    website: "https://www.grupomeridian.com.br",
-    address: "Rua da Assembleia, 100 — Rio de Janeiro, RJ",
-  },
-  {
-    id:      IDS.clients[2],
-    name:    "iStart Digital",
-    cnpj:    "33.444.555/0001-03",
-    email:   "projetos@istartdigital.com.br",
-    phone:   "(41) 3200-3003",
-    segment: "Marketing Digital",
-    website: "https://www.istartdigital.com.br",
-    address: "Al. Carlos de Carvalho, 200 — Curitiba, PR",
-  },
-  {
-    id:      IDS.clients[3],
-    name:    "Conexão Plus",
-    cnpj:    "44.555.666/0001-04",
-    email:   "digital@conexaoplus.com.br",
-    phone:   "(51) 3300-4004",
-    segment: "E-commerce",
-    website: "https://www.conexaoplus.com.br",
-    address: "Av. Ipiranga, 6681 — Porto Alegre, RS",
-  },
-  {
-    id:      IDS.clients[4],
-    name:    "Viva Commerce",
-    cnpj:    "55.666.777/0001-05",
-    email:   "mkt@vivacommerce.com.br",
-    phone:   "(31) 3400-5005",
-    segment: "Varejo",
-    website: "https://www.vivacommerce.com.br",
-    address: "Av. Afonso Pena, 1000 — Belo Horizonte, MG",
-  },
-];
-
-// Projetos por cliente: 120 + 100 + 95 + 105 + 90 = 510
-const CLIENT_QUOTAS = [120, 100, 95, 105, 90];
-
-const PROJECT_TEMPLATES = [
-  { title: "Gestão de Tráfego Pago",                 type: "Marketing Digital"      },
-  { title: "Desenvolvimento de Landing Page",         type: "Desenvolvimento Web"    },
-  { title: "Identidade Visual",                       type: "Design"                 },
-  { title: "Campanha de E-mail Marketing",            type: "Marketing Digital"      },
-  { title: "SEO e Posicionamento Orgânico",           type: "Marketing Digital"      },
-  { title: "Redesign do Site Institucional",          type: "Desenvolvimento Web"    },
-  { title: "Social Media Management",                 type: "Marketing Digital"      },
-  { title: "Desenvolvimento de App Mobile",           type: "Desenvolvimento Mobile" },
-  { title: "Consultoria de Performance Digital",      type: "Consultoria"            },
-  { title: "Criação de Loja Virtual",                 type: "E-commerce"             },
-  { title: "Produção de Conteúdo Editorial",          type: "Design"                 },
-  { title: "Auditoria de Presença Digital",           type: "Consultoria"            },
-  { title: "Campanha de Influenciadores",             type: "Marketing Digital"      },
-  { title: "Sistema de Automação de CRM",             type: "Desenvolvimento Web"    },
-  { title: "Estratégia de Inbound Marketing",         type: "Marketing Digital"      },
-  { title: "Dashboard Analytics Personalizado",       type: "Desenvolvimento Web"    },
-  { title: "Gestão de Redes Sociais",                 type: "Marketing Digital"      },
-  { title: "Criação de Material Gráfico",             type: "Design"                 },
-  { title: "Configuração de Google Ads",              type: "Marketing Digital"      },
-  { title: "Desenvolvimento de E-commerce B2B",       type: "E-commerce"             },
-];
-
-const VALUES = [
-  1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000,
-  6000, 7000, 8000, 10000, 12000, 15000, 18000, 20000,
-  25000, 30000, 35000, 40000,
-];
-
-const now = new Date();
-const past   = (days: number) => new Date(now.getTime() - days * 86_400_000);
-const future = (days: number) => new Date(now.getTime() + days * 86_400_000);
-
-function pick<T>(arr: T[], i: number): T {
-  return arr[i % arr.length];
-}
-
-function progressForStatus(status: string, seed: number): number {
-  const r = seed % 60;
-  switch (status) {
-    case "draft":             return 0;
-    case "negotiation":       return 5;
-    case "pending-approval":  return 10;
-    case "awaiting-payment":  return 15;
-    case "planning":          return 20;
-    case "in-progress":       return 30 + r;
-    case "paused":            return 20 + (r % 30);
-    case "completed":         return 100;
-    case "cancelled":         return r % 40;
-    default:                  return 0;
-  }
-}
-
-function datesForStatus(
-  status: string,
-  idx: number,
-): { start_date?: Date; end_date?: Date } {
-  const offset = (idx * 2) % 80;
-  switch (status) {
-    case "in-progress":
-      return { start_date: past(offset + 10), end_date: future(30 + offset) };
-    case "completed":
-      return { start_date: past(offset + 60), end_date: past(offset + 5) };
-    case "paused":
-      return { start_date: past(offset + 30), end_date: future(60 + offset) };
-    case "planning":
-      return { start_date: past(offset + 5), end_date: future(45 + offset) };
-    case "cancelled":
-      return { start_date: past(offset + 45), end_date: past(offset + 10) };
-    default:
-      return {};
-  }
-}
 
 async function main() {
-  console.log("🌱 Seed: dados para agência agencia@allka.test\n");
+  console.log("🌱 Seed: Lamego Teste Agency — 10 clientes + 10 projetos reais\n");
 
-  // 1. Find agency user
-  const user = await prisma.user.findUnique({ where: { email: AGENCY_EMAIL } });
-  if (!user) {
-    console.error(`❌ Usuário ${AGENCY_EMAIL} não encontrado. Crie-o primeiro.`);
+  // 1. Encontrar user agencia@allka.test
+  const user = await prisma.user.findUnique({
+    where: { email: AGENCY_EMAIL },
+    include: { agency: true },
+  });
+  if (!user || !user.agency) {
+    console.error(`❌ User ${AGENCY_EMAIL} ou perfil de agência não encontrado.`);
     process.exit(1);
   }
-  console.log(`  ✓ Usuário → ${user.name} (${user.id})`);
+  console.log(`  ✓ User    → ${user.email}`);
+  console.log(`  ✓ Agency  → "${user.agency.name}" → atualizando para "${AGENCY_NAME}"...`);
 
-  // 2. Upsert Agency profile
-  // Check if user already has an agency record (by user_id) to avoid unique constraint error
-  const existingByUser = await prisma.agency.findUnique({ where: { user_id: user.id } });
-  let agency;
-  if (existingByUser) {
-    agency = await prisma.agency.update({
-      where: { id: existingByUser.id },
-      data:  { name: existingByUser.name },
-    });
-  } else {
-    agency = await prisma.agency.upsert({
-      where:  { id: IDS.agency },
-      update: {},
-      create: {
-        id:      IDS.agency,
-        user_id: user.id,
-        name:    user.name ?? "Allka Test Agency",
-        email:   AGENCY_EMAIL,
-        status:  "ativo",
-      },
-    });
-  }
-  const agencyName = agency.name;
-  console.log(`  ✓ Agency   → ${agencyName} (${agency.id})`);
+  // 2. Atualizar nome da agência para bater com os mocks
+  await prisma.agency.update({
+    where: { id: user.agency.id },
+    data:  { name: AGENCY_NAME },
+  });
+  console.log(`  ✓ Agency renomeada para "${AGENCY_NAME}"\n`);
 
-  // 3. Create 5 client companies
-  const createdCompanies: Array<{ id: string; name: string }> = [];
-  for (const c of CLIENTS_DATA) {
-    const company = await prisma.company.upsert({
+  // 3. Upsert 10 clientes
+  const clients = [
+    { id: IDS.clientCocaCola,  name: "Coca-Cola Brasil",  cnpj: "45.997.418/0001-53", segment: "Bebidas"       },
+    { id: IDS.clientStarbucks, name: "Starbucks Coffee",  cnpj: "08.883.874/0001-62", segment: "Alimentação"   },
+    { id: IDS.clientGoogle,    name: "Google Brasil",     cnpj: "06.990.590/0001-23", segment: "Tecnologia"    },
+    { id: IDS.clientMagazine,  name: "Magazine Luiza",    cnpj: "47.960.950/0001-21", segment: "Varejo"        },
+    { id: IDS.clientNubank,    name: "Nubank",            cnpj: "18.236.120/0001-58", segment: "Fintech"       },
+    { id: IDS.clientNatura,    name: "Natura Cosméticos", cnpj: "71.673.990/0001-77", segment: "Cosméticos"    },
+    { id: IDS.clientTesla,     name: "Tesla Brasil",      cnpj: "33.456.789/0001-11", segment: "Mobilidade"    },
+    { id: IDS.clientAmbev,     name: "Ambev S.A.",        cnpj: "02.808.708/0001-07", segment: "Bebidas"       },
+    { id: IDS.clientIfood,     name: "iFood",             cnpj: "14.380.200/0001-21", segment: "Tecnologia"    },
+    { id: IDS.clientEmbraer,   name: "Embraer",           cnpj: "07.689.002/0001-89", segment: "Aeronáutica"   },
+  ];
+
+  for (const c of clients) {
+    await prisma.company.upsert({
       where:  { id: c.id },
       update: { name: c.name },
-      create: {
-        id:      c.id,
-        name:    c.name,
-        cnpj:    c.cnpj,
-        email:   c.email,
-        phone:   c.phone,
-        segment: c.segment,
-        website: c.website,
-        address: c.address,
-        status:  "ativo",
-      },
+      create: { id: c.id, name: c.name, cnpj: c.cnpj, segment: c.segment, status: "ativo" },
     });
-    createdCompanies.push({ id: company.id, name: company.name });
-    console.log(`  ✓ Cliente  → ${company.name}`);
+    console.log(`  ✓ Cliente → ${c.name}`);
   }
+  console.log();
 
-  // 4. Build project list (510 projects)
-  type ProjectEntry = {
-    id: string;
-    title: string;
-    type: string;
-    status: string;
-    clientId: string;
-    value: number;
-    progress: number;
-    lifecycle: "avulso" | "mensal";
-    start_date?: Date;
-    end_date?: Date;
-  };
+  // 4. Upsert 10 projetos (espelho fiel de dev-mocks/data/projects.ts)
+  const projects = [
+    { id: IDS.proj01, title: "Rebranding Institucional",    client_id: IDS.clientCocaCola,  type: "Branding",        status: "completed",       progress: 100, budget: 45000, value: 45000, start_date: new Date("2025-09-01"), end_date: new Date("2026-01-15"), created_at: new Date("2025-08-20T10:00:00Z") },
+    { id: IDS.proj02, title: "Social Media Mensal",          client_id: IDS.clientStarbucks, type: "Social Media",    status: "in-progress",     progress: 60,  budget: 8000,  value: 8000,  start_date: new Date("2026-01-01"), end_date: new Date("2026-12-31"), created_at: new Date("2025-12-15T09:00:00Z") },
+    { id: IDS.proj03, title: "Landing Page Produto X",       client_id: IDS.clientGoogle,    type: "Web Design",      status: "planning",        progress: 15,  budget: 12000, value: 12000, start_date: new Date("2026-04-20"), end_date: new Date("2026-06-20"), created_at: new Date("2026-04-01T08:00:00Z") },
+    { id: IDS.proj04, title: "Campanha Black Friday 2026",   client_id: IDS.clientMagazine,  type: "Campanha",        status: "draft",           progress: 0,   budget: 65000, value: 65000, start_date: new Date("2026-08-01"), end_date: new Date("2026-11-30"), created_at: new Date("2026-03-25T14:00:00Z") },
+    { id: IDS.proj05, title: "Vídeo Institucional",          client_id: IDS.clientNubank,    type: "Vídeo",           status: "in-progress",     progress: 40,  budget: 28000, value: 28000, start_date: new Date("2026-03-01"), end_date: new Date("2026-05-15"), created_at: new Date("2026-02-15T10:00:00Z") },
+    { id: IDS.proj06, title: "E-mail Marketing Mensal",      client_id: IDS.clientNatura,    type: "E-mail Marketing",status: "in-progress",     progress: 75,  budget: 5000,  value: 5000,  start_date: new Date("2026-01-01"), end_date: new Date("2026-12-31"), created_at: new Date("2025-12-20T11:00:00Z") },
+    { id: IDS.proj07, title: "App de Fidelidade",            client_id: IDS.clientTesla,     type: "UX/UI",           status: "awaiting-payment",progress: 0,   budget: 35000, value: 35000, start_date: new Date("2026-05-01"), end_date: new Date("2026-08-30"), created_at: new Date("2026-04-05T09:00:00Z") },
+    { id: IDS.proj08, title: "Content Marketing Mensal",     client_id: IDS.clientAmbev,     type: "Content",         status: "in-progress",     progress: 50,  budget: 6500,  value: 6500,  start_date: new Date("2026-02-01"), end_date: new Date("2026-12-31"), created_at: new Date("2026-01-20T14:00:00Z") },
+    { id: IDS.proj09, title: "Redesign Portal Interno",      client_id: IDS.clientIfood,     type: "Web Design",      status: "paused",          progress: 30,  budget: 52000, value: 52000, start_date: new Date("2026-01-15"), end_date: new Date("2026-07-15"), created_at: new Date("2025-12-28T10:00:00Z") },
+    { id: IDS.proj10, title: "Identidade Visual Corporativa",client_id: IDS.clientEmbraer,   type: "Branding",        status: "in-progress",     progress: 65,  budget: 38000, value: 38000, start_date: new Date("2026-02-15"), end_date: new Date("2026-06-30"), created_at: new Date("2026-02-01T08:00:00Z") },
+  ];
 
-  const projectEntries: ProjectEntry[] = [];
-  let globalIdx = 0;
-
-  for (let ci = 0; ci < IDS.clients.length; ci++) {
-    const clientId = IDS.clients[ci];
-    const quota    = CLIENT_QUOTAS[ci];
-
-    // Build status list for this client proportional to STATUS_COUNTS
-    const statusesForClient: string[] = [];
-    for (const [status, count] of Object.entries(STATUS_COUNTS)) {
-      const share = Math.round((count / 510) * quota);
-      for (let k = 0; k < share; k++) statusesForClient.push(status);
-    }
-    // Fill any rounding gap with "in-progress"
-    while (statusesForClient.length < quota) statusesForClient.push("in-progress");
-    // Trim if slightly over
-    statusesForClient.splice(quota);
-
-    for (let pi = 0; pi < statusesForClient.length; pi++) {
-      const status   = statusesForClient[pi];
-      const tmpl     = pick(PROJECT_TEMPLATES, globalIdx);
-      const repeat   = Math.floor(pi / PROJECT_TEMPLATES.length);
-      const suffix   = repeat > 0 ? ` — Fase ${repeat + 1}` : "";
-
-      projectEntries.push({
-        id:        `seed-ag-proj-${String(globalIdx + 1).padStart(4, "0")}`,
-        title:     tmpl.title + suffix,
-        type:      tmpl.type,
-        status,
-        clientId,
-        value:     VALUES[globalIdx % VALUES.length],
-        progress:  progressForStatus(status, globalIdx),
-        lifecycle: globalIdx % 5 === 0 ? "mensal" : "avulso",
-        ...datesForStatus(status, globalIdx),
-      });
-      globalIdx++;
-    }
-  }
-
-  // 5. Upsert all projects
-  console.log(`\n  Criando ${projectEntries.length} projetos...`);
-  let done = 0;
-  for (const p of projectEntries) {
+  for (const p of projects) {
+    const { created_at, ...rest } = p;
     await prisma.project.upsert({
       where:  { id: p.id },
-      update: {
-        title:     p.title,
-        status:    p.status,
-        agency:    agencyName,
-        client_id: p.clientId,
-        value:     p.value,
-        progress:  p.progress,
-      },
-      create: {
-        id:           p.id,
-        title:        p.title,
-        type:         p.type,
-        status:       p.status,
-        agency:       agencyName,
-        client_id:    p.clientId,
-        value:        p.value,
-        budget:       p.value,
-        progress:     p.progress,
-        lifecycle:    p.lifecycle,
-        company_type: "company",
-        start_date:   p.start_date,
-        end_date:     p.end_date,
-      },
+      update: { title: p.title, status: p.status, progress: p.progress, agency: AGENCY_NAME },
+      create: { ...rest, agency: AGENCY_NAME, company_type: "company", lifecycle: "avulso", created_at },
     });
-    done++;
-    if (done % 100 === 0) console.log(`    → ${done}/${projectEntries.length}`);
+    console.log(`  ✓ Projeto [${p.status.padEnd(17)}] → ${p.title}`);
   }
 
-  // 6. Summary
-  const byStatus: Record<string, number> = {};
-  for (const p of projectEntries) byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
-
-  console.log("\n  ✅ Por status:");
-  for (const [s, n] of Object.entries(byStatus)) {
-    console.log(`     ${s.padEnd(22)} → ${n}`);
-  }
-
-  console.log("\n  ✅ Por cliente:");
-  for (let ci = 0; ci < CLIENTS_DATA.length; ci++) {
-    const n = projectEntries.filter((p) => p.clientId === IDS.clients[ci]).length;
-    console.log(`     ${CLIENTS_DATA[ci].name.padEnd(25)} → ${n} projetos`);
-  }
-
-  console.log(`\n  Total projetos: ${projectEntries.length}`);
-  console.log(`  Login agência:  ${AGENCY_EMAIL}`);
-  console.log("  ✅ Seed concluído!\n");
+  const total = await prisma.project.count({ where: { agency: AGENCY_NAME } });
+  console.log(`\n✅ Agência "${AGENCY_NAME}" tem ${total} projeto(s) no banco.`);
+  console.log(`\n💡 Para testar agency com dados reais localmente (sem mocks):`);
+  console.log(`   No console do browser: localStorage.setItem("allka_use_real_api", "true"); location.reload();`);
 }
 
 main()

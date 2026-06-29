@@ -27,6 +27,7 @@ export interface EmpresaContractedProduct {
 
 export interface EmpresaProject {
   id: string;
+  seq?: number | null;
   name: string;
   category: string;
   status:
@@ -152,6 +153,7 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
         setProjects(
           pList.map((p: any) => ({
             id: String(p.id),
+            seq: p._seq ?? null,
             name: p.title || p.name || "",
             category: p.type || p.category || "",
             status: p.status || "briefing",

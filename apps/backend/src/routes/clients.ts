@@ -118,6 +118,34 @@ router.get("/", verifyToken, async (req, res, next) => {
       return;
     }
 
+    // Partner users see only companies referred by them
+    if (account_type === "parceiro") {
+      const profile = await prisma.partnerProfile.findUnique({
+        where: { user_id: userId },
+        select: { id: true },
+      });
+      if (!profile) {
+        res.json({ data: [], total: 0, page: 1, limit: 20 });
+        return;
+      }
+      const { page, limit, skip } = parsePagination(req.query);
+      const search = req.query.search as string | undefined;
+      const where: Record<string, unknown> = { referred_by_partner_id: profile.id };
+      if (search) {
+        where["AND"] = [
+          { referred_by_partner_id: profile.id },
+          { OR: [{ name: { contains: search } }, { cnpj: { contains: search } }] },
+        ];
+        delete where["referred_by_partner_id"];
+      }
+      const [total, data] = await Promise.all([
+        prisma.company.count({ where }),
+        prisma.company.findMany({ where, include: COMPANY_COUNT_SELECT, skip, take: limit, orderBy: { name: "asc" } }),
+      ]);
+      res.json({ data, total, page, limit });
+      return;
+    }
+
     // Non-admin, non-company accounts cannot list companies
     if (role !== "admin") {
       res.status(403).json({ error: "Acesso não autorizado" });
@@ -189,6 +217,24 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
+function normalizeCNPJ(cnpj: string): string {
+  return cnpj.replace(/\D/g, "");
+}
+
+function handleCompanyUniqueError(err: any, res: any): boolean {
+  if (err?.code !== "P2002") return false;
+  const targets = (Array.isArray(err?.meta?.target) ? err.meta.target : [err?.meta?.target ?? ""]) as string[];
+  if (targets.some((f: string) => f.includes("cnpj"))) {
+    res.status(409).json({ error: "Este CNPJ já está cadastrado" });
+    return true;
+  }
+  if (targets.some((f: string) => f.includes("email"))) {
+    res.status(409).json({ error: "Este e-mail já está cadastrado" });
+    return true;
+  }
+  return false;
+}
+
 // POST /api/clients — admin only
 router.post(
   "/",
@@ -197,9 +243,23 @@ router.post(
   validate(createSchema),
   async (req, res, next) => {
     try {
+      if (req.body.cnpj) {
+        const raw = normalizeCNPJ(req.body.cnpj);
+        // Check both raw and formatted variants to catch normalized duplicates
+        const dup = await prisma.company.findFirst({
+          where: { OR: [{ cnpj: raw }, { cnpj: req.body.cnpj }] },
+          select: { id: true },
+        });
+        if (dup) {
+          res.status(409).json({ error: "Já existe um cliente cadastrado com este CNPJ" });
+          return;
+        }
+        req.body.cnpj = raw;
+      }
       const company = await prisma.company.create({ data: req.body });
       res.status(201).json(company);
-    } catch (err) {
+    } catch (err: any) {
+      if (handleCompanyUniqueError(err, res)) return;
       next(err);
     }
   },
@@ -218,7 +278,8 @@ router.put(
         data: req.body,
       });
       res.json(company);
-    } catch (err) {
+    } catch (err: any) {
+      if (handleCompanyUniqueError(err, res)) return;
       next(err);
     }
   },

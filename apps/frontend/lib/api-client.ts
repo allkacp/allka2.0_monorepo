@@ -1016,21 +1016,7 @@ class ApiClient {
 }
 
 // Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.
-// Assim não depende de alias do Vite funcionar corretamente.
+// Agency usa banco real (mesma fonte que admin/lider). Mocks só quando VITE_USE_MOCKS=true.
 const env = (import.meta as any).env ?? {};
-// Escape hatch: localStorage.setItem("allka_use_real_api", "true") → desativa o mock
-// de agency mesmo em DEV, permitindo validar o agency contra o backend real seedado.
-const forceRealApi =
-  typeof window !== "undefined" &&
-  window.localStorage?.getItem("allka_use_real_api") === "true";
-const isAgencyPreviewRoute =
-  !forceRealApi &&
-  env.DEV && typeof window !== "undefined" &&
-  (window.location.pathname.startsWith("/agency") ||
-    window.location.pathname.startsWith("/agencia"));
-const useMocks =
-  !forceRealApi &&
-  (env.MODE === "mock" ||
-  env.VITE_USE_MOCKS === "true" ||
-  isAgencyPreviewRoute);
+const useMocks = env.MODE === "mock" || env.VITE_USE_MOCKS === "true";
 export const apiClient: any = useMocks ? mockApiClient : new ApiClient();

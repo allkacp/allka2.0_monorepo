@@ -2,6 +2,10 @@
 
 export interface FrontendProject {
   id: string | number;
+  seq?: number | null;
+  hasOwner?: boolean;
+  ownerType?: "agency" | "company" | "partner" | null;
+  ownerName?: string | null;
   name: string;
   description: string;
   client: string;
@@ -77,8 +81,24 @@ export function adaptApiProject(api: any): FrontendProject {
     "in-progress",
   ];
 
+  const ownerType: "agency" | "company" | "partner" | null = api.agency
+    ? "agency"
+    : api.client?.referred_by_partner_id
+      ? "partner"
+      : api.client_id
+        ? "company"
+        : null;
+
+  const ownerName: string | null = api.agency
+    ? api.agency
+    : api.client?.referred_by_partner?.user?.name ?? api.client?.name ?? null;
+
   return {
     id: api.id,
+    seq: api._seq ?? null,
+    hasOwner: api._hasOwner ?? true,
+    ownerType,
+    ownerName,
     name: api.title || "",
     description: api.description || "",
     client: api.client?.name || "",

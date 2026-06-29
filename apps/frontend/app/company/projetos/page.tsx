@@ -154,6 +154,7 @@ export default function EmpresaProjetosPage() {
     () =>
       empresaProjects.map((p) => ({
         id: p.id,
+        seq: p.seq ?? null,
         name: p.name,
         description: "",
         client: profile?.name ?? "",
@@ -2486,7 +2487,7 @@ export default function EmpresaProjetosPage() {
                                 }}
                               >
                                 <span className="font-mono text-xs text-slate-400">
-                                  #{project.id}
+                                  proj_{String(project.seq ?? (startIndex + rowIdx + 1)).padStart(5, "0")}
                                 </span>
                               </td>
                             )}

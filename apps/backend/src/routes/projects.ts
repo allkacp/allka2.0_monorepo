@@ -15,7 +15,9 @@ type ProjectScope =
   | { kind: "agency"; agencyName: string }
   | { kind: "agency_unlinked" }
   | { kind: "company"; companyId: string }
-  | { kind: "company_unlinked" };
+  | { kind: "company_unlinked" }
+  | { kind: "partner"; companyIds: string[] }
+  | { kind: "partner_unlinked" };
 
 async function getProjectScope(
   userId: string,
@@ -42,13 +44,29 @@ async function getProjectScope(
     return { kind: "company", companyId: user.company_id };
   }
 
+  if (accountType === "parceiro") {
+    const profile = await prisma.partnerProfile.findUnique({
+      where: { user_id: userId },
+      select: { referred_companies: { select: { id: true } } },
+    });
+    const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
+    if (companyIds.length === 0) return { kind: "partner_unlinked" };
+    return { kind: "partner", companyIds };
+  }
+
   return { kind: "open" };
 }
 
 function scopeToWhere(scope: ProjectScope): Record<string, unknown> | null {
-  if (scope.kind === "company_unlinked" || scope.kind === "agency_unlinked") return null;
+  if (
+    scope.kind === "company_unlinked" ||
+    scope.kind === "agency_unlinked" ||
+    scope.kind === "partner_unlinked"
+  )
+    return null;
   if (scope.kind === "agency") return { agency: scope.agencyName };
   if (scope.kind === "company") return { client_id: scope.companyId };
+  if (scope.kind === "partner") return { client_id: { in: scope.companyIds } };
   return {};
 }
 
@@ -57,9 +75,16 @@ function projectInScope(
   project: { agency: string | null; client_id: string | null },
 ): boolean {
   if (scope.kind === "admin" || scope.kind === "open") return true;
-  if (scope.kind === "company_unlinked" || scope.kind === "agency_unlinked") return false;
+  if (
+    scope.kind === "company_unlinked" ||
+    scope.kind === "agency_unlinked" ||
+    scope.kind === "partner_unlinked"
+  )
+    return false;
   if (scope.kind === "agency") return project.agency === scope.agencyName;
   if (scope.kind === "company") return project.client_id === scope.companyId;
+  if (scope.kind === "partner")
+    return scope.companyIds.includes(project.client_id ?? "");
   return false;
 }
 
@@ -110,6 +135,31 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
+// GET /api/projects/check-name — check if a project name is already in use
+router.get("/check-name", verifyToken, async (req, res, next) => {
+  try {
+    const title = req.query.title as string | undefined;
+    const client_id = req.query.client_id as string | undefined;
+    const agency = req.query.agency as string | undefined;
+    const exclude_id = req.query.exclude_id as string | undefined;
+
+    if (!title?.trim()) {
+      res.status(400).json({ error: "title é obrigatório" });
+      return;
+    }
+
+    const where: Record<string, unknown> = { title };
+    if (client_id) where.client_id = client_id;
+    if (agency) where.agency = agency;
+    if (exclude_id) where.id = { not: exclude_id };
+
+    const existing = await prisma.project.findFirst({ where, select: { id: true, title: true } });
+    res.json({ exists: !!existing });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/projects
 router.get("/", verifyToken, async (req, res, next) => {
   try {
@@ -139,7 +189,17 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.project.findMany({
         where,
         include: {
-          client: { select: { id: true, name: true, cnpj: true } },
+          client: {
+            select: {
+              id: true,
+              name: true,
+              cnpj: true,
+              referred_by_partner_id: true,
+              referred_by_partner: {
+                select: { user: { select: { id: true, name: true } } },
+              },
+            },
+          },
           products: {
             include: {
               product: {
@@ -165,7 +225,28 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    res.json({ data, total, page, limit });
+    // Compute global sequence number for each project (position across ALL projects sorted DESC)
+    let seqMap: Record<string, number> = {};
+    if (data.length > 0) {
+      const ids = data.map((p) => p.id);
+      const rows = await prisma.$queryRawUnsafe<{ id: string; seq: bigint }[]>(
+        `SELECT ranked.id, ranked.seq
+         FROM (
+           SELECT id, ROW_NUMBER() OVER (ORDER BY created_at DESC, id ASC) AS seq
+           FROM projects
+         ) ranked
+         WHERE ranked.id IN (${ids.map(() => "?").join(",")})`,
+        ...ids,
+      );
+      for (const r of rows) seqMap[r.id] = Number(r.seq);
+    }
+
+    const enriched = data.map((p) => ({
+      ...p,
+      _seq: seqMap[p.id] ?? null,
+      _hasOwner: !!(p.agency || p.client_id),
+    }));
+    res.json({ data: enriched, total, page, limit });
   } catch (err) {
     next(err);
   }
@@ -308,6 +389,17 @@ router.post(
         const d = new Date(v);
         return isNaN(d.getTime()) ? undefined : d;
       };
+
+      // Name uniqueness check within the same scope
+      const nameWhere: Record<string, unknown> = { title: rest.title };
+      if (agencyName || rest.agency) nameWhere.agency = agencyName || rest.agency;
+      if (rest.client_id) nameWhere.client_id = rest.client_id;
+      const duplicate = await prisma.project.findFirst({ where: nameWhere, select: { id: true } });
+      if (duplicate) {
+        res.status(409).json({ error: "Já existe um projeto com esse nome" });
+        return;
+      }
+
       const project = await prisma.project.create({
         data: {
           ...rest,
@@ -354,6 +446,18 @@ router.put(
       if (!projectInScope(scope, before)) {
         res.status(403).json({ error: "Acesso negado" });
         return;
+      }
+
+      // Name uniqueness check on rename (skip if title unchanged)
+      if (rest.title && rest.title !== (await prisma.project.findUnique({ where: { id }, select: { title: true } }))?.title) {
+        const nameWhere: Record<string, unknown> = { title: rest.title, id: { not: id } };
+        if (before.agency) nameWhere.agency = before.agency;
+        if (before.client_id) nameWhere.client_id = before.client_id;
+        const duplicate = await prisma.project.findFirst({ where: nameWhere, select: { id: true } });
+        if (duplicate) {
+          res.status(409).json({ error: "Já existe um projeto com esse nome" });
+          return;
+        }
       }
 
       const project = await prisma.project.update({

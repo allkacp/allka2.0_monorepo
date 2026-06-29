@@ -198,6 +198,7 @@ export default function AdminProjetosPage({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
   const [projectToClone, setProjectToClone] = useState<FrontendProject | null>(
     null,
   );
@@ -248,6 +249,7 @@ export default function AdminProjetosPage({
     "id",
     "name",
     "client",
+    "owner",
     "agency",
     "type",
     "status",
@@ -260,6 +262,7 @@ export default function AdminProjetosPage({
     id: "#",
     name: "Projeto",
     client: "Cliente",
+    owner: "Conta responsável",
     agency: "Empresa",
     type: "Tipo",
     status: "Status",
@@ -275,6 +278,7 @@ export default function AdminProjetosPage({
     id: 50,
     name: 240,
     client: 160,
+    owner: 160,
     agency: 140,
     type: 130,
     status: 140,
@@ -1521,13 +1525,11 @@ export default function AdminProjetosPage({
       };
       const onMove = (ev: MouseEvent) => {
         if (!dragState.current) return;
-        const delta = ev.clientX - dragState.current.startX;
+        const { col: dragCol, startX: dragStartX, startW: dragStartW } = dragState.current;
+        const delta = ev.clientX - dragStartX;
         setColWidths((prev) => ({
           ...prev,
-          [dragState.current!.col]: Math.max(
-            60,
-            dragState.current!.startW + delta,
-          ),
+          [dragCol]: Math.max(60, dragStartW + delta),
         }));
       };
       const onUp = () => {
@@ -2173,100 +2175,126 @@ export default function AdminProjetosPage({
               p.status === "pending-approval",
           );
           if (pendingProjects.length === 0) return null;
+          const VISIBLE_LIMIT = 5;
+          const visiblePending = pendingProjects.slice(0, VISIBLE_LIMIT);
+          const hiddenCount = pendingProjects.length - VISIBLE_LIMIT;
+
+          const PendingCard = ({ project }: { project: typeof pendingProjects[0] }) => (
+            <div className="flex items-center gap-3 bg-white rounded-lg border border-amber-200 px-3 py-2 shadow-sm min-w-0">
+              <div
+                className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-bold"
+                style={{
+                  background:
+                    project.status === "awaiting-payment"
+                      ? "linear-gradient(135deg,#0891b2,#6d28d9)"
+                      : project.status === "pending-approval"
+                        ? "linear-gradient(135deg,#d97706,#b45309)"
+                        : "linear-gradient(135deg,#475569,#94a3b8)",
+                }}
+              >
+                {(project.name ?? "P")[0].toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-slate-800 truncate">{project.name}</p>
+                <p className="text-[10px] text-slate-500 truncate">{project.client}</p>
+              </div>
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                  project.status === "awaiting-payment"
+                    ? "bg-cyan-100 text-cyan-700"
+                    : project.status === "pending-approval"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {project.status === "awaiting-payment"
+                  ? "Ag. Pagamento"
+                  : project.status === "pending-approval"
+                    ? "Ag. Aprovação"
+                    : "Rascunho"}
+              </span>
+              {project.status === "draft" ? (
+                <Button size="sm" className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white shrink-0" onClick={() => handleContinueDraft(project)}>
+                  Continuar <ArrowRight className="h-3 w-3 ml-1" />
+                </Button>
+              ) : project.status === "pending-approval" ? (
+                <Button size="sm" className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0" onClick={() => handleGoToPayment(project)}>
+                  Aprovar <ArrowRight className="h-3 w-3 ml-1" />
+                </Button>
+              ) : (
+                <Button size="sm" className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0" onClick={() => handleGoToPayment(project)}>
+                  Pagar Agora <CreditCard className="h-3 w-3 ml-1" />
+                </Button>
+              )}
+            </div>
+          );
+
           return (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 mb-2">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-white" />
+            <>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 mb-2">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">
+                        {pendingProjects.length === 1
+                          ? "1 projeto pendente"
+                          : `${pendingProjects.length} projetos pendentes`}
+                      </p>
+                      <p className="text-xs text-amber-600">
+                        Projetos em rascunho, aguardando pagamento ou aprovação precisam de ação.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-amber-800">
-                      {pendingProjects.length === 1
-                        ? "1 projeto pendente"
-                        : `${pendingProjects.length} projetos pendentes`}
-                    </p>
-                    <p className="text-xs text-amber-600">
-                      Projetos em rascunho, aguardando pagamento ou aprovação
-                      precisam de ação.
-                    </p>
-                  </div>
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowPendingModal(true)}
+                      className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0 ml-4"
+                    >
+                      Ver todos ({pendingProjects.length})
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {visiblePending.map((project) => (
+                    <PendingCard key={project.id} project={project} />
+                  ))}
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowPendingModal(true)}
+                      className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 transition-colors rounded-lg border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-800"
+                    >
+                      +{hiddenCount} projeto{hiddenCount > 1 ? "s" : ""}
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {pendingProjects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="flex items-center gap-3 bg-white rounded-lg border border-amber-200 px-3 py-2 shadow-sm min-w-0"
-                  >
-                    <div
-                      className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-bold"
-                      style={{
-                        background:
-                          project.status === "awaiting-payment"
-                            ? "linear-gradient(135deg,#0891b2,#6d28d9)"
-                            : project.status === "pending-approval"
-                              ? "linear-gradient(135deg,#d97706,#b45309)"
-                              : "linear-gradient(135deg,#475569,#94a3b8)",
-                      }}
-                    >
-                      {(project.name ?? "P")[0].toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">
-                        {project.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {project.client}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                        project.status === "awaiting-payment"
-                          ? "bg-cyan-100 text-cyan-700"
-                          : project.status === "pending-approval"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {project.status === "awaiting-payment"
-                        ? "Ag. Pagamento"
-                        : project.status === "pending-approval"
-                          ? "Ag. Aprovação"
-                          : "Rascunho"}
-                    </span>
-                    {project.status === "draft" ? (
-                      <Button
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-                        onClick={() => handleContinueDraft(project)}
-                      >
-                        Continuar
-                        <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    ) : project.status === "pending-approval" ? (
-                      <Button
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0"
-                        onClick={() => handleGoToPayment(project)}
-                      >
-                        Aprovar
-                        <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0"
-                        onClick={() => handleGoToPayment(project)}
-                      >
-                        Pagar Agora
-                        <CreditCard className="h-3 w-3 ml-1" />
-                      </Button>
-                    )}
+
+              {/* Modal: todos os projetos pendentes */}
+              <Dialog open={showPendingModal} onOpenChange={setShowPendingModal}>
+                <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-md bg-amber-400 flex items-center justify-center">
+                        <AlertTriangle className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      {pendingProjects.length} projetos pendentes
+                    </DialogTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Projetos em rascunho, aguardando pagamento ou aprovação precisam de ação.
+                    </p>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-2 overflow-y-auto pr-1 mt-2">
+                    {pendingProjects.map((project) => (
+                      <PendingCard key={project.id} project={project} />
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </DialogContent>
+              </Dialog>
+            </>
           );
         })()}
 
@@ -2477,8 +2505,7 @@ export default function AdminProjetosPage({
 
               {/* ── Table ── */}
               <div
-                className="overflow-auto allka-table-scroll"
-                style={{ maxHeight: "calc(100vh - 18rem)" }}
+                className="overflow-x-auto allka-table-scroll"
               >
                 <table
                   className="w-full text-xs"
@@ -2613,8 +2640,8 @@ export default function AdminProjetosPage({
                                   overflow: "hidden",
                                 }}
                               >
-                                <span className="font-mono text-xs text-slate-400">
-                                  #{project.id}
+                                <span className="font-mono text-[11px] text-slate-400 tracking-wide">
+                                  proj_{String(project.seq ?? ((currentPage - 1) * itemsPerPage + rowIdx + 1)).padStart(5, "0")}
                                 </span>
                               </td>
                             )}
@@ -2646,11 +2673,18 @@ export default function AdminProjetosPage({
                                       .toUpperCase()}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="font-semibold text-sm text-slate-900 truncate">
-                                      {project.name}
-                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="font-semibold text-sm text-slate-900 truncate">
+                                        {project.name}
+                                      </p>
+                                      {project.hasOwner === false && (
+                                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                          Sem responsável
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-xs text-slate-400 truncate">
-                                      {project.consultant || project.agency}
+                                      {project.consultant || project.agency || "—"}
                                     </p>
                                   </div>
                                 </div>
@@ -2672,6 +2706,46 @@ export default function AdminProjetosPage({
                                   <span className="text-xs text-blue-600 font-medium truncate">
                                     {project.client}
                                   </span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Conta responsável */}
+                            {visibleCols.includes("owner") && (
+                              <td
+                                className="px-5 py-3.5"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs text-slate-700 font-medium truncate">
+                                    {project.ownerName || "—"}
+                                  </span>
+                                  {project.ownerType && (
+                                    <span
+                                      className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none uppercase tracking-wide ${
+                                        project.ownerType === "agency"
+                                          ? "bg-orange-100 text-orange-700"
+                                          : project.ownerType === "partner"
+                                            ? "bg-purple-100 text-purple-700"
+                                            : "bg-blue-100 text-blue-700"
+                                      }`}
+                                    >
+                                      {project.ownerType === "agency"
+                                        ? "Agency"
+                                        : project.ownerType === "partner"
+                                          ? "Partner"
+                                          : "Company"}
+                                    </span>
+                                  )}
+                                  {!project.ownerType && (
+                                    <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-700">
+                                      Sem dono
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                             )}

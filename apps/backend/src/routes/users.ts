@@ -227,7 +227,25 @@ router.post(
       });
 
       res.status(201).json(user);
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.code === "P2002") {
+        const field = err?.meta?.target as string | string[] | undefined;
+        const targets = Array.isArray(field) ? field : [field ?? ""];
+        if (targets.some((f) => f.includes("email"))) {
+          res.status(409).json({ error: "Este e-mail já está cadastrado" });
+          return;
+        }
+        if (targets.some((f) => f.includes("username"))) {
+          res.status(409).json({ error: "Este usuário já está cadastrado" });
+          return;
+        }
+        if (targets.some((f) => f.includes("cpf"))) {
+          res.status(409).json({ error: "Este CPF já está cadastrado" });
+          return;
+        }
+        res.status(409).json({ error: "Registro duplicado" });
+        return;
+      }
       next(err);
     }
   }
