@@ -275,7 +275,7 @@ export default function AdminProjetosPage({
 
   // column widths (resizable)
   const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 50,
+    id: 90,
     name: 240,
     client: 160,
     owner: 160,

@@ -81,17 +81,21 @@ export function adaptApiProject(api: any): FrontendProject {
     "in-progress",
   ];
 
-  const ownerType: "agency" | "company" | "partner" | null = api.agency
-    ? "agency"
-    : api.client?.referred_by_partner_id
-      ? "partner"
-      : api.client_id
-        ? "company"
-        : null;
+  const ownerType: "agency" | "company" | "partner" | null =
+    api._ownerType ??
+    (api.agency
+      ? "agency"
+      : api.client?.referred_by_partner_id
+        ? "partner"
+        : api.client_id
+          ? "company"
+          : null);
 
-  const ownerName: string | null = api.agency
-    ? api.agency
-    : api.client?.referred_by_partner?.user?.name ?? api.client?.name ?? null;
+  const ownerName: string | null =
+    api._ownerName ??
+    (api.agency
+      ? api.agency
+      : api.client?.referred_by_partner?.user?.name ?? api.client?.name ?? null);
 
   return {
     id: api.id,

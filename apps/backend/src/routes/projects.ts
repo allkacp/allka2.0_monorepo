@@ -228,24 +228,47 @@ router.get("/", verifyToken, async (req, res, next) => {
     // Compute global sequence number for each project (position across ALL projects sorted DESC)
     let seqMap: Record<string, number> = {};
     if (data.length > 0) {
-      const ids = data.map((p) => p.id);
-      const rows = await prisma.$queryRawUnsafe<{ id: string; seq: bigint }[]>(
-        `SELECT ranked.id, ranked.seq
-         FROM (
-           SELECT id, ROW_NUMBER() OVER (ORDER BY created_at DESC, id ASC) AS seq
-           FROM projects
-         ) ranked
-         WHERE ranked.id IN (${ids.map(() => "?").join(",")})`,
-        ...ids,
-      );
-      for (const r of rows) seqMap[r.id] = Number(r.seq);
+      try {
+        const ids = data.map((p) => p.id);
+        const rows = await prisma.$queryRawUnsafe<{ id: string; seq: bigint }[]>(
+          `SELECT ranked.id, ranked.seq
+           FROM (
+             SELECT id, ROW_NUMBER() OVER (ORDER BY created_at DESC, id ASC) AS seq
+             FROM projects
+           ) ranked
+           WHERE ranked.id IN (${ids.map(() => "?").join(",")})`,
+          ...ids,
+        );
+        for (const r of rows) seqMap[r.id] = Number(r.seq);
+      } catch {
+        // fallback: assign local positions if window function unsupported
+        data.forEach((p, i) => { seqMap[p.id] = i + 1; });
+      }
     }
 
-    const enriched = data.map((p) => ({
-      ...p,
-      _seq: seqMap[p.id] ?? null,
-      _hasOwner: !!(p.agency || p.client_id),
-    }));
+    const enriched = data.map((p) => {
+      const ownerType: "agency" | "company" | "partner" | null = p.agency
+        ? "agency"
+        : (p.client as any)?.referred_by_partner_id
+          ? "partner"
+          : p.client_id
+            ? "company"
+            : null;
+
+      const ownerName: string | null = p.agency
+        ? p.agency
+        : (p.client as any)?.referred_by_partner?.user?.name ??
+          (p.client as any)?.name ??
+          null;
+
+      return {
+        ...p,
+        _seq: seqMap[p.id] ?? null,
+        _hasOwner: !!(p.agency || p.client_id),
+        _ownerType: ownerType,
+        _ownerName: ownerName,
+      };
+    });
     res.json({ data: enriched, total, page, limit });
   } catch (err) {
     next(err);
