@@ -7,6 +7,7 @@ import React from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { createPortal } from "react-dom";
 import { useState, useRef } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import {
   Accordion,
   AccordionContent,
@@ -623,7 +624,7 @@ export function ProjectManagementModal({
   const [tasksViewMode, setTasksViewMode] = useState<"list" | "kanban">("list");
 
   const [tasksCurrentPage, setTasksCurrentPage] = useState(1);
-  const [tasksPerPage, setTasksPerPage] = useState(10);
+  const [tasksPerPage, setTasksPerPage] = useItemsPerPage("pm-modal-tasks", 10);
   const [taskSearchTerm, setTaskSearchTerm] = useState("");
   // Removed duplicate: const [showProductFilters, setShowProductFilters] = useState(false)
 
@@ -638,7 +639,7 @@ export function ProjectManagementModal({
     "list" | "kanban"
   >("list");
   const [productTaskCurrentPage, setProductTaskCurrentPage] = useState(1);
-  const [productTaskPerPage, setProductTaskPerPage] = useState(10);
+  const [productTaskPerPage, setProductTaskPerPage] = useItemsPerPage("pm-modal-product-tasks", 10);
 
   // State for mock credentials, to allow updates
   const [mockCredentials, setMockCredentials] = useState<any[]>([]);

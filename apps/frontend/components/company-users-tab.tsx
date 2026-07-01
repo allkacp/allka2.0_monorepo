@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
@@ -489,7 +490,7 @@ export function CompanyUsersTab({
   };
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("company-users-tab", 10);
 
   // Column visibility & resize
   const [visibleCols, setVisibleCols] = useState<Set<UserColKey>>(

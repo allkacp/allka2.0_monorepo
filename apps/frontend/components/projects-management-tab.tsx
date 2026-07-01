@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { useState, useMemo } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ProjectManagementModal } from "@/components/project-management-modal";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import {
@@ -44,7 +45,7 @@ export function ProjectsManagementTab({
 }: ProjectsManagementTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("projects-management-tab", 10);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"view" | "edit">("view");

@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { useState, useMemo, type CSSProperties } from "react"
+import { useItemsPerPage } from "@/lib/use-items-per-page"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import {
   Filter, X, Search, ChevronDown, GripVertical, Activity,
@@ -260,7 +261,7 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
   // ── Logs state ──────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]     = useState("")
   const [currentPage, setCurrentPage]   = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(15)
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("company-logs-tab", 15)
   const [expandedLog, setExpandedLog]   = useState<string | null>(null)
   const [isLogFilterModalOpen, setIsLogFilterModalOpen] = useState(false)
   const [advancedFilters, setAdvancedFilters] = useState({

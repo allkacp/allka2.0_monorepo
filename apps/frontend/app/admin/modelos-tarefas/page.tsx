@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ClipboardList,
@@ -1047,7 +1048,7 @@ export default function AdminModelosTarefasPage() {
   const DEFAULT_VISIBLE = new Set(ALL_COLUMNS.map((c) => c.key));
 
   const [prefsLoaded, setPrefsLoaded] = useState(false);
-  const [pageSize, setPageSize] = useState<number>(25);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-modelos-tarefas", 25);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(DEFAULT_VISIBLE);
 
   // Filters

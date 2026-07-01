@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
@@ -234,8 +235,10 @@ export default function EmpresaProjetosPage() {
   );
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("empresa-projetos", 10);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingPanelSearch, setPendingPanelSearch] = useState("");
   const [projectToClone, setProjectToClone] = useState<FrontendProject | null>(
     null,
   );
@@ -341,6 +344,15 @@ export default function EmpresaProjetosPage() {
     if (header) setHeaderHeight(header.getBoundingClientRect().height);
     if (footer) setFooterHeight(footer.getBoundingClientRect().height);
   }, []);
+
+  useEffect(() => {
+    if (!showPendingModal) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setShowPendingModal(false); setPendingPanelSearch(""); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [showPendingModal]);
 
   const { toast } = useToast();
   const pageRef = useRef<HTMLDivElement>(null);
@@ -2057,91 +2069,193 @@ export default function EmpresaProjetosPage() {
           </AccordionItem>
         </Accordion>
 
-        {/* ── Draft / Awaiting-Payment Banner ── */}
+        {/* ── Draft / Awaiting-Payment Banner (compact) ── */}
         {(() => {
           const pendingProjects = projectsData.filter(
             (p) => p.status === "draft" || p.status === "awaiting-payment",
           );
           if (pendingProjects.length === 0) return null;
+
+          const PREVIEW_LIMIT = 3;
+          const previewItems = pendingProjects.slice(0, PREVIEW_LIMIT);
+
+          const statusLabel = (s: string) =>
+            s === "awaiting-payment" ? "Ag. Pagamento" : "Rascunho";
+
+          const statusBadge = (s: string) =>
+            s === "awaiting-payment"
+              ? "bg-cyan-50 text-cyan-700 border-cyan-200"
+              : "bg-slate-50 text-slate-600 border-slate-200";
+
+          const avatarGradient = (s: string) =>
+            s === "awaiting-payment"
+              ? "linear-gradient(135deg,#0891b2,#6d28d9)"
+              : "linear-gradient(135deg,#475569,#94a3b8)";
+
+          const filteredPending = pendingProjects.filter((p) => {
+            if (!pendingPanelSearch) return true;
+            const q = pendingPanelSearch.toLowerCase();
+            return p.name?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q);
+          });
+
           return (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 mb-2">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-white" />
+            <>
+              {/* Compact banner */}
+              <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-white px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
+                    <AlertTriangle className="h-3.5 w-3.5 text-white" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-amber-800">
-                      {pendingProjects.length === 1
-                        ? "1 projeto pendente"
-                        : `${pendingProjects.length} projetos pendentes`}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900 leading-tight">
+                      {pendingProjects.length === 1 ? "1 projeto pendente" : `${pendingProjects.length} projetos pendentes`}
                     </p>
-                    <p className="text-xs text-amber-600">
-                      Projetos em rascunho ou aguardando pagamento precisam de
-                      ação.
+                    <p className="text-[11px] text-amber-600/80">Precisam de ação para avançar</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {pendingProjects.length > PREVIEW_LIMIT && (
+                      <span className="text-[11px] font-medium text-amber-600">
+                        +{pendingProjects.length - PREVIEW_LIMIT} restantes
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setShowPendingModal(true)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-100/80 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors"
+                    >
+                      Ver todos ({pendingProjects.length})
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {previewItems.map((project) => (
+                    <div key={project.id} className="flex flex-col gap-2 bg-white rounded-lg border border-slate-100 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 text-white text-[11px] font-bold"
+                          style={{ background: avatarGradient(project.status) }}
+                        >
+                          {(project.name ?? "P")[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-800 truncate leading-tight">{project.name}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{project.client}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge(project.status)}`}>
+                          {statusLabel(project.status)}
+                        </span>
+                        {project.status === "draft" ? (
+                          <Button size="sm" className="h-6 px-2.5 text-[11px] bg-violet-600 hover:bg-violet-700 text-white shrink-0" onClick={() => handleContinueDraft(project)}>
+                            Continuar
+                          </Button>
+                        ) : (
+                          <Button size="sm" className="h-6 px-2.5 text-[11px] bg-cyan-600 hover:bg-cyan-700 text-white shrink-0" onClick={() => handleGoToPayment(project)}>
+                            Pagar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Slide-over: todos os projetos pendentes */}
+              {showPendingModal && (
+                <div
+                  className="fixed top-0 right-0 bottom-0 flex flex-col z-[80] shadow-2xl border-l border-border animate-in slide-in-from-right duration-300 ease-out overflow-hidden bg-background"
+                  style={{ left: sidebarWidth }}
+                >
+                  <div
+                    className="shrink-0 px-6 pt-6 pb-4"
+                    style={{ background: "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)" }}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="h-5 w-5 text-amber-300" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-bold text-white">Projetos pendentes</h2>
+                          <p className="text-xs text-white/55 mt-0.5">
+                            {pendingProjects.length === 1 ? "1 projeto precisa" : `${pendingProjects.length} projetos precisam`} de ação
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); }}
+                        className="h-8 w-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0 mt-0.5"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-white/40 mb-4 leading-relaxed">
+                      Projetos em rascunho ou aguardando pagamento precisam de ação para avançar.
+                    </p>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/35 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome ou cliente..."
+                        value={pendingPanelSearch}
+                        onChange={(e) => setPendingPanelSearch(e.target.value)}
+                        className="w-full h-9 pl-9 pr-3 bg-white/10 border border-white/15 rounded-lg text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/35 focus:bg-white/15 transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto bg-white">
+                    {filteredPending.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+                        <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                          <Search className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-600">Nenhum resultado</p>
+                        <p className="text-xs text-slate-400 mt-1">Tente um nome ou cliente diferente</p>
+                      </div>
+                    ) : (
+                      <div className="p-4 flex flex-col gap-2">
+                        {filteredPending.map((project) => (
+                          <div key={project.id} className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 hover:border-slate-200 hover:shadow-md transition-all">
+                            <div
+                              className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-white text-sm font-bold shadow-sm"
+                              style={{ background: avatarGradient(project.status) }}
+                            >
+                              {(project.name ?? "P")[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-800 truncate">{project.name}</p>
+                              <p className="text-xs text-slate-500 truncate">{project.client}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border hidden sm:inline-flex ${statusBadge(project.status)}`}>
+                                {statusLabel(project.status)}
+                              </span>
+                              {project.status === "draft" ? (
+                                <Button size="sm" className="h-8 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleContinueDraft(project); }}>
+                                  Continuar <ArrowRight className="h-3 w-3 ml-1" />
+                                </Button>
+                              ) : (
+                                <Button size="sm" className="h-8 px-3 text-xs bg-cyan-600 hover:bg-cyan-700 text-white" onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleGoToPayment(project); }}>
+                                  Pagar Agora <CreditCard className="h-3 w-3 ml-1" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 border-t border-slate-100 px-5 py-3 bg-slate-50">
+                    <p className="text-xs text-slate-400 text-center">
+                      {filteredPending.length === pendingProjects.length
+                        ? `${pendingProjects.length} projeto${pendingProjects.length !== 1 ? "s" : ""} pendente${pendingProjects.length !== 1 ? "s" : ""}`
+                        : `${filteredPending.length} de ${pendingProjects.length} projetos pendentes`}
                     </p>
                   </div>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {pendingProjects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="flex items-center gap-3 bg-white rounded-lg border border-amber-200 px-3 py-2 shadow-sm min-w-0"
-                  >
-                    <div
-                      className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-bold"
-                      style={{
-                        background:
-                          project.status === "awaiting-payment"
-                            ? "linear-gradient(135deg,#0891b2,#6d28d9)"
-                            : "linear-gradient(135deg,#475569,#94a3b8)",
-                      }}
-                    >
-                      {(project.name ?? "P")[0].toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">
-                        {project.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {project.client}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                        project.status === "awaiting-payment"
-                          ? "bg-cyan-100 text-cyan-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {project.status === "awaiting-payment"
-                        ? "Ag. Pagamento"
-                        : "Rascunho"}
-                    </span>
-                    {project.status === "draft" ? (
-                      <Button
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-                        onClick={() => handleContinueDraft(project)}
-                      >
-                        Continuar
-                        <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white shrink-0"
-                        onClick={() => handleGoToPayment(project)}
-                      >
-                        Pagar Agora
-                        <CreditCard className="h-3 w-3 ml-1" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+              )}
+            </>
           );
         })()}
 

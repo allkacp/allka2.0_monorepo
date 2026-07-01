@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { useState, useRef, useEffect } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -186,7 +187,7 @@ export default function CampanhasPage() {
     "all" | "campaigns" | "coupons" | "influencers"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-campanhas-indicacao", 10);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Report modal state

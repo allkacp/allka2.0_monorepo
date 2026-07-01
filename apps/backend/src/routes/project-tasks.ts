@@ -134,6 +134,74 @@ function buildStatusSideEffects(
   return extras;
 }
 
+// ── Task scope helpers ────────────────────────────────────────────────────────
+// Returns a Prisma `where` fragment that restricts ProjectTask visibility.
+//   null → caller must reject the request (return empty list or 404).
+//   {}   → admin / no restriction, sees everything.
+
+type ScopeWhere = Record<string, unknown>;
+
+async function getTaskScopeWhere(
+  userId: string,
+  accountType: string,
+  role: string,
+): Promise<ScopeWhere | null> {
+  // Admin sees everything
+  if (accountType === "admin" || role === "admin") return {};
+
+  // Leader: scoped to tasks where they are the explicitly assigned leader.
+  // Leaders should use /api/lider/tasks for their primary workflow, but if
+  // they hit this endpoint we never let them fall through to admin behaviour.
+  if (role === "lider") {
+    return { lider_responsavel_id: userId };
+  }
+
+  // Agency: scoped to tasks in projects belonging to their agency (by name)
+  if (accountType === "agencias") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { agency: { select: { name: true } } },
+    });
+    const agencyName = user?.agency?.name;
+    if (!agencyName) return null; // not linked to any agency → no access
+    return { project: { agency: agencyName } };
+  }
+
+  // Company: scoped to tasks in projects where the client is their company
+  if (accountType === "empresas") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { company_id: true },
+    });
+    if (!user?.company_id) return null; // not linked to any company → no access
+    return { project: { client_id: user.company_id } };
+  }
+
+  // Partner: scoped to tasks in projects of companies they referred
+  if (accountType === "parceiro") {
+    const profile = await prisma.partnerProfile.findUnique({
+      where: { user_id: userId },
+      select: { referred_companies: { select: { id: true } } },
+    });
+    const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
+    if (companyIds.length === 0) return null; // no referred companies → no access
+    return { project: { client_id: { in: companyIds } } };
+  }
+
+  // Unknown account type → deny
+  return null;
+}
+
+// Merges a base `where` with the scope filter using Prisma AND so neither
+// overwrites the other (important when both have a `project` key).
+function applyScope(
+  base: Record<string, unknown>,
+  scope: ScopeWhere,
+): Record<string, unknown> {
+  if (Object.keys(scope).length === 0) return base; // admin: no extra filter
+  return { AND: [base, scope] };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TASKS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -163,6 +231,17 @@ router.get(
       const client_id = req.query.client_id as string | undefined; // filter by project.client_id
       const overdue = req.query.overdue === "true";
 
+      // ── Resolve scope before building the where clause ──
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.json({ data: [], total: 0 });
+        return;
+      }
+
       const where: Record<string, unknown> = {};
       if (project_id) where.project_id = project_id;
       if (status) where.status = status;
@@ -174,7 +253,10 @@ router.get(
         where.nomade_responsavel_id = nomade_responsavel_id;
       if (responsavel_agencia_id)
         where.responsavel_agencia_id = responsavel_agencia_id;
-      if (client_id) where.project = { client_id };
+      // client_id filter only honoured for admin; scoped users already have their scope locked
+      if (client_id && Object.keys(scopeWhere).length === 0) {
+        where.project = { client_id };
+      }
       if (overdue) {
         where.due_date = { lt: new Date() };
         where.status = { notIn: ["CONCLUIDA", "CANCELADA"] };
@@ -182,7 +264,7 @@ router.get(
 
       const tasks = await withZeroDateRecovery(() =>
         prisma.projectTask.findMany({
-          where,
+          where: applyScope(where, scopeWhere),
           include: {
             project: {
               select: {
@@ -274,13 +356,22 @@ router.get(
 );
 
 // ── GET /api/project-tasks/aguardando-nomade ─────────────────────────────────
-// Admin view: tasks waiting for a nomad to be assigned
+// Admin-only view: tasks waiting for a nomad to be assigned
 
 router.get(
   "/aguardando-nomade",
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Only admin can see the global queue of tasks awaiting nomad assignment
+      if (
+        req.user!.account_type !== "admin" &&
+        req.user!.role !== "admin"
+      ) {
+        res.status(403).json({ error: "Acesso restrito a administradores" });
+        return;
+      }
+
       const tasks = await prisma.projectTask.findMany({
         where: { status: "AGUARDANDO_NOMADE" },
         include: {
@@ -322,8 +413,18 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
         include: {
           project: {
             include: {
@@ -358,8 +459,18 @@ router.patch(
   validate(updateTaskSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const existing = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const existing = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
       });
       if (!existing) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -400,7 +511,7 @@ router.patch(
       }
 
       const updated = await prisma.projectTask.update({
-        where: { id: req.params.id as string as string as string },
+        where: { id: req.params.id as string },
         data,
         include: {
           project: { select: { id: true, title: true } },
@@ -441,8 +552,18 @@ router.patch(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -471,7 +592,7 @@ router.patch(
       }
 
       const updated = await prisma.projectTask.update({
-        where: { id: req.params.id as string as string as string },
+        where: { id: req.params.id as string },
         data: {
           status: "EM_LANCAMENTO",
           data_lancamento: task.data_lancamento ?? new Date(),
@@ -510,8 +631,18 @@ router.patch(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -528,7 +659,7 @@ router.patch(
       }
 
       const updated = await prisma.projectTask.update({
-        where: { id: req.params.id as string as string as string },
+        where: { id: req.params.id as string },
         data: {
           status: "LIBERADA_PARA_EXECUCAO",
           data_liberacao_execucao: new Date(),
@@ -560,8 +691,18 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
         select: {
           id: true,
           briefing_snapshot: true,
@@ -603,8 +744,19 @@ router.put(
   validate(briefingAnswerSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        select: { id: true },
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -618,12 +770,12 @@ router.put(
           prisma.taskBriefingAnswer.upsert({
             where: {
               project_task_id_question_key: {
-                project_task_id: req.params.id as string as string as string,
+                project_task_id: req.params.id as string,
                 question_key: a.question_key,
               },
             },
             create: {
-              project_task_id: req.params.id as string as string as string,
+              project_task_id: req.params.id as string,
               question_key: a.question_key,
               question_text: a.question_text,
               answer: a.answer ?? null,
@@ -660,8 +812,18 @@ router.patch(
   validate(briefingAnswerSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -742,8 +904,18 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
         select: { id: true },
       });
       if (!task) {
@@ -753,7 +925,7 @@ router.get(
 
       const type = req.query.type as string | undefined;
       const where: Record<string, unknown> = {
-        project_task_id: req.params.id as string as string as string,
+        project_task_id: req.params.id as string,
       };
       if (type) where.type = type;
 
@@ -777,8 +949,18 @@ router.post(
   validate(attachmentSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
         select: { id: true },
       });
       if (!task) {
@@ -788,7 +970,7 @@ router.post(
 
       const attachment = await prisma.taskAttachment.create({
         data: {
-          project_task_id: req.params.id as string as string as string,
+          project_task_id: req.params.id as string,
           type: req.body.type,
           name: req.body.name,
           url: req.body.url,
@@ -813,10 +995,30 @@ router.delete(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      // Verify the parent task is in scope before allowing deletion
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        select: { id: true },
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
       const attachment = await prisma.taskAttachment.findFirst({
         where: {
-          id: req.params.attachmentId as string as string as string,
-          project_task_id: req.params.id as string as string as string,
+          id: req.params.attachmentId as string,
+          project_task_id: req.params.id as string,
         },
       });
       if (!attachment) {
@@ -825,7 +1027,7 @@ router.delete(
       }
 
       await prisma.taskAttachment.delete({
-        where: { id: req.params.attachmentId as string as string as string },
+        where: { id: req.params.attachmentId as string },
       });
       res.status(204).send();
     } catch (err) {
@@ -845,8 +1047,18 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
         select: { id: true, steps_snapshot: true },
       });
       if (!task) {
@@ -855,7 +1067,7 @@ router.get(
       }
 
       const stages = await prisma.projectTaskStage.findMany({
-        where: { project_task_id: req.params.id as string as string as string },
+        where: { project_task_id: req.params.id as string },
         orderBy: { ordem: "asc" },
       });
 
@@ -878,7 +1090,7 @@ router.get(
             steps.map((step, idx) =>
               prisma.projectTaskStage.create({
                 data: {
-                  project_task_id: req.params.id as string as string as string,
+                  project_task_id: req.params.id as string,
                   titulo: step.title || step.label || `Etapa ${idx + 1}`,
                   descricao: step.description ?? null,
                   ordem: idx,
@@ -916,10 +1128,30 @@ router.patch(
   validate(updateStageSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      // Verify parent task is in scope before allowing stage mutation
+      const taskInScope = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        select: { id: true },
+      });
+      if (!taskInScope) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
       const stage = await prisma.projectTaskStage.findFirst({
         where: {
-          id: req.params.stageId as string as string as string,
-          project_task_id: req.params.id as string as string as string,
+          id: req.params.stageId as string,
+          project_task_id: req.params.id as string,
         },
       });
       if (!stage) {
@@ -928,7 +1160,7 @@ router.patch(
       }
 
       const updated = await prisma.projectTaskStage.update({
-        where: { id: req.params.stageId as string as string as string },
+        where: { id: req.params.stageId as string },
         data: { status: req.body.status },
       });
 
@@ -936,19 +1168,19 @@ router.patch(
       if (req.body.status === "CONCLUIDA") {
         const remaining = await prisma.projectTaskStage.count({
           where: {
-            project_task_id: req.params.id as string as string as string,
+            project_task_id: req.params.id as string,
             obrigatoria: true,
             status: { not: "CONCLUIDA" },
           },
         });
         if (remaining === 0) {
           const parent = await prisma.projectTask.findUnique({
-            where: { id: req.params.id as string as string as string },
+            where: { id: req.params.id as string },
             select: { status: true },
           });
           if (parent && !["CONCLUIDA", "CANCELADA"].includes(parent.status)) {
             await prisma.projectTask.update({
-              where: { id: req.params.id as string as string as string },
+              where: { id: req.params.id as string },
               data: {
                 status: "EM_APROVACAO",
               },

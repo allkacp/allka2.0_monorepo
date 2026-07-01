@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckSquare2,
@@ -820,7 +821,7 @@ export default function AdminTarefasPage({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   // Pagination
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-tarefas", 10);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Sorting

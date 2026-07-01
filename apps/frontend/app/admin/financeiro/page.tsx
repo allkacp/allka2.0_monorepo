@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -209,7 +210,7 @@ export default function AdminFinanceiroPage() {
   const [invoices, setInvoices] = useState([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invPage, setInvPage] = useState(1);
-  const [invPerPage, setInvPerPage] = useState(10);
+  const [invPerPage, setInvPerPage] = useItemsPerPage("admin-fin-inv", 10);
   const [invSearch, setInvSearch] = useState("");
   const [invStatusFilter, setInvStatusFilter] = useState("all");
   const [invLoading, setInvLoading] = useState(true);
@@ -221,14 +222,14 @@ export default function AdminFinanceiroPage() {
   const [wdLoading, setWdLoading] = useState(true);
   const [wdSearch, setWdSearch] = useState("");
   const [wdStatusFilter, setWdStatusFilter] = useState("all");
-  const [wdPerPage, setWdPerPage] = useState(10);
+  const [wdPerPage, setWdPerPage] = useItemsPerPage("admin-fin-wd", 10);
   const [wdPage, setWdPage] = useState(1);
 
   // ── state: expenses ────────────────────────────────────────────────────────
   const [expenses, setExpenses] = useState([]);
   const [expenseTotal, setExpenseTotal] = useState(0);
   const [expPage, setExpPage] = useState(1);
-  const [expPerPage, setExpPerPage] = useState(10);
+  const [expPerPage, setExpPerPage] = useItemsPerPage("admin-fin-exp", 10);
   const [expSearch, setExpSearch] = useState("");
   const [expStatusFilter, setExpStatusFilter] = useState("all");
   const [expCategoryFilter, setExpCategoryFilter] = useState("all");
@@ -249,7 +250,7 @@ export default function AdminFinanceiroPage() {
   const [wallets, setWallets] = useState([]);
   const [walletTotal, setWalletTotal] = useState(0);
   const [walletPage, setWalletPage] = useState(1);
-  const [walletPerPage, setWalletPerPage] = useState(10);
+  const [walletPerPage, setWalletPerPage] = useItemsPerPage("admin-fin-wallet", 10);
   const [walletSearch, setWalletSearch] = useState("");
   const [walletTypeFilter, setWalletTypeFilter] = useState("all");
   const [walletStatusFilter, setWalletStatusFilter] = useState("all");
@@ -292,7 +293,7 @@ export default function AdminFinanceiroPage() {
   const [squadList, setSquadList] = useState<any[]>([]);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadSearch, setSquadSearch] = useState("");
-  const [squadPerPage, setSquadPerPage] = useState(50);
+  const [squadPerPage, setSquadPerPage] = useItemsPerPage("admin-fin-squad", 50);
   const [squadAddOpen, setSquadAddOpen] = useState(false);
   const [squadEditTarget, setSquadEditTarget] = useState<any>(null);
   const [squadDetailTarget, setSquadDetailTarget] = useState<any>(null);
@@ -309,7 +310,7 @@ export default function AdminFinanceiroPage() {
   const [concilData, setConcilData] = useState<any[]>([]);
   const [concilTotal, setConcilTotal] = useState(0);
   const [concilPage, setConcilPage] = useState(1);
-  const [concilPerPage, setConcilPerPage] = useState(25);
+  const [concilPerPage, setConcilPerPage] = useItemsPerPage("admin-fin-concil", 25);
   const [concilStats, setConcilStats] = useState<any>(null);
   const [concilDateRange, setConcilDateRange] = useState<DateRange | undefined>(undefined);
   const [concilImpact, setConcilImpact] = useState("all");   // all | bank_in | bank_out

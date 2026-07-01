@@ -9,6 +9,7 @@ import {
 import type React from "react";
 
 import { useState, useEffect, useCallback } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Card,
@@ -455,7 +456,7 @@ export default function AdminProdutosPage() {
       localStorage.setItem(PROD_GRID_STORAGE_KEY, String(mode));
     } catch {}
   };
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-produtos", 10);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Advanced filter modal

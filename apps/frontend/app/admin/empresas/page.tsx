@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -503,7 +504,7 @@ export default function EmpresasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlEmpresaId, companies, companiesLoading]);
 
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-empresas", 10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{

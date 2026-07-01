@@ -24,6 +24,7 @@
     "db:audit:products": "tsx src/scripts/audit-products.ts",
     "db:repair:product-structure": "tsx src/scripts/repair-product-structure.ts",
     "db:seed:project-tasks": "node seed-in-progress.cjs",
+    "db:seed:qa-project-tasks": "tsx prisma/seed-project-tasks.ts",
     "db:restore": "tsx restore-data.ts",
     "db:backfill:agency-projects": "tsx src/scripts/backfill-agency-projects.ts",
     "db:studio": "prisma studio",

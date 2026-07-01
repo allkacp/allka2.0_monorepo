@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
@@ -249,7 +250,7 @@ export default function UsuariosPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-usuarios", 10);
   const [paginatedUsers, setPaginatedUsers] = useState<User[]>([]);
 
   // Demo last_login dates injected when the API doesn't return the field.

@@ -1,5 +1,6 @@
 
 import { useState, useMemo, useEffect, type CSSProperties } from "react"
+import { useItemsPerPage } from "@/lib/use-items-per-page"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -74,7 +75,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
 
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("company-tasks-tab", 10)
   const [tasksViewMode, setTasksViewMode] = useState<"list" | "kanban">("list")
   const [taskSortBy, setTaskSortBy] = useState("projectName")
   const [taskSortOrder, setTaskSortOrder] = useState<"asc" | "desc">("asc")
