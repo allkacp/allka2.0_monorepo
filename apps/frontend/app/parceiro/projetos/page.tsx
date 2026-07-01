@@ -235,8 +235,15 @@ export default function PartnerProjetos() {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {sortData(filtered).map((p, idx) => {
-              const sc = statusConfig[p.status];
-              const cc = commStatusConfig[p.commissionStatus];
+              const sc = statusConfig[p.status] ?? {
+                label: p.status ?? "—",
+                color: "bg-slate-100 text-slate-600",
+                icon: FolderOpen,
+              };
+              const cc = commStatusConfig[p.commissionStatus] ?? {
+                label: p.commissionStatus ?? "—",
+                color: "bg-slate-100 text-slate-600",
+              };
               return (
                 <tr
                   key={p.id}

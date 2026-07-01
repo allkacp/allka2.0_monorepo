@@ -65,7 +65,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
 
     // Fetch projects of companies referred by this partner
     const referredCompanyIds = partner.referred_companies.map((c: any) => c.id);
-    const projects =
+    const rawProjects =
       referredCompanyIds.length > 0
         ? await prisma.project.findMany({
             where: { client_id: { in: referredCompanyIds } },
@@ -73,6 +73,57 @@ router.get("/me", verifyToken, async (req, res, next) => {
             orderBy: { created_at: "desc" },
           })
         : [];
+
+    // Map project.status → PartnerProject status (active | completed | cancelled)
+    const mapProjectStatus = (
+      status: string,
+    ): "active" | "completed" | "cancelled" => {
+      if (status === "completed" || status === "paid") return "completed";
+      if (status === "cancelled") return "cancelled";
+      return "active";
+    };
+
+    // Commission per project: match by project_name against PartnerCommission
+    const commissionByProjectName = new Map<
+      string,
+      { amount: number; status: string }
+    >();
+    for (const c of partner.commissions as any[]) {
+      if (c.project_name) {
+        commissionByProjectName.set(c.project_name, {
+          amount: c.amount ?? 0,
+          status: c.status ?? "pending",
+        });
+      }
+    }
+    const mapCommissionStatus = (
+      status: string,
+    ): "pending" | "confirmed" | "paid" => {
+      if (status === "paid") return "paid";
+      if (status === "approved" || status === "confirmed") return "confirmed";
+      return "pending";
+    };
+
+    // Shape projects to match the frontend PartnerProject interface
+    const projects = rawProjects.map((p: any) => {
+      const comm = commissionByProjectName.get(p.title);
+      return {
+        id: p.id,
+        partnerId: partner.id,
+        companyName: p.client?.name ?? "—",
+        companyId: p.client?.id ?? p.client_id ?? "",
+        projectName: p.title,
+        projectValue: p.value ?? p.budget ?? 0,
+        serviceCategory: p.type ?? "—",
+        status: mapProjectStatus(p.status),
+        contractedAt: (p.start_date ?? p.created_at)
+          ?.toISOString()
+          .split("T")[0],
+        completedAt: p.end_date ? p.end_date.toISOString().split("T")[0] : undefined,
+        commissionGenerated: comm?.amount ?? 0,
+        commissionStatus: mapCommissionStatus(comm?.status ?? "pending"),
+      };
+    });
 
     const { referred_companies, ...partnerData } = partner as any;
     res.json({ ...partnerData, projects });
