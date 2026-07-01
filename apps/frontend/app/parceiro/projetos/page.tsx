@@ -11,7 +11,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
 
 function fmtBRL(n: number) {
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function fmtDate(s: string) {

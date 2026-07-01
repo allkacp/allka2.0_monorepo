@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useEffect, type CSSProperties } from "react"
+import { useState, useMemo, useEffect, useCallback, type CSSProperties } from "react"
 import { useItemsPerPage } from "@/lib/use-items-per-page"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { Card } from "@/components/ui/card"
@@ -58,9 +58,44 @@ interface CompanyTasksTabProps {
   }
 }
 
-// Tasks loaded from API
-const mockCompanyTasks: Task[] = [];
+function mapApiStatusToDisplay(status: string): string {
+  const map: Record<string, string> = {
+    PARA_LANCAMENTO: "Para Lançamento",
+    EM_LANCAMENTO: "Para Lançamento",
+    LIBERADA_PELO_LIDER: "Para Lançamento",
+    LANCAMENTO_ENVIADO_PARA_ANALISE: "Aguardando",
+    DEVOLVIDA_PARA_AGENCIA: "Aguardando",
+    AGUARDANDO_INFORMACOES: "Aguardando",
+    AGUARDANDO_NOMADE: "Aguardando",
+    AGUARDANDO_ETAPA: "Aguardando",
+    LIBERADA_PARA_EXECUCAO: "Em Execução",
+    EM_EXECUCAO: "Em Execução",
+    EM_REVISAO: "Em Execução",
+    EM_APROVACAO: "Para Aprovação",
+    APROVACAO_PENDENTE_CLIENTE: "Para Aprovação",
+    PARA_QUALIFICACAO: "Aguardando",
+    QUALIFICACAO_PENDENTE: "Aguardando",
+    MELHORIAS_FINAIS: "Aguardando",
+    ENTREGUE_PELO_NOMADE: "Entregue",
+    ENTREGA_PENDENTE: "Entregue",
+    ENTREGA_ATRASADA: "Atrasada",
+    CONCLUIDA: "Aprovada",
+    APROVADA: "Aprovada",
+    CANCELADA: "Bloqueada",
+    REPROVADA: "Bloqueada",
+    NAO_SEGUIU_ORIENTACOES: "Bloqueada",
+    PAUSADA: "Bloqueada",
+  }
+  return map[status] ?? status
+}
 
+function mapPriority(p: string | null | undefined): "Alta" | "Média" | "Baixa" | undefined {
+  if (!p) return undefined
+  if (p === "urgent" || p === "high") return "Alta"
+  if (p === "medium") return "Média"
+  if (p === "low") return "Baixa"
+  return undefined
+}
 
 export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
   const { sidebarSettings, previewTheme } = useSidebar()
@@ -72,6 +107,41 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
     if (themeBg.includes("gradient")) return { background: taskGradientMap[themeBg] || "#0f172a" }
     return {}
   }
+
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(true)
+
+  const fetchTasks = useCallback(async () => {
+    if (!company?.id) return
+    setLoadingTasks(true)
+    try {
+      const companyId = (company as any)._apiId ?? String(company.id)
+      const res = await apiClient.getOperationalTasks({ client_id: companyId, limit: 500 })
+      const raw: Task[] = (res?.data ?? []).map((t: any) => ({
+        id: t.id,
+        uniqueId: t.task_code ?? t.id,
+        nome: t.title ?? "",
+        produtoNome: t.project_product?.product_name_snapshot ?? t.product_id ?? "",
+        executor: t.nomade_responsavel?.name ?? "",
+        lider: t.lider_responsavel_id ?? "",
+        prazo: t.due_date ? t.due_date.split("T")[0] : "",
+        status: mapApiStatusToDisplay(t.status),
+        projectId: t.project_id,
+        projectName: t.project?.title ?? "",
+        dataInicio: t.start_date ? t.start_date.split("T")[0] : "",
+        prioridade: mapPriority(t.priority),
+      }))
+      setTasks(raw)
+    } catch {
+      setTasks([])
+    } finally {
+      setLoadingTasks(false)
+    }
+  }, [company?.id])
+
+  useEffect(() => {
+    fetchTasks()
+  }, [fetchTasks])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -105,7 +175,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
 
   // Filtrar tarefas
   const filteredTasks = useMemo(() => {
-    let result = mockCompanyTasks
+    let result = tasks
 
     // Filtro por projeto
     if (advancedFilters.project !== "all") {
@@ -181,7 +251,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
     })
 
     return result
-  }, [advancedFilters, searchTerm, taskSortBy, taskSortOrder])
+  }, [tasks, advancedFilters, searchTerm, taskSortBy, taskSortOrder])
 
   // Paginação
   const totalTasks = filteredTasks.length
@@ -240,13 +310,13 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
   // Obter lista única de projetos
   const projects = useMemo(() => {
     const uniqueProjects = Array.from(
-      new Map(mockCompanyTasks.map((task) => [task.projectId, task])).values()
+      new Map(tasks.map((task) => [task.projectId, task])).values()
     ).map((task) => ({
       id: task.projectId,
       name: task.projectName,
     }))
     return uniqueProjects.sort((a, b) => a.name.localeCompare(b.name))
-  }, [])
+  }, [tasks])
 
   const allStatuses = ["Aprovada", "Em Execução", "Para Aprovação", "Entregue", "Atrasada", "Bloqueada", "Aguardando"]
 
@@ -266,11 +336,11 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
 
   const stats = {
     total:      filteredTasks.length,
-    aprovada:   mockCompanyTasks.filter(t => t.status === "Aprovada").length,
-    execucao:   mockCompanyTasks.filter(t => t.status === "Em Execução").length,
-    aprovacao:  mockCompanyTasks.filter(t => t.status === "Para Aprovação").length,
-    entregue:   mockCompanyTasks.filter(t => t.status === "Entregue").length,
-    atrasada:   mockCompanyTasks.filter(t => t.status === "Atrasada").length,
+    aprovada:   tasks.filter(t => t.status === "Aprovada").length,
+    execucao:   tasks.filter(t => t.status === "Em Execução").length,
+    aprovacao:  tasks.filter(t => t.status === "Para Aprovação").length,
+    entregue:   tasks.filter(t => t.status === "Entregue").length,
+    atrasada:   tasks.filter(t => t.status === "Atrasada").length,
   }
 
   const activeFilterCount =
@@ -289,7 +359,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
             <CheckSquare className="h-3.5 w-3.5 text-indigo-600" />
           </div>
           <span className="text-xs font-semibold text-slate-600">Total</span>
-          <span className="text-sm font-bold text-slate-900">{mockCompanyTasks.length}</span>
+          <span className="text-sm font-bold text-slate-900">{tasks.length}</span>
         </div>
         <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
           <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
@@ -368,9 +438,9 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
               onValueChange={(v) => handleItemsPerPageChange(parseInt(v))}
             />
             <span className="text-xs text-slate-400 whitespace-nowrap">
-              {filteredTasks.length !== mockCompanyTasks.length
-                ? <>de <span className="font-semibold text-blue-500">{filteredTasks.length}</span> de {mockCompanyTasks.length} tarefa{mockCompanyTasks.length !== 1 ? "s" : ""}</>
-                : <>de <span className="font-semibold text-slate-600">{mockCompanyTasks.length}</span> tarefa{mockCompanyTasks.length !== 1 ? "s" : ""}</>
+              {filteredTasks.length !== tasks.length
+                ? <>de <span className="font-semibold text-blue-500">{filteredTasks.length}</span> de {tasks.length} tarefa{tasks.length !== 1 ? "s" : ""}</>
+                : <>de <span className="font-semibold text-slate-600">{tasks.length}</span> tarefa{tasks.length !== 1 ? "s" : ""}</>
               }
             </span>
           </div>
@@ -420,7 +490,11 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
         <div>
 
       {/* Lista de Tarefas */}
-      {tasksViewMode === "list" ? (
+      {loadingTasks ? (
+        <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+          Carregando tarefas…
+        </div>
+      ) : tasksViewMode === "list" ? (
         <div className="overflow-hidden">
           {paginatedTasks.length > 0 ? (
             paginatedTasks.map((tarefa, idx) => (
@@ -596,9 +670,9 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
                 variant="bottom"
               />
               <span className="text-xs text-slate-400 whitespace-nowrap">
-                {filteredTasks.length !== mockCompanyTasks.length
-                  ? <>de <span className="font-semibold text-blue-500">{filteredTasks.length}</span> de {mockCompanyTasks.length} tarefa{mockCompanyTasks.length !== 1 ? "s" : ""}</>
-                  : <>de <span className="font-semibold text-slate-600">{mockCompanyTasks.length}</span> tarefa{mockCompanyTasks.length !== 1 ? "s" : ""}</>
+                {filteredTasks.length !== tasks.length
+                  ? <>de <span className="font-semibold text-blue-500">{filteredTasks.length}</span> de {tasks.length} tarefa{tasks.length !== 1 ? "s" : ""}</>
+                  : <>de <span className="font-semibold text-slate-600">{tasks.length}</span> tarefa{tasks.length !== 1 ? "s" : ""}</>
                 }
               </span>
             </div>
