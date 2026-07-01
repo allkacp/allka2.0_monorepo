@@ -148,6 +148,9 @@ export default function PartnerProjetos() {
         <table className="w-full text-sm min-w-150">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
+                ID
+              </th>
               <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 <SortableHeader
                   label="Projeto"
@@ -251,6 +254,11 @@ export default function PartnerProjetos() {
                     idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
                   }
                 >
+                  <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                    <span className="font-mono text-xs text-slate-400">
+                      proj_{String((p as any).seq ?? (idx + 1)).padStart(5, "0")}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
                     {p.projectName}
                   </td>
@@ -289,7 +297,7 @@ export default function PartnerProjetos() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-5 py-10 text-center text-sm text-slate-400"
                 >
                   <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
