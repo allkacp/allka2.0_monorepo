@@ -715,13 +715,53 @@ router.get(
         return;
       }
 
-      // Prefer snapshot saved at task creation; fall back to live CatalogTask data
-      let briefingQuestions: unknown[] = [];
-      if (task.briefing_snapshot) {
-        try { briefingQuestions = JSON.parse(task.briefing_snapshot); } catch {}
-      } else if (task.catalog_task?.briefing_questions) {
-        try { briefingQuestions = JSON.parse(task.catalog_task.briefing_questions); } catch {}
+      // ── Helper: normalize the raw JSON stored in briefing_questions/briefing_snapshot
+      // The field can contain either:
+      //   a) A rich array of objects: [{ question_key, question_text, type, required, options }]
+      //   b) A plain string array (from the admin "modelos-tarefas" UI): ["question text", ...]
+      // We normalize both into the rich object format.
+      function normalizeBriefingQuestions(raw: unknown[]): Record<string, unknown>[] {
+        return raw.map((item, idx) => {
+          if (typeof item === "string") {
+            // Plain string → convert to minimal rich object
+            return {
+              question_key: `q_${idx}`,
+              question_text: item,
+              type: "text_long",
+              required: true,
+            };
+          }
+          if (item && typeof item === "object") {
+            const q = item as Record<string, unknown>;
+            // Already rich — ensure question_key exists
+            if (!q.question_key) {
+              q.question_key = q.key ?? `q_${idx}`;
+            }
+            // Normalize text field
+            if (!q.question_text) {
+              q.question_text = q.text ?? q.label ?? `Pergunta ${idx + 1}`;
+            }
+            return q;
+          }
+          return { question_key: `q_${idx}`, question_text: String(item), type: "text_long", required: true };
+        });
       }
+
+      // Prefer snapshot saved at task creation; fall back to live CatalogTask data
+      let rawQuestions: unknown[] = [];
+      if (task.briefing_snapshot) {
+        try {
+          const parsed = JSON.parse(task.briefing_snapshot);
+          if (Array.isArray(parsed)) rawQuestions = parsed;
+        } catch {}
+      }
+      if (rawQuestions.length === 0 && task.catalog_task?.briefing_questions) {
+        try {
+          const parsed = JSON.parse(task.catalog_task.briefing_questions);
+          if (Array.isArray(parsed)) rawQuestions = parsed;
+        } catch {}
+      }
+      const briefingQuestions = normalizeBriefingQuestions(rawQuestions);
 
       const answers = await prisma.taskBriefingAnswer.findMany({
         where: { project_task_id: req.params.id as string },

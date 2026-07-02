@@ -225,24 +225,15 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    // Compute global sequence number for each project (position across ALL projects sorted DESC)
+    // Compute global sequence number: oldest project = 1, newest = N (stable when new projects added)
+    // Uses Prisma (no raw SQL) so it works in both SQLite (dev) and MySQL (prod)
     let seqMap: Record<string, number> = {};
     if (data.length > 0) {
-      try {
-        const ids = data.map((p) => p.id);
-        const rows = await prisma.$queryRawUnsafe<{ id: string; seq: bigint }[]>(
-          `SELECT ranked.id, ranked.seq
-           FROM (
-             SELECT id, ROW_NUMBER() OVER (ORDER BY created_at DESC, id ASC) AS seq
-             FROM projects
-           ) ranked
-           WHERE ranked.id IN (${ids.map(() => "?").join(",")})`,
-          ...ids,
-        );
-        for (const r of rows) seqMap[r.id] = Number(r.seq);
-      } catch {
-        data.forEach((p, i) => { seqMap[p.id] = i + 1; });
-      }
+      const allProjectIds = await prisma.project.findMany({
+        select: { id: true },
+        orderBy: [{ created_at: "asc" }, { id: "asc" }],
+      });
+      allProjectIds.forEach((p, i) => { seqMap[p.id] = i + 1; });
     }
 
     // Build set of client_ids that belong to partner-referred companies (direct DB query, no join dependency)
@@ -337,6 +328,723 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// GET /api/projects/:id/files  — all task attachments for a project, grouped
+router.get("/:id/files", verifyToken, async (req, res, next) => {
+  try {
+    const parent = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!parent) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, parent)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+
+    const attachments = await prisma.taskAttachment.findMany({
+      where: { project_task: { project_id: req.params.id as string } },
+      include: {
+        project_task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            project_product: {
+              select: {
+                id: true,
+                product_name_snapshot: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { created_at: "asc" },
+    });
+
+    const enriched = attachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      url: a.url,
+      type: a.type,
+      mime_type: a.mime_type,
+      size: a.size,
+      uploaded_by: a.uploaded_by,
+      observations: a.observations,
+      created_at: a.created_at,
+      task: a.project_task
+        ? {
+            id: a.project_task.id,
+            title: a.project_task.title,
+            status: a.project_task.status,
+          }
+        : null,
+      product: a.project_task?.project_product
+        ? {
+            id: a.project_task.project_product.id,
+            name: a.project_task.project_product.product_name_snapshot,
+            status: a.project_task.project_product.status,
+          }
+        : null,
+      isApproved:
+        a.type === "delivery" &&
+        a.project_task?.status === "CONCLUIDA",
+    }));
+
+    const initialFiles = enriched.filter((a) => a.type === "reference");
+    const internalFiles = enriched.filter((a) => a.type === "file");
+    const deliveries = enriched.filter((a) => a.type === "delivery");
+    const approvedFiles = enriched.filter((a) => a.isApproved);
+
+    res.json({
+      summary: {
+        total: enriched.length,
+        initial: initialFiles.length,
+        internal: internalFiles.length,
+        deliveries: deliveries.length,
+        approved: approvedFiles.length,
+      },
+      initialFiles,
+      internalFiles,
+      deliveries,
+      approvedFiles,
+      allFiles: enriched,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Credential helpers ──────────────────────────────────────────────────────
+
+async function getCredentialOwned(credentialId: string, projectId: string) {
+  return prisma.projectCredential.findFirst({
+    where: { id: credentialId, project_id: projectId },
+  });
+}
+
+async function logCredentialAction(
+  credentialId: string,
+  action: string,
+  actorType: string,
+  actorId: string,
+  details?: string,
+) {
+  await prisma.projectCredentialAccessLog.create({
+    data: {
+      credential_id: credentialId,
+      action,
+      actor_type: actorType,
+      actor_user_id: actorType === "user" ? actorId : null,
+      actor_nomad_id: actorType === "nomad" ? actorId : null,
+      details: details ?? null,
+    },
+  });
+}
+
+// GET /api/projects/:id/credentials
+router.get("/:id/credentials", verifyToken, async (req, res, next) => {
+  try {
+    const parent = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!parent) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, parent)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+
+    const credentials = await prisma.projectCredential.findMany({
+      where: { project_id: req.params.id as string },
+      include: {
+        project_task: { select: { id: true, title: true, status: true } },
+        project_product: {
+          select: { id: true, product_name_snapshot: true, status: true },
+        },
+      },
+      orderBy: { created_at: "asc" },
+    });
+
+    const enriched = credentials.map((c) => ({
+      id: c.id,
+      title: c.title,
+      service: c.service,
+      url: c.url,
+      username: c.username,
+      password_demo: c.password_demo,
+      notes: c.notes,
+      category: c.category,
+      status: c.status,
+      is_demo: c.is_demo,
+      requires_rotation: c.requires_rotation,
+      rotation_reason: c.rotation_reason,
+      last_rotated_at: c.last_rotated_at,
+      expires_at: c.expires_at,
+      shared_until: c.shared_until,
+      shared_with_user_id: c.shared_with_user_id,
+      shared_with_nomad_id: c.shared_with_nomad_id,
+      created_by: c.created_by,
+      created_at: c.created_at,
+      updated_at: c.updated_at,
+      task: c.project_task
+        ? {
+            id: c.project_task.id,
+            title: c.project_task.title,
+            status: c.project_task.status,
+          }
+        : null,
+      product: c.project_product
+        ? {
+            id: c.project_product.id,
+            name: c.project_product.product_name_snapshot,
+            status: c.project_product.status,
+          }
+        : null,
+    }));
+
+    const summary = {
+      total: enriched.length,
+      active: enriched.filter((c) => c.status === "active").length,
+      shared: enriched.filter((c) => c.status === "shared").length,
+      expired: enriched.filter((c) => c.status === "expired").length,
+      rotationRequired: enriched.filter(
+        (c) => c.status === "rotation_required" || c.requires_rotation,
+      ).length,
+      demo: enriched.filter((c) => c.is_demo).length,
+    };
+
+    res.json({ summary, credentials: enriched });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/projects/:id/credentials
+router.post("/:id/credentials", verifyToken, async (req, res, next) => {
+  try {
+    const parent = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!parent) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, parent)) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+
+    const {
+      title,
+      service,
+      url,
+      username,
+      password_demo,
+      notes,
+      category,
+      status,
+      project_task_id,
+      project_product_id,
+      expires_at,
+    } = req.body;
+
+    if (!title?.trim()) {
+      res.status(400).json({ error: "title é obrigatório" });
+      return;
+    }
+
+    if (password_demo && !String(password_demo).includes("DEMO")) {
+      res
+        .status(400)
+        .json({ error: "Em ambiente demo, a senha deve conter 'DEMO'" });
+      return;
+    }
+
+    const credential = await prisma.projectCredential.create({
+      data: {
+        project_id: req.params.id as string,
+        project_task_id: project_task_id ?? null,
+        project_product_id: project_product_id ?? null,
+        title,
+        service: service ?? null,
+        url: url ?? null,
+        username: username ?? null,
+        password_demo: password_demo ?? null,
+        notes: notes ?? null,
+        category: category ?? "other",
+        status: status ?? "active",
+        is_demo: true,
+        created_by: req.user!.id,
+        expires_at: expires_at ? new Date(expires_at) : null,
+      },
+    });
+
+    await logCredentialAction(credential.id, "created", "user", req.user!.id);
+    res.status(201).json(credential);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/projects/:id/credentials/:credentialId
+router.patch(
+  "/:id/credentials/:credentialId",
+  verifyToken,
+  async (req, res, next) => {
+    try {
+      const parent = await prisma.project.findUnique({
+        where: { id: req.params.id as string },
+        select: { agency: true, client_id: true },
+      });
+      if (!parent) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      if (!projectInScope(scope, parent)) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      const existing = await getCredentialOwned(
+        req.params.credentialId as string,
+        req.params.id as string,
+      );
+      if (!existing) {
+        res.status(404).json({ error: "Credencial não encontrada" });
+        return;
+      }
+
+      const {
+        title,
+        service,
+        url,
+        username,
+        password_demo,
+        notes,
+        category,
+        status,
+        project_task_id,
+        project_product_id,
+        requires_rotation,
+        rotation_reason,
+        expires_at,
+      } = req.body;
+
+      const updated = await prisma.projectCredential.update({
+        where: { id: req.params.credentialId as string },
+        data: {
+          ...(title !== undefined && { title }),
+          ...(service !== undefined && { service }),
+          ...(url !== undefined && { url }),
+          ...(username !== undefined && { username }),
+          ...(password_demo !== undefined && { password_demo }),
+          ...(notes !== undefined && { notes }),
+          ...(category !== undefined && { category }),
+          ...(status !== undefined && { status }),
+          ...(project_task_id !== undefined && { project_task_id }),
+          ...(project_product_id !== undefined && { project_product_id }),
+          ...(requires_rotation !== undefined && { requires_rotation }),
+          ...(rotation_reason !== undefined && { rotation_reason }),
+          ...(expires_at !== undefined && {
+            expires_at: expires_at ? new Date(expires_at) : null,
+          }),
+        },
+      });
+
+      await logCredentialAction(
+        req.params.credentialId as string,
+        "edited",
+        "user",
+        req.user!.id,
+      );
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// DELETE /api/projects/:id/credentials/:credentialId — soft delete (archive)
+router.delete(
+  "/:id/credentials/:credentialId",
+  verifyToken,
+  async (req, res, next) => {
+    try {
+      const parent = await prisma.project.findUnique({
+        where: { id: req.params.id as string },
+        select: { agency: true, client_id: true },
+      });
+      if (!parent) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      if (!projectInScope(scope, parent)) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      const existing = await getCredentialOwned(
+        req.params.credentialId as string,
+        req.params.id as string,
+      );
+      if (!existing) {
+        res.status(404).json({ error: "Credencial não encontrada" });
+        return;
+      }
+
+      const archived = await prisma.projectCredential.update({
+        where: { id: req.params.credentialId as string },
+        data: { status: "archived" },
+      });
+
+      await logCredentialAction(
+        req.params.credentialId as string,
+        "archived",
+        "user",
+        req.user!.id,
+      );
+      res.json(archived);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/projects/:id/credentials/:credentialId/share
+router.post(
+  "/:id/credentials/:credentialId/share",
+  verifyToken,
+  async (req, res, next) => {
+    try {
+      const parent = await prisma.project.findUnique({
+        where: { id: req.params.id as string },
+        select: { agency: true, client_id: true },
+      });
+      if (!parent) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      if (!projectInScope(scope, parent)) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      const existing = await getCredentialOwned(
+        req.params.credentialId as string,
+        req.params.id as string,
+      );
+      if (!existing) {
+        res.status(404).json({ error: "Credencial não encontrada" });
+        return;
+      }
+
+      const { shared_with_user_id, shared_with_nomad_id, shared_until } =
+        req.body;
+      if (!shared_with_user_id && !shared_with_nomad_id) {
+        res.status(400).json({
+          error: "Informe shared_with_user_id ou shared_with_nomad_id",
+        });
+        return;
+      }
+
+      const updated = await prisma.projectCredential.update({
+        where: { id: req.params.credentialId as string },
+        data: {
+          status: "shared",
+          shared_with_user_id: shared_with_user_id ?? null,
+          shared_with_nomad_id: shared_with_nomad_id ?? null,
+          shared_until: shared_until ? new Date(shared_until) : null,
+        },
+      });
+
+      await logCredentialAction(
+        req.params.credentialId as string,
+        "shared",
+        "user",
+        req.user!.id,
+        JSON.stringify({ shared_with_user_id, shared_with_nomad_id, shared_until }),
+      );
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/projects/:id/credentials/:credentialId/revoke
+router.post(
+  "/:id/credentials/:credentialId/revoke",
+  verifyToken,
+  async (req, res, next) => {
+    try {
+      const parent = await prisma.project.findUnique({
+        where: { id: req.params.id as string },
+        select: { agency: true, client_id: true },
+      });
+      if (!parent) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      if (!projectInScope(scope, parent)) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      const existing = await getCredentialOwned(
+        req.params.credentialId as string,
+        req.params.id as string,
+      );
+      if (!existing) {
+        res.status(404).json({ error: "Credencial não encontrada" });
+        return;
+      }
+
+      const newStatus = existing.requires_rotation
+        ? "rotation_required"
+        : "active";
+
+      const updated = await prisma.projectCredential.update({
+        where: { id: req.params.credentialId as string },
+        data: {
+          status: newStatus,
+          shared_with_user_id: null,
+          shared_with_nomad_id: null,
+          shared_until: null,
+        },
+      });
+
+      await logCredentialAction(
+        req.params.credentialId as string,
+        "revoked",
+        "user",
+        req.user!.id,
+      );
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/projects/:id/dashboard  — aggregated KPIs for the project modal
+router.get("/:id/dashboard", verifyToken, async (req, res, next) => {
+  try {
+    const proj = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: {
+        agency: true, client_id: true, status: true, created_at: true,
+        project_tasks: {
+          select: { id: true, status: true, updated_at: true, title: true },
+        },
+        invoices: {
+          select: { id: true, status: true, amount: true, paid_at: true, invoice_number: true, created_at: true },
+          orderBy: { created_at: "desc" },
+        },
+        credentials: { select: { id: true, status: true, requires_rotation: true } },
+      },
+    });
+    if (!proj) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, { agency: proj.agency, client_id: proj.client_id })) { res.status(403).json({ error: "Acesso negado" }); return; }
+
+    // Task counts
+    const tasks = proj.project_tasks;
+    const totalTasks = tasks.length;
+    const doneTasks = tasks.filter((t) => t.status === "CONCLUIDA").length;
+    const inProgressTasks = tasks.filter((t) => ["EM_EXECUCAO", "EM_REVISAO", "EM_APROVACAO"].includes(t.status)).length;
+    const waitingTasks = tasks.filter((t) => ["PARA_LANCAMENTO", "EM_LANCAMENTO", "LIBERADA_PARA_EXECUCAO"].includes(t.status)).length;
+    const cancelledTasks = tasks.filter((t) => t.status === "CANCELADA").length;
+    const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    // Billing breakdown
+    const invoices = proj.invoices;
+    const paidInvoices = invoices.filter((i) => i.status === "paid");
+    const overdueInvoices = invoices.filter((i) => i.status === "overdue");
+    const pendingInvoices = invoices.filter((i) => i.status === "pending");
+    const totalAmount = invoices.reduce((s, i) => s + i.amount, 0);
+    const paidAmount = paidInvoices.reduce((s, i) => s + i.amount, 0);
+    const overdueAmount = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+    const pendingAmount = pendingInvoices.reduce((s, i) => s + i.amount, 0);
+
+    // Credentials
+    const rotationCreds = proj.credentials.filter((c) => c.requires_rotation && c.status !== "archived").length;
+    const activeCredentials = proj.credentials.filter((c) => c.status === "active" || c.status === "shared").length;
+
+    // Attention = overdue invoices + rotation-required credentials
+    const overdueCount = overdueInvoices.length;
+    const attentionCount = overdueCount + rotationCreds;
+
+    // Recent activities: paid invoices + done tasks, sorted descending
+    const actInvoices = paidInvoices
+      .filter((i) => i.paid_at != null)
+      .map((i) => ({
+        id: `inv-${i.id}`,
+        type: "invoice_paid",
+        label: `Fatura ${i.invoice_number} paga — R$ ${i.amount.toLocaleString("pt-BR")}`,
+        at: i.paid_at as Date,
+      }));
+    const actTasks = tasks
+      .filter((t) => t.status === "CONCLUIDA")
+      .map((t) => ({ id: `task-${t.id}`, type: "task_done", label: `Tarefa concluída: ${t.title}`, at: t.updated_at }));
+    const recentActivities = [...actInvoices, ...actTasks]
+      .sort((a, b) => b.at.getTime() - a.at.getTime())
+      .slice(0, 8);
+
+    res.json({
+      tasks: { total: totalTasks, done: doneTasks, inProgress: inProgressTasks, waiting: waitingTasks, cancelled: cancelledTasks, completionPct },
+      billing: {
+        total: totalAmount,
+        paid: paidAmount,
+        pending: pendingAmount,
+        overdue: overdueAmount,
+        totalCount: invoices.length,
+        paidCount: paidInvoices.length,
+        overdueCount,
+        pendingCount: pendingInvoices.length,
+      },
+      credentials: { total: proj.credentials.length, active: activeCredentials, rotationRequired: rotationCreds },
+      attention: attentionCount,
+      recentActivities,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /api/projects/:id/log  — synthesized timeline from existing data
+router.get("/:id/log", verifyToken, async (req, res, next) => {
+  try {
+    const proj = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: {
+        agency: true, client_id: true, status: true, created_at: true, updated_at: true,
+        products: { select: { id: true, product_name_snapshot: true, created_at: true }, orderBy: { created_at: "asc" } },
+        project_tasks: { select: { id: true, title: true, status: true, created_at: true, updated_at: true }, orderBy: { created_at: "asc" } },
+        invoices: { select: { id: true, invoice_number: true, amount: true, status: true, paid_at: true, created_at: true }, orderBy: { created_at: "asc" } },
+        credentials: {
+          select: { access_logs: { select: { id: true, action: true, actor_user_id: true, details: true, created_at: true }, orderBy: { created_at: "asc" } } },
+        },
+      },
+    });
+    if (!proj) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, { agency: proj.agency, client_id: proj.client_id })) { res.status(403).json({ error: "Acesso negado" }); return; }
+
+    type LogEntry = { id: string; event: string; description: string; actor_name?: string; meta?: string; created_at: Date };
+    const entries: LogEntry[] = [];
+
+    // 1. Projeto criado
+    entries.push({ id: `proj-created`, event: "CRIADO", description: "Projeto criado na plataforma.", created_at: proj.created_at });
+
+    // 2. Produtos adicionados
+    proj.products.forEach((pp, i) => {
+      entries.push({ id: `prod-${pp.id}`, event: "PRODUTO_ADICIONADO", description: `Produto "${pp.product_name_snapshot}" adicionado ao projeto.`, created_at: pp.created_at });
+    });
+
+    // 3. Tarefas geradas (quando há tarefas)
+    if (proj.project_tasks.length > 0) {
+      entries.push({ id: `tasks-generated`, event: "TAREFAS_GERADAS", description: `${proj.project_tasks.length} tarefa(s) gerada(s) automaticamente para os produtos do projeto.`, created_at: proj.project_tasks[0].created_at });
+    }
+
+    // 4. Tarefas concluídas
+    const doneTasks = proj.project_tasks.filter((t) => t.status === "CONCLUIDA");
+    doneTasks.slice(0, 5).forEach((t) => {
+      entries.push({ id: `task-done-${t.id}`, event: "ATUALIZADO", description: `Tarefa "${t.title}" concluída.`, created_at: t.updated_at });
+    });
+
+    // 5. Faturas geradas + pagas
+    proj.invoices.forEach((inv) => {
+      entries.push({ id: `inv-${inv.id}`, event: "CHECKOUT_INICIADO", description: `Fatura ${inv.invoice_number ?? inv.id.slice(-8)} de R$ ${inv.amount.toFixed(2)} gerada.`, meta: JSON.stringify({ amount: inv.amount, status: inv.status }), created_at: inv.created_at });
+      if (inv.status === "paid" && inv.paid_at) {
+        entries.push({ id: `pay-${inv.id}`, event: "PAGAMENTO_APROVADO", description: `Pagamento de R$ ${inv.amount.toFixed(2)} aprovado.`, meta: JSON.stringify({ amount: inv.amount }), created_at: inv.paid_at });
+      }
+    });
+
+    // 6. Logs de credenciais
+    proj.credentials.flatMap((c) => c.access_logs).slice(0, 10).forEach((log) => {
+      const eventMap: Record<string, string> = { created: "ATUALIZADO", edited: "ATUALIZADO", shared: "ATUALIZADO", revoked: "ATUALIZADO", archived: "ATUALIZADO" };
+      const descMap: Record<string, string> = { created: "Credencial adicionada ao cofre.", edited: "Credencial editada.", shared: "Credencial compartilhada com nômade.", revoked: "Compartilhamento de credencial revogado.", archived: "Credencial arquivada." };
+      entries.push({ id: `cred-log-${log.id}`, event: eventMap[log.action] ?? "ATUALIZADO", description: descMap[log.action] ?? `Ação: ${log.action}`, created_at: log.created_at });
+    });
+
+    // 7. Status atual (se não for draft)
+    if (proj.status !== "draft" && proj.status !== "negotiation") {
+      const statusDescMap: Record<string, string> = {
+        "awaiting-payment": "Projeto aguardando pagamento para iniciar.",
+        "planning": "Projeto em fase de planejamento.",
+        "in-progress": "Projeto em execução.",
+        "paused": "Projeto pausado.",
+        "completed": "Projeto concluído com sucesso.",
+        "cancelled": "Projeto cancelado.",
+      };
+      const desc = statusDescMap[proj.status] ?? `Status do projeto: ${proj.status}.`;
+      entries.push({ id: `status-current`, event: "STATUS_ALTERADO", description: desc, created_at: proj.updated_at });
+    }
+
+    // Sort by created_at descending (newest first)
+    entries.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+
+    res.json({ total: entries.length, data: entries });
+  } catch (err) { next(err); }
+});
+
+// GET /api/projects/:id/billing  — invoices + payments summary
+router.get("/:id/billing", verifyToken, async (req, res, next) => {
+  try {
+    const parent = await prisma.project.findUnique({
+      where: { id: req.params.id as string },
+      select: { agency: true, client_id: true },
+    });
+    if (!parent) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
+    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    if (!projectInScope(scope, parent)) { res.status(403).json({ error: "Acesso negado" }); return; }
+
+    const [invoices, payments] = await Promise.all([
+      prisma.invoice.findMany({
+        where: { project_id: req.params.id as string },
+        orderBy: { due_date: "desc" },
+      }),
+      prisma.payment.findMany({
+        where: { project_id: req.params.id as string },
+        orderBy: { created_at: "desc" },
+      }),
+    ]);
+
+    const totalAmount = invoices.reduce((s, i) => s + i.amount, 0);
+    const paidAmount = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+    const pendingAmount = invoices.filter((i) => i.status === "pending").reduce((s, i) => s + i.amount, 0);
+    const overdueAmount = invoices.filter((i) => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+
+    res.json({
+      summary: {
+        totalInvoices: invoices.length,
+        totalAmount,
+        paidAmount,
+        pendingAmount,
+        overdueAmount,
+        paidCount: invoices.filter((i) => i.status === "paid").length,
+        pendingCount: invoices.filter((i) => i.status === "pending").length,
+        overdueCount: invoices.filter((i) => i.status === "overdue").length,
+      },
+      invoices,
+      payments,
+    });
+  } catch (err) { next(err); }
 });
 
 // GET /api/projects/:id/tasks  — operational execution tasks (ProjectTask)

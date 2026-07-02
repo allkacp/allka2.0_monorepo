@@ -74,21 +74,14 @@ router.get("/me", verifyToken, async (req, res, next) => {
           })
         : [];
 
-    // Compute global seq for each project (same as /api/projects)
+    // Compute global seq using Prisma (works in SQLite dev + MySQL prod — no window functions)
     let seqMap: Record<string, number> = {};
     if (rawProjects.length > 0) {
-      try {
-        const rows = await prisma.$queryRawUnsafe<{ id: string; seq: bigint }[]>(
-          `SELECT ranked.id, ranked.seq FROM (
-             SELECT id, ROW_NUMBER() OVER (ORDER BY created_at DESC, id ASC) AS seq
-             FROM projects
-           ) ranked WHERE ranked.id IN (${rawProjects.map(() => "?").join(",")})`,
-          ...rawProjects.map((p) => p.id),
-        );
-        for (const r of rows) seqMap[r.id] = Number(r.seq);
-      } catch {
-        rawProjects.forEach((p, i) => { seqMap[p.id] = i + 1; });
-      }
+      const allProjectIds = await prisma.project.findMany({
+        select: { id: true },
+        orderBy: [{ created_at: "asc" }, { id: "asc" }],
+      });
+      allProjectIds.forEach((p, i) => { seqMap[p.id] = i + 1; });
     }
 
     // Map project.status → PartnerProject status (active | completed | cancelled)
@@ -126,7 +119,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
       const comm = commissionByProjectName.get(p.title);
       return {
         id: p.id,
-        seq: seqMap[p.id] ?? (i + 1),
+        seq: seqMap[p.id],
         partnerId: partner.id,
         companyName: p.client?.name ?? "—",
         companyId: p.client?.id ?? p.client_id ?? "",
