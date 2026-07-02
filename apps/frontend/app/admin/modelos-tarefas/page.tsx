@@ -2241,8 +2241,7 @@ export default function AdminModelosTarefasPage() {
         {!loading && !error && sorted.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div
-              className="overflow-auto allka-table-scroll"
-              style={{ maxHeight: "calc(100vh - 18rem)" }}
+              className="overflow-x-auto allka-table-scroll"
             >
               <table className="w-full text-sm min-w-[800px]">
                 <thead

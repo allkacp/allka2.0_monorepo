@@ -18,10 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
-const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -67,6 +68,7 @@ export default function AgenciaClientesPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("agencia-clientes", 20);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function AgenciaClientesPage() {
     try {
       const params: Record<string, string> = {
         page: String(page),
-        limit: String(PAGE_SIZE),
+        limit: String(itemsPerPage),
       };
       if (search) params.search = search;
       const data = await apiFetch("/clients", params);
@@ -91,7 +93,7 @@ export default function AgenciaClientesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, itemsPerPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -104,7 +106,7 @@ export default function AgenciaClientesPage() {
     }, 400);
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.ceil(total / itemsPerPage);
 
   return (
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
@@ -142,11 +144,18 @@ export default function AgenciaClientesPage() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
-        {total > 0 && (
-          <span className="text-xs text-muted-foreground ml-auto">
-            {total} cliente{total !== 1 ? "s" : ""}
-          </span>
-        )}
+        <div className="flex items-center gap-2 ml-auto shrink-0">
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setPage(1); }}
+            variant="top"
+          />
+          {total > 0 && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {total} cliente{total !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -168,7 +177,7 @@ export default function AgenciaClientesPage() {
             <span className="text-xs">Os clientes aparecerão aqui quando tiverem projetos vinculados à sua agência.</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">

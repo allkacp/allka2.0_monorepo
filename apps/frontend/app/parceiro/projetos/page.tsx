@@ -3,12 +3,22 @@
 
 import { useState } from "react";
 import { usePartner } from "@/contexts/partner-context";
-import { FolderOpen, CheckCircle2, Clock, XCircle, Search } from "lucide-react";
+import {
+  FolderOpen,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 function fmtBRL(n: number) {
   return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -22,6 +32,8 @@ export default function PartnerProjetos() {
   const { projects, stats, loading } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("parceiro-projetos", 10);
   const {
     sortKey,
     sortDir,
@@ -42,6 +54,15 @@ export default function PartnerProjetos() {
     if (statusFilter !== "all" && p.status !== statusFilter) return false;
     return true;
   });
+
+  const sorted = sortData(filtered);
+  const totalItems = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedProjects = sorted.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
+  );
 
   const totalValue = projects.reduce((s, p) => s + p.projectValue, 0);
   const totalCommission = projects.reduce(
@@ -110,21 +131,21 @@ export default function PartnerProjetos() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters + Items per page */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <Input
             placeholder="Buscar projeto ou empresa..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="pl-8 h-8 text-sm"
           />
         </div>
         {(["all", "active", "completed", "cancelled"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => { setStatusFilter(s); setCurrentPage(1); }}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusFilter === s
                 ? "bg-blue-600 text-white shadow-sm"
@@ -140,175 +161,212 @@ export default function PartnerProjetos() {
                   : "Cancelados"}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
+            variant="top"
+          />
+          {totalItems > 0 && (
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              {totalItems} projeto{totalItems !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Table */}
       <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-150">
-          <thead>
-            <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
-                ID
-              </th>
-              <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Projeto"
-                  field="projectName"
-                  type="text"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Empresa"
-                  field="companyName"
-                  type="text"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Categoria"
-                  field="serviceCategory"
-                  type="status"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  columnFilters={columnFilters}
-                  onFilter={toggleColumnFilter}
-                  onClearFilter={clearColumnFilter}
-                  filterValues={[
-                    "Branding",
-                    "Social Media",
-                    "Produção de Vídeo",
-                    "Conteúdo",
-                  ]}
-                />
-              </th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Valor"
-                  field="projectValue"
-                  type="number"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              </th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Comissão"
-                  field="commissionGenerated"
-                  type="number"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Status"
-                  field="status"
-                  type="status"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  columnFilters={columnFilters}
-                  onFilter={toggleColumnFilter}
-                  onClearFilter={clearColumnFilter}
-                  filterValues={["active", "completed", "cancelled"]}
-                />
-              </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                <SortableHeader
-                  label="Contratado"
-                  field="startDate"
-                  type="date"
-                  sortKey={sortKey ? String(sortKey) : null}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {sortData(filtered).map((p, idx) => {
-              const sc = statusConfig[p.status] ?? {
-                label: p.status ?? "—",
-                color: "bg-slate-100 text-slate-600",
-                icon: FolderOpen,
-              };
-              const cc = commStatusConfig[p.commissionStatus] ?? {
-                label: p.commissionStatus ?? "—",
-                color: "bg-slate-100 text-slate-600",
-              };
-              return (
-                <tr
-                  key={p.id}
-                  className={
-                    idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
-                  }
-                >
-                  <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                    <span className="font-mono text-xs text-slate-400">
-                      proj_{String((p as any).seq ?? (idx + 1)).padStart(5, "0")}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
-                    {p.projectName}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                    {p.companyName}
-                  </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">
-                    {p.serviceCategory}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
-                    {fmtBRL(p.projectValue)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="tabular-nums font-semibold text-emerald-600">
-                      {fmtBRL(p.commissionGenerated)}
-                    </span>
-                    <span
-                      className={`ml-2 text-[10px] px-1 py-0.5 rounded font-semibold ${cc.color}`}
-                    >
-                      {cc.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}
-                    >
-                      {sc.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">
-                    {fmtDate(p.contractedAt)}
+        <div className="overflow-x-auto allka-table-scroll">
+          <table className="w-full text-sm min-w-150">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
+                  ID
+                </th>
+                <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Projeto"
+                    field="projectName"
+                    type="text"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Empresa"
+                    field="companyName"
+                    type="text"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Categoria"
+                    field="serviceCategory"
+                    type="status"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    columnFilters={columnFilters}
+                    onFilter={toggleColumnFilter}
+                    onClearFilter={clearColumnFilter}
+                    filterValues={[
+                      "Branding",
+                      "Social Media",
+                      "Produção de Vídeo",
+                      "Conteúdo",
+                    ]}
+                  />
+                </th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Valor"
+                    field="projectValue"
+                    type="number"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Comissão"
+                    field="commissionGenerated"
+                    type="number"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Status"
+                    field="status"
+                    type="status"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    columnFilters={columnFilters}
+                    onFilter={toggleColumnFilter}
+                    onClearFilter={clearColumnFilter}
+                    filterValues={["active", "completed", "cancelled"]}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <SortableHeader
+                    label="Contratado"
+                    field="startDate"
+                    type="date"
+                    sortKey={sortKey ? String(sortKey) : null}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {paginatedProjects.map((p, idx) => {
+                const sc = statusConfig[p.status] ?? {
+                  label: p.status ?? "—",
+                  color: "bg-slate-100 text-slate-600",
+                  icon: FolderOpen,
+                };
+                const cc = commStatusConfig[p.commissionStatus] ?? {
+                  label: p.commissionStatus ?? "—",
+                  color: "bg-slate-100 text-slate-600",
+                };
+                return (
+                  <tr
+                    key={p.id}
+                    className={
+                      idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
+                    }
+                  >
+                    <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <span className="font-mono text-xs text-slate-400">
+                        proj_{String((p as any).seq ?? "?????").padStart(5, "0")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                      {p.projectName}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                      {p.companyName}
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-xs">
+                      {p.serviceCategory}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                      {fmtBRL(p.projectValue)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="tabular-nums font-semibold text-emerald-600">
+                        {fmtBRL(p.commissionGenerated)}
+                      </span>
+                      <span
+                        className={`ml-2 text-[10px] px-1 py-0.5 rounded font-semibold ${cc.color}`}
+                      >
+                        {cc.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}
+                      >
+                        {sc.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      {fmtDate(p.contractedAt)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-5 py-10 text-center text-sm text-slate-400"
+                  >
+                    <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                    Nenhum projeto encontrado
                   </td>
                 </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-5 py-10 text-center text-sm text-slate-400"
-                >
-                  <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                  Nenhum projeto encontrado
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={safeCurrentPage === 1}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Anterior
+          </button>
+          <span className="text-sm text-slate-500">
+            Página {safeCurrentPage} de {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safeCurrentPage === totalPages}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            Próxima
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

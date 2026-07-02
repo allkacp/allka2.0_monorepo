@@ -1464,8 +1464,7 @@ export default function EmpresasPage() {
         <div
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-auto allka-table-scroll"
-          style={{ maxHeight: "calc(100vh - 19rem)" }}
+          className="overflow-x-auto allka-table-scroll"
         >
           <table
             className="text-xs"

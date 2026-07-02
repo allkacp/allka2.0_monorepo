@@ -38,12 +38,13 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
   "/api";
-const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -187,12 +188,13 @@ export default function LiderQualificacaoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("lider-qualificacao", 10);
 
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [returnDialogTask, setReturnDialogTask] = useState<any | null>(null);
   const [returning, setReturning] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -201,7 +203,7 @@ export default function LiderQualificacaoPage() {
       const data = await apiFetch("/lider/tasks", undefined, {
         status: "PARA_LANCAMENTO",
         page: String(page),
-        limit: String(PAGE_SIZE),
+        limit: String(itemsPerPage),
       });
       setTasks(data.tasks ?? []);
       setTotal(data.total ?? 0);
@@ -210,7 +212,7 @@ export default function LiderQualificacaoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, itemsPerPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -351,6 +353,11 @@ export default function LiderQualificacaoPage() {
               : `${total} tarefa${total !== 1 ? "s" : ""}`
             }
           </span>
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setPage(1); }}
+            variant="top"
+          />
           {/* Pagination (top) */}
           <div className="flex items-center gap-0.5 shrink-0">
             <button
@@ -431,10 +438,7 @@ export default function LiderQualificacaoPage() {
 
         {/* Table */}
         {!loading && filtered.length > 0 && (
-          <div
-            className="overflow-auto allka-table-scroll"
-            style={{ maxHeight: "calc(100vh - 18rem)" }}
-          >
+          <div className="overflow-x-auto allka-table-scroll">
             <table
               className="text-sm"
               style={{ tableLayout: "fixed", width: "100%", minWidth: 900 }}

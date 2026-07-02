@@ -43,6 +43,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import type { DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   CheckCircle2,
   XCircle,
@@ -1347,7 +1348,7 @@ export default function AdminFinanceiroPage() {
         {/* ── Tabela Faturas ──────────────────────────────────────── */}
         {activeTab === "faturas" && (
           <Card className="overflow-hidden">
-            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 26rem)" }}>
+            <div className="overflow-x-auto allka-table-scroll">
               <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
@@ -1508,7 +1509,7 @@ export default function AdminFinanceiroPage() {
               )}
             </div>
 
-            <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
+            <div className="overflow-x-auto allka-table-scroll">
               <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
@@ -1665,7 +1666,7 @@ export default function AdminFinanceiroPage() {
                 )}
               </div>
 
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
+              <div className="overflow-x-auto allka-table-scroll">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
@@ -1954,7 +1955,7 @@ export default function AdminFinanceiroPage() {
 
             {/* Wallet table */}
             <Card className="overflow-hidden">
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 30rem)" }}>
+              <div className="overflow-x-auto allka-table-scroll">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
@@ -2092,7 +2093,7 @@ export default function AdminFinanceiroPage() {
 
             {/* Squad table */}
             <Card className="overflow-hidden">
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 32rem)" }}>
+              <div className="overflow-x-auto allka-table-scroll">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
@@ -2302,7 +2303,7 @@ export default function AdminFinanceiroPage() {
 
             {/* Tabela de conciliação */}
             <Card className="overflow-hidden">
-              <div className="overflow-auto allka-table-scroll" style={{ maxHeight: "calc(100vh - 36rem)" }}>
+              <div className="overflow-x-auto allka-table-scroll">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>

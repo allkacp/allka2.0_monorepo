@@ -16,10 +16,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
-const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -82,6 +83,7 @@ export default function LiderProjetosPage() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("lider-projetos", 10);
   const pageRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
@@ -91,7 +93,7 @@ export default function LiderProjetosPage() {
     try {
       const params: Record<string, string> = {
         page: String(page),
-        limit: String(PAGE_SIZE),
+        limit: String(itemsPerPage),
       };
       if (search) params.search = search;
       const data = await apiFetch("/projects", params);
@@ -102,7 +104,7 @@ export default function LiderProjetosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, itemsPerPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -115,7 +117,7 @@ export default function LiderProjetosPage() {
     }, 400);
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.ceil(total / itemsPerPage);
 
   // Stats
   const totalValue = projects.reduce((s, p) => s + (p.value ?? 0), 0);
@@ -160,6 +162,11 @@ export default function LiderProjetosPage() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
+        <ItemsPerPageSelect
+          value={itemsPerPage.toString()}
+          onValueChange={(v) => { setItemsPerPage(Number(v)); setPage(1); }}
+          variant="top"
+        />
         {total > 0 && (
           <span className="text-xs text-muted-foreground ml-auto">
             {total} projeto{total !== 1 ? "s" : ""}
@@ -185,7 +192,7 @@ export default function LiderProjetosPage() {
             <span className="text-sm">Nenhum projeto encontrado</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">

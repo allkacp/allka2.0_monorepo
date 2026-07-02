@@ -10,12 +10,16 @@ import {
   Clock,
   XCircle,
   Banknote,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { Label } from "@/components/ui/label";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -35,8 +39,17 @@ export default function PartnerSaques() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("parceiro-saques", 10);
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting();
-  const sortedWithdrawals = sortData(withdrawals);
+  const sorted = sortData(withdrawals);
+  const totalItems = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedWithdrawals = sorted.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
+  );
 
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
   const balance = profile?.balance ?? 0;
@@ -203,12 +216,17 @@ export default function PartnerSaques() {
         {/* Right: History */}
         <div className="col-span-2">
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
                 Histórico de Saques
               </h2>
+              <ItemsPerPageSelect
+                value={itemsPerPage.toString()}
+                onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
+                variant="top"
+              />
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-sm min-w-150">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
@@ -229,7 +247,7 @@ export default function PartnerSaques() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {sortedWithdrawals.map((w, idx) => {
+                {paginatedWithdrawals.map((w, idx) => {
                   const sc = statusConfig[w.status];
                   const Icon = sc.icon;
                   return (
@@ -280,6 +298,31 @@ export default function PartnerSaques() {
               </tbody>
             </table>
             </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-3 px-5 pb-3">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <span className="text-sm text-slate-500">
+                Página {safeCurrentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Próxima
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           </div>
         </div>
       </div>

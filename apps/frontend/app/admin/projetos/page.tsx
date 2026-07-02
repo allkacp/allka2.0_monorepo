@@ -2760,7 +2760,7 @@ export default function AdminProjetosPage({
                                 }}
                               >
                                 <span className="font-mono text-[11px] text-slate-400 tracking-wide">
-                                  proj_{String(project.seq ?? ((currentPage - 1) * itemsPerPage + rowIdx + 1)).padStart(5, "0")}
+                                  proj_{String(project.seq ?? "?????").padStart(5, "0")}
                                 </span>
                               </td>
                             )}

@@ -6,12 +6,13 @@ import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
   "/api";
-const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -76,8 +77,9 @@ export default function LiderHistoricoPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("lider-historico", 10);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,7 +87,7 @@ export default function LiderHistoricoPage() {
     try {
       const params: Record<string, string> = {
         page: String(page),
-        limit: String(PAGE_SIZE),
+        limit: String(itemsPerPage),
       };
       if (isAprovacoes) params.status = "APROVADA";
       const data = await apiFetch("/lider/tasks", params);
@@ -96,7 +98,7 @@ export default function LiderHistoricoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, isAprovacoes]);
+  }, [page, isAprovacoes, itemsPerPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -114,6 +116,14 @@ export default function LiderHistoricoPage() {
         </div>
       )}
 
+      <div className="flex items-center justify-end mb-2">
+        <ItemsPerPageSelect
+          value={itemsPerPage.toString()}
+          onValueChange={(v) => { setItemsPerPage(Number(v)); setPage(1); }}
+          variant="top"
+        />
+      </div>
+
       <div className="bg-white dark:bg-card rounded-xl border border-slate-200 dark:border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-48 gap-2 text-slate-400">
@@ -125,7 +135,7 @@ export default function LiderHistoricoPage() {
             Nenhuma tarefa encontrada.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100 dark:border-border">

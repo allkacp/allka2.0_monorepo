@@ -1765,8 +1765,7 @@ export default function AdminTarefasPage({
           {/* Table */}
           {sorted.length > 0 && (
             <div
-              className="overflow-auto allka-table-scroll"
-              style={{ maxHeight: "calc(100vh - 18rem)" }}
+              className="overflow-x-auto allka-table-scroll"
             >
               <table
                 className="text-sm"

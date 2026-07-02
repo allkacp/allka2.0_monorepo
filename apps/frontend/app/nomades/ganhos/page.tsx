@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { useState } from "react"
-import { Wallet, TrendingUp, Target, Star, Download } from "lucide-react"
+import { Wallet, TrendingUp, Target, Star, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
+import { useItemsPerPage } from "@/lib/use-items-per-page"
+import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import {
   Tooltip,
   TooltipContent,
@@ -62,7 +64,13 @@ export default function NomadesGanhosPage() {
   const totalBonus  = paid.reduce((s, p) => s + p.bonus, 0)
   const avgPerTask  = paid.length ? Math.round(totalEarned / paid.length) : 0
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } = useSorting()
-  const sortedPayments = sortData(PAYMENTS)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("nomades-ganhos", 10)
+  const sorted = sortData(PAYMENTS)
+  const totalItems = sorted.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const paginatedPayments = sorted.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage)
 
   const maxBar = Math.max(...MONTHLY.map((m) => m.value), 1)
 
@@ -170,10 +178,15 @@ export default function NomadesGanhosPage() {
 
         {/* Payments table */}
         <div className="lg:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Histórico de Pagamentos</h3>
+            <ItemsPerPageSelect
+              value={itemsPerPage.toString()}
+              onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+              variant="top"
+            />
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50">
@@ -195,7 +208,7 @@ export default function NomadesGanhosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {sortedPayments.map((p) => {
+                {paginatedPayments.map((p) => {
                   const s = STATUS_CFG[p.status]
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
@@ -221,6 +234,27 @@ export default function NomadesGanhosPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <span className="text-sm text-slate-500">Página {safeCurrentPage} de {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Próxima
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

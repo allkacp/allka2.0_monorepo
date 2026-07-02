@@ -2319,8 +2319,7 @@ export default function UsuariosPage() {
 
             {/* Users Table */}
             <div
-              className="overflow-auto allka-table-scroll"
-              style={{ maxHeight: "calc(100vh - 18rem)" }}
+              className="overflow-x-auto allka-table-scroll"
             >
               <table className="w-full text-xs">
                 <thead>

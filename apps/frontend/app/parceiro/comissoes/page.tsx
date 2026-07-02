@@ -3,11 +3,13 @@
 
 import { useState } from "react";
 import { usePartner } from "@/contexts/partner-context";
-import { TrendingUp, Search } from "lucide-react";
+import { TrendingUp, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -21,6 +23,8 @@ export default function PartnerComissoes() {
   const { commissions, loading } = usePartner();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("parceiro-comissoes", 10);
   const {
     sortKey,
     sortDir,
@@ -41,6 +45,15 @@ export default function PartnerComissoes() {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     return true;
   });
+
+  const sorted = sortData(filtered);
+  const totalItems = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedCommissions = sorted.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
+  );
 
   const totalEarned = commissions.reduce((s, c) => s + c.commissionAmount, 0);
   const totalPending = commissions
@@ -118,14 +131,14 @@ export default function PartnerComissoes() {
           <Input
             placeholder="Buscar empresa ou origem..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="pl-8 h-8 text-sm"
           />
         </div>
         {(["all", "pending", "confirmed", "paid"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => { setStatusFilter(s); setCurrentPage(1); }}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusFilter === s
                 ? "bg-blue-600 text-white shadow-sm"
@@ -141,11 +154,23 @@ export default function PartnerComissoes() {
                   : "Pagas"}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
+            variant="top"
+          />
+          {totalItems > 0 && (
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              {totalItems} comissã{totalItems !== 1 ? "ões" : "o"}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Table */}
       <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto allka-table-scroll">
         <table className="w-full text-sm min-w-150">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
@@ -230,7 +255,7 @@ export default function PartnerComissoes() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {sortData(filtered).map((c, idx) => {
+            {paginatedCommissions.map((c, idx) => {
               const sc = statusConfig[c.status] ?? statusConfig.pending;
               const src = sourceConfig[c.sourceType] ?? sourceConfig.campaign;
               return (
@@ -290,6 +315,31 @@ export default function PartnerComissoes() {
         </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={safeCurrentPage === 1}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Anterior
+          </button>
+          <span className="text-sm text-slate-500">
+            Página {safeCurrentPage} de {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safeCurrentPage === totalPages}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            Próxima
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

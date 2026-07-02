@@ -2601,7 +2601,7 @@ export default function EmpresaProjetosPage() {
                                 }}
                               >
                                 <span className="font-mono text-xs text-slate-400">
-                                  proj_{String(project.seq ?? (startIndex + rowIdx + 1)).padStart(5, "0")}
+                                  proj_{String(project.seq ?? "?????").padStart(5, "0")}
                                 </span>
                               </td>
                             )}

@@ -2,13 +2,15 @@
 import { useState } from "react"
 import {
   CheckCircle2, XCircle, Star, Wallet, TrendingUp, Calendar,
-  Filter, Download, ChevronDown,
+  Filter, Download, ChevronDown, ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PageHeader } from "@/components/page-header"
+import { useItemsPerPage } from "@/lib/use-items-per-page"
+import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import {
   Tooltip,
   TooltipContent,
@@ -62,6 +64,8 @@ function StarRating({ value }: { value: number }) {
 export default function NomadesHistoricoPage() {
   const [month, setMonth]   = useState("Todos")
   const [detail, setDetail] = useState<HistItem | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("nomades-historico", 10)
   const { sortKey, sortDir, handleSort, sortData } = useSorting<HistItem>()
 
   const filtered = month === "Todos"
@@ -69,6 +73,10 @@ export default function NomadesHistoricoPage() {
     : HISTORY.filter((h) => (MONTH_MAP[month] ?? []).includes(h.completedAt))
 
   const sorted = sortData(filtered)
+  const totalItems = sorted.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const paginatedHistory = sorted.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage)
 
   const totalEarned  = filtered.reduce((s, h) => s + h.finalValue, 0)
   const totalBonus   = filtered.reduce((s, h) => s + h.bonus, 0)
@@ -130,7 +138,7 @@ export default function NomadesHistoricoPage() {
         {MONTHS.map((m) => (
           <button
             key={m}
-            onClick={() => setMonth(m)}
+            onClick={() => { setMonth(m); setCurrentPage(1) }}
             className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
               month === m
                 ? "bg-blue-600 text-white border-blue-600"
@@ -140,11 +148,18 @@ export default function NomadesHistoricoPage() {
             {m}
           </button>
         ))}
+        <div className="ml-auto shrink-0">
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+            variant="top"
+          />
+        </div>
       </div>
 
       {/* Table */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto allka-table-scroll">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
@@ -168,7 +183,7 @@ export default function NomadesHistoricoPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {sorted.map((h) => (
+              {paginatedHistory.map((h) => (
                 <tr key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-44">{h.title}</p>
@@ -216,6 +231,27 @@ export default function NomadesHistoricoPage() {
         {filtered.length === 0 && (
           <div className="text-center py-14 text-slate-400">
             <p className="text-sm">Nenhuma tarefa neste período</p>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </button>
+            <span className="text-sm text-slate-500">Página {safeCurrentPage} de {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Próxima
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>

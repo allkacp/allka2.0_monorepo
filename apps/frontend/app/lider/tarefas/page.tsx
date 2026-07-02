@@ -25,6 +25,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import { PageHeader } from "@/components/page-header";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import {
   Tooltip,
   TooltipContent,
@@ -54,7 +56,6 @@ const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
   "/api";
-const PAGE_SIZE = 20;
 
 function getToken() {
   try { return localStorage.getItem("allka_token"); } catch { return null; }
@@ -194,11 +195,12 @@ export default function LiderTarefasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [itemsPerPage, setItemsPerPage] = useItemsPerPage("lider-tarefas", 10);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState<any | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,7 +209,7 @@ export default function LiderTarefasPage() {
       const data = await apiFetch("/lider/tasks", {
         status: activeStatus,
         page: String(page),
-        limit: String(PAGE_SIZE),
+        limit: String(itemsPerPage),
       });
       setTasks(data.tasks ?? []);
       setTotal(data.total ?? 0);
@@ -216,7 +218,7 @@ export default function LiderTarefasPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, activeStatus]);
+  }, [page, activeStatus, itemsPerPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -332,6 +334,11 @@ export default function LiderTarefasPage() {
               : `${total} tarefa${total !== 1 ? "s" : ""}`
             }
           </span>
+          <ItemsPerPageSelect
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => { setItemsPerPage(Number(v)); setPage(1); }}
+            variant="top"
+          />
           {/* Pagination (top) */}
           <div className="flex items-center gap-0.5 shrink-0">
             <button
@@ -412,10 +419,7 @@ export default function LiderTarefasPage() {
 
         {/* Table */}
         {!loading && filtered.length > 0 && (
-          <div
-            className="overflow-auto allka-table-scroll"
-            style={{ maxHeight: "calc(100vh - 18rem)" }}
-          >
+          <div className="overflow-x-auto allka-table-scroll">
             <table
               className="text-sm"
               style={{ tableLayout: "fixed", width: "100%", minWidth: 960 }}
