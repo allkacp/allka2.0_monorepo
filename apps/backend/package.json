@@ -27,6 +27,12 @@
     "db:seed:qa-project-tasks": "tsx prisma/seed-project-tasks.ts",
     "db:restore": "tsx restore-data.ts",
     "db:backfill:agency-projects": "tsx src/scripts/backfill-agency-projects.ts",
+    "db:seed:demo-project-details": "tsx prisma/seed-demo-project-details.ts",
+    "db:seed:demo-project-products": "tsx prisma/seed-demo-project-products.ts",
+    "db:seed:demo-project-tasks": "tsx prisma/seed-demo-project-tasks.ts",
+    "db:seed:demo-project-task-assets": "tsx prisma/seed-demo-project-task-assets.ts",
+    "db:seed:demo-project-credentials": "tsx prisma/seed-demo-project-credentials.ts",
+    "db:seed:demo-project-billing": "tsx prisma/seed-demo-project-billing.ts",
     "db:studio": "prisma studio",
     "db:reset": "echo '⛔  Proibido em automação. Use: prisma migrate reset --force (manualmente)'",
     "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\""
