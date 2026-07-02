@@ -358,6 +358,7 @@ model Project {
   products        ProjectProduct[]
   project_tasks   ProjectTask[]
   payments        Payment[]
+  credentials     ProjectCredential[]
 
   @@map("projects")
 }
@@ -624,7 +625,8 @@ model ProjectProduct {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tasks ProjectTask[]
+  tasks       ProjectTask[]
+  credentials ProjectCredential[]
 
   @@unique([project_id, product_id])
   @@map("project_products")
@@ -693,6 +695,7 @@ model ProjectTask {
   briefing_answers   TaskBriefingAnswer[]
   attachments        TaskAttachment[]
   assignment_history TaskAssignmentHistory[]
+  credentials        ProjectCredential[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   @@map("project_tasks")
@@ -1390,4 +1393,93 @@ model SquadCycle {
   @@index([status])
   @@index([squad_config_id])
   @@map("squad_cycles")
+}
+
+// ─── ProjectCredential — Cofre do Projeto ────────────────────────────────────
+
+model ProjectCredential {
+  id                 String   @id @default(cuid())
+
+  project_id         String
+  project_task_id    String?
+  project_product_id String?
+
+  // Identificação
+  title              String
+  service            String?
+  // Ex: "Meta Ads", "Google Analytics", "WordPress Admin"
+  url                String?
+  username           String?
+  password_demo      String?
+  // DEMO ONLY — never use real passwords here
+  notes              String?  @db.LongText
+  category           String   @default("other")
+  // social | ads | analytics | hosting | cms | email | ecommerce | design | other
+
+  // Status operacional
+  status             String   @default("active")
+  // active | expiring | expired | rotation_required | shared | revoked | archived
+
+  // Controle demo
+  is_demo            Boolean  @default(true)
+
+  // Alertas de segurança
+  requires_rotation  Boolean  @default(false)
+  rotation_reason    String?
+  last_rotated_at    DateTime?
+  expires_at         DateTime?
+
+  // Compartilhamento (string IDs — sem FK para evitar deleção acidental)
+  shared_until         DateTime?
+  shared_with_user_id  String?
+  shared_with_nomad_id String?
+
+  // Auditoria
+  created_by         String?
+
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  // Relações
+  project            Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_task       ProjectTask?    @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
+  project_product    ProjectProduct? @relation(fields: [project_product_id], references: [id], onDelete: SetNull)
+
+  access_logs        ProjectCredentialAccessLog[]
+
+  @@unique([project_id, title])
+  @@index([project_id])
+  @@index([project_task_id])
+  @@index([project_product_id])
+  @@index([status])
+  @@index([category])
+  @@index([shared_with_user_id])
+  @@index([shared_with_nomad_id])
+  @@map("project_credentials")
+}
+
+// ─── ProjectCredentialAccessLog — Histórico de acesso ao Cofre ───────────────
+
+model ProjectCredentialAccessLog {
+  id            String            @id @default(cuid())
+
+  credential_id String
+  credential    ProjectCredential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
+
+  action        String
+  // created | viewed | copied | shared | revoked | rotated | edited | archived | deleted
+  actor_type    String?
+  // user | nomad | system
+  actor_user_id  String?
+  actor_nomad_id String?
+  details       String?           @db.LongText
+
+  created_at    DateTime          @default(now())
+
+  @@index([credential_id])
+  @@index([action])
+  @@index([created_at])
+  @@index([actor_user_id])
+  @@index([actor_nomad_id])
+  @@map("project_credential_access_logs")
 }
