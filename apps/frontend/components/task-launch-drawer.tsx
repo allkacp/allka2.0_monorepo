@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useSidebar } from "@/contexts/sidebar-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,11 +188,14 @@ export function TaskLaunchDrawer({
   onReleased,
   onTaskUpdated,
 }: TaskLaunchDrawerProps) {
+  // ── Sidebar width for full-height panel positioning ────────────────────────
+  const { sidebarWidth } = useSidebar();
+
   // ── State ──────────────────────────────────────────────────────────────────
   const [initializing, setInitializing] = useState(true);
   const [currentTask, setCurrentTask] = useState<any>(task);
   const [briefingQuestions, setBriefingQuestions] = useState<any[]>([]);
-  // fillMode: null = mode-selection screen, "manual" = questions, "ai" = ai placeholder
+  // fillMode: null = mode-selection screen, "manual" = questions, "ai" = assistant fill
   const [fillMode, setFillMode] = useState<null | "manual" | "ai">(null);
   // answers: { [question_key]: { answer?: string; selected_options?: string[]; links?: string[] } }
   const [answers, setAnswers] = useState<Record<string, any>>({});
@@ -204,6 +207,15 @@ export function TaskLaunchDrawer({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── AI/Assistant fill state ────────────────────────────────────────────────
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiMissingInfo, setAiMissingInfo] = useState<string[]>([]);
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [aiFillSuccess, setAiFillSuccess] = useState(false);
 
   // ── Initialize ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -409,6 +421,103 @@ export function TaskLaunchDrawer({
     } catch {}
   }
 
+  // ── Local smart text parser (no external AI service required) ────────────
+  function parseFreetextToAnswers(freeText: string, questions: any[]): Record<string, string> {
+    const result: Record<string, string> = {};
+    const text = freeText.trim();
+    if (!text) return result;
+
+    const sentences = text.split(/[.!?;\n]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 5);
+
+    questions.forEach((q: any, idx: number) => {
+      const key = getQuestionKey(q, idx);
+      const label = (q.question_text ?? q.label ?? "").toLowerCase();
+      const type = q.type ?? "text_short";
+
+      // For select/multiple_choice: check if any option appears in the text first
+      if (q.options?.length > 0 && Array.isArray(q.options)) {
+        const optionMatch = q.options.find((opt: string) =>
+          text.toLowerCase().includes(opt.toLowerCase())
+        );
+        if (optionMatch) {
+          result[key] = optionMatch;
+          return;
+        }
+      }
+
+      // Keyword extraction from question label (words longer than 3 chars)
+      const keywords = label.split(/\s+/).filter((w: string) => w.length > 3);
+
+      // Score each sentence by how many keywords it contains
+      let bestMatch = "";
+      let bestScore = 0;
+      for (const sentence of sentences) {
+        const sentLower = sentence.toLowerCase();
+        let score = 0;
+        for (const kw of keywords) {
+          if (sentLower.includes(kw)) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = sentence;
+        }
+      }
+
+      if (bestScore > 0) {
+        result[key] = bestMatch;
+      } else if (type === "textarea" || type === "text_long") {
+        // Long text fields with no keyword match: use the full input
+        result[key] = text;
+      } else if (sentences.length > 0) {
+        // Short text with no keyword match: use first sentence
+        result[key] = sentences[0];
+      }
+    });
+
+    return result;
+  }
+
+  // ── Handle AI/Assistant fill ────────────────────────────────────────────
+  async function handleAIFill() {
+    if (!aiText.trim() || briefingQuestions.length === 0) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiFillSuccess(false);
+    try {
+      // Local parser — no external API needed
+      const suggested = parseFreetextToAnswers(aiText, briefingQuestions);
+
+      const newAnswers = { ...answers };
+      const filledNow = new Set<string>();
+
+      for (const [key, value] of Object.entries(suggested)) {
+        if (value) {
+          const alreadyHasAnswer = answers[key]?.answer?.trim() ||
+            (answers[key]?.selected_options?.length > 0);
+          if (!alreadyHasAnswer || overwriteExisting) {
+            newAnswers[key] = {
+              ...(newAnswers[key] ?? {}),
+              answer: value,
+              answeredAt: new Date().toISOString(),
+            };
+            filledNow.add(key);
+          }
+        }
+      }
+
+      setAnswers(newAnswers);
+      setAiFilledFields(filledNow);
+      setAiMissingInfo([]);
+      setAiFillSuccess(true);
+      // Switch to questionnaire view so user can review suggestions
+      setFillMode("manual");
+    } catch {
+      setAiError("Não foi possível processar o briefing. Tente novamente.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   // ── Render: Briefing question ──────────────────────────────────────────────
   function renderQuestion(q: any, idx: number) {
     const key = getQuestionKey(q, idx);
@@ -428,14 +537,22 @@ export function TaskLaunchDrawer({
       >
         {/* Question label */}
         <div className="flex items-start justify-between gap-2">
-          <Label className="text-sm font-semibold text-slate-700 leading-snug">
-            {label}
-            {q.required && (
-              <span className="text-red-500 ml-1" aria-label="obrigatório">
-                *
+          <div className="flex items-center flex-wrap gap-1.5">
+            <Label className="text-sm font-semibold text-slate-700 leading-snug">
+              {label}
+              {q.required && (
+                <span className="text-red-500 ml-1" aria-label="obrigatório">
+                  *
+                </span>
+              )}
+            </Label>
+            {aiFilledFields.has(key) && (
+              <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded font-medium border border-violet-200 whitespace-nowrap">
+                <Wand2 className="h-2.5 w-2.5" />
+                Sugerido automaticamente
               </span>
             )}
-          </Label>
+          </div>
           {q.type && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 border border-slate-200 font-mono uppercase shrink-0">
               {q.type.replace("_", " ")}
@@ -673,19 +790,19 @@ export function TaskLaunchDrawer({
             )}
           </button>
 
-          {/* AI */}
+          {/* Assistant fill */}
           <button
             onClick={() => setFillMode("ai")}
             className="text-left rounded-2xl border-2 border-slate-200 bg-white p-5 hover:border-violet-400 hover:shadow-md transition-all group relative overflow-hidden"
           >
             <div className="absolute top-3 right-3">
-              <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold border border-violet-200">Em breve</span>
+              <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold border border-violet-200">Novo</span>
             </div>
             <div className="h-10 w-10 rounded-xl bg-violet-50 flex items-center justify-center mb-4 group-hover:bg-violet-100 transition-colors">
-              <Sparkles className="h-5 w-5 text-violet-600" />
+              <Wand2 className="h-5 w-5 text-violet-600" />
             </div>
-            <p className="text-sm font-bold text-slate-800 mb-1">Preencher com ajuda de IA</p>
-            <p className="text-xs text-slate-500">Informe sua ideia geral e deixe a IA sugerir respostas para o briefing.</p>
+            <p className="text-sm font-bold text-slate-800 mb-1">Preencher com Assistente</p>
+            <p className="text-xs text-slate-500">Cole o briefing do cliente e o assistente distribui nas perguntas automaticamente.</p>
           </button>
         </div>
       </div>
@@ -696,31 +813,82 @@ export function TaskLaunchDrawer({
   function renderFillingContent() {
     if (fillMode === "ai") {
       return (
-        <div className="px-6 py-8 space-y-6">
-          <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800">Preencher com ajuda de IA</p>
-                <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold border border-violet-200">Recurso com IA em breve</span>
-              </div>
+        <div className="px-6 py-8 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+              <Wand2 className="h-5 w-5 text-violet-600" />
             </div>
-            <Textarea
-              placeholder="Descreva sua ideia, objetivo ou contexto da tarefa..."
-              rows={5}
-              disabled
-              className="resize-none text-sm opacity-50"
-            />
-            <Button disabled className="gap-2 opacity-60">
-              <Sparkles className="h-4 w-4" />
-              Gerar respostas com IA
-            </Button>
-            <p className="text-xs text-slate-400">
-              Em breve, a IA ajudará a preencher o briefing automaticamente com base no contexto que você informar.
+            <div>
+              <p className="text-sm font-bold text-slate-800">Preencher com Assistente Automático</p>
+              <p className="text-xs text-slate-500">Cole o briefing do cliente e o assistente vai distribuir nas perguntas.</p>
+            </div>
+          </div>
+
+          {/* Disclaimer */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
+            <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700">
+              <span className="font-semibold">Assistente automático local.</span> As sugestões são geradas pelo dispositivo com base em palavras-chave — sem envio de dados para serviços externos. Revise as respostas antes de salvar.
             </p>
           </div>
+
+          {/* Main textarea */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Texto livre com informações do cliente
+            </Label>
+            <Textarea
+              placeholder="Cole aqui o briefing geral do cliente, mensagens do WhatsApp, anotações de reunião ou descreva o que precisa ser feito. O assistente vai organizar nos campos do questionário."
+              rows={9}
+              value={aiText}
+              onChange={(e) => setAiText(e.target.value)}
+              className="resize-none text-sm leading-relaxed"
+            />
+            <p className="text-[10px] text-slate-400">
+              {aiText.trim().length} caracteres · {aiText.trim().split(/[.!?;\n]+/).filter((s) => s.trim().length > 5).length} frases detectadas
+            </p>
+          </div>
+
+          {/* Overwrite checkbox */}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="overwrite-existing"
+              checked={overwriteExisting}
+              onCheckedChange={(checked) => setOverwriteExisting(!!checked)}
+            />
+            <Label htmlFor="overwrite-existing" className="text-sm text-slate-600 cursor-pointer">
+              Sobrescrever respostas já preenchidas
+            </Label>
+          </div>
+
+          {/* Error state */}
+          {aiError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-600">{aiError}</p>
+            </div>
+          )}
+
+          {/* Action button */}
+          <Button
+            onClick={handleAIFill}
+            disabled={aiLoading || !aiText.trim() || briefingQuestions.length === 0}
+            className="gap-2 bg-violet-600 hover:bg-violet-700 text-white w-full"
+          >
+            {aiLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2 className="h-4 w-4" />
+            )}
+            {aiLoading ? "Processando…" : "Organizar com Assistente"}
+          </Button>
+
+          {briefingQuestions.length === 0 && (
+            <p className="text-xs text-slate-400 text-center">
+              Esta tarefa não possui perguntas de briefing — o assistente não tem campos para preencher.
+            </p>
+          )}
         </div>
       );
     }
@@ -728,6 +896,27 @@ export function TaskLaunchDrawer({
     // fillMode === "manual"
     return (
       <div className="px-6 py-6 space-y-8">
+        {/* ── AI fill success banner ── */}
+        {aiFillSuccess && aiFilledFields.size > 0 && (
+          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 flex items-start gap-3">
+            <Wand2 className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-violet-800">
+                {aiFilledFields.size} {aiFilledFields.size === 1 ? "sugestão aplicada" : "sugestões aplicadas"} ao questionário
+              </p>
+              <p className="text-xs text-violet-600 mt-0.5">
+                Revise os campos marcados com <span className="font-semibold">Sugerido automaticamente</span> antes de salvar.
+              </p>
+            </div>
+            <button
+              onClick={() => setAiFillSuccess(false)}
+              className="h-6 w-6 rounded-md hover:bg-violet-200 flex items-center justify-center text-violet-500 shrink-0 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        )}
+
         {/* ── Section 1: Briefing questions ── */}
         <section>
           <div className="flex items-center gap-2 mb-4">
@@ -875,16 +1064,21 @@ export function TaskLaunchDrawer({
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const panelWidth = `calc(100vw - ${sidebarWidth}px)`;
+
   return (
-    <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-3xl p-0 flex flex-col h-full gap-0"
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
+        style={{ left: `${sidebarWidth}px` }}
+        onClick={onClose}
+      />
+
+      {/* Full-height side panel */}
+      <div
+        className="fixed top-0 right-0 bottom-0 z-50 flex flex-col bg-white border-l border-slate-200 shadow-2xl overflow-hidden"
+        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
       >
         {initializing ? (
           /* Loading state */
@@ -895,21 +1089,41 @@ export function TaskLaunchDrawer({
         ) : (
           <>
             {/* ════════════════ HEADER ════════════════ */}
-            <div className="bg-linear-to-br from-indigo-600 to-indigo-800 text-white px-6 pt-5 pb-5 shrink-0 pr-14">
-              {/* Status badge */}
-              <div className="mb-3">
+            <div
+              className="px-6 pt-5 pb-5 shrink-0 text-white"
+              style={{
+                background:
+                  "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+              }}
+            >
+              {/* Top row: status badge + close button */}
+              <div className="flex items-start justify-between mb-3">
                 <TaskStatusBadge status={currentTask.status} onDark />
+                <button
+                  onClick={onClose}
+                  className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors shrink-0"
+                  aria-label="Fechar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>
 
-              {/* Task title */}
-              <h2 className="text-xl font-bold text-white leading-tight mb-1">
+              {/* Task code + title */}
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                {currentTask.task_code && (
+                  <span className="text-[10px] font-mono bg-white/20 text-white px-2 py-0.5 rounded-md font-bold tracking-wider">
+                    {currentTask.task_code}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-white leading-tight mb-2">
                 {currentTask.title}
               </h2>
 
               {/* Product ref */}
               {(currentTask.project_product?.product_code_snapshot ||
                 currentTask.project_product?.product_name_snapshot) && (
-                <p className="text-indigo-200 text-sm mb-4 flex items-center gap-1.5">
+                <p className="text-white/70 text-sm mb-4 flex items-center gap-1.5">
                   <Package className="h-3.5 w-3.5 shrink-0" />
                   {currentTask.project_product?.product_code_snapshot && (
                     <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-xs">
@@ -923,15 +1137,15 @@ export function TaskLaunchDrawer({
               {/* 3-col grid: Projeto | Cliente | Prazo */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div>
-                  <p className="text-indigo-300 text-[10px] uppercase tracking-wider mb-0.5">Projeto</p>
+                  <p className="text-white/50 text-[10px] uppercase tracking-wider mb-0.5">Projeto</p>
                   <p className="text-white text-sm font-medium truncate">{currentTask.project?.title ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-indigo-300 text-[10px] uppercase tracking-wider mb-0.5">Cliente</p>
+                  <p className="text-white/50 text-[10px] uppercase tracking-wider mb-0.5">Cliente</p>
                   <p className="text-white text-sm font-medium truncate">{currentTask.project?.client?.name ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-indigo-300 text-[10px] uppercase tracking-wider mb-0.5">Prazo</p>
+                  <p className="text-white/50 text-[10px] uppercase tracking-wider mb-0.5">Prazo</p>
                   <p className="text-white text-sm font-medium">
                     {currentTask.due_date
                       ? new Date(currentTask.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -944,7 +1158,7 @@ export function TaskLaunchDrawer({
               {fillMode === "manual" && requiredCount > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-indigo-200 text-xs">Briefing obrigatório</span>
+                    <span className="text-white/70 text-xs">Briefing obrigatório</span>
                     <span className="text-white text-xs font-semibold">{answeredCount}/{requiredCount}</span>
                   </div>
                   <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
@@ -966,7 +1180,7 @@ export function TaskLaunchDrawer({
             {renderFooter()}
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </>
   );
 }

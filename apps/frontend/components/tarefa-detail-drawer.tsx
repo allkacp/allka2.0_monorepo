@@ -439,12 +439,14 @@ export function TarefaDetailDrawer({
   onClose,
   onStatusChange,
   updatingId,
+  onLaunch,
 }: {
   tarefa: any | null;
   open: boolean;
   onClose: () => void;
   onStatusChange: (t: any, s: string) => void;
   updatingId: string | null;
+  onLaunch?: (tarefa: any) => void;
 }) {
   const { sidebarWidth } = useSidebar();
   const [tab, setTab] = useState<TabKey>("dados");
@@ -803,6 +805,27 @@ export function TarefaDetailDrawer({
                 ))}
             </div>
           </div>
+
+          {/* ── Launch Banner (PARA_LANCAMENTO / EM_LANCAMENTO) ────────── */}
+          {onLaunch && (tarefa.status === "PARA_LANCAMENTO" || tarefa.status === "EM_LANCAMENTO") && (
+            <div className="px-6 py-3 bg-indigo-50 border-b border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-700 shrink-0 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Rocket className="h-4 w-4 text-indigo-600 shrink-0" />
+                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+                  {tarefa.status === "PARA_LANCAMENTO"
+                    ? "Esta tarefa aguarda lançamento."
+                    : "Lançamento em andamento — continue preenchendo o briefing."}
+                </p>
+              </div>
+              <button
+                onClick={() => { onLaunch(tarefa); onClose(); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shrink-0"
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                {tarefa.status === "PARA_LANCAMENTO" ? "Lançar tarefa" : "Continuar lançamento"}
+              </button>
+            </div>
+          )}
 
           {/* ── Tab Bar ────────────────────────────────────────────────── */}
           <div className="shrink-0 overflow-x-auto border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-background">
