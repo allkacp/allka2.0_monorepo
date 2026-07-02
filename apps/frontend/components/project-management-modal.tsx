@@ -127,6 +127,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
+import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import {
   buildProposalData,
   exportProposalPDF,
@@ -535,7 +536,10 @@ export function ProjectManagementModal({
     if (open && project?.id) fetchModalData();
     if (!open)
       setMockData({ produtos: [], tarefas: [], timeline: [], kanban: {} });
-    if (!open) setMockInvoices([]);
+    if (!open) { setMockInvoices([]); setBillingPayments([]); setBillingSummary(null); }
+    if (!open) setProjectFilesData(null);
+    if (!open) { setMockCredentials([]); setCredentialsSummary(null); }
+    if (!open) setDashboardData(null);
   }, [open, project?.id]);
 
   const handleDadosProjSave = async () => {
@@ -561,6 +565,8 @@ export function ProjectManagementModal({
   const [approvedFileSortOrder, setApprovedFileSortOrder] = useState("recent");
   const [showAddFileDialog, setShowAddFileDialog] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const projectFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedProjectFile, setSelectedProjectFile] = useState<File | null>(null);
   const [activeFileTab, setActiveFileTab] = useState<"iniciais" | "aprovados">(
     "iniciais",
   );
@@ -617,6 +623,8 @@ export function ProjectManagementModal({
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [taskDrawerTask, setTaskDrawerTask] = useState<any>(null);
+  const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
+  const [launchDrawerTask, setLaunchDrawerTask] = useState<any>(null);
   const [taskDateFilter, setTaskDateFilter] = useState<string>("");
   const [taskSortBy, setTaskSortBy] = useState<string>("produto");
   const [taskSortOrder, setTaskSortOrder] = useState<"asc" | "desc">("asc");
@@ -641,8 +649,10 @@ export function ProjectManagementModal({
   const [productTaskCurrentPage, setProductTaskCurrentPage] = useState(1);
   const [productTaskPerPage, setProductTaskPerPage] = useItemsPerPage("pm-modal-product-tasks", 10);
 
-  // State for mock credentials, to allow updates
+  // Credentials state — lazy loaded on "cofre" tab
   const [mockCredentials, setMockCredentials] = useState<any[]>([]);
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+  const [credentialsSummary, setCredentialsSummary] = useState<any>(null);
 
   // Controlled active tab — resets to initialTab when modal opens
   const [activeModalTab, setActiveModalTab] = useState(
@@ -668,6 +678,74 @@ export function ProjectManagementModal({
     }
   }, [activeModalTab, project?.id]);
 
+  // Project files state
+  const [projectFilesData, setProjectFilesData] = useState<any>(null);
+  const [projectFilesLoading, setProjectFilesLoading] = useState(false);
+  React.useEffect(() => {
+    if (activeModalTab === "arquivos" && project?.id) {
+      setProjectFilesLoading(true);
+      setProjectFilesData(null);
+      apiClient
+        .getProjectFiles(String(project.id))
+        .then((res: any) => setProjectFilesData(res ?? {}))
+        .catch(() => setProjectFilesData({ _error: true }))
+        .finally(() => setProjectFilesLoading(false));
+    }
+  }, [activeModalTab, project?.id]);
+
+  // Project dashboard lazy load
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  React.useEffect(() => {
+    if (activeModalTab === "dashboard" && project?.id) {
+      setDashboardData(null);
+      setDashboardLoading(true);
+      apiClient
+        .getProjectDashboard(String(project.id))
+        .then((res: any) => setDashboardData(res ?? null))
+        .catch(() => setDashboardData(null))
+        .finally(() => setDashboardLoading(false));
+    }
+  }, [activeModalTab, project?.id]);
+
+  // Project billing lazy load
+  React.useEffect(() => {
+    if (activeModalTab === "faturamento" && project?.id) {
+      setBillingLoading(true);
+      apiClient
+        .getProjectBilling(String(project.id))
+        .then((res: any) => {
+          setMockInvoices(Array.isArray(res?.invoices) ? res.invoices : []);
+          setBillingPayments(Array.isArray(res?.payments) ? res.payments : []);
+          setBillingSummary(res?.summary ?? null);
+        })
+        .catch(() => {
+          setMockInvoices([]);
+          setBillingPayments([]);
+          setBillingSummary(null);
+        })
+        .finally(() => setBillingLoading(false));
+    }
+  }, [activeModalTab, project?.id]);
+
+  // Project credentials lazy load
+  React.useEffect(() => {
+    if (activeModalTab === "cofre" && project?.id) {
+      setCredentialsLoading(true);
+      apiClient
+        .getProjectCredentials(String(project.id))
+        .then((res: any) => {
+          setMockCredentials(Array.isArray(res?.credentials) ? res.credentials : []);
+          setCredentialsSummary(res?.summary ?? null);
+        })
+        .catch(() => {
+          setMockCredentials([]);
+          setCredentialsSummary(null);
+        })
+        .finally(() => setCredentialsLoading(false));
+    }
+  }, [activeModalTab, project?.id]);
+
   const isReadOnly = mode === "view";
 
   const [mockData, setMockData] = useState<any>({
@@ -677,8 +755,6 @@ export function ProjectManagementModal({
     kanban: {},
   });
   const [loadingModalData, setLoadingModalData] = useState(false);
-
-  const mockVaultCredentials: any[] = [];
 
   const [selectedCredential, setSelectedCredential] = useState<any>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<{
@@ -697,6 +773,9 @@ export function ProjectManagementModal({
   const [showAvulsoReativarAlert, setShowAvulsoReativarAlert] = useState(false);
 
   const [mockInvoices, setMockInvoices] = useState<any[]>([]);
+  const [billingPayments, setBillingPayments] = useState<any[]>([]);
+  const [billingSummary, setBillingSummary] = useState<any>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [faturamentoSubTab, setFaturamentoSubTab] = useState<
     "faturas" | "formas-pagamento"
   >("faturas");
@@ -765,29 +844,54 @@ export function ProjectManagementModal({
     return title.substring(0, 2).toUpperCase();
   };
 
-  const handleDeleteCredential = (credentialId: number) => {
-    // TODO: Implement actual delete logic
-    setShowDeleteCredentialDialog(false);
+  const handleDeleteCredential = (credentialId: string) => {
+    if (!project?.id) return;
+    apiClient
+      .deleteProjectCredential(String(project.id), credentialId)
+      .then(() => {
+        setMockCredentials((prev) => prev.filter((c) => c.id !== credentialId));
+        setShowDeleteCredentialDialog(false);
+        toast({ title: "Credencial arquivada", description: "Credencial movida para o histórico." });
+      })
+      .catch(() => toast({ title: "Erro", description: "Não foi possível excluir a credencial.", variant: "destructive" }));
   };
 
   const handleEditCredential = (credential: any) => {
-    setEditingCredential(credential);
+    setEditingCredential({ ...credential, password: credential.password_demo ?? "" });
     setShowEditCredentialDialog(true);
   };
 
   const handleSaveCredential = () => {
-    // TODO: Implement actual save logic
-    setShowEditCredentialDialog(false);
-    setEditPasswordVisible(false); // Reset visibility
-    setConfirmPassword(""); // Reset confirmation
+    if (!project?.id || !editingCredential) return;
+    const payload: Record<string, any> = {
+      title: editingCredential.title,
+      url: editingCredential.url,
+      username: editingCredential.username,
+      category: editingCredential.category,
+      notes: editingCredential.notes,
+    };
+    if (editingCredential.password) payload.password_demo = editingCredential.password;
+    apiClient
+      .updateProjectCredential(String(project.id), editingCredential.id, payload)
+      .then((updated: any) => {
+        setMockCredentials((prev) =>
+          prev.map((c) => (c.id === editingCredential.id ? { ...c, ...updated } : c)),
+        );
+        setShowEditCredentialDialog(false);
+        setEditPasswordVisible(false);
+        setConfirmPassword("");
+        toast({ title: "Credencial atualizada" });
+      })
+      .catch(() => toast({ title: "Erro", description: "Não foi possível salvar as alterações.", variant: "destructive" }));
   };
 
   const handleAddFile = () => {
-    if (newFileName.trim()) {
-      // TODO: Implement actual file upload logic
-      setNewFileName("");
-      setShowAddFileDialog(false);
-    }
+    if (!selectedProjectFile && !newFileName.trim()) return;
+    // TODO: Implement actual upload to backend
+    toast({ title: "Arquivo adicionado", description: selectedProjectFile?.name ?? newFileName });
+    setNewFileName("");
+    setSelectedProjectFile(null);
+    setShowAddFileDialog(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1026,6 +1130,29 @@ export function ProjectManagementModal({
       project_product: { product_name_snapshot: tarefa.produtoNome },
     });
     setTaskDrawerOpen(true);
+  };
+
+  const openLaunchDrawer = (tarefa: any) => {
+    // Open the TaskLaunchDrawer for tasks in PARA_LANCAMENTO or EM_LANCAMENTO
+    setLaunchDrawerTask({
+      id: tarefa.taskDbId,
+      title: tarefa.nome,
+      code_snapshot: tarefa.tarefaCode,
+      task_code: tarefa.tarefaCode,
+      status: tarefa.rawStatus ?? "PARA_LANCAMENTO",
+      priority: tarefa.priority ?? "medium",
+      due_date: null,
+      lancamento_expires_at: tarefa.lancamentoExpiresAt ?? null,
+      project: project
+        ? {
+            id: String(project.id),
+            title: project.name,
+            client: { name: project.client },
+          }
+        : null,
+      project_product: { product_name_snapshot: tarefa.produtoNome },
+    });
+    setLaunchDrawerOpen(true);
   };
 
   /** Returns a badge label + className for PARA_LANCAMENTO expiry, or null for other statuses */
@@ -1716,6 +1843,14 @@ export function ProjectManagementModal({
                   className="p-0 m-0 flex-1 overflow-y-auto bg-slate-100"
                 >
                   <div className="px-[50px] py-[25px] space-y-4">
+                    {/* Dashboard loading */}
+                    {dashboardLoading && (
+                      <div className="flex items-center justify-center py-16">
+                        <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+
+                    {!dashboardLoading && <>
                     {/* Summary banner */}
                     <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
                       <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shrink-0">
@@ -1726,28 +1861,31 @@ export function ProjectManagementModal({
                           Status do Projeto
                         </p>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          0% das tarefas concluídas · 0 aguardando aprovação ·
-                          sem atividade registrada ainda
+                          {dashboardData
+                            ? `${dashboardData.tasks.completionPct}% das tarefas concluídas · ${dashboardData.billing?.paidCount ?? 0}/${dashboardData.billing?.totalCount ?? 0} faturas pagas · ${dashboardData.attention} item(s) requerendo atenção`
+                            : "Carregando dados do projeto..."}
                         </p>
                       </div>
                     </div>
 
                     {/* KPI row – 4 compact stat cards */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      {/* Horas */}
+                      {/* Faturado */}
                       <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl px-4 py-3 text-white shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                            Horas
+                            Faturado
                           </span>
-                          <Clock className="w-3.5 h-3.5 opacity-70" />
+                          <DollarSign className="w-3.5 h-3.5 opacity-70" />
                         </div>
-                        <p className="text-2xl font-bold leading-tight">
-                          0h
+                        <p className="text-xl font-bold leading-tight">
+                          {dashboardData?.billing?.total != null
+                            ? `R$ ${dashboardData.billing.total.toLocaleString("pt-BR")}`
+                            : "R$ 0"}
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1">
                           <TrendingUp className="w-3 h-3" />
-                          sem horas registradas
+                          {dashboardData?.billing?.paidCount ?? 0} fatura(s) quitada(s)
                         </p>
                       </div>
                       {/* Tarefas */}
@@ -1759,28 +1897,30 @@ export function ProjectManagementModal({
                           <CheckCircle2 className="w-3.5 h-3.5 opacity-70" />
                         </div>
                         <p className="text-2xl font-bold leading-tight">
-                          0
-                          <span className="text-base font-semibold opacity-70">/0</span>
+                          {dashboardData?.tasks?.done ?? 0}
+                          <span className="text-base font-semibold opacity-70">/{dashboardData?.tasks?.total ?? 0}</span>
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1">
                           <TrendingUp className="w-3 h-3" />
-                          sem tarefas executadas
+                          {dashboardData?.tasks?.completionPct ?? 0}% concluídas
                         </p>
                       </div>
-                      {/* Nota */}
+                      {/* Faturas */}
                       <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl px-4 py-3 text-white shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                            Nota Média
+                            Faturas
                           </span>
-                          <Star className="w-3.5 h-3.5 opacity-70" />
+                          <CreditCard className="w-3.5 h-3.5 opacity-70" />
                         </div>
                         <p className="text-2xl font-bold leading-tight">
-                          0.0
-                          <span className="text-base font-semibold opacity-70">/5</span>
+                          {dashboardData?.billing?.paidCount ?? 0}
+                          <span className="text-base font-semibold opacity-70">/{dashboardData?.billing?.totalCount ?? 0}</span>
                         </p>
                         <p className="text-[10px] opacity-75 mt-0.5">
-                          sem avaliação ainda
+                          {(dashboardData?.billing?.overdueCount ?? 0) > 0
+                            ? `${dashboardData.billing.overdueCount} em atraso`
+                            : "sem atrasos"}
                         </p>
                       </div>
                       {/* Atenção */}
@@ -1791,15 +1931,16 @@ export function ProjectManagementModal({
                           </span>
                           <AlertTriangle className="w-3.5 h-3.5 opacity-70" />
                         </div>
-                        <p className="text-2xl font-bold leading-tight">0</p>
+                        <p className="text-2xl font-bold leading-tight">{dashboardData?.attention ?? 0}</p>
                         <p className="text-[10px] opacity-75 mt-0.5">
-                          nenhuma tarefa crítica
+                          {(dashboardData?.attention ?? 0) > 0 ? "item(s) crítico(s)" : "nenhuma atenção necessária"}
                         </p>
                       </div>
                     </div>
+                    </>}
 
-                    {/* Middle row – task status + reprovação */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {/* Middle row – task status + billing distribution */}
+                    {!dashboardLoading && <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {/* Tarefas por Status */}
                       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                         <div className="flex items-center justify-between mb-3">
@@ -1812,29 +1953,29 @@ export function ProjectManagementModal({
                           {[
                             {
                               label: "Concluídas",
-                              value: 0,
-                              total: 1,
+                              value: dashboardData?.tasks?.done ?? 0,
+                              total: dashboardData?.tasks?.total ?? 1,
                               color: "bg-emerald-500",
                               text: "text-emerald-600",
                             },
                             {
                               label: "Em Andamento",
-                              value: 0,
-                              total: 1,
+                              value: dashboardData?.tasks?.inProgress ?? 0,
+                              total: dashboardData?.tasks?.total ?? 1,
                               color: "bg-blue-500",
                               text: "text-blue-600",
                             },
                             {
                               label: "Aguardando",
-                              value: 0,
-                              total: 1,
+                              value: dashboardData?.tasks?.waiting ?? 0,
+                              total: dashboardData?.tasks?.total ?? 1,
                               color: "bg-amber-400",
                               text: "text-amber-600",
                             },
                             {
-                              label: "Bloqueadas",
-                              value: 0,
-                              total: 1,
+                              label: "Canceladas",
+                              value: dashboardData?.tasks?.cancelled ?? 0,
+                              total: dashboardData?.tasks?.total ?? 1,
                               color: "bg-red-500",
                               text: "text-red-500",
                             },
@@ -1844,21 +1985,14 @@ export function ProjectManagementModal({
                                 <span className="text-[11px] text-slate-500">
                                   {s.label}
                                 </span>
-                                <span
-                                  className={`text-[11px] font-semibold ${s.text}`}
-                                >
+                                <span className={`text-[11px] font-semibold ${s.text}`}>
                                   {s.value}
                                 </span>
                               </div>
                               <div className="w-full bg-slate-100 rounded-full h-1.5">
                                 <div
                                   className={`${s.color} h-1.5 rounded-full`}
-                                  style={{
-                                    width:
-                                      s.total > 0
-                                        ? `${(s.value / s.total) * 100}%`
-                                        : "0%",
-                                  }}
+                                  style={{ width: s.total > 0 ? `${(s.value / s.total) * 100}%` : "0%" }}
                                 />
                               </div>
                             </div>
@@ -1866,49 +2000,74 @@ export function ProjectManagementModal({
                         </div>
                       </div>
 
-                      {/* Taxa de Reprovação */}
+                      {/* Distribuição de Faturas */}
                       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-xs font-semibold text-slate-700">
-                            Taxa de Reprovação
+                            Distribuição de Faturas
                           </p>
-                          <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />
+                          <Wallet className="w-3.5 h-3.5 text-emerald-500" />
                         </div>
-                        <div className="flex items-end gap-3 mb-3">
-                          <span className="text-3xl font-bold text-slate-800">
-                            0.0%
-                          </span>
-                          <span className="text-xs text-emerald-600 font-medium mb-1">
-                            Sem reprovações registradas
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2">
-                          <div
-                            className="bg-emerald-500 h-2 rounded-full transition-all"
-                            style={{ width: "0%" }}
-                          />
-                        </div>
-                        <div className="flex justify-between mt-1.5">
-                          <span className="text-[10px] text-slate-400">0%</span>
-                          <span className="text-[10px] text-slate-400">
-                            Média: 15%
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            100%
-                          </span>
-                        </div>
+                        {(() => {
+                          const total = dashboardData?.billing?.total ?? 0;
+                          const paid = dashboardData?.billing?.paid ?? 0;
+                          const pending = dashboardData?.billing?.pending ?? 0;
+                          const overdue = dashboardData?.billing?.overdue ?? 0;
+                          const bars = [
+                            { label: "Pago", amount: paid, count: dashboardData?.billing?.paidCount ?? 0, color: "bg-emerald-500", text: "text-emerald-600" },
+                            { label: "Pendente", amount: pending, count: dashboardData?.billing?.pendingCount ?? 0, color: "bg-amber-400", text: "text-amber-600" },
+                            { label: "Em atraso", amount: overdue, count: dashboardData?.billing?.overdueCount ?? 0, color: "bg-red-500", text: "text-red-600" },
+                          ];
+                          return (
+                            <div className="space-y-2.5">
+                              {bars.map((b) => (
+                                <div key={b.label}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] text-slate-500">{b.label} ({b.count})</span>
+                                    <span className={`text-[11px] font-semibold ${b.text}`}>
+                                      R$ {b.amount.toLocaleString("pt-BR")}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                                    <div
+                                      className={`${b.color} h-1.5 rounded-full`}
+                                      style={{ width: total > 0 ? `${(b.amount / total) * 100}%` : "0%" }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                              {total === 0 && (
+                                <p className="text-[11px] text-slate-400 text-center py-4">Sem faturas registradas</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                    </div>
+                    </div>}
 
                     {/* Recent Activity */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                    {!dashboardLoading && <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                       <p className="text-xs font-semibold text-slate-700 mb-3">
                         Atividades Recentes
                       </p>
-                      <div className="px-2 py-8 text-center text-slate-400 text-xs">
-                        Nenhuma atividade registrada ainda.
-                      </div>
-                    </div>
+                      {dashboardData?.recentActivities?.length > 0 ? (
+                        <div className="space-y-2">
+                          {dashboardData.recentActivities.map((a: any) => (
+                            <div key={a.id} className="flex items-center gap-2 text-xs text-slate-500">
+                              {a.type === "invoice_paid"
+                                ? <DollarSign className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                : <CheckCircle2 className="h-3.5 w-3.5 text-violet-500 shrink-0" />}
+                              <span className="flex-1 truncate">{a.label}</span>
+                              <span className="text-slate-400 text-[10px] shrink-0">{new Date(a.at).toLocaleDateString("pt-BR")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-2 py-8 text-center text-slate-400 text-xs">
+                          Nenhuma atividade registrada ainda.
+                        </div>
+                      )}
+                    </div>}
                   </div>
                 </TabsContent>
 
@@ -2856,13 +3015,14 @@ export function ProjectManagementModal({
                   className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200"
                 >
                   <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+                    {/* Header */}
                     <div className="flex items-center justify-between pb-1">
                       <div>
                         <h3 className="text-sm font-semibold text-slate-900">
                           Arquivos do Projeto
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          Gerencie os arquivos e entregáveis deste projeto
+                          Todos os arquivos vinculados às tarefas deste projeto
                         </p>
                       </div>
                       <button
@@ -2874,28 +3034,140 @@ export function ProjectManagementModal({
                       </button>
                     </div>
 
-                    <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white">
-                      <div className="flex border-b border-slate-200 bg-slate-50">
-                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 border-blue-500 bg-white text-blue-600">
-                          <FolderOpen className="h-3.5 w-3.5" />
-                          Arquivos Iniciais
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-600">
-                            0
-                          </span>
-                        </button>
-                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-600">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          Arquivos Aprovados
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-500">
-                            0
-                          </span>
-                        </button>
+                    {/* Loading state */}
+                    {projectFilesLoading && (
+                      <div className="flex items-center justify-center py-16">
+                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                       </div>
+                    )}
 
-                      <div className="px-4 py-10 text-center text-slate-400 text-xs">
-                        Nenhum arquivo enviado neste projeto.
+                    {/* Error state */}
+                    {!projectFilesLoading && projectFilesData?._error && (
+                      <div className="border border-red-200 rounded-xl bg-white px-4 py-10 text-center text-red-400 text-xs">
+                        Erro ao carregar arquivos. Tente novamente.
                       </div>
-                    </div>
+                    )}
+
+                    {/* Data loaded */}
+                    {!projectFilesLoading && projectFilesData && !projectFilesData._error && (() => {
+                      const pf = projectFilesData;
+                      const summary = pf.summary ?? { total: 0, initial: 0, internal: 0, deliveries: 0, approved: 0 };
+                      const groups: { key: string; label: string; icon: any; files: any[]; emptyLabel: string }[] = [
+                        { key: "iniciais", label: "Referências", icon: FolderOpen, files: pf.initialFiles ?? [], emptyLabel: "Nenhum arquivo de referência." },
+                        { key: "internos", label: "Arquivos Internos", icon: FileText, files: pf.internalFiles ?? [], emptyLabel: "Nenhum arquivo interno." },
+                        { key: "entregas", label: "Entregáveis", icon: File, files: pf.deliveries ?? [], emptyLabel: "Nenhum entregável enviado." },
+                        { key: "aprovados", label: "Aprovados", icon: CheckCircle, files: pf.approvedFiles ?? [], emptyLabel: "Nenhum arquivo aprovado ainda." },
+                      ];
+
+                      const formatSize = (bytes: number | null) => {
+                        if (!bytes) return null;
+                        if (bytes < 1024) return `${bytes} B`;
+                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                      };
+
+                      const taskStatusLabel: Record<string, string> = {
+                        PARA_LANCAMENTO: "Para Lançamento", EM_LANCAMENTO: "Em Lançamento",
+                        LIBERADA_PARA_EXECUCAO: "Liberada", EM_EXECUCAO: "Em Execução",
+                        EM_REVISAO: "Em Revisão", EM_APROVACAO: "Em Aprovação",
+                        CONCLUIDA: "Concluída", CANCELADA: "Cancelada",
+                      };
+
+                      return (
+                        <>
+                          {/* Summary pills */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {[
+                              { label: "Total", value: summary.total, color: "slate" },
+                              { label: "Referências", value: summary.initial, color: "blue" },
+                              { label: "Internos", value: summary.internal, color: "violet" },
+                              { label: "Entregáveis", value: summary.deliveries, color: "amber" },
+                              { label: "Aprovados", value: summary.approved, color: "emerald" },
+                            ].map((pill) => (
+                              <div key={pill.label} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                                <span className="text-xs font-medium text-slate-500">{pill.label}</span>
+                                <span className="text-sm font-bold text-slate-900">{pill.value}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* File groups */}
+                          {groups.map((group) => (
+                            <div key={group.key} className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
+                                <group.icon className="h-3.5 w-3.5 text-slate-500" />
+                                <span className="text-xs font-semibold text-slate-700">{group.label}</span>
+                                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-500">
+                                  {group.files.length}
+                                </span>
+                              </div>
+
+                              {group.files.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-slate-400 text-xs">
+                                  {group.emptyLabel}
+                                </div>
+                              ) : (
+                                <ul className="divide-y divide-slate-100">
+                                  {group.files.map((file: any) => (
+                                    <li key={file.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors group">
+                                      <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                                        <FileText className="h-4 w-4 text-slate-400" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-slate-800 truncate">{file.name}</p>
+                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                          {file.task?.title && (
+                                            <span className="text-[10px] text-slate-400 truncate max-w-[160px]">
+                                              {file.task.title}
+                                            </span>
+                                          )}
+                                          {file.task?.status && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                                              {taskStatusLabel[file.task.status] ?? file.task.status}
+                                            </span>
+                                          )}
+                                          {file.product?.name && (
+                                            <span className="text-[10px] text-blue-500 truncate max-w-[140px]">
+                                              {file.product.name}
+                                            </span>
+                                          )}
+                                          {formatSize(file.size) && (
+                                            <span className="text-[10px] text-slate-300">
+                                              {formatSize(file.size)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {file.isApproved && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-semibold shrink-0">
+                                          Aprovado
+                                        </span>
+                                      )}
+                                      <a
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-7 w-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Abrir arquivo"
+                                      >
+                                        <ExternalLink className="h-3.5 w-3.5 text-slate-500 hover:text-blue-600" />
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </>
+                      );
+                    })()}
+
+                    {/* Not yet loaded */}
+                    {!projectFilesLoading && !projectFilesData && (
+                      <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white px-4 py-10 text-center text-slate-400 text-xs">
+                        Abra esta aba para carregar os arquivos do projeto.
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
 
@@ -2904,8 +3176,21 @@ export function ProjectManagementModal({
                   className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200"
                 >
                   <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+                    {/* Loading */}
+                    {credentialsLoading && (
+                      <div className="flex items-center justify-center py-16">
+                        <div className="h-6 w-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                    {/* Demo banner */}
+                    {!credentialsLoading && mockCredentials.some((c) => c.is_demo) && (
+                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-amber-700 text-xs font-medium">
+                        <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
+                        Estas credenciais são dados de demonstração. Não contêm senhas reais.
+                      </div>
+                    )}
                     {/* Stats bar */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {!credentialsLoading && <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2">
                         <div className="h-6 w-6 rounded-md bg-indigo-100 flex items-center justify-center">
                           <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
@@ -2947,10 +3232,10 @@ export function ProjectManagementModal({
                           Adicionar senha ao cofre
                         </Button>
                       </div>
-                    </div>
+                    </div>}
 
                     {/* Main card */}
-                    <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
+                    {!credentialsLoading && <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
                       <div className="divide-y divide-slate-100">
                         {mockCredentials.map((credential: any) => (
                           <div
@@ -3057,7 +3342,7 @@ export function ProjectManagementModal({
                                         ? "text"
                                         : "password"
                                     }
-                                    value={credential.password}
+                                    value={credential.password_demo ?? ""}
                                     readOnly
                                     className="h-5 text-[11px] bg-transparent border-0 p-0 focus-visible:ring-0 truncate min-w-0"
                                   />
@@ -3077,7 +3362,7 @@ export function ProjectManagementModal({
                                     <button
                                       onClick={() =>
                                         copyToClipboard(
-                                          credential.password,
+                                          credential.password_demo ?? "",
                                           "Senha",
                                         )
                                       }
@@ -3089,37 +3374,37 @@ export function ProjectManagementModal({
                                 </div>
                               </div>
 
-                              {/* Shared avatars + actions */}
+                              {/* Status badges + shared avatars + actions */}
                               <div className="flex items-center gap-3 shrink-0">
+                                {/* Status badge */}
+                                {credential.status === "shared" && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                    <Share2 className="h-2.5 w-2.5" /> Compartilhado
+                                  </span>
+                                )}
+                                {credential.status === "rotation_required" && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                    <RefreshCw className="h-2.5 w-2.5" /> Rotacionar
+                                  </span>
+                                )}
+                                {credential.status === "archived" && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                    Arquivado
+                                  </span>
+                                )}
+                                {credential.status === "expired" && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                                    Expirado
+                                  </span>
+                                )}
+                                {/* Shared nomad avatar */}
                                 <div className="flex items-center -space-x-1.5">
-                                  {credential.sharedWith
-                                    .slice(0, 3)
-                                    .map((user: any, idx: number) => {
-                                      const name =
-                                        typeof user === "string"
-                                          ? user
-                                          : user.name;
-                                      return (
-                                        <div
-                                          key={idx}
-                                          title={name}
-                                          className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-white flex items-center justify-center"
-                                        >
-                                          <span className="text-[8px] font-bold text-white">
-                                            {name
-                                              .split(" ")
-                                              .map((n: string) => n[0])
-                                              .join("")
-                                              .slice(0, 2)}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  {credential.sharedWith.length > 3 && (
-                                    <div className="h-6 w-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
-                                      <span className="text-[8px] font-semibold text-slate-500">
-                                        +{credential.sharedWith.length - 3}
-                                      </span>
+                                  {credential.shared_with_nomad_id && (
+                                    <div
+                                      title={credential.shared_with_nomad_id}
+                                      className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-white flex items-center justify-center"
+                                    >
+                                      <span className="text-[8px] font-bold text-white">N</span>
                                     </div>
                                   )}
                                 </div>
@@ -3172,7 +3457,7 @@ export function ProjectManagementModal({
                           </div>
                         )}
                       </div>
-                    </div>
+                    </div>}
                   </div>
                 </TabsContent>
 
@@ -3692,14 +3977,27 @@ export function ProjectManagementModal({
 
                                     {/* Status pill + expand + eye */}
                                     <div className="flex items-center gap-2 shrink-0">
-                                      <div
-                                        className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
-                                      >
-                                        <span
-                                          className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
-                                        />
-                                        {tarefa.status}
-                                      </div>
+                                      {tarefa.status === "Para lançamento" ? (
+                                        <button
+                                          onClick={() => openLaunchDrawer(tarefa)}
+                                          title={tarefa.rawStatus === "EM_LANCAMENTO" || tarefa.rawStatus === "AGUARDANDO_INFORMACOES" ? "Clique para continuar o lançamento" : "Clique para lançar a tarefa"}
+                                          className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-orange-300 transition-all ${getStatusBadgeColor(tarefa.status)}`}
+                                        >
+                                          <span
+                                            className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
+                                          />
+                                          {tarefa.status}
+                                        </button>
+                                      ) : (
+                                        <div
+                                          className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
+                                        >
+                                          <span
+                                            className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
+                                          />
+                                          {tarefa.status}
+                                        </div>
+                                      )}
                                       {tarefa.etapas?.length > 0 && (
                                         <button
                                           onClick={() =>
@@ -4048,7 +4346,7 @@ export function ProjectManagementModal({
                           {dadosProjForm.lifecycle === "Mensal" &&
                             (() => {
                               const overdueInvoices = mockInvoices.filter(
-                                (inv: any) => inv.status !== "PAGO",
+                                (inv: any) => inv.status === "overdue" || inv.status === "pending",
                               );
                               const today = new Date();
                               const billingDay =
@@ -4205,8 +4503,49 @@ export function ProjectManagementModal({
                             </div>
                           </div>
 
+                          {/* Billing loading */}
+                          {billingLoading && (
+                            <div className="flex items-center justify-center py-8">
+                              <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+
+                          {/* Summary pills */}
+                          {!billingLoading && billingSummary && (
+                            <div className="flex flex-wrap gap-2">
+                              <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg px-3 py-1.5">
+                                <span className="text-xs text-slate-500">Total</span>
+                                <span className="text-sm font-bold text-slate-900">
+                                  R$ {(billingSummary.totalAmount ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                                <span className="text-xs text-green-600">Pago</span>
+                                <span className="text-sm font-bold text-green-700">
+                                  R$ {(billingSummary.paidAmount ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              {(billingSummary.pendingAmount ?? 0) > 0 && (
+                                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                                  <span className="text-xs text-amber-600">Pendente</span>
+                                  <span className="text-sm font-bold text-amber-700">
+                                    R$ {billingSummary.pendingAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              )}
+                              {(billingSummary.overdueAmount ?? 0) > 0 && (
+                                <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                                  <span className="text-xs text-red-600">Em atraso</span>
+                                  <span className="text-sm font-bold text-red-700">
+                                    R$ {billingSummary.overdueAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Invoices table */}
-                          <div>
+                          {!billingLoading && <div>
                             <h3 className="text-sm font-semibold mb-2">
                               Faturas
                             </h3>
@@ -4221,10 +4560,13 @@ export function ProjectManagementModal({
                                       SITUAÇÃO
                                     </TableHead>
                                     <TableHead className="text-xs font-semibold">
-                                      COMPETÊNCIA
+                                      FATURA
                                     </TableHead>
                                     <TableHead className="text-xs font-semibold">
                                       DESCRIÇÃO
+                                    </TableHead>
+                                    <TableHead className="text-xs font-semibold">
+                                      VENCIMENTO
                                     </TableHead>
                                     <TableHead className="text-xs font-semibold">
                                       VALOR
@@ -4235,33 +4577,30 @@ export function ProjectManagementModal({
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {mockInvoices.map((invoice) => (
+                                  {mockInvoices.map((invoice) => {
+                                    const statusLabel = invoice.status === "paid" ? "Pago" : invoice.status === "overdue" ? "Atrasado" : invoice.status === "cancelled" ? "Cancelado" : "Pendente";
+                                    const statusClass = invoice.status === "paid" ? "bg-green-500 hover:bg-green-600" : invoice.status === "overdue" ? "bg-red-500 hover:bg-red-600" : invoice.status === "cancelled" ? "bg-slate-400 hover:bg-slate-500" : "bg-yellow-500 hover:bg-yellow-600";
+                                    return (
                                     <TableRow
                                       key={invoice.id}
                                       className="hover:bg-muted/30"
                                     >
                                       <TableCell className="py-2">
-                                        <Badge
-                                          className={`${
-                                            invoice.status === "PAGO"
-                                              ? "bg-green-500 hover:bg-green-600"
-                                              : "bg-yellow-500 hover:bg-yellow-600"
-                                          } text-white text-xs`}
-                                        >
-                                          {invoice.status}
+                                        <Badge className={`${statusClass} text-white text-xs`}>
+                                          {statusLabel}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-xs font-medium">
-                                        {invoice.month}
+                                        {invoice.invoice_number ?? invoice.id.slice(-8).toUpperCase()}
+                                      </TableCell>
+                                      <TableCell className="text-xs max-w-[180px] truncate">
+                                        {invoice.description ?? "—"}
                                       </TableCell>
                                       <TableCell className="text-xs">
-                                        {invoice.descricao}
+                                        {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("pt-BR") : "—"}
                                       </TableCell>
                                       <TableCell className="text-xs font-semibold">
-                                        R${" "}
-                                        {invoice.valor
-                                          .toFixed(2)
-                                          .replace(".", ",")}
+                                        R$ {(invoice.amount ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                                       </TableCell>
                                       <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
@@ -4289,11 +4628,19 @@ export function ProjectManagementModal({
                                         </div>
                                       </TableCell>
                                     </TableRow>
-                                  ))}
+                                    );
+                                  })}
+                                  {mockInvoices.length === 0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={6} className="text-center text-xs text-slate-400 py-8">
+                                        Nenhuma fatura encontrada para este projeto.
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
                                 </TableBody>
                               </Table>
                             </div>
-                          </div>
+                          </div>}
                         </div>
                       )}
 
@@ -5525,59 +5872,67 @@ export function ProjectManagementModal({
             <DialogTitle>Adicionar Arquivo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nome do Arquivo</label>
+            <input
+              ref={projectFileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                setSelectedProjectFile(f);
+                if (f) setNewFileName(f.name);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => projectFileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 transition-colors px-4 py-6 text-sm text-slate-500 hover:text-blue-600"
+            >
+              <Upload className="h-4 w-4" />
+              {selectedProjectFile ? selectedProjectFile.name : "Clique para selecionar um arquivo"}
+            </button>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Nome exibido</label>
               <Input
                 value={newFileName}
                 onChange={(e) => setNewFileName(e.target.value)}
-                placeholder="Digite o nome do arquivo"
+                placeholder="Nome do arquivo (opcional)"
               />
             </div>
-            <Button className="w-full bg-transparent" variant="outline">
-              <Upload className="h-4 w-4 mr-2" />
-              Selecionar Arquivo
-            </Button>
           </div>
           <DialogFooter className="flex gap-2">
             <Button
               variant="outline"
               className="flex-1 bg-transparent"
-              onClick={() => setShowAddFileDialog(false)}
+              onClick={() => { setShowAddFileDialog(false); setSelectedProjectFile(null); setNewFileName(""); }}
             >
               Cancelar
             </Button>
-            <Button className="flex-1" onClick={handleAddFile}>
+            <Button
+              className="flex-1"
+              disabled={!selectedProjectFile && !newFileName.trim()}
+              onClick={handleAddFile}
+            >
               Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edited Edit Credential Dialog */}
       {/* Add Credential Dialog */}
-      {showAddCredentialDialog &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-            style={{ left: sidebarWidth }}
-            onClick={() => {
-              setShowAddCredentialDialog(false);
-              setNewCredentialForm({
-                title: "",
-                url: "",
-                username: "",
-                password: "",
-                confirmPassword: "",
-                category: "Website",
-              });
-              setNewCredentialPasswordVisible(false);
-              setNewCredentialConfirmVisible(false);
-            }}
-          >
-            <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+      <Dialog
+        open={showAddCredentialDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAddCredentialDialog(false);
+            setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" });
+            setNewCredentialPasswordVisible(false);
+            setNewCredentialConfirmVisible(false);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false} className="p-0 overflow-hidden max-w-lg">
+            <div>
               {/* Brand header */}
               <div className="app-brand-header px-6 py-5">
                 <div className="flex items-center gap-3">
@@ -5595,14 +5950,7 @@ export function ProjectManagementModal({
                   <button
                     onClick={() => {
                       setShowAddCredentialDialog(false);
-                      setNewCredentialForm({
-                        title: "",
-                        url: "",
-                        username: "",
-                        password: "",
-                        confirmPassword: "",
-                        category: "Website",
-                      });
+                      setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" });
                       setNewCredentialPasswordVisible(false);
                       setNewCredentialConfirmVisible(false);
                     }}
@@ -5805,31 +6153,25 @@ export function ProjectManagementModal({
                       newCredentialForm.confirmPassword
                   }
                   onClick={() => {
-                    const newCred = {
-                      id: Date.now(),
-                      title: newCredentialForm.title,
-                      url: newCredentialForm.url,
-                      username: newCredentialForm.username,
-                      password: newCredentialForm.password,
-                      category: newCredentialForm.category,
-                      sharedWith: [],
-                    };
-                    setMockCredentials((prev) => [...prev, newCred]);
-                    setShowAddCredentialDialog(false);
-                    setNewCredentialForm({
-                      title: "",
-                      url: "",
-                      username: "",
-                      password: "",
-                      confirmPassword: "",
-                      category: "Website",
-                    });
-                    setNewCredentialPasswordVisible(false);
-                    setNewCredentialConfirmVisible(false);
-                    toast({
-                      title: "Credencial adicionada",
-                      description: `"${newCred.title}" foi salva no cofre.`,
-                    });
+                    if (!project?.id) return;
+                    apiClient
+                      .createProjectCredential(String(project.id), {
+                        title: newCredentialForm.title,
+                        url: newCredentialForm.url,
+                        username: newCredentialForm.username,
+                        password_demo: newCredentialForm.password,
+                        category: newCredentialForm.category,
+                        is_demo: false,
+                      })
+                      .then((created: any) => {
+                        setMockCredentials((prev) => [...prev, created]);
+                        setShowAddCredentialDialog(false);
+                        setNewCredentialForm({ title: "", url: "", username: "", password: "", confirmPassword: "", category: "Website" });
+                        setNewCredentialPasswordVisible(false);
+                        setNewCredentialConfirmVisible(false);
+                        toast({ title: "Credencial adicionada", description: `"${newCredentialForm.title}" foi salva no cofre.` });
+                      })
+                      .catch(() => toast({ title: "Erro", description: "Não foi possível salvar a credencial.", variant: "destructive" }));
                   }}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />
@@ -5837,26 +6179,16 @@ export function ProjectManagementModal({
                 </Button>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Credential Dialog */}
-      {showEditCredentialDialog &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-            style={{ left: sidebarWidth }}
-            onClick={() => {
-              setShowEditCredentialDialog(false);
-              setEditPasswordVisible(false);
-              setConfirmPassword("");
-            }}
-          >
-            <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+      <Dialog
+        open={showEditCredentialDialog}
+        onOpenChange={(open) => { if (!open) { setShowEditCredentialDialog(false); setEditPasswordVisible(false); setConfirmPassword(""); } }}
+      >
+        <DialogContent showCloseButton={false} className="p-0 overflow-hidden max-w-lg">
+            <div>
               <div className="app-brand-header px-6 py-5">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
@@ -6046,22 +6378,16 @@ export function ProjectManagementModal({
                 </Button>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Credential Dialog */}
-      {showDeleteCredentialDialog &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-            style={{ left: sidebarWidth }}
-            onClick={() => setShowDeleteCredentialDialog(false)}
-          >
-            <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+      <Dialog
+        open={showDeleteCredentialDialog}
+        onOpenChange={(open) => { if (!open) setShowDeleteCredentialDialog(false); }}
+      >
+        <DialogContent showCloseButton={false} className="p-0 overflow-hidden max-w-sm">
+            <div>
               <div className="app-brand-header px-6 py-5">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
@@ -6109,9 +6435,8 @@ export function ProjectManagementModal({
                 </Button>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+        </DialogContent>
+      </Dialog>
 
       {/* Credential Details Sheet - Used for sharing management */}
       <Sheet open={showShareCredential} onOpenChange={setShowShareCredential}>
@@ -6138,116 +6463,59 @@ export function ProjectManagementModal({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-900">
-                    Usuários com Acesso
+                    Acesso compartilhado
                   </h3>
                   <span className="text-xs text-gray-500">
-                    {selectedCredential.sharedWith.length} usuários
+                    {selectedCredential.shared_with_nomad_id ? "1 nômade" : "Nenhum acesso ativo"}
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {selectedCredential.sharedWith.map(
-                    (user: any, idx: number) => {
-                      const userName =
-                        typeof user === "string" ? user : user.name;
-                      const permission =
-                        typeof user === "string"
-                          ? "Pode visualizar"
-                          : user.permission === "edit"
-                            ? "Pode editar"
-                            : "Pode visualizar";
-                      const expiresAt =
-                        typeof user === "string" ? null : user.expiresAt;
-                      const isExpired =
-                        expiresAt && new Date(expiresAt) < new Date();
-
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center gap-2.5 flex-1">
-                            <div className="h-7 w-7 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
-                              <span className="text-[10px] font-semibold text-white">
-                                {userName
-                                  .split(" ")
-                                  .map((n: string) => n[0])
-                                  .join("")}
-                              </span>
-                            </div>
-                            <div className="flex flex-col flex-1 min-w-0">
-                              <span className="text-xs font-medium">
-                                {userName}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-500">
-                                  {permission}
-                                </span>
-                                {expiresAt && (
-                                  <>
-                                    <span className="text-[10px] text-gray-400">
-                                      •
-                                    </span>
-                                    <span
-                                      className={`text-[10px] ${isExpired ? "text-red-600 font-medium" : "text-gray-500"}`}
-                                    >
-                                      {isExpired
-                                        ? "Expirado"
-                                        : `Expira em ${new Date(expiresAt).toLocaleDateString("pt-BR")}`}
-                                    </span>
-                                  </>
-                                )}
-                                {!expiresAt && (
-                                  <>
-                                    <span className="text-[10px] text-gray-400">
-                                      •
-                                    </span>
-                                    <span className="text-[10px] text-green-600">
-                                      Sem expiração
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => {
-                              toast({
-                                title: "Acesso removido",
-                                description: `${userName} não tem mais acesso a esta credencial.`,
-                              });
-                              setSelectedCredential({
-                                ...selectedCredential,
-                                sharedWith:
-                                  selectedCredential.sharedWith.filter(
-                                    (_: any, i: number) => i !== idx,
-                                  ),
-                              });
-                              // Also remove from the main list
-                              setMockCredentials((prev: any[]) =>
-                                prev.map((cred: any) =>
-                                  cred.id === selectedCredential.id
-                                    ? {
-                                        ...cred,
-                                        sharedWith: cred.sharedWith.filter(
-                                          (sharedUser: any) =>
-                                            (typeof sharedUser === "string"
-                                              ? sharedUser
-                                              : sharedUser.name) !== userName,
-                                        ),
-                                      }
-                                    : cred,
-                                ),
-                              );
-                            }}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
+                  {selectedCredential.shared_with_nomad_id ? (
+                    <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-2.5 flex-1">
+                        <div className="h-7 w-7 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] font-semibold text-white">N</span>
                         </div>
-                      );
-                    },
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-xs font-medium">{selectedCredential.shared_with_nomad_id}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-500">Nômade · Pode visualizar</span>
+                            {selectedCredential.shared_until && (
+                              <>
+                                <span className="text-[10px] text-gray-400">•</span>
+                                <span className={`text-[10px] ${new Date(selectedCredential.shared_until) < new Date() ? "text-red-600 font-medium" : "text-gray-500"}`}>
+                                  {new Date(selectedCredential.shared_until) < new Date()
+                                    ? "Expirado"
+                                    : `Expira em ${new Date(selectedCredential.shared_until).toLocaleDateString("pt-BR")}`}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (!project?.id) return;
+                          apiClient
+                            .revokeProjectCredential(String(project.id), selectedCredential.id)
+                            .then((updated: any) => {
+                              setMockCredentials((prev: any[]) =>
+                                prev.map((c) => c.id === selectedCredential.id ? { ...c, ...updated } : c),
+                              );
+                              setSelectedCredential({ ...selectedCredential, shared_with_nomad_id: null, shared_until: null, status: "active" });
+                              toast({ title: "Acesso revogado" });
+                            })
+                            .catch(() => toast({ title: "Erro ao revogar acesso", variant: "destructive" } as any));
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 py-4 text-center">Nenhum acesso compartilhado no momento.</p>
                   )}
                 </div>
               </div>
@@ -7050,7 +7318,32 @@ export function ProjectManagementModal({
         onClose={() => setTaskDrawerOpen(false)}
         onStatusChange={() => {}}
         updatingId={null}
+        onLaunch={(t) => {
+          setTaskDrawerOpen(false);
+          setLaunchDrawerTask(t);
+          setLaunchDrawerOpen(true);
+        }}
       />
+
+      {/* ── Task Launch Drawer ─────────────────────────────────────────────── */}
+      {launchDrawerOpen && launchDrawerTask && (
+        <TaskLaunchDrawer
+          task={launchDrawerTask}
+          onClose={() => {
+            setLaunchDrawerOpen(false);
+            setLaunchDrawerTask(null);
+          }}
+          onReleased={(taskId) => {
+            setLaunchDrawerOpen(false);
+            setLaunchDrawerTask(null);
+            // Refresh project data so the task list reflects the new status
+            fetchModalData();
+          }}
+          onTaskUpdated={(updatedTask) => {
+            setLaunchDrawerTask(updatedTask);
+          }}
+        />
+      )}
     </>
   );
 }

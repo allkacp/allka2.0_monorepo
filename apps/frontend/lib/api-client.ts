@@ -951,6 +951,33 @@ class ApiClient {
   async getProjectTaskBriefing(id: string) {
     return this.get(`/project-tasks/${id}/briefing`);
   }
+  async getProjectFiles(projectId: string) {
+    return this.get(`/projects/${projectId}/files`);
+  }
+  async getProjectDashboard(projectId: string) {
+    return this.get(`/projects/${projectId}/dashboard`);
+  }
+  async getProjectBilling(projectId: string) {
+    return this.get(`/projects/${projectId}/billing`);
+  }
+  async getProjectCredentials(projectId: string) {
+    return this.get(`/projects/${projectId}/credentials`);
+  }
+  async createProjectCredential(projectId: string, data: Record<string, any>) {
+    return this.post(`/projects/${projectId}/credentials`, data);
+  }
+  async updateProjectCredential(projectId: string, credentialId: string, data: Record<string, any>) {
+    return this.patch(`/projects/${projectId}/credentials/${credentialId}`, data);
+  }
+  async deleteProjectCredential(projectId: string, credentialId: string) {
+    return this.del(`/projects/${projectId}/credentials/${credentialId}`);
+  }
+  async shareProjectCredential(projectId: string, credentialId: string, data: Record<string, any>) {
+    return this.post(`/projects/${projectId}/credentials/${credentialId}/share`, data);
+  }
+  async revokeProjectCredential(projectId: string, credentialId: string) {
+    return this.post(`/projects/${projectId}/credentials/${credentialId}/revoke`, {});
+  }
   async getProjectTaskAttachments(id: string, type?: string) {
     return this.get(
       `/project-tasks/${id}/attachments`,
