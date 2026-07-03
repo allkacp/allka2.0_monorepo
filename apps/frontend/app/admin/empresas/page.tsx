@@ -41,6 +41,7 @@ import {
   Award,
   AlertTriangle,
   ShieldCheck,
+  Phone,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ExportButton } from "@/components/export-button";
@@ -245,7 +246,7 @@ function CompanyAvatar({ company }: { company: Company }) {
   const [err, setErr] = React.useState(false);
   if (company.avatar && !err) {
     return (
-      <div className="w-9 h-9 rounded-xl flex-shrink-0 shadow-sm overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="w-10 h-10 rounded-full flex-shrink-0 shadow-sm overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <img
           src={company.avatar}
           alt={company.name}
@@ -257,7 +258,7 @@ function CompanyAvatar({ company }: { company: Company }) {
   }
   return (
     <div
-      className={`w-9 h-9 rounded-xl bg-gradient-to-br ${avatarColor(company.id)} flex items-center justify-center flex-shrink-0 shadow-sm`}
+      className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(company.id)} flex items-center justify-center flex-shrink-0 shadow-sm`}
     >
       <span className="text-xs font-bold text-white">
         {companyInitials(company.name)}
@@ -1280,83 +1281,85 @@ export default function EmpresasPage() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+      <Card className="rounded-[20px] border border-[#e6ebf3] dark:border-slate-700/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)] overflow-hidden mx-0">
         {/* Card Top Bar */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900/30">
           {/* Search */}
-          <div className="flex-1 relative min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <div className="flex-1 relative min-w-[180px] basis-full sm:basis-auto">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Nome, e-mail, CNPJ, telefone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
+              className="pl-10 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:border-blue-400 w-full"
             />
           </div>
 
-          {/* Items per page + result count */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
-            />
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {(() => {
-                const start = Math.min(
-                  (currentPage - 1) * pageSize + 1,
-                  filteredCompanies.length,
-                );
-                const end = Math.min(
-                  currentPage * pageSize,
-                  filteredCompanies.length,
-                );
-                return (
-                  <>
-                    {start}-{end} de{" "}
-                    <span className="font-semibold text-slate-600 dark:text-slate-300">
-                      {filteredCompanies.length}
-                    </span>{" "}
-                    empresa{filteredCompanies.length !== 1 ? "s" : ""}
-                  </>
-                );
-              })()}
-            </span>
-          </div>
+          {/* Right cluster: items + count + filters + gear + pagination */}
+          <div className="flex flex-wrap items-center gap-2.5 flex-shrink-0">
+            {/* Items per page + result count */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <ItemsPerPageSelect
+                value={pageSize.toString()}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(1);
+                }}
+                variant="top"
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {(() => {
+                  const start = Math.min(
+                    (currentPage - 1) * pageSize + 1,
+                    filteredCompanies.length,
+                  );
+                  const end = Math.min(
+                    currentPage * pageSize,
+                    filteredCompanies.length,
+                  );
+                  return (
+                    <>
+                      {start}-{end} de{" "}
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">
+                        {filteredCompanies.length}
+                      </span>{" "}
+                      empresa{filteredCompanies.length !== 1 ? "s" : ""}
+                    </>
+                  );
+                })()}
+              </span>
+            </div>
 
-          {/* Filter Button */}
-          <Button
-            onClick={() => setIsFilterModalOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0"
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filtros
-          </Button>
-
-          {/* Column config */}
-          <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className={`flex items-center justify-center h-7 w-7 rounded-md border transition-colors flex-shrink-0 ${
-                  colConfigOpen
-                    ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
-                    : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-                }`}
-                title="Configurar colunas"
-              >
-                <Cog className="h-3.5 w-3.5" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="w-[260px] p-0"
+            {/* Filter Button */}
+            <Button
+              onClick={() => setIsFilterModalOpen(true)}
+              variant="outline"
+              size="sm"
+              className="h-11 gap-2 px-4 text-xs font-medium rounded-[12px] border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0"
             >
+              <Filter className="h-3.5 w-3.5" />
+              Filtros
+            </Button>
+
+            {/* Column config */}
+            <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className={`flex items-center justify-center h-11 w-11 rounded-[12px] border transition-colors flex-shrink-0 ${
+                    colConfigOpen
+                      ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
+                      : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  }`}
+                  title="Configurar colunas"
+                >
+                  <Cog className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                sideOffset={8}
+                className="w-[260px] p-0"
+              >
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                   Colunas visíveis
@@ -1407,46 +1410,47 @@ export default function EmpresasPage() {
                   {visibleCols.size} de {allColumns.length}
                 </span>
               </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
 
-          {/* Pagination */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            {getPageNumbers().map((page, index) =>
-              page === "..." ? (
-                <span key={index} className="text-xs text-slate-300 px-0.5">
-                  ·
-                </span>
-              ) : (
-                <button
-                  key={index}
-                  onClick={() => setCurrentPage(Number(page))}
-                  className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                    page === currentPage
-                      ? "btn-brand text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                  }`}
-                >
-                  {page}
-                </button>
-              ),
-            )}
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, currentPage + 1))
-              }
-              disabled={currentPage === totalPages}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            {/* Pagination */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              {getPageNumbers().map((page, index) =>
+                page === "..." ? (
+                  <span key={index} className="text-xs text-slate-300 px-0.5">
+                    ·
+                  </span>
+                ) : (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentPage(Number(page))}
+                    className={`h-8 w-8 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                      page === currentPage
+                        ? "btn-brand text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() =>
+                  setCurrentPage(Math.min(totalPages, currentPage + 1))
+                }
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1454,7 +1458,7 @@ export default function EmpresasPage() {
         <div
           ref={topScrollRef}
           onScroll={handleTopBarScroll}
-          className="overflow-x-scroll allka-table-scroll"
+          className="overflow-x-scroll empresas-table-scroll"
           style={{ height: 10 }}
         >
           <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
@@ -1464,7 +1468,7 @@ export default function EmpresasPage() {
         <div
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto allka-table-scroll"
+          className="overflow-x-auto empresas-table-scroll pb-2"
         >
           <table
             className="text-xs"
@@ -1484,26 +1488,26 @@ export default function EmpresasPage() {
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
+                    className="py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none relative"
                     style={{
-                      paddingLeft: 20,
-                      paddingRight: 20,
+                      paddingLeft: 16,
+                      paddingRight: 16,
                       textAlign: col.key === "acoes" ? "center" : "left",
                       position: "sticky",
                       top: 0,
                       zIndex: col.key === "acoes" ? 3 : 2,
                       background: "var(--table-head)",
-                      boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                      boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                       borderRight:
                         col.key !== "acoes"
-                          ? "1px solid rgba(148,163,184,0.25)"
+                          ? "1px solid rgba(148,163,184,0.16)"
                           : undefined,
                       ...(col.key === "acoes"
                         ? {
                             right: 0,
                             minWidth: 130,
-                            borderLeft: "1px solid rgba(148,163,184,0.18)",
-                            boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                            borderLeft: "1px solid rgba(148,163,184,0.16)",
+                            boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                           }
                         : {}),
                     }}
@@ -1569,20 +1573,20 @@ export default function EmpresasPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[oklch(0.20_0.022_258)]">
+            <tbody className="divide-y divide-[#edf1f7] dark:divide-[oklch(0.20_0.022_258)]">
               {paginatedCompanies.map((company, rowIndex) => (
                 <tr
                   key={company.id}
                   className={`group transition-colors cursor-pointer ${
                     rowIndex % 2 === 0
-                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#eef2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                      : "bg-[#f4f7fb] dark:bg-[oklch(0.16_0.024_258)] hover:bg-[#e8eeff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f8fbff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      : "bg-[#fbfcff] dark:bg-[oklch(0.16_0.024_258)] hover:bg-[#f8fbff] dark:hover:bg-[oklch(0.21_0.024_258)]"
                   }`}
                 >
                   {/* Company */}
                   {visibleCols.has("empresa") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
@@ -1591,7 +1595,7 @@ export default function EmpresasPage() {
                       <div className="flex items-center gap-3">
                         <CompanyAvatar company={company} />
                         <div>
-                          <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate max-w-[180px]">
                             {company.name}
                           </p>
                           <p className="text-xs text-slate-400 dark:text-slate-500">
@@ -1604,7 +1608,7 @@ export default function EmpresasPage() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button
-                                      className="allka-badge allka-badge-dpo-warning hover:brightness-110 transition-all"
+                                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#FFEBDD] text-[#C2410C] hover:brightness-105 transition-all"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditCompany(company);
@@ -1638,7 +1642,7 @@ export default function EmpresasPage() {
                               <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="allka-badge allka-badge-dpo-ok cursor-default">
+                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#E7F8EF] text-[#168A4A] cursor-default">
                                       <ShieldCheck className="h-3 w-3" />
                                       DPO cadastrado
                                     </span>
@@ -1670,7 +1674,7 @@ export default function EmpresasPage() {
                             {/* Política de privacidade ainda não aceita */}
                             {company.lgpd &&
                               !company.lgpd.privacy_policy_accepted && (
-                                <span className="allka-badge allka-badge-policy-pending">
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#FFF4D6] text-[#A16207]">
                                   Política pendente
                                 </span>
                               )}
@@ -1683,39 +1687,53 @@ export default function EmpresasPage() {
                   {/* Contact */}
                   {visibleCols.has("contato") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
                       }}
                     >
                       <div className="space-y-1">
-                        <a
-                          href={`mailto:${company.email}`}
-                          className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group w-fit"
-                        >
-                          <Mail className="h-3 w-3 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
-                          <span className="group-hover:underline underline-offset-2">
-                            {company.email}
-                          </span>
-                        </a>
-                        <a
-                          href={`https://wa.me/${company.phone.replace(/\D/g, "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group w-fit"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3 fill-current text-slate-400 group-hover:text-emerald-500 transition-colors flex-shrink-0"
-                            xmlns="http://www.w3.org/2000/svg"
+                        {company.email ? (
+                          <a
+                            href={`mailto:${company.email}`}
+                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group w-fit"
                           >
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                          </svg>
-                          <span className="group-hover:underline underline-offset-2">
-                            {company.phone}
-                          </span>
-                        </a>
+                            <Mail className="h-3 w-3 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                            <span className="group-hover:underline underline-offset-2 truncate max-w-[160px]">
+                              {company.email}
+                            </span>
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
+                            <Mail className="h-3 w-3 flex-shrink-0" />
+                            <span>—</span>
+                          </div>
+                        )}
+                        {company.phone ? (
+                          <a
+                            href={`https://wa.me/${company.phone.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group w-fit"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-3 w-3 fill-current text-slate-400 group-hover:text-emerald-500 transition-colors flex-shrink-0"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                            </svg>
+                            <span className="group-hover:underline underline-offset-2">
+                              {company.phone}
+                            </span>
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
+                            <Phone className="h-3 w-3 flex-shrink-0" />
+                            <span>—</span>
+                          </div>
+                        )}
                       </div>
                     </td>
                   )}
@@ -1723,7 +1741,7 @@ export default function EmpresasPage() {
                   {/* CNPJ + Users */}
                   {visibleCols.has("cnpj") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
@@ -1731,13 +1749,13 @@ export default function EmpresasPage() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-1.5">
-                          <Hash className="h-3 w-3 text-slate-400" />
-                          <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
-                            {company.document}
+                          <Hash className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                          <span className="text-[13px] font-mono tracking-tight text-slate-600 dark:text-slate-300">
+                            {company.document || "—"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-                          <Users className="h-3 w-3 text-slate-400" />
+                        <div className="flex items-center gap-1.5 text-[13px] text-slate-400 dark:text-slate-500">
+                          <Users className="h-3 w-3 text-slate-400 flex-shrink-0" />
                           {company.users_count} usuários
                         </div>
                       </div>
@@ -1747,28 +1765,28 @@ export default function EmpresasPage() {
                   {/* Status */}
                   {visibleCols.has("status") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
                       }}
                     >
                       <span
-                        className={`allka-badge ${
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold w-fit ${
                           company.status === "active"
-                            ? "allka-badge-status-ativo"
+                            ? "bg-[#E7F8EF] text-[#168A4A]"
                             : company.status === "inactive"
-                              ? "allka-badge-status-inativo"
-                              : "allka-badge-status-pendente"
+                              ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
                         }`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                             company.status === "active"
-                              ? "bg-emerald-400"
+                              ? "bg-emerald-500"
                               : company.status === "inactive"
                                 ? "bg-slate-400"
-                                : "bg-amber-400"
+                                : "bg-amber-500"
                           }`}
                         />
                         {company.status === "active"
@@ -1783,13 +1801,15 @@ export default function EmpresasPage() {
                   {/* Plan */}
                   {visibleCols.has("plano") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
                       }}
                     >
                       {(() => {
+                        const planBadgeBase =
+                          "inline-flex items-center rounded-full px-3 py-1 text-xs font-bold w-fit cursor-default";
                         const planMap: Record<
                           string,
                           {
@@ -1805,49 +1825,49 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "allka-badge allka-badge-plano-lite",
+                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
                           },
                           start: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-start",
+                            color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
                           },
                           standard: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-standard",
+                            color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
                           },
                           growth: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-growth",
+                            color: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400",
                           },
                           scale: {
                             name: "Scale",
                             price: "R$ 3.000/mês",
                             discount: "20%",
                             info: "20% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-scale",
+                            color: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400",
                           },
                           squad: {
                             name: "Squad",
                             price: "R$ 5.000/mês",
                             discount: "20%",
                             info: "Agências — 20% desconto + pós pago + squad dedicado",
-                            color: "allka-badge allka-badge-plano-squad",
+                            color: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400",
                           },
                           enterprise: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "allka-badge allka-badge-plano-enterprise",
+                            color: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
                           },
                           // backwards compat
                           basic: {
@@ -1855,42 +1875,42 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "allka-badge allka-badge-plano-lite",
+                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
                           },
                           starter: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-start",
+                            color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
                           },
                           premium: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-standard",
+                            color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
                           },
                           gold: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color: "allka-badge allka-badge-plano-growth",
+                            color: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400",
                           },
                           silver: {
                             name: "Lite",
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "allka-badge allka-badge-plano-lite",
+                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
                           },
                           platinum: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "allka-badge allka-badge-plano-enterprise",
+                            color: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
                           },
                         };
                         const key = (
@@ -1907,7 +1927,7 @@ export default function EmpresasPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span
-                                  className={`${plan.color} w-fit cursor-default`}
+                                  className={`${planBadgeBase} ${plan.color}`}
                                 >
                                   {plan.name}
                                 </span>
@@ -1934,7 +1954,7 @@ export default function EmpresasPage() {
                   {/* Type */}
                   {visibleCols.has("tipo") && (
                     <td
-                      className="px-5 py-3.5"
+                      className="px-4 py-3"
                       style={{
                         borderRight: "1px solid rgba(148,163,184,0.15)",
                         overflow: "hidden",
@@ -1981,8 +2001,8 @@ export default function EmpresasPage() {
                     <td
                       className={`px-2 py-2 transition-colors ${
                         rowIndex % 2 === 0
-                          ? "bg-white group-hover:bg-[#eef2ff] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                          : "bg-[#f4f7fb] group-hover:bg-[#e8eeff] dark:bg-[oklch(0.16_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          ? "bg-white group-hover:bg-[#f8fbff] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#fbfcff] group-hover:bg-[#f8fbff] dark:bg-[oklch(0.16_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                       }`}
                       style={{
                         position: "sticky",
@@ -1992,67 +2012,56 @@ export default function EmpresasPage() {
                         borderLeft: "1px solid rgba(148,163,184,0.18)",
                       }}
                     >
-                      {/* Pill container */}
-                      <div className="flex items-center justify-center">
-                        <div className="inline-flex items-center gap-px rounded-lg border border-slate-200/80 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/60 p-0.5 shadow-sm backdrop-blur-sm">
-                          {/* Ver detalhes */}
-                          <TooltipProvider delayDuration={400}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleViewCompany(company)}
-                                  className="h-6 w-6 p-0 rounded-md text-[#2558FF]/60 hover:text-[#2558FF] hover:bg-[#2558FF]/10 dark:text-[#2558FF]/50 dark:hover:text-[#2558FF] dark:hover:bg-[#2558FF]/15 transition-all duration-150"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-medium">
-                                Ver detalhes
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          {/* Editar empresa */}
-                          <TooltipProvider delayDuration={400}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditCompany(company)}
-                                  className="h-6 w-6 p-0 rounded-md text-[#6E2C96]/60 hover:text-[#6E2C96] hover:bg-[#6E2C96]/10 dark:text-[#6E2C96]/50 dark:hover:text-[#6E2C96] dark:hover:bg-[#6E2C96]/15 transition-all duration-150"
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-medium">
-                                Editar empresa
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          {/* Excluir empresa */}
-                          <TooltipProvider delayDuration={400}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleDeleteCompany(company.id)
-                                  }
-                                  className="h-6 w-6 p-0 rounded-md text-rose-400/60 hover:text-rose-500 hover:bg-rose-500/10 dark:text-rose-400/50 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-all duration-150"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-medium">
-                                Excluir empresa
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                        {/* end pill */}
+                      {/* Square action buttons */}
+                      <div className="flex items-center justify-center gap-1.5">
+                        {/* Ver detalhes */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => handleViewCompany(company)}
+                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Ver detalhes
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {/* Editar empresa */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => handleEditCompany(company)}
+                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Editar empresa
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {/* Excluir empresa */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => handleDeleteCompany(company.id)}
+                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Excluir empresa
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       {/* end center wrapper */}
                     </td>
@@ -2080,8 +2089,8 @@ export default function EmpresasPage() {
 
         {/* Bottom Pagination */}
         {filteredCompanies.length > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <div className="flex items-center gap-3">
               <ItemsPerPageSelect
                 value={pageSize.toString()}
                 onValueChange={(value) => {
@@ -2090,18 +2099,32 @@ export default function EmpresasPage() {
                 }}
                 variant="bottom"
               />
-              <span className="text-xs text-slate-400">
-                de {filteredCompanies.length} empresa
-                {filteredCompanies.length !== 1 ? "s" : ""}
+              <span className="text-[13px] font-medium text-[#64748b] dark:text-slate-400 whitespace-nowrap">
+                {(() => {
+                  const start = Math.min(
+                    (currentPage - 1) * pageSize + 1,
+                    filteredCompanies.length,
+                  );
+                  const end = Math.min(
+                    currentPage * pageSize,
+                    filteredCompanies.length,
+                  );
+                  return (
+                    <>
+                      Mostrando {start}-{end} de {filteredCompanies.length}{" "}
+                      empresa{filteredCompanies.length !== 1 ? "s" : ""}
+                    </>
+                  );
+                })()}
               </span>
             </div>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
               {getPageNumbers().map((page, index) =>
                 page === "..." ? (
@@ -2112,11 +2135,19 @@ export default function EmpresasPage() {
                   <button
                     key={index}
                     onClick={() => setCurrentPage(Number(page))}
-                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                    className={`h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-[13px] font-bold transition-colors ${
                       page === currentPage
-                        ? "btn-brand text-white shadow-sm"
+                        ? "text-white shadow-[0_8px_18px_rgba(110,44,150,0.25)]"
                         : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                     }`}
+                    style={
+                      page === currentPage
+                        ? {
+                            background:
+                              "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                          }
+                        : undefined
+                    }
                   >
                     {page}
                   </button>
@@ -2127,9 +2158,9 @@ export default function EmpresasPage() {
                   setCurrentPage(Math.min(totalPages, currentPage + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
-                <ChevronRight className="h-3.5 w-3.5" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>
