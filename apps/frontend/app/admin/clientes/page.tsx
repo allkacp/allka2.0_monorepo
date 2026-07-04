@@ -21,10 +21,12 @@ import {
   Settings2,
   AlertTriangle,
   ShieldCheck,
+  Hash,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
+import { apiClient } from "@/lib/api-client";
 import {
   Tooltip,
   TooltipContent,
@@ -153,6 +155,18 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
 ];
 const DEFAULT_VISIBLE: ColKey[] = ["empresa", "segmento", "contato", "projetos", "usuarios", "status", "tipo"];
 
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  draft: "Rascunho",
+  negotiation: "Negociação",
+  "awaiting-payment": "Aguardando pagamento",
+  planning: "Planejamento",
+  "in-progress": "Em andamento",
+  paused: "Pausado",
+  completed: "Concluído",
+  cancelled: "Cancelado",
+  paid: "Pago",
+};
+
 // Gradient stat-card treatment matching admin/empresas' statColorMap
 const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
   blue: {
@@ -225,6 +239,30 @@ export default function AdminClientesPage() {
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
+
+  // "+" info panel — same recipe as admin/empresas, backed by the same
+  // real GET /clients/:id/summary endpoint (same Company entity).
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoPanelClient, setInfoPanelClient] = useState<any>(null);
+  const [infoPanelSummary, setInfoPanelSummary] = useState<{
+    projects: { total: number; byStatus: Record<string, number> };
+    users: { id: string; name: string; email: string; is_active: boolean }[];
+  } | null>(null);
+  const [infoPanelLoading, setInfoPanelLoading] = useState(false);
+  const openInfoPanel = useCallback(async (client: any) => {
+    setInfoPanelClient(client);
+    setInfoPanelSummary(null);
+    setInfoPanelOpen(true);
+    setInfoPanelLoading(true);
+    try {
+      const data = await apiClient.getCompanySummary(client.id);
+      setInfoPanelSummary(data as any);
+    } catch {
+      setInfoPanelSummary(null);
+    } finally {
+      setInfoPanelLoading(false);
+    }
+  }, []);
 
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
     useSorting<any>();
@@ -639,6 +677,22 @@ export default function AdminClientesPage() {
                         <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openInfoPanel(c);
+                                }}
+                                className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
                               <a
                                 href={`/admin/empresas/${c.id}`}
                                 className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
@@ -886,6 +940,144 @@ export default function AdminClientesPage() {
             </label>
           ))}
         </div>
+      </SlidePanel>
+
+      {/* "+" info panel — real project/user data via GET /clients/:id/summary */}
+      <SlidePanel
+        open={infoPanelOpen}
+        onClose={() => setInfoPanelOpen(false)}
+        title={
+          infoPanelClient && (
+            <div className="flex items-center gap-3">
+              <ClientAvatar client={infoPanelClient} index={0} />
+              <div className="min-w-0">
+                <p className="truncate">{infoPanelClient.name}</p>
+              </div>
+            </div>
+          )
+        }
+        subtitle={
+          infoPanelClient &&
+          `${formatCompanySequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Localização não informada"}`
+        }
+      >
+        {infoPanelClient && (
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                  Dados da empresa
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Contato</p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelClient.email || "—"}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                      <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelClient.phone || "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">CNPJ · Usuários</p>
+                    <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
+                      <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelClient.cnpj || "—"}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                      <Users className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelClient._count?.users ?? 0} usuário{(infoPanelClient._count?.users ?? 0) !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${STATUS_DOT_CLASSES[infoPanelClient.status] ?? STATUS_DOT_CLASSES.ativo}`}>
+                      {STATUS_CONFIG[infoPanelClient.status]?.label ?? infoPanelClient.status ?? "Ativo"}
+                    </span>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Segmento · Tipo</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {(infoPanelClient.segment || "—") + " · " + getCompanyTypeLabel(infoPanelClient.type)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Membro desde</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {infoPanelClient.created_at ? fmtDate(infoPanelClient.created_at) : "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Projetos</h3>
+                {infoPanelLoading ? (
+                  <p className="text-xs text-slate-400">Carregando...</p>
+                ) : infoPanelSummary ? (
+                  <>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                      <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
+                        {infoPanelSummary.projects.total}
+                      </span>
+                      projeto{infoPanelSummary.projects.total !== 1 ? "s" : ""} no total
+                    </p>
+                    {infoPanelSummary.projects.total > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(infoPanelSummary.projects.byStatus).map(([status, count]) => (
+                          <span
+                            key={status}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300"
+                          >
+                            {PROJECT_STATUS_LABELS[status] || status}
+                            <span className="rounded-full bg-slate-700 text-white dark:bg-slate-500 px-1.5 text-[10px] font-bold">
+                              {count}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">Nenhum projeto cadastrado para esta empresa.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-400">Não foi possível carregar os projetos.</p>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Usuários vinculados</h3>
+                {infoPanelLoading ? (
+                  <p className="text-xs text-slate-400">Carregando...</p>
+                ) : infoPanelSummary && infoPanelSummary.users.length > 0 ? (
+                  <div className="space-y-2">
+                    {infoPanelSummary.users.map((u) => (
+                      <div key={u.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{u.name}</p>
+                          <p className="text-xs text-slate-400 truncate">{u.email}</p>
+                        </div>
+                        <span
+                          className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                            u.is_active
+                              ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                              : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          {u.is_active ? "Ativo" : "Inativo"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">Nenhum usuário cadastrado para esta empresa.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </SlidePanel>
     </div>
   );

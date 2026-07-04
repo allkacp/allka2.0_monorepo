@@ -6,8 +6,10 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 interface SlidePanelProps {
   open: boolean;
   onClose: () => void;
-  title: string;
-  subtitle?: string;
+  /** Usually a string, but accepts a ReactNode for headers that need more
+   * than plain text (e.g. an avatar next to the title). */
+  title: ReactNode;
+  subtitle?: ReactNode;
   /** "full" spans from the sidebar to the right edge (filters, column config,
    * record detail). "compact" is a fixed-width panel anchored to the right
    * edge (small forms, confirmations). */
@@ -106,10 +108,10 @@ export function SlidePanel({
             "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
         }}
       >
-        <div className="min-w-0">
-          <h2 className="text-sm font-bold text-white truncate">{title}</h2>
+        <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+          {title}
           {subtitle && (
-            <p className="text-[11px] text-white/60 mt-0.5 truncate">
+            <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
               {subtitle}
             </p>
           )}
