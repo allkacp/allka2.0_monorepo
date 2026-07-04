@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api-client"
 
 export interface ApiCompany {
   id: string
+  sequence_number: number
   name: string
   cnpj: string | null
   email: string | null

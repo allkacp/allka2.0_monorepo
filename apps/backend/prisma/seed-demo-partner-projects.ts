@@ -28,9 +28,9 @@ const PARTNER_PWD   = "DEMO-Partner2026!";
 
 // 3 empresas exclusivas do parceiro (IDs fixos)
 const PARTNER_COMPANIES = [
-  { id: "seed-partner-company-A", name: "Cliente Partner Alpha Ltda", cnpj: "30100100000101", segment: "Tecnologia" },
-  { id: "seed-partner-company-B", name: "Cliente Partner Beta Ltda",  cnpj: "30200200000102", segment: "Marketing"  },
-  { id: "seed-partner-company-C", name: "Cliente Partner Gamma Ltda", cnpj: "30300300000103", segment: "Design"     },
+  { id: "seed-partner-company-A", name: "Cliente Partner Alpha Ltda", cnpj: "30100100000101", segment: "Tecnologia", email: "contato@alpha.com.br", phone: "(11) 97777-7777" },
+  { id: "seed-partner-company-B", name: "Cliente Partner Beta Ltda",  cnpj: "30200200000102", segment: "Marketing",  email: "contato@beta.com.br",  phone: "(11) 98888-8888" },
+  { id: "seed-partner-company-C", name: "Cliente Partner Gamma Ltda", cnpj: "30300300000103", segment: "Design",     email: "contato@gamma.com.br", phone: "(11) 99999-9999" },
 ];
 
 // IDs de clientes da agência para os 5 projetos extras
@@ -221,6 +221,9 @@ async function main() {
           cnpj: c.cnpj,
           segment: c.segment,
           status: "ativo",
+          email: c.email,
+          phone: c.phone,
+          type: "parceiro",
           ...(partnerProfileId ? { referred_by_partner_id: partnerProfileId } : {}),
         },
       });

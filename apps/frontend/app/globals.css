@@ -1178,30 +1178,6 @@
     background: transparent;
   }
 
-  /* Scrollbar horizontal exclusivo da tabela de /admin/empresas —
-     não aplicar em .allka-table-scroll (compartilhado por outras telas). */
-  .empresas-table-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: #6E2C96 #eef2f7;
-  }
-  .empresas-table-scroll::-webkit-scrollbar {
-    height: 10px;
-  }
-  .empresas-table-scroll::-webkit-scrollbar-track {
-    background: #eef2f7;
-    border-radius: 999px;
-  }
-  .empresas-table-scroll::-webkit-scrollbar-thumb {
-    background: linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%);
-    border-radius: 999px;
-    border: 2px solid #eef2f7;
-  }
-  .empresas-table-scroll::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(90deg, #1f4be0 0%, #632886 55%, #c61f86 100%);
-  }
-  .empresas-table-scroll::-webkit-scrollbar-corner {
-    background: #eef2f7;
-  }
 
   /* Hide scrollbar for mobile menu */
   .hide-scrollbar {
@@ -1519,16 +1495,18 @@
    SCROLLBAR — moderna, fina e sutil em toda a aplicação
    ============================================================ */
 
-/* Firefox */
+/* Firefox — flat-color fallback (gradients aren't supported here) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  scrollbar-color: #6e2c96 transparent;
 }
 
-/* Chrome / Edge / Safari */
+/* Chrome / Edge / Safari — degradê Allka, fundo do trilho transparente,
+   aplicado a todos os scrolls da plataforma (vertical da página, sidebar,
+   modais, tabelas, etc.) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -1536,13 +1514,13 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
   border-radius: 999px;
-  transition: background 0.2s;
+  transition: filter 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.6);
+  filter: brightness(1.15);
 }
 
 ::-webkit-scrollbar-corner {
@@ -1933,4 +1911,55 @@
   );
   background-size: 200% 100%;
   animation: allka-shimmer 1.6s ease-in-out infinite;
+}
+/* Remove o contorno branco (herdado de .btn-brand) do seletor "Itens:" no
+   modo escuro, onde ficava parecendo um quadrado com borda branca indevida.
+   Especificidade mais alta que `.btn-brand` sozinho vence o !important dela. */
+.dark .items-per-page-select .btn-brand {
+  border-color: transparent !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Scrollbar horizontal com degradê — EXCLUSIVO da tabela de /admin/empresas.
+   Fica FORA de @layer e no fim do arquivo, DEPOIS da regra global
+   `::-webkit-scrollbar`, para vencê-la por especificidade + ordem da cascata
+   (regra sem-layer vence regra com-layer). Não afeta outras telas.
+   ───────────────────────────────────────────────────────────────────────────── */
+.empresas-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #6e2c96 transparent;
+  forced-color-adjust: none;
+}
+.empresas-table-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.empresas-table-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.empresas-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.empresas-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+  border-radius: 999px;
+}
+.empresas-table-scroll::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.15);
+}
+.empresas-table-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Corpo da tabela de /admin/empresas: rola horizontalmente mas SEM barra
+   visível (a barra degradê fica no rodapé/topo, espelhada). Unlayered para
+   vencer a regra global `::-webkit-scrollbar`. */
+.empresas-table-body {
+  scrollbar-width: none;
+}
+.empresas-table-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

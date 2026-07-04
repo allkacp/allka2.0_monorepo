@@ -63,23 +63,23 @@ async function main() {
 
   // 3. Upsert 10 clientes
   const clients = [
-    { id: IDS.clientCocaCola,  name: "Coca-Cola Brasil",  cnpj: "45.997.418/0001-53", segment: "Bebidas"       },
-    { id: IDS.clientStarbucks, name: "Starbucks Coffee",  cnpj: "08.883.874/0001-62", segment: "Alimentação"   },
-    { id: IDS.clientGoogle,    name: "Google Brasil",     cnpj: "06.990.590/0001-23", segment: "Tecnologia"    },
-    { id: IDS.clientMagazine,  name: "Magazine Luiza",    cnpj: "47.960.950/0001-21", segment: "Varejo"        },
-    { id: IDS.clientNubank,    name: "Nubank",            cnpj: "18.236.120/0001-58", segment: "Fintech"       },
-    { id: IDS.clientNatura,    name: "Natura Cosméticos", cnpj: "71.673.990/0001-77", segment: "Cosméticos"    },
-    { id: IDS.clientTesla,     name: "Tesla Brasil",      cnpj: "33.456.789/0001-11", segment: "Mobilidade"    },
-    { id: IDS.clientAmbev,     name: "Ambev S.A.",        cnpj: "02.808.708/0001-07", segment: "Bebidas"       },
-    { id: IDS.clientIfood,     name: "iFood",             cnpj: "14.380.200/0001-21", segment: "Tecnologia"    },
-    { id: IDS.clientEmbraer,   name: "Embraer",           cnpj: "07.689.002/0001-89", segment: "Aeronáutica"   },
+    { id: IDS.clientCocaCola,  name: "Coca-Cola Brasil",  cnpj: "45.997.418/0001-53", segment: "Bebidas",       email: "contato@cocacola.com.br",      phone: "(11) 2107-8000" },
+    { id: IDS.clientStarbucks, name: "Starbucks Coffee",  cnpj: "08.883.874/0001-62", segment: "Alimentação",   email: "contato@starbucks.com.br",     phone: "(11) 3956-4000" },
+    { id: IDS.clientGoogle,    name: "Google Brasil",     cnpj: "06.990.590/0001-23", segment: "Tecnologia",    email: "contato@google.com.br",        phone: "(11) 2395-3400" },
+    { id: IDS.clientMagazine,  name: "Magazine Luiza",    cnpj: "47.960.950/0001-21", segment: "Varejo",        email: "contato@magazineluiza.com.br", phone: "(11) 3504-2500" },
+    { id: IDS.clientNubank,    name: "Nubank",            cnpj: "18.236.120/0001-58", segment: "Fintech",       email: "contato@nubank.com.br",        phone: "(11) 4020-2440" },
+    { id: IDS.clientNatura,    name: "Natura Cosméticos", cnpj: "71.673.990/0001-77", segment: "Cosméticos",    email: "contato@natura.net",           phone: "(11) 4796-8000" },
+    { id: IDS.clientTesla,     name: "Tesla Brasil",      cnpj: "33.456.789/0001-11", segment: "Mobilidade",    email: "contato@tesla.com.br",         phone: "(11) 4000-2020" },
+    { id: IDS.clientAmbev,     name: "Ambev S.A.",        cnpj: "02.808.708/0001-07", segment: "Bebidas",       email: "contato@ambev.com.br",         phone: "(11) 2122-1200" },
+    { id: IDS.clientIfood,     name: "iFood",             cnpj: "14.380.200/0001-21", segment: "Tecnologia",    email: "contato@ifood.com.br",         phone: "(11) 3230-3200" },
+    { id: IDS.clientEmbraer,   name: "Embraer",           cnpj: "07.689.002/0001-89", segment: "Aeronáutica",   email: "contato@embraer.com.br",       phone: "(12) 3927-1000" },
   ];
 
   for (const c of clients) {
     await prisma.company.upsert({
       where:  { id: c.id },
       update: { name: c.name },
-      create: { id: c.id, name: c.name, cnpj: c.cnpj, segment: c.segment, status: "ativo" },
+      create: { id: c.id, name: c.name, cnpj: c.cnpj, segment: c.segment, status: "ativo", email: c.email, phone: c.phone, type: "agencia" },
     });
     console.log(`  ✓ Cliente → ${c.name}`);
   }

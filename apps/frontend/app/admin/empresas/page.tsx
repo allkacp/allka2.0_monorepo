@@ -37,7 +37,7 @@ import {
   CheckCircle,
   PauseCircle,
   Clock,
-  Cog,
+  Settings2,
   Award,
   AlertTriangle,
   ShieldCheck,
@@ -113,11 +113,12 @@ const gradientMap: Record<string, string> = {
     "linear-gradient(to top right, #000000, #0f172a, #111827)",
 };
 
-type CompanyType = "all" | "company" | "agency" | "nomad";
+type CompanyType = "all" | "company" | "agency" | "nomad" | "partner";
 type CompanyStatus = "all" | "active" | "inactive" | "pending";
 
 type Company = {
   id: number;
+  sequence_number?: number;
   name: string;
   legal_name?: string;
   type: CompanyType;
@@ -267,6 +268,45 @@ function CompanyAvatar({ company }: { company: Company }) {
   );
 }
 
+// Renders text that truncates with an ellipsis when the column is narrowed;
+// a tooltip with the full value only appears when the text is actually cut
+// off (checked via scrollWidth vs clientWidth on hover).
+function TruncatedText({
+  text,
+  className = "",
+}: {
+  text?: string | null;
+  className?: string;
+}) {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const [isTruncated, setIsTruncated] = React.useState(false);
+  const value = text || "—";
+  const checkTruncation = () => {
+    const el = ref.current;
+    if (el) setIsTruncated(el.scrollWidth > el.clientWidth);
+  };
+  return (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            ref={ref}
+            onMouseEnter={checkTruncation}
+            className={`block truncate ${className}`}
+          >
+            {value}
+          </span>
+        </TooltipTrigger>
+        {isTruncated && (
+          <TooltipContent side="top" className="max-w-xs text-xs break-words">
+            {value}
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export default function EmpresasPage() {
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const { toast } = useToast();
@@ -282,22 +322,40 @@ export default function EmpresasPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
 
   const isSyncingScroll = useRef(false);
-  const handleTopBarScroll = useCallback(() => {
-    if (isSyncingScroll.current) return;
+  // The two mirror bars (top/bottom) are narrow flex-1 strips sitting next to
+  // other toolbar/footer controls, while the real table div spans the full
+  // card width — their scrollable widths differ. Syncing by raw scrollLeft
+  // pixels made one hit its end long before the others. Sync by the
+  // *ratio* of scroll completion instead, so all three always reach 0% and
+  // 100% together regardless of their individual widths.
+  const syncScrollFrom = useCallback((source: HTMLDivElement | null) => {
+    if (isSyncingScroll.current || !source) return;
     isSyncingScroll.current = true;
-    if (tableScrollRef.current && topScrollRef.current)
-      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    const sourceMax = source.scrollWidth - source.clientWidth;
+    const ratio = sourceMax > 0 ? source.scrollLeft / sourceMax : 0;
+    [tableScrollRef, topScrollRef, bottomScrollRef].forEach((ref) => {
+      const el = ref.current;
+      if (!el || el === source) return;
+      const max = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = ratio * max;
+    });
     requestAnimationFrame(() => { isSyncingScroll.current = false; });
   }, []);
-  const handleTableScroll = useCallback(() => {
-    if (isSyncingScroll.current) return;
-    isSyncingScroll.current = true;
-    if (topScrollRef.current && tableScrollRef.current)
-      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => { isSyncingScroll.current = false; });
-  }, []);
+  const handleTopBarScroll = useCallback(
+    () => syncScrollFrom(topScrollRef.current),
+    [syncScrollFrom],
+  );
+  const handleTableScroll = useCallback(
+    () => syncScrollFrom(tableScrollRef.current),
+    [syncScrollFrom],
+  );
+  const handleBottomBarScroll = useCallback(
+    () => syncScrollFrom(bottomScrollRef.current),
+    [syncScrollFrom],
+  );
 
   const appliedTheme = previewTheme || sidebarSettings;
   const themeBg = appliedTheme.backgroundColor;
@@ -319,46 +377,156 @@ export default function EmpresasPage() {
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
+    | "acoes"
+    | "id"
     | "empresa"
     | "contato"
     | "cnpj"
     | "status"
     | "plano"
     | "tipo"
-    | "acoes";
+    | "membro_desde";
   const allColumns: { key: ColKey; label: string; required?: boolean }[] = [
+    { key: "acoes", label: "Ações", required: true },
+    { key: "id", label: "ID", required: true },
     { key: "empresa", label: "Empresa", required: true },
     { key: "contato", label: "Contato" },
     { key: "cnpj", label: "CNPJ · Usuários" },
     { key: "status", label: "Status" },
     { key: "plano", label: "Plano" },
     { key: "tipo", label: "Tipo" },
-    { key: "acoes", label: "Ações", required: true },
+    { key: "membro_desde", label: "Membro Desde" },
   ];
+  // Explicação de cada coluna, mostrada no tooltip do ícone de info do cabeçalho
+  const COLUMN_INFO: Partial<Record<ColKey, string>> = {
+    acoes: "Ações rápidas: ver detalhes, editar e mais informações da empresa.",
+    id: "Código sequencial único da empresa — nunca se repete.",
+    empresa: "Nome, localização e indicadores de conformidade (DPO/LGPD).",
+    contato: "E-mail e telefone/WhatsApp de contato da empresa.",
+    cnpj: "CNPJ cadastrado e quantidade de usuários vinculados à empresa.",
+    status: "Situação atual da empresa na plataforma.",
+    plano: "Plano contratado pela empresa.",
+    tipo: "Tipo de conta (Empresa, Agência ou Nômade) e nível de parceria.",
+    membro_desde: "Data em que a empresa foi cadastrada na plataforma.",
+  };
+  // Colunas visíveis por padrão (o usuário pode ligar as demais na engrenagem)
+  const DEFAULT_VISIBLE_COLS: ColKey[] = [
+    "acoes",
+    "id",
+    "empresa",
+    "contato",
+    "status",
+    "plano",
+    "tipo",
+  ];
+  // v2: bumped after adding the "id" and "membro_desde" columns and
+  // redefining the default visible set — ensures everyone (including
+  // browsers with an old saved preference) starts from the new default.
+  const VISIBLE_COLS_STORAGE_KEY = "empresas:visibleColsV2";
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
     // Persist user choice per browser. To apply per backend user, swap the
     // key with the userId from your auth context.
     try {
-      const raw = localStorage.getItem("empresas:visibleCols");
+      const raw = localStorage.getItem(VISIBLE_COLS_STORAGE_KEY);
       if (raw) {
         const arr = JSON.parse(raw) as string[];
         if (Array.isArray(arr) && arr.length > 0) {
-          return new Set(
+          const restored = new Set(
             arr.filter((k): k is ColKey => allColumns.some((c) => c.key === k)),
           );
+          // Required columns must always show, even if they were added to
+          // the schema after this preference was last saved.
+          allColumns.forEach((c) => {
+            if (c.required) restored.add(c.key);
+          });
+          return restored;
         }
       }
     } catch {
       /* ignore */
     }
-    return new Set(allColumns.map((c) => c.key));
+    return new Set(DEFAULT_VISIBLE_COLS);
   });
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [colConfigClosing, setColConfigClosing] = useState(false);
+  const closeColConfig = useCallback(() => {
+    setColConfigClosing(true);
+    setTimeout(() => {
+      setColConfigClosing(false);
+      setColConfigOpen(false);
+    }, 300);
+  }, []);
+  useEffect(() => {
+    if (!colConfigOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeColConfig();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [colConfigOpen, closeColConfig]);
+
+  // ── Company "more info" slide panel (opened via the + button) ───────────
+  const [infoPanelCompany, setInfoPanelCompany] = useState<Company | null>(null);
+  const [infoPanelClosing, setInfoPanelClosing] = useState(false);
+  const [infoPanelSummary, setInfoPanelSummary] = useState<{
+    projects: { total: number; byStatus: Record<string, number> };
+    users: {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      is_active: boolean;
+      last_login: string | null;
+    }[];
+  } | null>(null);
+  const [infoPanelLoading, setInfoPanelLoading] = useState(false);
+  const openInfoPanel = useCallback(async (company: Company) => {
+    setInfoPanelCompany(company);
+    setInfoPanelSummary(null);
+    if (!company._apiId) return;
+    setInfoPanelLoading(true);
+    try {
+      const data = await apiClient.getCompanySummary(company._apiId);
+      setInfoPanelSummary(data as any);
+    } catch {
+      setInfoPanelSummary(null);
+    } finally {
+      setInfoPanelLoading(false);
+    }
+  }, []);
+  const closeInfoPanel = useCallback(() => {
+    setInfoPanelClosing(true);
+    setTimeout(() => {
+      setInfoPanelClosing(false);
+      setInfoPanelCompany(null);
+      setInfoPanelSummary(null);
+    }, 300);
+  }, []);
+  useEffect(() => {
+    if (!infoPanelCompany) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeInfoPanel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [infoPanelCompany, closeInfoPanel]);
+  const PROJECT_STATUS_LABELS: Record<string, string> = {
+    draft: "Rascunho",
+    negotiation: "Negociação",
+    "awaiting-payment": "Aguardando pagamento",
+    planning: "Planejamento",
+    "in-progress": "Em andamento",
+    paused: "Pausado",
+    completed: "Concluído",
+    cancelled: "Cancelado",
+    paid: "Pago",
+  };
+
   // Persist whenever visibleCols changes
   useEffect(() => {
     try {
       localStorage.setItem(
-        "empresas:visibleCols",
+        VISIBLE_COLS_STORAGE_KEY,
         JSON.stringify(Array.from(visibleCols)),
       );
     } catch {
@@ -377,22 +545,26 @@ export default function EmpresasPage() {
 
   // ── Column resize ──────────────────────────────────────────────
   const allDefaultWidths: Record<ColKey, number> = {
+    acoes: 99,
+    id: 85,
     empresa: 280,
     contato: 240,
     cnpj: 210,
-    status: 145,
-    plano: 145,
-    tipo: 160,
-    acoes: 130,
+    status: 108,
+    plano: 118,
+    tipo: 135,
+    membro_desde: 140,
   };
   const allMinWidths: Record<ColKey, number> = {
+    acoes: 99,
+    id: 72,
     empresa: 200,
     contato: 180,
     cnpj: 180,
-    status: 110,
-    plano: 110,
-    tipo: 130,
-    acoes: 130,
+    status: 92,
+    plano: 98,
+    tipo: 115,
+    membro_desde: 110,
   };
   const defaultColWidths = visibleColumnsList.map(
     (c) => allDefaultWidths[c.key],
@@ -404,6 +576,25 @@ export default function EmpresasPage() {
   useEffect(() => {
     setColWidths(visibleColumnsList.map((c) => allDefaultWidths[c.key]));
   }, [visibleCols.size]);
+
+  // Only show the horizontal scrollbars (top/bottom mirrors) when the table
+  // actually overflows its container — no point showing a scrollbar that
+  // has nothing to scroll.
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const check = () =>
+      setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    window.addEventListener("resize", check);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", check);
+    };
+  }, [colWidths, visibleCols]);
   const dragState = useRef<{
     colIndex: number;
     startX: number;
@@ -420,14 +611,15 @@ export default function EmpresasPage() {
       };
       const onMouseMove = (ev: MouseEvent) => {
         if (!dragState.current) return;
-        const delta = ev.clientX - dragState.current.startX;
-        const newWidth = Math.max(
-          minColWidths[dragState.current.colIndex],
-          dragState.current.startWidth + delta,
-        );
+        // Capture as plain values — dragState.current can be nulled by
+        // onMouseUp before React flushes the setColWidths updater below,
+        // so reading the ref again inside that callback would crash.
+        const { colIndex: idx, startX, startWidth } = dragState.current;
+        const delta = ev.clientX - startX;
+        const newWidth = Math.max(minColWidths[idx], startWidth + delta);
         setColWidths((prev) => {
           const next = [...prev];
-          next[dragState.current!.colIndex] = newWidth;
+          next[idx] = newWidth;
           return next;
         });
       };
@@ -442,15 +634,32 @@ export default function EmpresasPage() {
     [colWidths],
   );
   useEffect(() => {
+    // The app shell mounts TWO <header> elements (one for desktop, hidden on
+    // mobile via CSS; one for mobile, hidden on desktop) — querySelector
+    // could grab the hidden one (offsetHeight 0) depending on DOM order, so
+    // pick whichever candidate is actually rendered with real height.
+    const headers = Array.from(document.querySelectorAll("header"));
+    const footers = Array.from(document.querySelectorAll("footer"));
     const measure = () => {
-      const h = document.querySelector("header");
-      const f = document.querySelector("footer");
+      const h = headers.find((el) => el.offsetHeight > 0);
+      const f = footers.find((el) => el.offsetHeight > 0);
       if (h) setHeaderHeight(h.offsetHeight);
       if (f) setFooterHeight(f.offsetHeight);
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // The header's second row (level/points pills) can mount/resize after
+    // this effect's first run (e.g. once user context finishes loading),
+    // which left slide panels positioned with a stale (too-short) height.
+    // A ResizeObserver keeps headerHeight/footerHeight correct whenever
+    // their actual rendered size changes, not just on window resize.
+    const ro = new ResizeObserver(measure);
+    headers.forEach((el) => ro.observe(el));
+    footers.forEach((el) => ro.observe(el));
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
   }, []);
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -466,10 +675,12 @@ export default function EmpresasPage() {
 
   // Mapping from ColKey to Company field for sortable columns
   const sortableColMap: Partial<Record<string, keyof Company>> = {
+    id: "sequence_number",
     empresa: "name",
     status: "status",
     plano: "plan",
     tipo: "type",
+    membro_desde: "created_at",
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
@@ -508,6 +719,20 @@ export default function EmpresasPage() {
   const [pageSize, setPageSize] = useItemsPerPage("admin-empresas", 10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [filterPanelClosing, setFilterPanelClosing] = useState(false);
+  const closeFilterPanel = useCallback((resetSelection: boolean) => {
+    setFilterPanelClosing(true);
+    setShowFieldPicker(false);
+    setTimeout(() => {
+      setFilterPanelClosing(false);
+      setIsFilterModalOpen(false);
+      if (resetSelection) {
+        setSelectedFilterId(null);
+        setIsEditingFilter(false);
+        setUnsavedChanges(false);
+      }
+    }, 300);
+  }, []);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     companyId: number | null;
@@ -567,6 +792,22 @@ export default function EmpresasPage() {
   ]);
   const [showFieldPicker, setShowFieldPicker] = useState(false);
 
+  // Close the filters slide panel on Escape — same confirm-on-unsaved-changes
+  // path as clicking the header's X button.
+  useEffect(() => {
+    if (!isFilterModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (unsavedChanges) {
+        setPendingClose(() => () => closeFilterPanel(true));
+        return;
+      }
+      closeFilterPanel(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFilterModalOpen, unsavedChanges, closeFilterPanel]);
+
   // Demo data injected for real-API companies so the UI can be previewed
   const DEMO_DPO = [
     {
@@ -609,9 +850,16 @@ export default function EmpresasPage() {
     const mapped = apiCompanies.map((c: any, idx: number) => ({
       id: idx + 1,
       _apiId: c.id,
+      sequence_number: c.sequence_number ?? undefined,
       name: c.name || "",
       legal_name: c.name || "",
-      type: "company" as const,
+      type: (c.type === "agencia"
+        ? "agency"
+        : c.type === "nomade"
+          ? "nomad"
+          : c.type === "parceiro"
+            ? "partner"
+            : "company") as CompanyType,
       status:
         c.status === "ativo"
           ? "active"
@@ -666,6 +914,47 @@ export default function EmpresasPage() {
     setCompanies(mapped);
   }, [apiCompanies]);
 
+  // ── Search autocomplete (name/ID suggestions as you type) ────────────────
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  // Brief "searching…" feedback so the user knows the query was received,
+  // in case the list/filtering ever feels slow (search itself is instant
+  // today, but this keeps the affordance ready regardless).
+  const [isSearching, setIsSearching] = useState(false);
+  useEffect(() => {
+    if (!searchQuery) {
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    const t = setTimeout(() => setIsSearching(false), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+  const searchSuggestions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return companies
+      .filter((c) => {
+        const idCode = `emp_${String(c.sequence_number ?? "").padStart(5, "0")}`;
+        return (
+          c.name?.toLowerCase().includes(q) || idCode.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 6);
+  }, [companies, searchQuery]);
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(e.target as Node)
+      ) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
   // ── Filtered companies (derived — useMemo ensures instant reactive updates) ──
   const filteredCompanies = useMemo(() => {
     let filtered = companies;
@@ -690,12 +979,19 @@ export default function EmpresasPage() {
             (company.phone
               ? company.phone.replace(/\D/g, "").includes(rawDigits)
               : false));
+        // ID match — "emp_00007", "00007", or just "7"
+        const idCode = `emp_${String(company.sequence_number ?? "").padStart(5, "0")}`;
+        const idMatch =
+          idCode.toLowerCase().includes(q) ||
+          (rawDigits.length > 0 &&
+            String(company.sequence_number ?? "").includes(rawDigits));
         return (
           nameWordMatch ||
           company.name?.toLowerCase().includes(q) ||
           company.legal_name?.toLowerCase().includes(q) ||
           company.email?.toLowerCase().includes(q) ||
           digitMatch ||
+          idMatch ||
           company.document?.toLowerCase().includes(q) ||
           company.location?.toLowerCase().includes(q) ||
           statusLabel.includes(q) ||
@@ -864,6 +1160,56 @@ export default function EmpresasPage() {
     return pages;
   };
 
+  // ── Go-to-page (jump directly to a page not shown in the compact list) ──
+  const [pageJumpValue, setPageJumpValue] = useState("");
+  const commitPageJump = () => {
+    const n = parseInt(pageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) {
+      setCurrentPage(n);
+    }
+    setPageJumpValue("");
+  };
+  const PageJumpField = ({ className = "" }: { className?: string }) => (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`flex items-center gap-1 flex-shrink-0 ${className}`}>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageJumpValue}
+              onChange={(e) => setPageJumpValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPageJump();
+              }}
+              placeholder="Pág."
+              aria-label="Ir para a página"
+              className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+              onClick={commitPageJump}
+              disabled={!pageJumpValue}
+              className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+            >
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+              />
+              <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                Ir
+              </span>
+            </button>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>
+          Digite um número de página e clique em "Ir" (ou aperte Enter) para
+          navegar direto, mesmo que a página não apareça nos botões
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   const stats = {
     total: companies.length,
     active: companies.filter((c) => c.status === "active").length,
@@ -951,11 +1297,23 @@ export default function EmpresasPage() {
   const getTypeLabel = (type: CompanyType) => {
     const labels = {
       all: "Todos",
-      company: "Empresa",
-      agency: "Agência",
-      nomad: "Nômade",
+      company: "Company",
+      agency: "Agency",
+      nomad: "Nomad",
+      partner: "Partner",
     };
     return labels[type];
+  };
+
+  const getTypeInfo = (type: CompanyType) => {
+    const info = {
+      all: "",
+      company: "Empresa cliente direta, sem vínculo com agência ou parceiro.",
+      agency: "Empresa vinculada a um projeto conduzido por uma agência parceira.",
+      nomad: "Empresa atendida por um nômade (freelancer) da plataforma.",
+      partner: "Empresa indicada por um parceiro de indicação (referral).",
+    };
+    return info[type];
   };
 
   const getStatusColor = (status: CompanyStatus) => {
@@ -1034,26 +1392,35 @@ export default function EmpresasPage() {
 
   const statColorMap: Record<
     string,
-    { gradient: string; borderClass: string; strokeColor: string }
+    {
+      gradient: string;
+      darkGradient: string;
+      borderClass: string;
+      strokeColor: string;
+    }
   > = {
     blue: {
       gradient: "from-blue-500 to-blue-700",
-      borderClass: "border-2 border-blue-300/70",
+      darkGradient: "dark:from-blue-800 dark:to-blue-950",
+      borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
       strokeColor: "white",
     },
     emerald: {
       gradient: "from-emerald-500 to-teal-600",
-      borderClass: "border-2 border-emerald-300/70",
+      darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+      borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
       strokeColor: "white",
     },
     violet: {
       gradient: "from-violet-500 to-purple-700",
-      borderClass: "border-2 border-violet-300/70",
+      darkGradient: "dark:from-violet-800 dark:to-purple-950",
+      borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
       strokeColor: "white",
     },
     orange: {
       gradient: "from-orange-500 to-rose-600",
-      borderClass: "border-2 border-orange-300/70",
+      darkGradient: "dark:from-orange-800 dark:to-rose-900",
+      borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
       strokeColor: "white",
     },
   };
@@ -1086,7 +1453,7 @@ export default function EmpresasPage() {
 
     return (
       <div
-        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.borderClass} ${hovered ? "shadow-xl scale-[1.02]" : "shadow-lg"}`}
+        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} ${hovered ? "shadow-xl scale-[1.02]" : "shadow-lg"}`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -1282,193 +1649,214 @@ export default function EmpresasPage() {
 
       {/* Main Table Card */}
       <Card className="rounded-[20px] border border-[#e6ebf3] dark:border-slate-700/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)] overflow-hidden mx-0">
-        {/* Card Top Bar */}
-        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900/30">
-          {/* Search */}
-          <div className="flex-1 relative min-w-[180px] basis-full sm:basis-auto">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        {/* Card Top Bar — row 1: search + filters + gear */}
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 bg-white dark:bg-slate-900/30">
+          {/* Search — com autocompletar por nome/ID */}
+          <div
+            ref={searchBoxRef}
+            className="flex-1 relative min-w-[180px] basis-full sm:basis-auto"
+          >
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7d1b6a]/50 dark:text-[#c07ab0]/60 z-10" />
             <Input
-              placeholder="Nome, e-mail, CNPJ, telefone..."
+              placeholder="Nome, ID, e-mail, CNPJ, telefone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:border-blue-400 w-full"
+              onFocus={() => setSearchFocused(true)}
+              className="pl-10 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 focus-visible:border-[#7d1b6a]/60 w-full"
             />
-          </div>
-
-          {/* Right cluster: items + count + filters + gear + pagination */}
-          <div className="flex flex-wrap items-center gap-2.5 flex-shrink-0">
-            {/* Items per page + result count */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <ItemsPerPageSelect
-                value={pageSize.toString()}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setCurrentPage(1);
-                }}
-                variant="top"
-              />
-              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                {(() => {
-                  const start = Math.min(
-                    (currentPage - 1) * pageSize + 1,
-                    filteredCompanies.length,
-                  );
-                  const end = Math.min(
-                    currentPage * pageSize,
-                    filteredCompanies.length,
-                  );
-                  return (
-                    <>
-                      {start}-{end} de{" "}
-                      <span className="font-semibold text-slate-600 dark:text-slate-300">
-                        {filteredCompanies.length}
-                      </span>{" "}
-                      empresa{filteredCompanies.length !== 1 ? "s" : ""}
-                    </>
-                  );
-                })()}
-              </span>
-            </div>
-
-            {/* Filter Button */}
-            <Button
-              onClick={() => setIsFilterModalOpen(true)}
-              variant="outline"
-              size="sm"
-              className="h-11 gap-2 px-4 text-xs font-medium rounded-[12px] border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0"
-            >
-              <Filter className="h-3.5 w-3.5" />
-              Filtros
-            </Button>
-
-            {/* Column config */}
-            <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  className={`flex items-center justify-center h-11 w-11 rounded-[12px] border transition-colors flex-shrink-0 ${
-                    colConfigOpen
-                      ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
-                      : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                  }`}
-                  title="Configurar colunas"
-                >
-                  <Cog className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="end"
-                sideOffset={8}
-                className="w-[260px] p-0"
-              >
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  Colunas visíveis
-                </p>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Selecione quais colunas exibir na tabela
-                </p>
-              </div>
-              <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
-                {allColumns.map((col) => (
-                  <label
-                    key={col.key}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                      visibleCols.has(col.key)
-                        ? "bg-blue-50 dark:bg-blue-900/20"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-800"
-                    } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
-                  >
-                    <Checkbox
-                      checked={visibleCols.has(col.key)}
-                      onCheckedChange={() =>
-                        !col.required && toggleCol(col.key)
-                      }
-                      disabled={col.required}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      {col.label}
-                    </span>
-                    {col.required && (
-                      <span className="text-[9px] text-slate-400 ml-auto">
-                        obrigatória
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <button
-                  onClick={() =>
-                    setVisibleCols(new Set(allColumns.map((c) => c.key)))
-                  }
-                  className="text-[10px] font-medium text-blue-500 hover:text-blue-700 transition-colors"
-                >
-                  Mostrar todas
-                </button>
-                <span className="text-[10px] text-slate-400">
-                  {visibleCols.size} de {allColumns.length}
-                </span>
-              </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Pagination */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              {getPageNumbers().map((page, index) =>
-                page === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">
-                    ·
-                  </span>
+            {searchFocused && searchQuery.trim() && (
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] shadow-xl overflow-hidden">
+                {searchSuggestions.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-slate-400">
+                    Nenhuma empresa encontrada com esse termo
+                  </p>
                 ) : (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentPage(Number(page))}
-                    className={`h-8 w-8 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                      page === currentPage
-                        ? "btn-brand text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() =>
-                  setCurrentPage(Math.min(totalPages, currentPage + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+                  searchSuggestions.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setSearchQuery(c.name);
+                        setSearchFocused(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                    >
+                      <CompanyAvatar company={c} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                          {c.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          emp_
+                          {String(c.sequence_number ?? c.id).padStart(5, "0")}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Filter Button — icon only, same gradient-on-hover pattern as "Nova Empresa" */}
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setIsFilterModalOpen(true)}
+                  className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
+                >
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                    style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  />
+                  <Filter className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Filtros avançados</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Column config — opens the slide panel (rendered at the end of the component) */}
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setColConfigOpen(true)}
+                  className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
+                >
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                    style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  />
+                  <Settings2 className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Configurar colunas</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
-        {/* Top scrollbar mirror */}
-        <div
-          ref={topScrollRef}
-          onScroll={handleTopBarScroll}
-          className="overflow-x-scroll empresas-table-scroll"
-          style={{ height: 10 }}
-        >
-          <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+        {/* Card Top Bar — row 2: items + count + scrollbar + pagination (mirrors footer) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+          <div className="flex items-center gap-3">
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setCurrentPage(1);
+              }}
+              variant="top"
+            />
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                    {(() => {
+                      const start = Math.min(
+                        (currentPage - 1) * pageSize + 1,
+                        filteredCompanies.length,
+                      );
+                      const end = Math.min(
+                        currentPage * pageSize,
+                        filteredCompanies.length,
+                      );
+                      return (
+                        <>
+                          {start}-{end} de{" "}
+                          <span className="font-semibold text-slate-600 dark:text-slate-300">
+                            {filteredCompanies.length}
+                          </span>{" "}
+                          empresa{filteredCompanies.length !== 1 ? "s" : ""}
+                        </>
+                      );
+                    })()}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Intervalo de empresas exibido nesta página, do total encontrado com os filtros atuais
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Top horizontal scrollbar mirror (gradient) — only when needed */}
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div
+                style={{
+                  minWidth: colWidths.reduce((a, b) => a + b, 0),
+                  height: 1,
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              title="Página anterior"
+              className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            {getPageNumbers().map((page, index) =>
+              page === "..." ? (
+                <span key={index} className="text-xs text-slate-300 px-0.5">
+                  ·
+                </span>
+              ) : (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPage(Number(page))}
+                  title={
+                    page === currentPage
+                      ? "Página atual"
+                      : `Ir para a página ${page}`
+                  }
+                  className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                    page === currentPage
+                      ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                  }`}
+                  style={
+                    page === currentPage
+                      ? {
+                          background:
+                            "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                        }
+                      : undefined
+                  }
+                >
+                  {page}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() =>
+                setCurrentPage(Math.min(totalPages, currentPage + 1))
+              }
+              disabled={currentPage === totalPages}
+              title="Próxima página"
+              className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
+          </div>
         </div>
 
         {/* Table */}
         <div
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto empresas-table-scroll pb-2"
+          className="overflow-x-auto empresas-table-body"
         >
           <table
             className="text-xs"
@@ -1488,7 +1876,7 @@ export default function EmpresasPage() {
                 {visibleColumnsList.map((col, i) => (
                   <th
                     key={col.key}
-                    className="py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none relative"
+                    className="py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none relative [&_button]:!text-[11px]"
                     style={{
                       paddingLeft: 16,
                       paddingRight: 16,
@@ -1498,68 +1886,90 @@ export default function EmpresasPage() {
                       zIndex: col.key === "acoes" ? 3 : 2,
                       background: "var(--table-head)",
                       boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                      borderRight:
-                        col.key !== "acoes"
-                          ? "1px solid rgba(148,163,184,0.16)"
-                          : undefined,
+                      borderRight: "1px solid rgba(148,163,184,0.16)",
                       ...(col.key === "acoes"
                         ? {
-                            right: 0,
-                            minWidth: 130,
-                            borderLeft: "1px solid rgba(148,163,184,0.16)",
+                            left: 0,
+                            minWidth: 99,
+                            paddingLeft: 8,
+                            paddingRight: 8,
+                            borderRight: "1px solid rgba(100,116,139,0.18)",
                             boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                           }
                         : {}),
                     }}
                   >
-                    {sortableColMap[col.key] ? (
-                      <SortableHeader
-                        label={col.label}
-                        field={String(sortableColMap[col.key]!)}
-                        type={
-                          col.key === "status" ||
-                          col.key === "plano" ||
-                          col.key === "tipo"
-                            ? "status"
-                            : "text"
-                        }
-                        sortKey={companySortKey ? String(companySortKey) : null}
-                        sortDir={companySortDir}
-                        onSort={(f, d) => handleCompanySort(f as any, d)}
-                        columnFilters={columnFilters}
-                        onFilter={toggleColumnFilter}
-                        onClearFilter={clearColumnFilter}
-                        filterValues={
-                          col.key === "status"
-                            ? [
-                                ...new Set(
-                                  filteredCompanies.map((c) =>
-                                    String(c.status),
-                                  ),
-                                ),
-                              ]
-                            : col.key === "plano"
-                              ? [
-                                  ...new Set(
-                                    filteredCompanies.map((c) =>
-                                      String(c.plan),
-                                    ),
-                                  ),
-                                ]
-                              : col.key === "tipo"
-                                ? [
-                                    ...new Set(
-                                      filteredCompanies.map((c) =>
-                                        String(c.type),
-                                      ),
-                                    ),
-                                  ]
-                                : undefined
-                        }
-                      />
-                    ) : (
-                      col.label
-                    )}
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={`inline-flex items-center gap-1 ${col.key === "acoes" ? "justify-center w-full" : ""}`}
+                          >
+                            {sortableColMap[col.key] ? (
+                              <SortableHeader
+                                label={col.label}
+                                field={String(sortableColMap[col.key]!)}
+                                type={
+                                  col.key === "status" ||
+                                  col.key === "plano" ||
+                                  col.key === "tipo"
+                                    ? "status"
+                                    : "text"
+                                }
+                                sortKey={
+                                  companySortKey ? String(companySortKey) : null
+                                }
+                                sortDir={companySortDir}
+                                onSort={(f, d) => handleCompanySort(f as any, d)}
+                                columnFilters={columnFilters}
+                                onFilter={toggleColumnFilter}
+                                onClearFilter={clearColumnFilter}
+                                filterValues={
+                                  col.key === "status"
+                                    ? [
+                                        ...new Set(
+                                          filteredCompanies.map((c) =>
+                                            String(c.status),
+                                          ),
+                                        ),
+                                      ]
+                                    : col.key === "plano"
+                                      ? [
+                                          ...new Set(
+                                            filteredCompanies.map((c) =>
+                                              String(c.plan),
+                                            ),
+                                          ),
+                                        ]
+                                      : col.key === "tipo"
+                                        ? [
+                                            ...new Set(
+                                              filteredCompanies.map((c) =>
+                                                String(c.type),
+                                              ),
+                                            ),
+                                          ]
+                                        : undefined
+                                }
+                              />
+                            ) : (
+                              col.label
+                            )}
+                            {COLUMN_INFO[col.key] && (
+                              <Info className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0" />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        {COLUMN_INFO[col.key] && (
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[220px] text-xs"
+                          >
+                            {COLUMN_INFO[col.key]}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                     {col.key !== "acoes" && (
                       <span
                         onMouseDown={(e) => onResizeMouseDown(e, i)}
@@ -1579,10 +1989,102 @@ export default function EmpresasPage() {
                   key={company.id}
                   className={`group transition-colors cursor-pointer ${
                     rowIndex % 2 === 0
-                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f8fbff] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                      : "bg-[#fbfcff] dark:bg-[oklch(0.16_0.024_258)] hover:bg-[#f8fbff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                   }`}
                 >
+                  {/* Actions — pinned to the left, first column */}
+                  {visibleCols.has("acoes") && (
+                    <td
+                      className={`px-1 py-2 transition-colors ${
+                        rowIndex % 2 === 0
+                          ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                      }`}
+                      style={{
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 1,
+                        minWidth: 99,
+                        borderRight: "1px solid rgba(100,116,139,0.18)",
+                      }}
+                    >
+                      {/* Square action buttons + "more" popover */}
+                      <div className="flex items-center justify-center gap-0.5">
+                        {/* Mais informações — abre o painel deslizante padrão */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openInfoPanel(company);
+                                }}
+                                className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Mais informações
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {/* Ver detalhes */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => handleViewCompany(company)}
+                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Ver detalhes
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {/* Editar empresa */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => handleEditCompany(company)}
+                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Editar empresa
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </td>
+                  )}
+
+                  {/* ID */}
+                  {visibleCols.has("id") && (
+                    <td
+                      className="px-4 py-3"
+                      style={{
+                        borderRight: "1px solid rgba(148,163,184,0.15)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                        emp_
+                        {String(company.sequence_number ?? company.id).padStart(
+                          5,
+                          "0",
+                        )}
+                      </span>
+                    </td>
+                  )}
+
                   {/* Company */}
                   {visibleCols.has("empresa") && (
                     <td
@@ -1594,13 +2096,17 @@ export default function EmpresasPage() {
                     >
                       <div className="flex items-center gap-3">
                         <CompanyAvatar company={company} />
-                        <div>
-                          <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate max-w-[180px]">
-                            {company.name}
-                          </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500">
-                            {company.location}
-                          </p>
+                        <div className="min-w-0 flex-1">
+                          <TruncatedText
+                            text={company.name}
+                            className="font-bold text-sm text-slate-800 dark:text-slate-100"
+                          />
+                          {company.location && (
+                            <TruncatedText
+                              text={company.location}
+                              className="text-xs text-slate-400 dark:text-slate-500"
+                            />
+                          )}
                           <div className="flex flex-wrap gap-1 mt-1">
                             {/* DPO ausente: badge clicável que abre edição */}
                             {!company.lgpd?.dpo_name && (
@@ -1608,7 +2114,7 @@ export default function EmpresasPage() {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button
-                                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#FFEBDD] text-[#C2410C] hover:brightness-105 transition-all"
+                                      className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100 hover:shadow-[0_0_12px_rgba(249,115,22,0.7)] transition-all"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditCompany(company);
@@ -1642,7 +2148,7 @@ export default function EmpresasPage() {
                               <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#E7F8EF] text-[#168A4A] cursor-default">
+                                    <span className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100 cursor-default">
                                       <ShieldCheck className="h-3 w-3" />
                                       DPO cadastrado
                                     </span>
@@ -1674,7 +2180,7 @@ export default function EmpresasPage() {
                             {/* Política de privacidade ainda não aceita */}
                             {company.lgpd &&
                               !company.lgpd.privacy_policy_accepted && (
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#FFF4D6] text-[#A16207]">
+                                <span className="inline-flex items-center rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_10px_rgba(245,158,11,0.6)] dark:bg-amber-800/70 dark:text-amber-100">
                                   Política pendente
                                 </span>
                               )}
@@ -1697,12 +2203,13 @@ export default function EmpresasPage() {
                         {company.email ? (
                           <a
                             href={`mailto:${company.email}`}
-                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group w-fit"
+                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group min-w-0"
                           >
                             <Mail className="h-3 w-3 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
-                            <span className="group-hover:underline underline-offset-2 truncate max-w-[160px]">
-                              {company.email}
-                            </span>
+                            <TruncatedText
+                              text={company.email}
+                              className="group-hover:underline underline-offset-2"
+                            />
                           </a>
                         ) : (
                           <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
@@ -1715,7 +2222,7 @@ export default function EmpresasPage() {
                             href={`https://wa.me/${company.phone.replace(/\D/g, "")}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group w-fit"
+                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group min-w-0"
                           >
                             <svg
                               viewBox="0 0 24 24"
@@ -1724,9 +2231,10 @@ export default function EmpresasPage() {
                             >
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                             </svg>
-                            <span className="group-hover:underline underline-offset-2">
-                              {company.phone}
-                            </span>
+                            <TruncatedText
+                              text={company.phone}
+                              className="group-hover:underline underline-offset-2"
+                            />
                           </a>
                         ) : (
                           <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
@@ -1748,11 +2256,12 @@ export default function EmpresasPage() {
                       }}
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <Hash className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                          <span className="text-[13px] font-mono tracking-tight text-slate-600 dark:text-slate-300">
-                            {company.document || "—"}
-                          </span>
+                          <TruncatedText
+                            text={company.document}
+                            className="text-[13px] font-mono tracking-tight text-slate-600 dark:text-slate-300"
+                          />
                         </div>
                         <div className="flex items-center gap-1.5 text-[13px] text-slate-400 dark:text-slate-500">
                           <Users className="h-3 w-3 text-slate-400 flex-shrink-0" />
@@ -1772,12 +2281,12 @@ export default function EmpresasPage() {
                       }}
                     >
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold w-fit ${
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${
                           company.status === "active"
-                            ? "bg-[#E7F8EF] text-[#168A4A]"
+                            ? "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100"
                             : company.status === "inactive"
-                              ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                              ? "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300"
+                              : "border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_12px_rgba(245,158,11,0.65)] dark:bg-amber-800/70 dark:text-amber-100"
                         }`}
                       >
                         <span
@@ -1809,7 +2318,7 @@ export default function EmpresasPage() {
                     >
                       {(() => {
                         const planBadgeBase =
-                          "inline-flex items-center rounded-full px-3 py-1 text-xs font-bold w-fit cursor-default";
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default";
                         const planMap: Record<
                           string,
                           {
@@ -1825,49 +2334,49 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
                           },
                           start: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                            color: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
                           },
                           standard: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+                            color: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
                           },
                           growth: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400",
+                            color: "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
                           },
                           scale: {
                             name: "Scale",
                             price: "R$ 3.000/mês",
                             discount: "20%",
                             info: "20% de desconto em todos os produtos",
-                            color: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400",
+                            color: "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100",
                           },
                           squad: {
                             name: "Squad",
                             price: "R$ 5.000/mês",
                             discount: "20%",
                             info: "Agências — 20% desconto + pós pago + squad dedicado",
-                            color: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400",
+                            color: "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100",
                           },
                           enterprise: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
+                            color: "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
                           },
                           // backwards compat
                           basic: {
@@ -1875,42 +2384,42 @@ export default function EmpresasPage() {
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
                           },
                           starter: {
                             name: "Start",
                             price: "R$ 500/mês",
                             discount: "5%",
                             info: "5% de desconto em todos os produtos",
-                            color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                            color: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
                           },
                           premium: {
                             name: "Standard",
                             price: "R$ 1.000/mês",
                             discount: "10%",
                             info: "10% de desconto em todos os produtos",
-                            color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+                            color: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
                           },
                           gold: {
                             name: "Growth",
                             price: "R$ 1.500/mês",
                             discount: "15%",
                             info: "15% de desconto em todos os produtos",
-                            color: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400",
+                            color: "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
                           },
                           silver: {
                             name: "Lite",
                             price: "R$ 300/mês",
                             discount: "—",
                             info: "Ativa conta agency na plataforma",
-                            color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
                           },
                           platinum: {
                             name: "Enterprise",
                             price: "R$ 5.000/mês",
                             discount: "—",
                             info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
+                            color: "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
                           },
                         };
                         const key = (
@@ -1961,17 +2470,28 @@ export default function EmpresasPage() {
                       }}
                     >
                       <div className="flex flex-col gap-1 items-start">
-                        <span
-                          className={`allka-badge ${
-                            company.type === "company"
-                              ? "allka-badge-tipo-empresa"
-                              : company.type === "agency"
-                                ? "allka-badge-tipo-agencia"
-                                : "allka-badge-tipo-outro"
-                          }`}
-                        >
-                          {getTypeLabel(company.type)}
-                        </span>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default ${
+                                  company.type === "company"
+                                    ? "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100"
+                                    : company.type === "agency"
+                                      ? "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100"
+                                      : company.type === "partner"
+                                        ? "border-pink-500 bg-pink-200 text-pink-900 shadow-[0_0_10px_rgba(236,72,153,0.6)] dark:bg-pink-800/70 dark:text-pink-100"
+                                        : "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100"
+                                }`}
+                              >
+                                {getTypeLabel(company.type)}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-[220px] leading-snug">
+                              {getTypeInfo(company.type)}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {company.type === "agency" &&
                           company.program_level &&
                           (() => {
@@ -1996,74 +2516,22 @@ export default function EmpresasPage() {
                     </td>
                   )}
 
-                  {/* Actions */}
-                  {visibleCols.has("acoes") && (
+                  {/* Membro Desde */}
+                  {visibleCols.has("membro_desde") && (
                     <td
-                      className={`px-2 py-2 transition-colors ${
-                        rowIndex % 2 === 0
-                          ? "bg-white group-hover:bg-[#f8fbff] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                          : "bg-[#fbfcff] group-hover:bg-[#f8fbff] dark:bg-[oklch(0.16_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                      }`}
+                      className="px-4 py-3"
                       style={{
-                        position: "sticky",
-                        right: 0,
-                        zIndex: 1,
-                        minWidth: 130,
-                        borderLeft: "1px solid rgba(148,163,184,0.18)",
+                        borderRight: "1px solid rgba(148,163,184,0.15)",
+                        overflow: "hidden",
                       }}
                     >
-                      {/* Square action buttons */}
-                      <div className="flex items-center justify-center gap-1.5">
-                        {/* Ver detalhes */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleViewCompany(company)}
-                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Ver detalhes
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Editar empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleEditCompany(company)}
-                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Editar empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Excluir empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleDeleteCompany(company.id)}
-                                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Excluir empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      {/* end center wrapper */}
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {company.created_at
+                          ? new Date(company.created_at).toLocaleDateString(
+                              "pt-BR",
+                            )
+                          : "—"}
+                      </span>
                     </td>
                   )}
                 </tr>
@@ -2099,32 +2567,66 @@ export default function EmpresasPage() {
                 }}
                 variant="bottom"
               />
-              <span className="text-[13px] font-medium text-[#64748b] dark:text-slate-400 whitespace-nowrap">
-                {(() => {
-                  const start = Math.min(
-                    (currentPage - 1) * pageSize + 1,
-                    filteredCompanies.length,
-                  );
-                  const end = Math.min(
-                    currentPage * pageSize,
-                    filteredCompanies.length,
-                  );
-                  return (
-                    <>
-                      Mostrando {start}-{end} de {filteredCompanies.length}{" "}
-                      empresa{filteredCompanies.length !== 1 ? "s" : ""}
-                    </>
-                  );
-                })()}
-              </span>
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                      {(() => {
+                        const start = Math.min(
+                          (currentPage - 1) * pageSize + 1,
+                          filteredCompanies.length,
+                        );
+                        const end = Math.min(
+                          currentPage * pageSize,
+                          filteredCompanies.length,
+                        );
+                        return (
+                          <>
+                            {start}-{end} de{" "}
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              {filteredCompanies.length}
+                            </span>{" "}
+                            empresa{filteredCompanies.length !== 1 ? "s" : ""}
+                          </>
+                        );
+                      })()}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>
+                    Intervalo de empresas exibido nesta página, do total encontrado com os filtros atuais
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <div className="flex items-center gap-1.5">
+
+            {/* Horizontal scrollbar mirror — sits between the count text and
+                the pagination, synced with the table's horizontal scroll.
+                Only rendered when the table actually overflows. */}
+            {hasHorizontalOverflow && (
+              <div
+                ref={bottomScrollRef}
+                onScroll={handleBottomBarScroll}
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center"
+                style={{ height: 12 }}
+              >
+                <div
+                  style={{
+                    minWidth: colWidths.reduce((a, b) => a + b, 0),
+                    height: 1,
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                title="Página anterior"
+                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </button>
               {getPageNumbers().map((page, index) =>
                 page === "..." ? (
@@ -2135,9 +2637,14 @@ export default function EmpresasPage() {
                   <button
                     key={index}
                     onClick={() => setCurrentPage(Number(page))}
-                    className={`h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-[13px] font-bold transition-colors ${
+                    title={
                       page === currentPage
-                        ? "text-white shadow-[0_8px_18px_rgba(110,44,150,0.25)]"
+                        ? "Página atual"
+                        : `Ir para a página ${page}`
+                    }
+                    className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                      page === currentPage
+                        ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                         : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                     }`}
                     style={
@@ -2158,17 +2665,19 @@ export default function EmpresasPage() {
                   setCurrentPage(Math.min(totalPages, currentPage + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="h-[34px] w-[34px] flex items-center justify-center rounded-[10px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                title="Próxima página"
+                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               </button>
+              <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
             </div>
           </div>
         )}
       </Card>
 
-      {/* Advanced Filters Modal */}
-      {isFilterModalOpen &&
+      {/* Advanced Filters Modal — sliding panel (same pattern as CompanyEditSlidePanel etc.) */}
+      {(isFilterModalOpen || filterPanelClosing) &&
         (() => {
           const allFilterFields = [
             { id: "nome", label: "Nome da Empresa", section: "identificacao" },
@@ -2216,34 +2725,16 @@ export default function EmpresasPage() {
           };
           return (
             <div
-              className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+              data-slot="sheet-content"
+              data-state={filterPanelClosing ? "closed" : "open"}
               style={{
-                left: sidebarWidth,
-                top: headerHeight,
-                bottom: footerHeight,
-                right: 0,
+                left: sidebarWidth - 2,
+                top: headerHeight - 1,
+                bottom: footerHeight - 1,
+                width: `calc(100vw - ${sidebarWidth - 2}px)`,
               }}
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  if (unsavedChanges) {
-                    setPendingClose(() => () => {
-                      setIsFilterModalOpen(false);
-                      setSelectedFilterId(null);
-                      setIsEditingFilter(false);
-                      setUnsavedChanges(false);
-                      setShowFieldPicker(false);
-                    });
-                    return;
-                  }
-                  setIsFilterModalOpen(false);
-                  setSelectedFilterId(null);
-                  setIsEditingFilter(false);
-                  setUnsavedChanges(false);
-                  setShowFieldPicker(false);
-                }
-              }}
+              className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
             >
-              <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
                 {/* Header — follows sidebar theme */}
                 <div
                   className="flex items-center justify-between px-5 py-3 flex-shrink-0"
@@ -2264,20 +2755,10 @@ export default function EmpresasPage() {
                   <button
                     onClick={() => {
                       if (unsavedChanges) {
-                        setPendingClose(() => () => {
-                          setIsFilterModalOpen(false);
-                          setSelectedFilterId(null);
-                          setIsEditingFilter(false);
-                          setUnsavedChanges(false);
-                          setShowFieldPicker(false);
-                        });
+                        setPendingClose(() => () => closeFilterPanel(true));
                         return;
                       }
-                      setIsFilterModalOpen(false);
-                      setSelectedFilterId(null);
-                      setIsEditingFilter(false);
-                      setUnsavedChanges(false);
-                      setShowFieldPicker(false);
+                      closeFilterPanel(true);
                     }}
                     className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
                   >
@@ -2325,11 +2806,11 @@ export default function EmpresasPage() {
                             className={`group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none ${
                               dragOverFilterId === filter.id &&
                               draggingFilterId !== filter.id
-                                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
+                                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/40"
                                 : draggingFilterId === filter.id
                                   ? "opacity-40"
                                   : selectedFilterId === filter.id
-                                    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
+                                    ? "bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
                                     : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300"
                             }`}
                           >
@@ -3124,32 +3605,340 @@ export default function EmpresasPage() {
                     <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
 
                     <button
-                      onClick={() => {
-                        setIsFilterModalOpen(false);
-                        setSelectedFilterId(null);
-                        setIsEditingFilter(false);
-                        setUnsavedChanges(false);
-                        setShowFieldPicker(false);
-                      }}
+                      onClick={() => closeFilterPanel(true)}
                       className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
-                      onClick={() => {
-                        setIsFilterModalOpen(false);
-                        setShowFieldPicker(false);
-                      }}
+                      onClick={() => closeFilterPanel(false)}
                       className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
                     >
                       Aplicar Filtros
                     </button>
                   </div>
                 </div>
+            </div>
+          );
+        })()}
+      {/* Configurar colunas — painel deslizante padrão */}
+      {(colConfigOpen || colConfigClosing) && (
+        <div
+          data-slot="sheet-content"
+          data-state={colConfigClosing ? "closed" : "open"}
+          style={{
+            left: sidebarWidth - 2,
+            top: headerHeight - 1,
+            bottom: footerHeight - 1,
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          }}
+          className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
+        >
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={getHeaderStyle()}
+          >
+            <div>
+              <h2 className="text-sm font-bold text-white">Configurar colunas</h2>
+              <p className="text-[11px] text-white/60 mt-0.5">
+                {visibleCols.size} de {allColumns.length} visíveis
+              </p>
+            </div>
+            <button
+              onClick={closeColConfig}
+              className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {allColumns.map((col) => (
+                <label
+                  key={col.key}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                    visibleCols.has(col.key)
+                      ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                      : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
+                >
+                  <Checkbox
+                    checked={visibleCols.has(col.key)}
+                    onCheckedChange={() => !col.required && toggleCol(col.key)}
+                    disabled={col.required}
+                    className="h-4 w-4"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {col.label}
+                    </span>
+                    {COLUMN_INFO[col.key] && (
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {COLUMN_INFO[col.key]}
+                      </p>
+                    )}
+                  </div>
+                  {col.required && (
+                    <span className="text-[9px] text-slate-400 flex-shrink-0">
+                      obrigatória
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-3 flex-shrink-0">
+            <button
+              onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))}
+              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Restaurar padrão
+            </button>
+            <button
+              onClick={() => setVisibleCols(new Set(allColumns.map((c) => c.key)))}
+              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+            >
+              Mostrar todas
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mais informações da empresa — painel deslizante padrão (botão +) */}
+      {(infoPanelCompany || infoPanelClosing) &&
+        (() => {
+          const company = infoPanelCompany;
+          if (!company) return null;
+          return (
+            <div
+              data-slot="sheet-content"
+              data-state={infoPanelClosing ? "closed" : "open"}
+              style={{
+                left: sidebarWidth - 2,
+                top: headerHeight - 1,
+                bottom: footerHeight - 1,
+                width: `calc(100vw - ${sidebarWidth - 2}px)`,
+              }}
+              className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
+            >
+              <div
+                className="flex items-start justify-between px-5 py-3 flex-shrink-0"
+                style={getHeaderStyle()}
+              >
+                <div className="flex items-center gap-3">
+                  <CompanyAvatar company={company} />
+                  <div>
+                    <h2 className="text-sm font-bold text-white">{company.name}</h2>
+                    <p className="text-[11px] text-white/60 mt-0.5">
+                      emp_
+                      {String(company.sequence_number ?? company.id).padStart(5, "0")}
+                      {" · "}
+                      {company.location || "Localização não informada"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeInfoPanel}
+                  className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {/* Dados completos da empresa */}
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                      Dados da empresa
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Contato
+                        </p>
+                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                          <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                          {company.email || "—"}
+                        </p>
+                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                          <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                          {company.phone || "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          CNPJ · Usuários
+                        </p>
+                        <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
+                          <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                          {company.document || "—"}
+                        </p>
+                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                          <Users className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                          {company.users_count} usuário
+                          {company.users_count !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Status
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                            company.status === "active"
+                              ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                              : company.status === "inactive"
+                                ? "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                                : "border-amber-500 bg-amber-200 text-amber-900 dark:bg-amber-800/70 dark:text-amber-100"
+                          }`}
+                        >
+                          {company.status === "active"
+                            ? "Ativo"
+                            : company.status === "inactive"
+                              ? "Inativo"
+                              : "Pendente"}
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Plano · Tipo
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 capitalize">
+                          {(company.partner_level || company.account_type || "—") +
+                            " · " +
+                            getTypeLabel(company.type)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Membro desde
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {company.created_at
+                            ? new Date(company.created_at).toLocaleDateString("pt-BR")
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Projetos — contagem por etapa */}
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                      Projetos
+                    </h3>
+                    {infoPanelLoading ? (
+                      <p className="text-xs text-slate-400">Carregando...</p>
+                    ) : infoPanelSummary ? (
+                      <>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                          <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
+                            {infoPanelSummary.projects.total}
+                          </span>
+                          projeto{infoPanelSummary.projects.total !== 1 ? "s" : ""}{" "}
+                          no total
+                        </p>
+                        {infoPanelSummary.projects.total > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(infoPanelSummary.projects.byStatus).map(
+                              ([status, count]) => (
+                                <span
+                                  key={status}
+                                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300"
+                                >
+                                  {PROJECT_STATUS_LABELS[status] || status}
+                                  <span className="rounded-full bg-slate-700 text-white dark:bg-slate-500 px-1.5 text-[10px] font-bold">
+                                    {count}
+                                  </span>
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">
+                            Nenhum projeto cadastrado para esta empresa.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Não foi possível carregar os projetos.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Usuários */}
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                      Usuários vinculados
+                    </h3>
+                    {infoPanelLoading ? (
+                      <p className="text-xs text-slate-400">Carregando...</p>
+                    ) : infoPanelSummary && infoPanelSummary.users.length > 0 ? (
+                      <div className="space-y-2">
+                        {infoPanelSummary.users.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                {u.name}
+                              </p>
+                              <p className="text-xs text-slate-400 truncate">
+                                {u.email}
+                              </p>
+                            </div>
+                            <span
+                              className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                                u.is_active
+                                  ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                                  : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                              }`}
+                            >
+                              {u.is_active ? "Ativo" : "Inativo"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Nenhum usuário cadastrado para esta empresa.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    closeInfoPanel();
+                    handleEditCompany(company);
+                  }}
+                  className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar empresa
+                </button>
+                <button
+                  onClick={() => {
+                    closeInfoPanel();
+                    handleDeleteCompany(company.id);
+                  }}
+                  className="h-9 px-4 rounded-lg text-xs font-medium border border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir empresa
+                </button>
               </div>
             </div>
           );
         })()}
+
       <CompanyCreateSlidePanel
         open={createPanelOpen}
         onOpenChange={setCreatePanelOpen}

@@ -62,7 +62,7 @@ export function Footer() {
       ref={footerRef}
       className={cn(
         /* Oculto em mobile/tablet — o espaço é gerenciado pelo bottom nav */
-        "hidden lg:block fixed bottom-0 z-30 footer-positioned",
+        "hidden lg:block fixed bottom-0 z-90 footer-positioned",
         !isGradientOrDefault && bg,
       )}
       style={getFooterStyle()}

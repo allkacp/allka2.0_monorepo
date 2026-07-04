@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => ({
     },
     watch: {
       ignored: ['**/ARQUIVOS_NAO_USADOS_NO_MOMENTO/**', '**/node_modules/**', '**/.git/**'],
+      usePolling: true,
+      interval: 300,
     },
   },
   optimizeDeps: {

@@ -217,8 +217,70 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/clients/:id/summary — project counts by status + user roster,
+// used by the "more info" panel on the admin companies table.
+router.get("/:id/summary", verifyToken, async (req, res, next) => {
+  try {
+    const { role, account_type, id: userId } = req.user!;
+    const companyId = req.params.id as string;
+
+    if (account_type === "empresas") {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
+      if (!user?.company_id || user.company_id !== companyId) {
+        res.status(403).json({ error: "Acesso não autorizado" });
+        return;
+      }
+    } else if (role !== "admin") {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+
+    const [projectsByStatus, users] = await Promise.all([
+      prisma.project.groupBy({
+        by: ["status"],
+        where: { client_id: companyId },
+        _count: { id: true },
+      }),
+      prisma.user.findMany({
+        where: { company_id: companyId },
+        select: { id: true, name: true, email: true, role: true, is_active: true, last_login: true },
+        orderBy: [{ is_active: "desc" }, { name: "asc" }],
+      }),
+    ]);
+
+    const projects = {
+      total: projectsByStatus.reduce((acc, r) => acc + r._count.id, 0),
+      byStatus: Object.fromEntries(
+        projectsByStatus.map((r) => [r.status, r._count.id]),
+      ),
+    };
+
+    res.json({ projects, users });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function normalizeCNPJ(cnpj: string): string {
   return cnpj.replace(/\D/g, "");
+}
+
+// Whitespace-trimmed duplicate check for company name. MySQL's default
+// collation (utf8mb4_unicode_ci) already compares `=` case-insensitively,
+// so a plain equals is enough here (Prisma's `mode: "insensitive"` is a
+// Postgres/Mongo-only option and isn't supported on the MySQL provider).
+// Excludes `excludeId` so an update doesn't collide with the record itself.
+async function findDuplicateNameId(name: string, excludeId?: string): Promise<string | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const match = await prisma.company.findFirst({
+    where: {
+      name: { equals: trimmed },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+  return match?.id ?? null;
 }
 
 function handleCompanyUniqueError(err: any, res: any): boolean {
@@ -243,6 +305,10 @@ router.post(
   validate(createSchema),
   async (req, res, next) => {
     try {
+      if (await findDuplicateNameId(req.body.name)) {
+        res.status(409).json({ error: "Já existe uma empresa cadastrada com este nome" });
+        return;
+      }
       if (req.body.cnpj) {
         const raw = normalizeCNPJ(req.body.cnpj);
         // Check both raw and formatted variants to catch normalized duplicates
@@ -273,6 +339,16 @@ router.put(
   validate(updateSchema),
   async (req, res, next) => {
     try {
+      if (
+        req.body.name &&
+        (await findDuplicateNameId(req.body.name, req.params.id as string))
+      ) {
+        res.status(409).json({ error: "Já existe uma empresa cadastrada com este nome" });
+        return;
+      }
+      if (req.body.cnpj) {
+        req.body.cnpj = normalizeCNPJ(req.body.cnpj);
+      }
       const company = await prisma.company.update({
         where: { id: req.params.id as string },
         data: req.body,

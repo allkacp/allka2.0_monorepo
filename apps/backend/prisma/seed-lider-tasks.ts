@@ -453,6 +453,8 @@ async function main() {
       name:   "Empresa Seed Performance",
       cnpj:   "00.000.000/0001-99",
       status: "ativo",
+      email:  "contato@seedperformance.com.br",
+      phone:  "(11) 3555-7788",
     },
   });
   console.log("  ✅ Empresa cliente criada");

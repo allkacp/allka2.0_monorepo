@@ -690,7 +690,7 @@ export function Header() {
       {/* search overlay removed — dropdown is now inline below the bar */}
 
       <header
-        className="border-b border-white/10 px-4 sm:px-8 relative z-40 shadow-xl overflow-visible"
+        className="border-b border-white pb-2.5 px-4 sm:px-8 relative z-90 shadow-xl overflow-visible"
         style={{
           background:
             "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",

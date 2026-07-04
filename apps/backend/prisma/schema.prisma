@@ -61,11 +61,18 @@ model LiderArea {
 // ─── Companies (Empresas / Clientes) ─────────────────────────────────────────
 
 model Company {
-  id          String   @id @default(cuid())
+  id              String @id @default(cuid())
+  sequence_number Int    @unique @default(autoincrement())
+  // Código de exibição sequencial (emp_00001, emp_00002, ...) — gerado a
+  // partir de sequence_number. Nunca se repete (AUTO_INCREMENT no MySQL).
   name        String
   cnpj        String?  @unique
   email       String?
   phone       String?
+  type        String   @default("empresa")
+  // empresa | agencia | nomade | parceiro — classificação real do
+  // relacionamento comercial (empresa direta, atendida por agência, por
+  // nômade, ou trazida por um parceiro via referred_by_partner_id)
   status      String   @default("ativo")
   // ativo | inativo | prospecto | inadimplente
   segment     String?

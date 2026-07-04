@@ -159,6 +159,10 @@ class ApiClient {
     return this.get(`/clients/${id}`);
   }
 
+  async getCompanySummary(id: string | number) {
+    return this.get(`/clients/${id}/summary`);
+  }
+
   async createCompany(data: Record<string, any>) {
     return this.post("/clients", data);
   }
