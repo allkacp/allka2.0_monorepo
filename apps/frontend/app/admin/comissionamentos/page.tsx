@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { NeonBadge } from "@/components/neon-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -165,16 +166,9 @@ export default function ComissionamentosPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{category.name}</CardTitle>
-                    <Badge
-                      variant="outline"
-                      className={
-                        category.status === "active"
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : "bg-orange-50 text-orange-700 border-orange-200"
-                      }
-                    >
+                    <NeonBadge color={category.status === "active" ? "emerald" : "orange"}>
                       {category.status === "active" ? "Ativo" : "Pendente"}
-                    </Badge>
+                    </NeonBadge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -383,18 +377,17 @@ export default function ComissionamentosPage() {
                             <td className="p-3 font-semibold">R$ {totalEarned.toLocaleString()}</td>
                             <td className="p-3">R$ {category.monthlyRevenue.toLocaleString()}</td>
                             <td className="p-3">
-                              <Badge
-                                variant="outline"
-                                className={
+                              <NeonBadge
+                                color={
                                   Number.parseFloat(roi) > 200
-                                    ? "bg-green-50 text-green-700 border-green-200"
+                                    ? "emerald"
                                     : Number.parseFloat(roi) > 100
-                                      ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                                      : "bg-red-50 text-red-700 border-red-200"
+                                      ? "amber"
+                                      : "red"
                                 }
                               >
                                 {roi}%
-                              </Badge>
+                              </NeonBadge>
                             </td>
                           </tr>
                         )

@@ -210,7 +210,7 @@ function CircuitAnalyticsSheet({ open, circuit, analytics, onClose }) {
 
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">
+      <SheetContent hideOverlay className="w-full sm:max-w-2xl p-0 flex flex-col gap-0">
         {/* Header */}
         <div className={`shrink-0 bg-linear-to-br ${grad} px-5 pt-5 pb-4`}>
           <div className="flex items-center gap-3 pr-8">
@@ -449,7 +449,7 @@ function QuizBuilder({ open, onClose, onSave }) {
 
   return (
     <Sheet open={open} onOpenChange={v => !v && handleClose()}>
-      <SheetContent className="w-full sm:max-w-xl p-0 flex flex-col gap-0">
+      <SheetContent hideOverlay className="w-full sm:max-w-xl p-0 flex flex-col gap-0">
         <div className="shrink-0 bg-linear-to-br from-purple-500 to-indigo-600 px-5 pt-5 pb-4">
           <div className="flex items-center gap-3 pr-8">
             <div className="p-2 bg-white/20 rounded-lg shrink-0">

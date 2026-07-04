@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/api-client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { NeonBadge } from "@/components/neon-badge";
 import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
@@ -62,28 +63,25 @@ const LIGHTS = {
     color: "#ef4444",
     dimColor: "#7f1d1d",
     label: "Crítico",
-    badge:
-      "bg-red-50    text-red-700    border-red-200    dark:bg-red-950/30    dark:text-red-400    dark:border-red-700/40",
+    badgeColor: "red",
   },
   yellow: {
     color: "#f59e0b",
     dimColor: "#78350f",
     label: "Atenção",
-    badge:
-      "bg-amber-50  text-amber-700  border-amber-200  dark:bg-amber-950/30  dark:text-amber-400  dark:border-amber-700/40",
+    badgeColor: "amber",
   },
   green: {
     color: "#10b981",
     dimColor: "#064e3b",
     label: "OK",
-    badge:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-700/40",
+    badgeColor: "emerald",
   },
   gray: {
     color: "#64748b",
     dimColor: "#1e293b",
     label: "Sem dados",
-    badge: "bg-slate-100 text-slate-500 border-slate-200",
+    badgeColor: "slate",
   },
 };
 
@@ -663,12 +661,9 @@ export default function AdminDisponibilidadePage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-semibold whitespace-nowrap ${lm.badge}`}
-                            >
+                            <NeonBadge color={lm.badgeColor} className="font-semibold whitespace-nowrap">
                               {lm.label}
-                            </Badge>
+                            </NeonBadge>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -807,12 +802,9 @@ export default function AdminDisponibilidadePage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-semibold whitespace-nowrap ${lm.badge}`}
-                            >
+                            <NeonBadge color={lm.badgeColor} className="font-semibold whitespace-nowrap">
                               {lm.label}
-                            </Badge>
+                            </NeonBadge>
                           </div>
                         </td>
                         <td className="px-4 py-3 max-w-50">

@@ -1642,10 +1642,6 @@ export default function CampanhasPage() {
       {(campaignDialogOpen || campaignClosing) && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={closeCampaignDialog}
-          />
-          <div
             data-slot="sheet-content"
             data-state={campaignClosing ? "closed" : "open"}
             style={{
@@ -1980,10 +1976,6 @@ export default function CampanhasPage() {
       {/* ── Coupon Drawer ────────────────────────────────────────── */}
       {(couponDialogOpen || couponClosing) && (
         <>
-          <div
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={closeCouponDrawer}
-          />
           <div
             data-slot="sheet-content"
             data-state={couponClosing ? "closed" : "open"}
@@ -3052,10 +3044,6 @@ export default function CampanhasPage() {
       {(accessDrawerOpen || accessClosing) && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={closeAccessDrawer}
-          />
-          <div
             data-slot="sheet-content"
             data-state={accessClosing ? "closed" : "open"}
             style={{
@@ -3228,10 +3216,6 @@ export default function CampanhasPage() {
       {/* ── Report Drawer ────────────────────────────────────────── */}
       {(reportOpen || reportClosing) && (
         <>
-          <div
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={closeReportDrawer}
-          />
           <div
             data-slot="sheet-content"
             data-state={reportClosing ? "closed" : "open"}
@@ -3673,12 +3657,15 @@ export default function CampanhasPage() {
       {/* ── Advanced Filter Modal ─────────────────────────────────── */}
       {isFilterModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsFilterModalOpen(false);
+          data-slot="sheet-content"
+          data-state="open"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
           }}
+          className="fixed top-0 right-0 z-70 h-[calc(100vh-24px)] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
         >
-          <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[780px] max-h-[82vh] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
+          <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
             {/* Header */}
             <div
               className="flex items-center justify-between px-5 py-3 flex-shrink-0"

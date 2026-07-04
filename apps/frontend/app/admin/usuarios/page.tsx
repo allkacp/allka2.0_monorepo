@@ -4,6 +4,8 @@ import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { NeonBadge } from "@/components/neon-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -820,38 +822,16 @@ export default function UsuariosPage() {
     const normalizedType = String(accountType).toLowerCase();
 
     if (normalizedType === "company" || normalizedType === "empresas")
-      return {
-        label: "Company",
-        color:
-          "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:to-purple-900",
-      };
+      return { label: "Company", badgeColor: "purple" as const };
     if (normalizedType === "agency" || normalizedType === "agencias")
-      return {
-        label: "Agency",
-        color:
-          "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:to-orange-900",
-      };
+      return { label: "Agency", badgeColor: "orange" as const };
     if (normalizedType === "nomad" || normalizedType === "nomades")
-      return {
-        label: "Nomad",
-        color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:to-blue-900",
-      };
+      return { label: "Nomad", badgeColor: "blue" as const };
     if (role === "financial")
-      return {
-        label: "Financial",
-        color:
-          "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:to-orange-900",
-      };
+      return { label: "Financial", badgeColor: "orange" as const };
     if (role === "team_allka")
-      return {
-        label: "Team allka",
-        color:
-          "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:to-indigo-900",
-      };
-    return {
-      label: "Outro",
-      color: "bg-gray-100 text-gray-800 dark:bg-gray-950 dark:to-gray-900",
-    };
+      return { label: "Team allka", badgeColor: "indigo" as const };
+    return { label: "Outro", badgeColor: "gray" as const };
   };
 
   // ── Sparkline ─────────────────────────────────────────────────────────────
@@ -1242,15 +1222,12 @@ export default function UsuariosPage() {
           </div>
 
           {/* Filter Button */}
-          <Button
+          <IconToolbarButton
+            icon={Filter}
+            tooltip="Filtros"
             onClick={() => setIsFilterModalOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0"
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filtros
-          </Button>
+            className="h-9 w-9"
+          />
 
           {/* Pagination */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -1322,23 +1299,17 @@ export default function UsuariosPage() {
                 };
                 return (
                   <div
-                    className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+                    data-slot="sheet-content"
+                    data-state="open"
+                    className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
                     style={{
-                      left: sidebarWidth,
-                      top: headerHeight,
-                      bottom: footerHeight,
-                      right: 0,
-                    }}
-                    onClick={(e) => {
-                      if (e.target !== e.currentTarget) return;
-                      if (unsavedChanges) {
-                        setPendingClose(() => closeFn);
-                        return;
-                      }
-                      closeFn();
+                      left: sidebarWidth - 2,
+                      top: headerHeight - 1,
+                      bottom: footerHeight - 1,
+                      width: `calc(100vw - ${sidebarWidth - 2}px)`,
                     }}
                   >
-                    <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
+                    <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
                       {/* Header — follows sidebar theme */}
                       <div
                         className="flex items-center justify-between px-5 py-3 flex-shrink-0"
@@ -2596,23 +2567,21 @@ export default function UsuariosPage() {
                           }}
                         >
                           <div className="space-y-0.5">
-                            <Badge
-                              className={`text-xs px-2 py-0.5 ${accountBadge.color}`}
-                            >
+                            <NeonBadge color={accountBadge.badgeColor}>
                               {accountBadge.label}
-                            </Badge>
+                            </NeonBadge>
                             <p className="text-xs text-slate-600 dark:text-slate-400">
                               {getRoleLabel(user.role)}
                             </p>
                             {!user.lgpd?.consent_given && (
-                              <Badge className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 border-0">
+                              <NeonBadge color="orange" tooltip="Usuário ainda não aceitou os termos de consentimento LGPD.">
                                 Sem consentimento LGPD
-                              </Badge>
+                              </NeonBadge>
                             )}
                             {user.lgpd?.deletion_requested && (
-                              <Badge className="text-xs px-2 py-0.5 bg-red-100 text-red-700 border-0">
+                              <NeonBadge color="red" tooltip="Usuário solicitou a exclusão dos seus dados pessoais.">
                                 Exclusão solicitada
-                              </Badge>
+                              </NeonBadge>
                             )}
                           </div>
                         </td>
@@ -2661,19 +2630,13 @@ export default function UsuariosPage() {
                                 : ""}
                             </p>
                             {user.inactivity_bucket === "inactive_30" && (
-                              <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                                30d+
-                              </span>
+                              <NeonBadge color="amber" tooltip="Sem acesso há mais de 30 dias.">30d+</NeonBadge>
                             )}
                             {user.inactivity_bucket === "inactive_60" && (
-                              <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                                60d+
-                              </span>
+                              <NeonBadge color="orange" tooltip="Sem acesso há mais de 60 dias.">60d+</NeonBadge>
                             )}
                             {user.inactivity_bucket === "inactive_90" && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                ⚠ 90d+
-                              </span>
+                              <NeonBadge color="red" tooltip="Sem acesso há mais de 90 dias — usuário pausado automaticamente.">⚠ 90d+</NeonBadge>
                             )}
                           </div>
                         </td>

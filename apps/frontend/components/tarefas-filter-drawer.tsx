@@ -275,6 +275,7 @@ export function TarefasFilterDrawer({
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="right"
+        hideOverlay
         className="w-full sm:max-w-135 p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700"
       >
         {/* ── Gradient header ─────────────────────────────────────── */}

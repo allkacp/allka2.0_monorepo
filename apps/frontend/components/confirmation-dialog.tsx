@@ -1,8 +1,8 @@
 
 import React from 'react'
-import { createPortal } from 'react-dom'
-import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SlidePanel } from '@/components/slide-panel'
 
 interface ConfirmationDialogProps {
   /** Controls the visibility of the dialog */
@@ -58,55 +58,20 @@ export function ConfirmationDialog({
   cancelText = "Cancelar",
   destructive = true,
 }: ConfirmationDialogProps) {
-  if (!open) return null
-
   const handleConfirm = () => {
     onConfirm()
     onClose()
   }
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 pointer-events-auto"
-      style={{ pointerEvents: 'auto' }}
-      onClick={onClose}
-    >
-      {/* Modal */}
-      <div
-        className="relative bg-white dark:bg-card rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
-        onClick={e => e.stopPropagation()}
-      >
-
-        {/* Top accent bar */}
-        <div className={`h-1 w-full ${destructive ? "bg-gradient-to-r from-red-500 to-rose-600" : "bg-gradient-to-r from-blue-500 to-violet-600"}`} />
-
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-0">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-            destructive
-              ? "bg-red-50 dark:bg-red-900/20"
-              : "bg-blue-50 dark:bg-blue-900/20"
-          }`}>
-            {destructive
-              ? <AlertTriangle className="h-5 w-5 text-red-500" />
-              : <CheckCircle2 className="h-5 w-5 text-blue-500" />}
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg p-1.5 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="px-6 pt-4 pb-6">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">{title}</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-6 pb-5">
+  return (
+    <SlidePanel
+      open={open}
+      onClose={onClose}
+      title={title}
+      widthMode="compact"
+      compactWidth={420}
+      footer={
+        <div className="flex gap-3">
           <Button
             variant="outline"
             className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -125,8 +90,20 @@ export function ConfirmationDialog({
             {confirmText}
           </Button>
         </div>
+      }
+    >
+      <div className="px-6 py-5 flex-1 overflow-y-auto">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl mb-4 ${
+          destructive
+            ? "bg-red-50 dark:bg-red-900/20"
+            : "bg-blue-50 dark:bg-blue-900/20"
+        }`}>
+          {destructive
+            ? <AlertTriangle className="h-5 w-5 text-red-500" />
+            : <CheckCircle2 className="h-5 w-5 text-blue-500" />}
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
       </div>
-    </div>
+    </SlidePanel>
   )
-
-  return createPortal(modal, document.body)}
+}

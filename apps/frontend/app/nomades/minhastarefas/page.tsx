@@ -209,7 +209,7 @@ export default function MinhasTarefasPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={() => setDetail(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" hideOverlay className="w-full sm:max-w-lg overflow-y-auto">
           {detail && (() => {
             const cfg  = STATUS_CFG[detail.status]
             const Icon = cfg.Icon

@@ -135,7 +135,7 @@ function CourseDetailSheet({ courseId, open, onClose }) {
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent hideOverlay className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader className="mb-4">
           <SheetTitle className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-blue-500" />

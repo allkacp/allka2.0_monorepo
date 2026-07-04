@@ -258,7 +258,7 @@ export default function NomadesHistoricoPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={() => setDetail(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent side="right" hideOverlay className="w-full sm:max-w-md overflow-y-auto">
           {detail && (
             <>
               <SheetTitle className="text-base font-bold pr-6">{detail.title}</SheetTitle>

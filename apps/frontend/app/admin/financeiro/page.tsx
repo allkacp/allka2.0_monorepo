@@ -2423,10 +2423,18 @@ export default function AdminFinanceiroPage() {
 
       {/* ── Modal Squad: Adicionar / Editar ────────────────────────────────── */}
       {squadAddOpen && (
-        <div className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-          style={{ left: sidebarWidth, top: headerHeight, bottom: footerHeight, right: 0 }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setSquadAddOpen(false); setSquadEditTarget(null); } }}>
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div
+          data-slot="sheet-content"
+          data-state="open"
+          className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
+          style={{
+            left: sidebarWidth - 2,
+            top: headerHeight - 1,
+            bottom: footerHeight - 1,
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          }}
+        >
+          <div className="bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
             <div className="app-brand-header relative shrink-0 px-5 min-h-[64px] flex items-center">
               <div className="flex-1">
                 <h2 className="text-white font-bold text-base">{squadEditTarget ? "Editar Squad" : "Adicionar ao Squad"}</h2>
@@ -2577,11 +2585,17 @@ export default function AdminFinanceiroPage() {
       {/* ── Modal Filtros Avançados — mesmo estilo de Projetos ─────── */}
       {filterOpen && (
         <div
-          className="fixed z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-          style={{ left: sidebarWidth, top: headerHeight, bottom: footerHeight, right: 0 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setFilterOpen(false); }}
+          data-slot="sheet-content"
+          data-state="open"
+          className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
+          style={{
+            left: sidebarWidth - 2,
+            top: headerHeight - 1,
+            bottom: footerHeight - 1,
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          }}
         >
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[720px] max-h-[82vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
 
             {/* Gradient header */}
             <div className="app-brand-header relative shrink-0 px-5 min-h-[72px] flex items-center">

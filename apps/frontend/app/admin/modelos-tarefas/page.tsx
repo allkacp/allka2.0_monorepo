@@ -383,6 +383,7 @@ function ModelDetailDrawer({
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="right"
+        hideOverlay
         className="w-full sm:max-w-3xl p-0 flex flex-col h-full gap-0"
       >
         {/* -- HEADER --------------------------------------------------------- */}
@@ -2712,6 +2713,7 @@ export default function AdminModelosTarefasPage() {
       >
         <SheetContent
           side="right"
+          hideOverlay
           className="p-0 flex flex-col h-full gap-0"
           style={{
             left: `${sidebarWidth}px`,

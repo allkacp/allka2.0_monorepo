@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { NeonBadge } from "@/components/neon-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { PermissionProfileSlidePanel } from "@/components/permission-profile-slide-panel"
@@ -54,9 +55,9 @@ function scopeSummary(perms: Record<string, ModulePerm>) {
 // ─── Read-only scope cell ───────────────────────────────────────────────────
 function ReadonlyScopeCell({ value }: { value: Scope }) {
   if (value === "own")
-    return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">Próprios</span>
+    return <NeonBadge color="blue" className="text-[10px] font-bold">Próprios</NeonBadge>
   if (value === "all")
-    return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">Todos</span>
+    return <NeonBadge color="emerald" className="text-[10px] font-bold">Todos</NeonBadge>
   return (
     <span className="w-5 h-5 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center mx-auto">
       <Minus className="h-2.5 w-2.5 text-slate-300" />
@@ -305,14 +306,14 @@ export default function PermissionsPage() {
                           <span className="text-xs text-slate-500">{profile.users} usuários</span>
                           <span className="mx-1 text-slate-200">·</span>
                           {sm.all > 0 && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                            <NeonBadge color="emerald" className="text-[10px] font-bold">
                               {sm.all} Todos
-                            </span>
+                            </NeonBadge>
                           )}
                           {sm.own > 0 && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                            <NeonBadge color="blue" className="text-[10px] font-bold">
                               {sm.own} Próprios
-                            </span>
+                            </NeonBadge>
                           )}
                           <span className="ml-auto text-[10px] text-slate-400">{sm.all + sm.own}/{sm.total} ativas</span>
                         </div>
@@ -328,16 +329,13 @@ export default function PermissionsPage() {
                               const isAll  = Object.values(perm).every((v) => v === "all")
                               if (!hasAny) return null
                               return (
-                                <span
+                                <NeonBadge
                                   key={mod.key}
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                                    isAll
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200"
-                                  }`}
+                                  color={isAll ? "emerald" : "blue"}
+                                  className="text-[10px] font-medium"
                                 >
                                   {mod.label}
-                                </span>
+                                </NeonBadge>
                               )
                             })}
                           </div>

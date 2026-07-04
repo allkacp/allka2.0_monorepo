@@ -102,7 +102,7 @@ export function ReportPermissionsDialog({
 
   return (
     <Sheet open={isOpen} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent hideOverlay className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader className="mb-6">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700">
