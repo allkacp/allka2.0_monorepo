@@ -45,6 +45,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import type { User } from "@/types/user";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import {
@@ -128,6 +129,15 @@ export default function UsuariosPage() {
   } = useUsers();
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([usersLoading]);
   const getHeaderStyle = () => {
     const theme = previewTheme || sidebarSettings;
     const bg = theme?.backgroundColor;
@@ -523,6 +533,13 @@ export default function UsuariosPage() {
   }, []);
 
   const totalPages = Math.ceil(filteredUsers.length / pageSize);
+
+  const [pageJumpValue, setPageJumpValue] = useState("");
+  const commitPageJump = () => {
+    const n = parseInt(pageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) setCurrentPage(n);
+    setPageJumpValue("");
+  };
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -1221,6 +1238,20 @@ export default function UsuariosPage() {
             </span>
           </div>
 
+          {/* Horizontal scrollbar mirror — only rendered when the table
+              actually overflows its container. */}
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div style={{ minWidth: 1200, height: 1 }} />
+            </div>
+          )}
+
           {/* Filter Button */}
           <IconToolbarButton
             icon={Filter}
@@ -1266,6 +1297,37 @@ export default function UsuariosPage() {
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageJumpValue}
+                      onChange={(e) => setPageJumpValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                      placeholder="Pág."
+                      aria-label="Ir para a página"
+                      className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <button
+                      onClick={commitPageJump}
+                      disabled={!pageJumpValue}
+                      className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+                    >
+                      <span
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                        style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                      />
+                      <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                    </button>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -2290,6 +2352,8 @@ export default function UsuariosPage() {
 
             {/* Users Table */}
             <div
+              ref={tableScrollRef}
+              onScroll={handleTableScroll}
               className="overflow-x-auto allka-table-scroll"
             >
               <table className="w-full text-xs">
@@ -2452,16 +2516,16 @@ export default function UsuariosPage() {
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="relative">
-                              <Avatar className="h-7 w-7">
+                              <Avatar className="h-10 w-10 shadow-sm">
                                 <AvatarFallback
-                                  className={`text-xs font-semibold ${
+                                  className={`text-xs font-bold text-white bg-gradient-to-br ${
                                     user.account_type === "company" ||
                                     user.account_type === "empresas"
-                                      ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                      ? "from-violet-500 to-purple-700"
                                       : user.account_type === "agency" ||
                                           user.account_type === "agencias"
-                                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
-                                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                        ? "from-orange-500 to-rose-600"
+                                        : "from-blue-500 to-blue-700"
                                   }`}
                                 >
                                   {user.name
@@ -2641,85 +2705,72 @@ export default function UsuariosPage() {
                           </div>
                         </td>
                         <td
-                          className="px-5 py-3.5"
+                          className={`px-1 py-2 transition-colors ${
+                            paginatedUsers.indexOf(user) % 2 === 0
+                              ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          }`}
                           style={{
                             position: "sticky",
                             right: 0,
                             zIndex: 1,
-                            background:
-                              paginatedUsers.indexOf(user) % 2 === 0
-                                ? "var(--table-row)"
-                                : "var(--table-row-alt)",
-                            borderLeft: "1px solid rgba(148,163,184,0.25)",
+                            minWidth: 99,
+                            borderLeft: "1px solid rgba(100,116,139,0.18)",
                           }}
                         >
-                          <div className="flex items-center justify-end gap-0">
-                            <TooltipProvider>
+                          <div className="flex items-center justify-center gap-1">
+                            <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleUserAction(user, "view")
-                                    }
-                                    className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                  <button
+                                    onClick={() => handleUserAction(user, "view")}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                   >
-                                    <Eye className="h-2.5 w-2.5" />
-                                  </Button>
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs">
+                                <TooltipContent className="text-xs font-medium">
                                   Ver Detalhes
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            <TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleUserAction(user, "block")
-                                    }
-                                    className={`h-5 w-5 p-0 rounded ${
-                                      user.is_active
-                                        ? "text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/30"
-                                        : "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                                  <button
+                                    onClick={() => handleUserAction(user, "block")}
+                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
+                                      user.is_active ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
                                     }`}
                                   >
                                     {user.is_active ? (
-                                      <UserX className="h-2.5 w-2.5" />
+                                      <UserX className="h-3.5 w-3.5" />
                                     ) : (
-                                      <Shield className="h-2.5 w-2.5" />
+                                      <Shield className="h-3.5 w-3.5" />
                                     )}
-                                  </Button>
+                                  </button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs">
+                                <TooltipContent className="text-xs font-medium">
                                   {user.is_active ? "Bloquear" : "Desbloquear"}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            <TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleUserAction(user, "delete")
-                                    }
+                                  <button
+                                    onClick={() => handleUserAction(user, "delete")}
                                     disabled={!canDelete}
-                                    className={`h-5 w-5 p-0 rounded ${
+                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all duration-150 ${
                                       canDelete
-                                        ? "text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                                        ? "hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px"
                                         : "opacity-40 cursor-not-allowed"
                                     }`}
                                   >
-                                    <Trash2 className="h-2.5 w-2.5" />
-                                  </Button>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs">
+                                <TooltipContent className="text-xs font-medium">
                                   {!canDelete
                                     ? "Não pode deletar este usuário"
                                     : "Deletar usuário"}
@@ -2767,6 +2818,19 @@ export default function UsuariosPage() {
                     {filteredUsers.length !== 1 ? "s" : ""}
                   </span>
                 </div>
+
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={bottomScrollRef}
+                    onScroll={handleBottomBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center mx-3"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 1200, height: 1 }} />
+                  </div>
+                )}
+
                 <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}

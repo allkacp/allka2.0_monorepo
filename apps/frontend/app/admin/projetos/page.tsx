@@ -38,6 +38,9 @@ import ProjectWizardSlidePanel from "@/components/project-wizard-slide-panel";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { AdvancedDateFilter } from "@/components/advanced-date-filter";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { SlidePanel } from "@/components/slide-panel";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import {
   exportToCSV,
   exportToExcel,
@@ -154,6 +157,15 @@ export default function AdminProjetosPage({
     refetch: refetchProjects,
     setProjects: setApiProjects,
   } = useProjects(scope === "agency" && agencyName ? { agencyName } : {});
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([projectsLoading]);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -2528,22 +2540,22 @@ export default function AdminProjetosPage({
                 </Button>
 
                 {/* Column config */}
-                <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      className={`flex items-center justify-center h-7 w-7 rounded-md border transition-colors flex-shrink-0 ${
-                        colConfigOpen
-                          ? "bg-blue-100 text-blue-600 border-blue-200"
-                          : "text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-100"
-                      }`}
-                      title="Configurar colunas"
-                    >
-                      <Cog className="h-3.5 w-3.5" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-52 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-slate-700">
+                <IconToolbarButton
+                  icon={Cog}
+                  tooltip="Configurar colunas"
+                  onClick={() => setColConfigOpen(true)}
+                />
+                <SlidePanel
+                  open={colConfigOpen}
+                  onClose={() => setColConfigOpen(false)}
+                  title="Configurar colunas"
+                  subtitle="Escolha quais colunas aparecem na tabela"
+                  widthMode="compact"
+                  compactWidth={360}
+                >
+                  <div className="p-5 flex-1 overflow-y-auto space-y-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                         Colunas visíveis
                       </p>
                       <button
@@ -2553,31 +2565,40 @@ export default function AdminProjetosPage({
                         Mostrar todas
                       </button>
                     </div>
-                    <div className="space-y-1.5">
-                      {ALL_COLS.map((col) => (
-                        <label
-                          key={col}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={visibleCols.includes(col)}
-                            onCheckedChange={(checked) => {
-                              setVisibleCols((prev) =>
-                                checked
-                                  ? [...prev, col]
-                                  : prev.filter((c) => c !== col),
-                              );
-                            }}
-                            className="h-3.5 w-3.5"
-                          />
-                          <span className="text-xs text-slate-600">
-                            {COL_LABELS[col]}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                    {ALL_COLS.map((col) => (
+                      <label
+                        key={col}
+                        className="flex items-center gap-2 text-sm cursor-pointer py-1"
+                      >
+                        <Checkbox
+                          checked={visibleCols.includes(col)}
+                          onCheckedChange={(checked) => {
+                            setVisibleCols((prev) =>
+                              checked
+                                ? [...prev, col]
+                                : prev.filter((c) => c !== col),
+                            );
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        {COL_LABELS[col]}
+                      </label>
+                    ))}
+                  </div>
+                </SlidePanel>
+
+                {/* Horizontal scrollbar mirror — only when the table overflows */}
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={topScrollRef}
+                    onScroll={handleTopBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 1400, height: 1 }} />
+                  </div>
+                )}
 
                 {/* Pagination (top) */}
                 <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
@@ -2624,6 +2645,8 @@ export default function AdminProjetosPage({
 
               {/* ── Table ── */}
               <div
+                ref={tableScrollRef}
+                onScroll={handleTableScroll}
                 className="overflow-x-auto allka-table-scroll"
               >
                 <table
@@ -2699,18 +2722,15 @@ export default function AdminProjetosPage({
                       <th
                         className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"
                         style={{
-                          paddingLeft: 20,
-                          paddingRight: 20,
-                          textAlign: "right",
+                          textAlign: "center",
                           position: "sticky",
                           right: 0,
                           top: 0,
                           zIndex: 3,
                           background: "var(--table-head)",
-                          borderLeft: "1px solid rgba(148,163,184,0.25)",
-                          boxShadow:
-                            "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
-                          width: 100,
+                          borderLeft: "1px solid rgba(100,116,139,0.18)",
+                          boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                          minWidth: 99,
                         }}
                       >
                         Ações
@@ -3036,21 +3056,21 @@ export default function AdminProjetosPage({
 
                             {/* Actions */}
                             <td
-                              className="px-5 py-3.5"
+                              className={`px-2 py-2 transition-colors ${
+                                rowIdx % 2 === 0
+                                  ? "bg-[#ECEFF4] dark:bg-[oklch(0.14_0.026_258)]"
+                                  : "bg-[#D6DCE8] dark:bg-[oklch(0.185_0.024_258)]"
+                              }`}
                               style={{
                                 position: "sticky",
                                 right: 0,
                                 zIndex: 1,
-                                background:
-                                  rowIdx % 2 === 0
-                                    ? "var(--table-row)"
-                                    : "var(--table-row-alt)",
-                                borderLeft: "1px solid rgba(148,163,184,0.25)",
-                                boxShadow: "-2px 0 6px rgba(0,0,0,0.05)",
+                                minWidth: 99,
+                                borderLeft: "1px solid rgba(100,116,139,0.18)",
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <div className="flex items-center justify-end gap-0">
+                              <div className="flex items-center justify-center gap-1">
                                 {project.status === "draft" ? (
                                   <>
                                     <Tooltip>
@@ -3061,9 +3081,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleContinueDraft(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-violet-500 hover:text-violet-700 hover:bg-violet-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <ArrowRight className="h-2.5 w-2.5" />
+                                          <ArrowRight className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3078,9 +3098,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Trash2 className="h-2.5 w-2.5" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3098,9 +3118,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleGoToPayment(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <CreditCard className="h-2.5 w-2.5" />
+                                          <CreditCard className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3115,9 +3135,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleViewProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Eye className="h-2.5 w-2.5" />
+                                          <Eye className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3132,9 +3152,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Trash2 className="h-2.5 w-2.5" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3152,9 +3172,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleViewProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Eye className="h-2.5 w-2.5" />
+                                          <Eye className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3169,9 +3189,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleCloneProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Copy className="h-2.5 w-2.5" />
+                                          <Copy className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3186,9 +3206,9 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-5 w-5 p-0 rounded text-red-400 hover:text-red-600 hover:bg-red-50"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                         >
-                                          <Trash2 className="h-2.5 w-2.5" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
@@ -3223,6 +3243,19 @@ export default function AdminProjetosPage({
                     {filteredProjects.length !== 1 ? "s" : ""}
                   </span>
                 </div>
+
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={bottomScrollRef}
+                    onScroll={handleBottomBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center mx-3"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 1400, height: 1 }} />
+                  </div>
+                )}
+
                 <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}

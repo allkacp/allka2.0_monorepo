@@ -73,6 +73,59 @@ interface PermissionProfile {
   permissions: Record<string, ModulePerm>
 }
 
+// ─── Stat card — saturated gradient recipe (matches admin/empresas & admin/clientes) ──
+const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
+  blue: {
+    gradient: "from-blue-500 to-blue-700",
+    darkGradient: "dark:from-blue-800 dark:to-blue-950",
+    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
+  },
+  emerald: {
+    gradient: "from-emerald-500 to-teal-600",
+    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
+  },
+  violet: {
+    gradient: "from-violet-500 to-purple-700",
+    darkGradient: "dark:from-violet-800 dark:to-purple-950",
+    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
+  },
+  orange: {
+    gradient: "from-orange-500 to-rose-600",
+    darkGradient: "dark:from-orange-800 dark:to-rose-900",
+    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
+  },
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string
+  value: number
+  icon: React.ElementType
+  color: keyof typeof STAT_COLOR_MAP
+}) {
+  const colors = STAT_COLOR_MAP[color]
+  return (
+    <div
+      className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg hover:shadow-xl`}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+          <div className="bg-white/20 rounded-md p-1">
+            <Icon className="h-3.5 w-3.5 text-white" />
+          </div>
+        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function PermissionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedProfile, setSelectedProfile] = useState<PermissionProfile | null>(null)
@@ -83,6 +136,8 @@ export default function PermissionsPage() {
   type P = Record<string, ModulePerm>
   const fullModule = (v: Scope = ALL): ModulePerm => ({ view: v, create: v, edit: v, delete: v })
 
+  // NOTE: mock data — no backend endpoint for permission profiles exists yet;
+  // this whole page renders from this hardcoded array (out of scope to wire up here).
   const mockProfiles: PermissionProfile[] = [
     {
       id: 1, name: "Super Admin", description: "Acesso irrestrito a toda a plataforma", users: 2,
@@ -160,14 +215,14 @@ export default function PermissionsPage() {
   )
 
   const stats = [
-    { label: "Total de Perfis", value: mockProfiles.length, icon: Shield, color: "blue" },
+    { label: "Total de Perfis", value: mockProfiles.length, icon: Shield, color: "blue" as const },
     {
       label: "Usuários com Perfil",
       value: mockProfiles.reduce((acc, p) => acc + p.users, 0),
       icon: Users,
-      color: "green",
+      color: "emerald" as const,
     },
-    { label: "Módulos Configuráveis", value: MODULES.length, icon: Settings, color: "purple" },
+    { label: "Módulos Configuráveis", value: MODULES.length, icon: Settings, color: "violet" as const },
   ]
 
   return (
@@ -206,43 +261,10 @@ export default function PermissionsPage() {
             </div>
           </AccordionTrigger>
           <AccordionContent className="pt-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {stats.map((stat, index) => {
-                const Icon = stat.icon
-                const colorClasses = {
-                  blue: {
-                    bg: "bg-gradient-to-br from-blue-50 to-blue-100",
-                    border: "border-blue-200",
-                    icon: "text-blue-600",
-                    text: "text-blue-900",
-                    value: "text-blue-700",
-                  },
-                  green: {
-                    bg: "bg-gradient-to-br from-emerald-50 to-emerald-100",
-                    border: "border-emerald-200",
-                    icon: "text-emerald-600",
-                    text: "text-emerald-900",
-                    value: "text-emerald-700",
-                  },
-                  purple: {
-                    bg: "bg-gradient-to-br from-violet-50 to-violet-100",
-                    border: "border-violet-200",
-                    icon: "text-violet-600",
-                    text: "text-violet-900",
-                    value: "text-violet-700",
-                  },
-                }[stat.color]
-
-                return (
-                  <Card key={index} className={`p-3 ${colorClasses.bg} ${colorClasses.border}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`h-4 w-4 ${colorClasses.icon}`} />
-                      <span className={`text-xs font-medium ${colorClasses.text}`}>{stat.label}</span>
-                    </div>
-                    <p className={`text-2xl font-bold ${colorClasses.value}`}>{stat.value}</p>
-                  </Card>
-                )
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {stats.map((stat, index) => (
+                <StatCard key={index} label={stat.label} value={stat.value} icon={stat.icon} color={stat.color} />
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -287,16 +309,30 @@ export default function PermissionsPage() {
                               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{profile.description}</p>
                             </div>
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            <button
-                              onClick={() => handleEditProfile(profile)}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </button>
-                            <button className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                          <div className="flex gap-1.5 shrink-0">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => handleEditProfile(profile)}
+                                    className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Editar perfil</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Excluir perfil</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </div>
 

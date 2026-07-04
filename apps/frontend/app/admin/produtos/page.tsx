@@ -119,6 +119,8 @@ import { useProducts } from "@/lib/contexts/product-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { SlidePanel } from "@/components/slide-panel";
+import { NeonBadge } from "@/components/neon-badge";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
 import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
 import { formatCurrency } from "@/lib/utils";
@@ -255,6 +257,82 @@ function getProdGridClass(mode: ProdGridMode): string {
 }
 
 const PROD_GRID_STORAGE_KEY = "allka_cadastro_produtos_view_mode";
+
+// ── Category → NeonBadge color mapping ───────────────────────────────────────
+// Products are classified into a fixed, curated set of categories (see the
+// checkbox list in the "Classificação e Preço" section of the product form),
+// so each one gets a stable, sensible color rather than a single flat tone.
+const CATEGORY_BADGE_COLOR_MAP: Record<string, string> = {
+  "Design e Criação": "violet",
+  "Mídias e Conteúdo": "cyan",
+  "Social Media e Publicações": "pink",
+  "Performance e Anúncios Patrocinados": "orange",
+  "Soluções Web": "blue",
+  "Fotografia e Imagem": "teal",
+  Desenvolvimento: "indigo",
+  Marketing: "emerald",
+};
+function getCategoryBadgeColor(category: string): any {
+  return CATEGORY_BADGE_COLOR_MAP[category] || "slate";
+}
+
+// ── Gradient stat-card treatment matching admin/empresas' STAT_COLOR_MAP ────
+const PROD_STAT_COLOR_MAP: Record<
+  string,
+  { gradient: string; darkGradient: string; borderClass: string }
+> = {
+  blue: {
+    gradient: "from-blue-500 to-blue-700",
+    darkGradient: "dark:from-blue-800 dark:to-blue-950",
+    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
+  },
+  emerald: {
+    gradient: "from-emerald-500 to-teal-600",
+    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
+  },
+  violet: {
+    gradient: "from-violet-500 to-purple-700",
+    darkGradient: "dark:from-violet-800 dark:to-purple-950",
+    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
+  },
+  orange: {
+    gradient: "from-orange-500 to-rose-600",
+    darkGradient: "dark:from-orange-800 dark:to-rose-900",
+    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
+  },
+};
+
+function ProdStatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  color: keyof typeof PROD_STAT_COLOR_MAP;
+}) {
+  const colors = PROD_STAT_COLOR_MAP[color];
+  return (
+    <div
+      className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg hover:shadow-xl`}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">
+            {label}
+          </span>
+          <div className="bg-white/20 rounded-md p-1">
+            <Icon className="h-3.5 w-3.5 text-white" />
+          </div>
+        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+      </div>
+    </div>
+  );
+}
 
 type Question = {
   id: string;
@@ -458,6 +536,7 @@ export default function AdminProdutosPage() {
   };
   const [pageSize, setPageSize] = useItemsPerPage("admin-produtos", 10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageJumpValue, setPageJumpValue] = useState("");
 
   // Advanced filter modal
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -484,6 +563,16 @@ export default function AdminProdutosPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false); // Renamed from isCreateOpen
   const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+
+  // "+" info panel for the list view — surfaces the task breakdown,
+  // categories/tags and pricing composition already loaded on each product,
+  // same recipe as admin/clientes' openInfoPanel SlidePanel.
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoPanelProduct, setInfoPanelProduct] = useState<Product | null>(null);
+  const openInfoPanel = useCallback((product: Product) => {
+    setInfoPanelProduct(product);
+    setInfoPanelOpen(true);
+  }, []);
   const navigate = useNavigate();
   const { produtoId: urlProdutoId } = useParams<{ produtoId?: string }>();
 
@@ -776,6 +865,12 @@ export default function AdminProdutosPage() {
       }
     }
     return pages;
+  };
+
+  const commitPageJump = () => {
+    const n = Number.parseInt(pageJumpValue, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) setCurrentPage(n);
+    setPageJumpValue("");
   };
 
   const uniqueAreas = Array.from(
@@ -1815,6 +1910,101 @@ export default function AdminProdutosPage() {
     sortBy !== "name",
   ].filter(Boolean).length;
 
+  // Shared numbered-pagination control (brand gradient on the active page +
+  // a "Pág./Ir" jump field), reused identically by the top and bottom
+  // toolbar mirrors — same recipe as admin/clientes' PaginationControls.
+  const PaginationControls = () => (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <button
+        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((page, index) =>
+        page === "..." ? (
+          <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+        ) : (
+          <button
+            key={index}
+            onClick={() => setCurrentPage(Number(page))}
+            title={page === currentPage ? "Página atual" : `Ir para a página ${page}`}
+            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+              page === currentPage
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+            }`}
+            style={page === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {page}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                placeholder="Pág."
+                aria-label="Ir para a página"
+                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={commitPageJump}
+                disabled={!pageJumpValue}
+                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  const ProductCountText = () => (
+    <span className="text-xs text-slate-400 whitespace-nowrap">
+      {filteredProducts.length !== safeProducts.length ? (
+        <>
+          de{" "}
+          <span className="font-semibold text-blue-500">{filteredProducts.length}</span>{" "}
+          de {safeProducts.length} produto
+          {safeProducts.length !== 1 ? "s" : ""}
+        </>
+      ) : (
+        <>
+          de{" "}
+          <span className="font-semibold text-slate-600 dark:text-slate-300">
+            {safeProducts.length}
+          </span>{" "}
+          produto{safeProducts.length !== 1 ? "s" : ""}
+        </>
+      )}
+    </span>
+  );
+
   if (productsLoading) {
     return <PageLoader text="Carregando produtos…" />;
   }
@@ -1873,62 +2063,26 @@ export default function AdminProdutosPage() {
         }
       />
 
-      {/* ── Stats Bar ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-1">
-        {/* Card — Produtos */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm transition-shadow hover:shadow-md">
-          {/* gradient accent strip */}
-          <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" />
-          <div className="flex items-center gap-5 px-6 py-5">
-            {/* icon */}
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shrink-0">
-              <Package className="h-7 w-7 text-white" />
-            </div>
-            {/* content */}
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
-                Produtos
-              </p>
-              <p className="text-4xl font-extrabold text-slate-800 dark:text-slate-100 leading-none tabular-nums">
-                {safeProducts.length}
-              </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">
-                Produtos cadastrados na base
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card — Tarefas */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm transition-shadow hover:shadow-md">
-          {/* gradient accent strip */}
-          <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" />
-          <div className="flex items-center gap-5 px-6 py-5">
-            {/* icon */}
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-md shrink-0">
-              <ListChecks className="h-7 w-7 text-white" />
-            </div>
-            {/* content */}
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
-                Tarefas
-              </p>
-              <p className="text-4xl font-extrabold text-slate-800 dark:text-slate-100 leading-none tabular-nums">
-                {safeProducts.reduce(
-                  (sum, p) => sum + (p.tasks || []).length,
-                  0,
-                )}
-              </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">
-                Modelos internos vinculados aos produtos
-              </p>
-            </div>
-          </div>
-        </div>
+      {/* ── Stats Bar — gradient cards matching admin/empresas ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
+        <ProdStatCard label="Produtos" value={safeProducts.length} icon={Package} color="blue" />
+        <ProdStatCard
+          label="Ativos"
+          value={safeProducts.filter((p) => p.isActive).length}
+          icon={CheckCircle2}
+          color="emerald"
+        />
+        <ProdStatCard
+          label="Tarefas"
+          value={safeProducts.reduce((sum, p) => sum + (p.tasks || []).length, 0)}
+          icon={ListChecks}
+          color="violet"
+        />
+        <ProdStatCard label="Categorias" value={uniqueCategories.length} icon={Layers} color="orange" />
       </div>
 
       <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-        {/* Top Bar */}
+        {/* Row 1 — search + Filtros + view-mode switch */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
           {/* Search */}
           <div className="flex-1 relative min-w-[180px]">
@@ -1942,38 +2096,6 @@ export default function AdminProdutosPage() {
               }}
               className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
             />
-          </div>
-
-          {/* Items per page + count */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
-            />
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {filteredProducts.length !== safeProducts.length ? (
-                <>
-                  de{" "}
-                  <span className="font-semibold text-blue-500">
-                    {filteredProducts.length}
-                  </span>{" "}
-                  de {safeProducts.length} produto
-                  {safeProducts.length !== 1 ? "s" : ""}
-                </>
-              ) : (
-                <>
-                  de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">
-                    {safeProducts.length}
-                  </span>{" "}
-                  produto{safeProducts.length !== 1 ? "s" : ""}
-                </>
-              )}
-            </span>
           </div>
 
           {/* Filters button */}
@@ -2010,47 +2132,22 @@ export default function AdminProdutosPage() {
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Pagination top */}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              {getPageNumbers().map((page, index) =>
-                page === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">
-                    ·
-                  </span>
-                ) : (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentPage(Number(page))}
-                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                      page === currentPage
-                        ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() =>
-                  setCurrentPage(Math.min(totalPages, currentPage + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
+        {/* Row 2 (top) — items-per-page + count + numbered pagination (mirrored at the bottom) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900/30">
+          <div className="flex items-center gap-3">
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setCurrentPage(1);
+              }}
+              variant="top"
+            />
+            <ProductCountText />
+          </div>
+          {totalPages > 1 && <PaginationControls />}
         </div>
 
         {/* Products content */}
@@ -2130,9 +2227,9 @@ export default function AdminProdutosPage() {
                 {/* Category badges */}
                 <div className="hidden sm:flex items-center gap-1 shrink-0">
                   {((product as any).categories?.length ? (product as any).categories : [product.category]).filter(Boolean).map((cat: string) => (
-                    <Badge key={cat} variant="secondary" className="text-xs font-normal px-2 py-0.5">
+                    <NeonBadge key={cat} color={getCategoryBadgeColor(cat)}>
                       {cat}
-                    </Badge>
+                    </NeonBadge>
                   ))}
                 </div>
 
@@ -2170,41 +2267,51 @@ export default function AdminProdutosPage() {
                   </span>
                 </div>
 
-                {/* Actions */}
-                <TooltipProvider>
-                  <div className="flex gap-0.5 shrink-0">
+                {/* Actions — "+" info panel, view, edit (standard icon-button recipe) */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <TooltipProvider delayDuration={400}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openInfoPanel(product);
+                          }}
+                          className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
                           onClick={() => handleViewProduct(product)}
-                          className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600"
+                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Ver detalhes</p>
-                      </TooltipContent>
+                      <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
                     </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider delayDuration={400}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
+                        <button
                           onClick={() => handleEditProduct(product)}
-                          className="h-8 w-8 hover:bg-amber-50 hover:text-amber-600"
+                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                         >
                           <Pencil className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Editar produto</p>
-                      </TooltipContent>
+                      <TooltipContent className="text-xs font-medium">Editar produto</TooltipContent>
                     </Tooltip>
-                  </div>
-                </TooltipProvider>
+                  </TooltipProvider>
+                </div>
               </div>
             ))}
           </div>
@@ -2769,10 +2876,10 @@ export default function AdminProdutosPage() {
           </div>
         )}
 
-        {/* Bottom Pagination */}
-        {filteredProducts.length > 0 && totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
-            <div className="flex items-center gap-2">
+        {/* Row 3 — bottom mirror of Row 2 (items-per-page + count + pagination) */}
+        {filteredProducts.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/20">
+            <div className="flex items-center gap-3">
               <ItemsPerPageSelect
                 value={pageSize.toString()}
                 onValueChange={(value) => {
@@ -2781,51 +2888,193 @@ export default function AdminProdutosPage() {
                 }}
                 variant="bottom"
               />
-              <span className="text-xs text-slate-400">
-                de {filteredProducts.length} produto
-                {filteredProducts.length !== 1 ? "s" : ""}
-              </span>
+              <ProductCountText />
             </div>
-            <div className="flex items-center gap-0.5">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              {getPageNumbers().map((page, index) =>
-                page === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">
-                    ·
-                  </span>
-                ) : (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentPage(Number(page))}
-                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                      page === currentPage
-                        ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() =>
-                  setCurrentPage(Math.min(totalPages, currentPage + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {totalPages > 1 && <PaginationControls />}
           </div>
         )}
       </Card>
+
+      {/* "+" info panel — task breakdown, categories/tags and pricing composition
+          already loaded on each product (no extra request needed). */}
+      <SlidePanel
+        open={infoPanelOpen}
+        onClose={() => setInfoPanelOpen(false)}
+        title={
+          infoPanelProduct && (
+            <div className="flex items-center gap-3">
+              {infoPanelProduct.productImagePreview || (infoPanelProduct as any).image ? (
+                <img
+                  src={infoPanelProduct.productImagePreview || (infoPanelProduct as any).image}
+                  alt={infoPanelProduct.name}
+                  className="h-9 w-9 rounded-lg object-cover border border-white/20 shrink-0"
+                />
+              ) : (
+                <div className="h-9 w-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                  <Package className="h-4 w-4 text-white" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate">{infoPanelProduct.name}</p>
+              </div>
+            </div>
+          )
+        }
+        subtitle={
+          infoPanelProduct &&
+          `${infoPanelProduct.id} · ${infoPanelProduct.isActive ? "Ativo" : "Inativo"}`
+        }
+      >
+        {infoPanelProduct && (
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {/* Dados do produto */}
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                  Dados do produto
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                      Categorias
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(((infoPanelProduct as any).categories?.length
+                        ? (infoPanelProduct as any).categories
+                        : [infoPanelProduct.category]
+                      )
+                        .filter(Boolean)
+                        .map((cat: string) => (
+                          <NeonBadge key={cat} color={getCategoryBadgeColor(cat)}>
+                            {cat}
+                          </NeonBadge>
+                        )))}
+                    </div>
+                  </div>
+                  {((infoPanelProduct.subcategories || []).length > 0) && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                        Subcategorias
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(infoPanelProduct.subcategories || []).map((sub) => (
+                          <NeonBadge key={sub} color="slate">
+                            {sub}
+                          </NeonBadge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {((infoPanelProduct.tags || []).length > 0) && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                        Tags
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(infoPanelProduct.tags || []).map((tag) => (
+                          <NeonBadge key={tag} color="cyan">
+                            {tag}
+                          </NeonBadge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                      Prazo de entrega
+                    </p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelProduct.deliveryDays ? `${infoPanelProduct.deliveryDays} dias` : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                      Recorrência
+                    </p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {(infoPanelProduct as any).recurrence || "Contrato único"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tarefas */}
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                  Tarefas
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
+                    {(infoPanelProduct.tasks || []).length}
+                  </span>
+                  tarefa{(infoPanelProduct.tasks || []).length !== 1 ? "s" : ""} · {getTotalHours(infoPanelProduct)}h estimadas
+                </p>
+                {(infoPanelProduct.tasks || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {(infoPanelProduct.tasks || []).map((task) => {
+                      const hours = (task.steps || []).reduce(
+                        (sum, s) => sum + (s.estimatedHours || 0),
+                        0,
+                      );
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                              {task.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {(task.steps || []).length} etapa{(task.steps || []).length !== 1 ? "s" : ""} · {hours}h
+                            </p>
+                          </div>
+                          <span className="flex-shrink-0 ml-3 text-xs font-bold text-emerald-600">
+                            {formatCurrency(task.calculatedCost || 0)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">Nenhuma tarefa cadastrada para este produto.</p>
+                )}
+              </div>
+
+              {/* Precificação */}
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                  Precificação
+                </h3>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                  {[
+                    { label: "Custo das tarefas", value: infoPanelProduct.totalTasksCost },
+                    { label: "Taxa de qualificação", value: infoPanelProduct.qualificationFee },
+                    { label: "Subtotal", value: infoPanelProduct.subtotal },
+                    { label: "Impostos", value: infoPanelProduct.taxes },
+                    { label: "Taxa operacional", value: infoPanelProduct.operationalFee },
+                    { label: "Comissão do parceiro", value: infoPanelProduct.partnerCommission },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center justify-between px-3.5 py-2 text-sm">
+                      <span className="text-slate-500 dark:text-slate-400">{row.label}</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">
+                        {formatCurrency(row.value || 0)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Preço final</span>
+                    <span className="text-base font-bold text-emerald-600">
+                      {formatCurrency(infoPanelProduct.finalPrice || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </SlidePanel>
 
       {/* Advanced Filters Modal */}
       {isFilterModalOpen &&

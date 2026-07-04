@@ -89,17 +89,14 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { SlidePanel } from "@/components/slide-panel";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
 import { TarefasFilterDrawer } from "@/components/tarefas-filter-drawer";
@@ -435,8 +432,8 @@ const ALL_COLUMNS: {
     key: "acoes",
     label: "A\u00e7\u00f5es",
     required: true,
-    defaultW: 80,
-    minW: 60,
+    defaultW: 99,
+    minW: 90,
   },
   { key: "id", label: "ID", defaultW: 80, minW: 60 },
   { key: "codigo", label: "C\u00f3digo", defaultW: 110, minW: 80 },
@@ -833,6 +830,20 @@ export default function AdminTarefasPage({
     new Set(DEFAULT_VISIBLE),
   );
   const [colConfigOpen, setColConfigOpen] = useState(false);
+
+  // Horizontal scrollbar mirrors (top toolbar + bottom footer), synced with
+  // the real table scroll. Deps include `loading` — the ResizeObserver only
+  // has something to measure once the real table mounts past the loading
+  // gate below.
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([loading, visibleCols.size]);
 
   // Column resize
   const [colWidths, setColWidths] = useState<number[]>(() =>
@@ -1578,7 +1589,7 @@ export default function AdminTarefasPage({
                     <>
                       Mostrando{" "}
                       <span className="font-semibold text-slate-600 dark:text-slate-300">
-                        {start}\u2013{end}
+                        {start}\u–{end}
                       </span>{" "}
                       de{" "}
                       <span className="font-semibold text-slate-600 dark:text-slate-300">
@@ -1611,81 +1622,33 @@ export default function AdminTarefasPage({
               )}
             </Button>
 
-            {/* Column config */}
-            <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center justify-center h-9 w-9 rounded-md border transition-colors shrink-0",
-                    colConfigOpen
-                      ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
-                      : "text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800",
-                  )}
-                  title="Configurar colunas"
-                >
-                  <Cog className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={8} className="w-65 p-0">
-                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    Colunas vis\u00edveis
-                  </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Selecione quais colunas exibir
-                  </p>
-                </div>
-                <div className="p-2 space-y-0.5 max-h-75 overflow-y-auto">
-                  {ALL_COLUMNS.map((col) => (
-                    <label
-                      key={col.key}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                        visibleCols.has(col.key)
-                          ? "bg-blue-50 dark:bg-blue-900/20"
-                          : "hover:bg-slate-50 dark:hover:bg-slate-800",
-                        col.required && "opacity-60 pointer-events-none",
-                      )}
-                    >
-                      <Checkbox
-                        checked={visibleCols.has(col.key)}
-                        onCheckedChange={() => {
-                          if (col.required) return;
-                          setVisibleCols((prev) => {
-                            const n = new Set(prev);
-                            n.has(col.key) ? n.delete(col.key) : n.add(col.key);
-                            return n;
-                          });
-                        }}
-                        disabled={col.required}
-                        className="h-4 w-4"
-                      />
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        {col.label}
-                      </span>
-                      {col.required && (
-                        <span className="text-[9px] text-slate-400 ml-auto">
-                          obrigat\u00f3ria
-                        </span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                  <button
-                    onClick={() =>
-                      setVisibleCols(new Set(ALL_COLUMNS.map((c) => c.key)))
-                    }
-                    className="text-[10px] font-medium text-blue-500 hover:text-blue-700"
-                  >
-                    Mostrar todas
-                  </button>
-                  <span className="text-[10px] text-slate-400">
-                    {visibleCols.size} de {ALL_COLUMNS.length}
-                  </span>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {/* Column config \u2014 opens the SlidePanel rendered near the other panels below */}
+            <button
+              onClick={() => setColConfigOpen(true)}
+              className={cn(
+                "flex items-center justify-center h-9 w-9 rounded-md border transition-colors shrink-0",
+                colConfigOpen
+                  ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
+                  : "text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800",
+              )}
+              title="Configurar colunas"
+            >
+              <Cog className="h-4 w-4" />
+            </button>
+
+            {/* Top horizontal scrollbar mirror \u2014 only rendered when the table
+                actually overflows its container. */}
+            {hasHorizontalOverflow && (
+              <div
+                ref={topScrollRef}
+                onScroll={handleTopBarScroll}
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que n\u00e3o couberem na tela"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                style={{ height: 12 }}
+              >
+                <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+              </div>
+            )}
 
             {/* Pagination */}
             <div className="flex items-center gap-0.5 shrink-0">
@@ -1699,7 +1662,7 @@ export default function AdminTarefasPage({
               {getPageNumbers().map((pg, i) =>
                 pg === "..." ? (
                   <span key={i} className="text-xs text-slate-300 px-0.5">
-                    \u00b7
+                    \u·
                   </span>
                 ) : (
                   <button
@@ -1765,6 +1728,8 @@ export default function AdminTarefasPage({
           {/* Table */}
           {sorted.length > 0 && (
             <div
+              ref={tableScrollRef}
+              onScroll={handleTableScroll}
               className="overflow-x-auto allka-table-scroll"
             >
               <table
@@ -1796,23 +1761,25 @@ export default function AdminTarefasPage({
                         execucao: "start_date",
                         prioridade: "priority",
                       }[col.key];
-                      const isLast = col.key === "acoes";
+                      const isAcoes = col.key === "acoes";
                       return (
                         <th
                           key={col.key}
                           className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
                           style={{
-                            paddingLeft: 20,
-                            paddingRight: 20,
-                            textAlign: isLast ? "right" : "left",
-                            borderRight: !isLast
-                              ? "1px solid rgba(148,163,184,0.2)"
-                              : undefined,
+                            paddingLeft: isAcoes ? 8 : 20,
+                            paddingRight: isAcoes ? 8 : 20,
+                            textAlign: isAcoes ? "center" : "left",
+                            borderRight: "1px solid rgba(148,163,184,0.2)",
                             position: "sticky",
                             top: 0,
-                            zIndex: 2,
+                            left: isAcoes ? 0 : undefined,
+                            zIndex: isAcoes ? 3 : 2,
+                            minWidth: isAcoes ? 99 : undefined,
                             background: "var(--table-head)",
-                            boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                            boxShadow: isAcoes
+                              ? "0 1px 0 rgba(148,163,184,0.3), 1px 0 0 rgba(100,116,139,0.18)"
+                              : "0 1px 0 rgba(148,163,184,0.3)",
                           }}
                         >
                           {sortField ? (
@@ -1824,7 +1791,7 @@ export default function AdminTarefasPage({
                               onSort={(f, d) => handleSort(f as any, d)}
                             />
                           ) : (
-                            <span className={isLast ? "flex justify-end" : ""}>
+                            <span className={isAcoes ? "flex justify-center" : ""}>
                               {col.label}
                             </span>
                           )}
@@ -1868,16 +1835,24 @@ export default function AdminTarefasPage({
                           overdue && "bg-red-50/50 dark:bg-red-950/10",
                         )}
                       >
-                        {/* A\u00e7\u00f5es */}
+                        {/* A\u00e7\u00f5es \u2014 pinned/sticky, matching the platform-wide icon-column recipe */}
                         {visibleCols.has("acoes") && (
                           <td
-                            className="px-5 py-3.5"
+                            className={cn(
+                              "px-2 py-3 transition-colors",
+                              rowIdx % 2 === 0
+                                ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
+                            )}
                             style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
+                              position: "sticky",
+                              left: 0,
+                              zIndex: 1,
+                              minWidth: 99,
+                              borderRight: "1px solid rgba(100,116,139,0.18)",
                             }}
                           >
-                            <div className="flex items-center justify-end gap-0.5">
+                            <div className="flex items-center justify-center gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
@@ -1888,6 +1863,7 @@ export default function AdminTarefasPage({
                                         replace: true,
                                       });
                                     }}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </button>
@@ -1898,7 +1874,7 @@ export default function AdminTarefasPage({
                               </Tooltip>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100">
+                                  <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                                     <MoreHorizontal className="h-3.5 w-3.5" />
                                   </button>
                                 </DropdownMenuTrigger>
@@ -2387,6 +2363,21 @@ export default function AdminTarefasPage({
                   );
                 })()}
               </p>
+
+              {/* Bottom horizontal scrollbar mirror — only rendered when the
+                  table actually overflows its container. */}
+              {hasHorizontalOverflow && (
+                <div
+                  ref={bottomScrollRef}
+                  onScroll={handleBottomBarScroll}
+                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                  style={{ height: 12 }}
+                >
+                  <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+                </div>
+              )}
+
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setCurrentPage(1)}
@@ -2405,7 +2396,7 @@ export default function AdminTarefasPage({
                 {getPageNumbers().map((pg, i) =>
                   pg === "..." ? (
                     <span key={i} className="text-xs text-slate-300 px-0.5">
-                      \u00b7\u00b7\u00b7
+                      \u·\u·\u·
                     </span>
                   ) : (
                     <button
@@ -2505,6 +2496,68 @@ export default function AdminTarefasPage({
           setProjectData(null);
         }}
       />
+
+      {/* Column config — SlidePanel, matching the platform-wide pattern */}
+      <SlidePanel
+        open={colConfigOpen}
+        onClose={() => setColConfigOpen(false)}
+        title="Configurar colunas"
+        subtitle="Escolha quais colunas aparecem na tabela"
+        widthMode="compact"
+        compactWidth={360}
+      >
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-2 space-y-0.5">
+            {ALL_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                  visibleCols.has(col.key)
+                    ? "bg-blue-50 dark:bg-blue-900/20"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-800",
+                  col.required && "opacity-60 pointer-events-none",
+                )}
+              >
+                <Checkbox
+                  checked={visibleCols.has(col.key)}
+                  onCheckedChange={() => {
+                    if (col.required) return;
+                    setVisibleCols((prev) => {
+                      const n = new Set(prev);
+                      n.has(col.key) ? n.delete(col.key) : n.add(col.key);
+                      return n;
+                    });
+                  }}
+                  disabled={col.required}
+                  className="h-4 w-4"
+                />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  {col.label}
+                </span>
+                {col.required && (
+                  <span className="text-[9px] text-slate-400 ml-auto">
+                    obrigatória
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+          <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <button
+              onClick={() =>
+                setVisibleCols(new Set(ALL_COLUMNS.map((c) => c.key)))
+              }
+              className="text-[10px] font-medium text-blue-500 hover:text-blue-700"
+            >
+              Mostrar todas
+            </button>
+            <span className="text-[10px] text-slate-400">
+              {visibleCols.size} de {ALL_COLUMNS.length}
+            </span>
+          </div>
+        </div>
+      </SlidePanel>
     </TooltipProvider>
   );
 }

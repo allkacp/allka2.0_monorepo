@@ -102,6 +102,10 @@ import {
   InlineLoader,
 } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
+import { SlidePanel } from "@/components/slide-panel";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { NeonBadge } from "@/components/neon-badge";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 
 // --- Types --------------------------------------------------------------------
 
@@ -219,6 +223,89 @@ const PRIORITY_LABEL: Record<string, string> = {
 };
 
 const ALL_STATUSES: ModelStatus[] = ["ativa", "inativa", "em_revisao"];
+
+// NeonBadge color mapping — used only for genuinely read-only status/type
+// labels (e.g. the drawer header pills). The Select-based status control
+// keeps its own sc.bg/sc.color/sc.border classes since that's a change
+// control, not a badge.
+const STATUS_BADGE_COLOR: Record<ModelStatus, import("@/lib/badge-styles").BadgeColor> = {
+  ativa: "emerald",
+  inativa: "slate",
+  em_revisao: "amber",
+};
+const TYPE_BADGE_COLOR: Record<TaskType, import("@/lib/badge-styles").BadgeColor> = {
+  execution: "blue",
+  review: "amber",
+  approval: "purple",
+  qualification: "teal",
+  support: "slate",
+};
+
+// Gradient stat-card treatment matching admin/empresas' statColorMap (see
+// docs/padrao-tabela-empresas.md) — copied verbatim from admin/clientes'
+// StatCard, with an added optional onClick so the cards can still drive the
+// existing filter shortcuts without changing any of the visual classes.
+const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
+  blue: {
+    gradient: "from-blue-500 to-blue-700",
+    darkGradient: "dark:from-blue-800 dark:to-blue-950",
+    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
+  },
+  emerald: {
+    gradient: "from-emerald-500 to-teal-600",
+    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
+  },
+  violet: {
+    gradient: "from-violet-500 to-purple-700",
+    darkGradient: "dark:from-violet-800 dark:to-purple-950",
+    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
+  },
+  orange: {
+    gradient: "from-orange-500 to-rose-600",
+    darkGradient: "dark:from-orange-800 dark:to-rose-900",
+    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
+  },
+};
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  icon: any;
+  color: keyof typeof STAT_COLOR_MAP;
+  onClick?: () => void;
+}) {
+  const colors = STAT_COLOR_MAP[color];
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "relative rounded-xl overflow-hidden transition-all duration-200 bg-gradient-to-br",
+        colors.gradient,
+        colors.darkGradient,
+        colors.borderClass,
+        "shadow-lg hover:shadow-xl",
+        onClick ? "cursor-pointer" : "cursor-default",
+      )}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+          <div className="bg-white/20 rounded-md p-1">
+            <Icon className="h-3.5 w-3.5 text-white" />
+          </div>
+        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+      </div>
+    </div>
+  );
+}
 
 // --- Helpers ------------------------------------------------------------------
 
@@ -397,25 +484,12 @@ function ModelDetailDrawer({
                 <span className="text-[10px] font-mono font-bold bg-white/20 text-white px-2 py-0.5 rounded-md tracking-wider">
                   {model.code}
                 </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold px-2 py-0.5 rounded-full border",
-                    sc.bg,
-                    sc.color,
-                    sc.border,
-                  )}
-                >
+                <NeonBadge color={STATUS_BADGE_COLOR[model.status] ?? "emerald"}>
                   {sc.label}
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                    tc.bg,
-                    tc.color,
-                  )}
-                >
+                </NeonBadge>
+                <NeonBadge color={TYPE_BADGE_COLOR[model.task_type] ?? "blue"}>
                   {tc.label}
-                </span>
+                </NeonBadge>
               </div>
               <h2 className="text-lg font-bold text-white leading-snug line-clamp-2">
                 {model.name}
@@ -1090,6 +1164,7 @@ export default function AdminModelosTarefasPage() {
 
   // Pagination
   const [page, setPage] = useState(1);
+  const [pageJumpValue, setPageJumpValue] = useState("");
 
   // Load prefs once
   useEffect(() => {
@@ -1163,6 +1238,26 @@ export default function AdminModelosTarefasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlModeloId]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // "+" info panel — lightweight read-only summary (name/code/category,
+  // requirements, product links) using only real fields already present on
+  // the row object, no fabricated data.
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoPanelModel, setInfoPanelModel] = useState<CatalogTask | null>(null);
+  const openInfoPanel = useCallback((model: CatalogTask) => {
+    setInfoPanelModel(model);
+    setInfoPanelOpen(true);
+  }, []);
+
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([loading, visibleCols.size]);
 
   // Create sheet
   const [createOpen, setCreateOpen] = useState(false);
@@ -1286,6 +1381,10 @@ export default function AdminModelosTarefasPage() {
       vinculados: models.filter(
         (m) => (m._count?.product_links ?? m.product_links?.length ?? 0) > 0,
       ).length,
+      totalLinks: models.reduce(
+        (sum, m) => sum + (m._count?.product_links ?? m.product_links?.length ?? 0),
+        0,
+      ),
     }),
     [models],
   );
@@ -1471,6 +1570,112 @@ export default function AdminModelosTarefasPage() {
     }
     return pages;
   };
+
+  const commitPageJump = () => {
+    const n = parseInt(pageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n);
+    setPageJumpValue("");
+  };
+
+  // Numbered pagination — identical markup/gradient recipe in the top and
+  // bottom mirror bars (see docs/padrao-tabela-empresas.md).
+  const PaginationControls = () => (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <button
+        onClick={() => setPage(Math.max(1, page - 1))}
+        disabled={page === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((p, idx) =>
+        p === "..." ? (
+          <span key={`dot-${idx}`} className="text-xs text-slate-300 px-0.5">·</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => setPage(Number(p))}
+            title={p === page ? "Página atual" : `Ir para a página ${p}`}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors",
+              p === page
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
+            )}
+            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setPage(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                placeholder="Pág."
+                aria-label="Ir para a página"
+                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={commitPageJump}
+                disabled={!pageJumpValue}
+                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  const CountText = ({ side = "bottom" as "top" | "bottom" }) => (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+            {(() => {
+              const start = sorted.length === 0 ? 0 : Math.min((page - 1) * pageSize + 1, sorted.length);
+              const end = Math.min(page * pageSize, sorted.length);
+              return (
+                <>
+                  {start}-{end} de{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{sorted.length}</span>{" "}
+                  modelo{sorted.length !== 1 ? "s" : ""}
+                  {hasActiveFilters && <span className="text-blue-600 ml-1">· filtros ativos</span>}
+                </>
+              );
+            })()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6}>
+          Intervalo de modelos exibido nesta página, do total filtrado ({models.length} no total)
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   // Create new model
   const handleCreateModel = async () => {
@@ -1671,94 +1876,42 @@ export default function AdminModelosTarefasPage() {
           </div>
         )}
 
-        {/* Stat cards */}
+        {/* Stat cards — gradient cards matching admin/empresas & admin/clientes */}
         {!loading && !error && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              {
-                label: "Total de modelos",
-                value: stats.total,
-                icon: ClipboardList,
-                grad: "from-slate-700 via-slate-800 to-slate-900",
-                ring: "ring-slate-300/40",
-                onClick: () => clearFilters(),
-              },
-              {
-                label: "Modelos ativos",
-                value: stats.ativos,
-                icon: CheckCircle2,
-                grad: "from-emerald-500 via-emerald-600 to-teal-700",
-                ring: "ring-emerald-300/40",
-                onClick: () => {
-                  clearFilters();
-                  setFilterStatus("ativa");
-                },
-              },
-              {
-                label: "Modelos inativos",
-                value: stats.inativos,
-                icon: PauseCircle,
-                grad: "from-slate-400 via-slate-500 to-slate-700",
-                ring: "ring-slate-300/40",
-                onClick: () => {
-                  clearFilters();
-                  setFilterStatus("inativa");
-                },
-              },
-              {
-                label: "Em revisão",
-                value: stats.emRevisao,
-                icon: Eye,
-                grad: "from-amber-500 via-orange-500 to-rose-600",
-                ring: "ring-amber-300/40",
-                onClick: () => {
-                  clearFilters();
-                  setFilterStatus("em_revisao");
-                },
-              },
-              {
-                label: "Vinculados a produtos",
-                value: stats.vinculados,
-                icon: Boxes,
-                grad: "from-blue-500 via-indigo-600 to-violet-700",
-                ring: "ring-indigo-300/40",
-                onClick: () => {
-                  clearFilters();
-                  setFilterLinkedMode("linked");
-                },
-              },
-            ].map((c) => {
-              const Icon = c.icon;
-              return (
-                <button
-                  key={c.label}
-                  onClick={c.onClick}
-                  className={cn(
-                    "group relative rounded-2xl bg-gradient-to-br px-4 py-4 text-white text-left overflow-hidden",
-                    "shadow-md ring-1 transition-all duration-200",
-                    "hover:shadow-xl hover:scale-[1.02] active:scale-[0.99]",
-                    c.grad,
-                    c.ring,
-                  )}
-                >
-                  {/* Decorative blob */}
-                  <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-white/10 blur-xl group-hover:bg-white/20 transition-colors" />
-                  <div className="relative flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider opacity-80 leading-none mb-2">
-                        {c.label}
-                      </p>
-                      <p className="text-3xl font-black leading-none tabular-nums">
-                        {c.value}
-                      </p>
-                    </div>
-                    <div className="h-9 w-9 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 group-hover:bg-white/25 transition-colors">
-                      <Icon className="h-4.5 w-4.5" strokeWidth={2.25} />
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard
+              label="Total de modelos"
+              value={stats.total}
+              icon={ClipboardList}
+              color="blue"
+              onClick={() => clearFilters()}
+            />
+            <StatCard
+              label="Modelos ativos"
+              value={stats.ativos}
+              icon={CheckCircle2}
+              color="emerald"
+              onClick={() => {
+                clearFilters();
+                setFilterStatus("ativa");
+              }}
+            />
+            <StatCard
+              label="Vinculados a produtos"
+              value={stats.vinculados}
+              icon={Boxes}
+              color="violet"
+              onClick={() => {
+                clearFilters();
+                setFilterLinkedMode("linked");
+              }}
+            />
+            <StatCard
+              label="Total de vínculos com produtos"
+              value={stats.totalLinks}
+              icon={Link2}
+              color="orange"
+            />
           </div>
         )}
 
@@ -2096,71 +2249,13 @@ export default function AdminModelosTarefasPage() {
                 </PopoverContent>
               </Popover>
 
-              {/* Column settings */}
-              <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-9 p-0"
-                    title="Configurar tabela"
-                  >
-                    <Cog className="h-3.5 w-3.5" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="end"
-                  sideOffset={8}
-                  className="w-[280px] p-0"
-                >
-                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      Colunas visíveis
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Sua preferência é salva automaticamente.
-                    </p>
-                  </div>
-                  <div className="p-2 max-h-[280px] overflow-y-auto space-y-0.5">
-                    {ALL_COLUMNS.map((col) => (
-                      <label
-                        key={col.key}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
-                      >
-                        <Checkbox
-                          checked={visibleCols.has(col.key)}
-                          onCheckedChange={() => toggleCol(col.key)}
-                          disabled={col.required}
-                        />
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200 flex-1">
-                          {col.label}
-                        </span>
-                        {col.required && (
-                          <span className="text-[9px] uppercase tracking-wider text-slate-400">
-                            obrigatória
-                          </span>
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <button
-                      onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
-                      className="text-[11px] text-slate-500 hover:text-slate-700"
-                    >
-                      Restaurar padrão
-                    </button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      onClick={() => setColConfigOpen(false)}
-                    >
-                      Fechar
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              {/* Column settings — opens the SlidePanel rendered at the end of this component */}
+              <IconToolbarButton
+                icon={Cog}
+                tooltip="Configurar colunas"
+                onClick={() => setColConfigOpen(true)}
+                className="h-9 w-9"
+              />
 
               {/* Clear */}
               {hasActiveFilters && (
@@ -2175,28 +2270,34 @@ export default function AdminModelosTarefasPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-xs text-slate-500">
-                Exibindo{" "}
-                <span className="font-semibold text-slate-700 dark:text-slate-200">
-                  {sorted.length}
-                </span>{" "}
-                de{" "}
-                <span className="font-semibold text-slate-700 dark:text-slate-200">
-                  {models.length}
-                </span>{" "}
-                modelo{models.length !== 1 ? "s" : ""}
-                {hasActiveFilters && (
-                  <span className="text-blue-600 ml-1">· filtros ativos</span>
-                )}
-              </p>
-              <ItemsPerPageSelect
-                value={String(pageSize)}
-                onValueChange={(v) => {
-                  setPageSize(Number(v));
-                  setPage(1);
-                }}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <ItemsPerPageSelect
+                  value={String(pageSize)}
+                  onValueChange={(v) => {
+                    setPageSize(Number(v));
+                    setPage(1);
+                  }}
+                  variant="top"
+                />
+                <CountText side="bottom" />
+              </div>
+
+              {/* Top horizontal scrollbar mirror — only rendered when the
+                  table actually overflows its container. */}
+              {hasHorizontalOverflow && (
+                <div
+                  ref={topScrollRef}
+                  onScroll={handleTopBarScroll}
+                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                  style={{ height: 12 }}
+                >
+                  <div style={{ minWidth: 800, height: 1 }} />
+                </div>
+              )}
+
+              {totalPages > 1 && <PaginationControls />}
             </div>
           </div>
         )}
@@ -2242,6 +2343,8 @@ export default function AdminModelosTarefasPage() {
         {!loading && !error && sorted.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div
+              ref={tableScrollRef}
+              onScroll={handleTableScroll}
               className="overflow-x-auto allka-table-scroll"
             >
               <table className="w-full text-sm min-w-[800px]">
@@ -2255,6 +2358,21 @@ export default function AdminModelosTarefasPage() {
                   }}
                 >
                   <tr>
+                    <th
+                      className="px-1 py-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center"
+                      style={{
+                        position: "sticky",
+                        left: 0,
+                        top: 0,
+                        zIndex: 3,
+                        minWidth: 84,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                        borderRight: "1px solid rgba(100,116,139,0.18)",
+                      }}
+                    >
+                      Ações
+                    </th>
                     {isCol("code") && (
                       <Th
                         label="Código"
@@ -2325,13 +2443,10 @@ export default function AdminModelosTarefasPage() {
                         className="w-32"
                       />
                     )}
-                    <th className="px-3 py-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-16">
-                      Ações
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {paginated.map((model) => {
+                  {paginated.map((model, i) => {
                     const sc =
                       STATUS_CONFIG[model.status] ?? STATUS_CONFIG.ativa;
                     const tc =
@@ -2341,15 +2456,111 @@ export default function AdminModelosTarefasPage() {
                       model.product_links?.length ??
                       0;
                     const updatingThis = updatingId === model.id;
+                    const isEven = i % 2 === 0;
                     return (
                       <tr
                         key={model.id}
-                        className={`group transition-colors ${
-                          sorted.indexOf(model) % 2 === 0
-                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
-                        }`}
+                        className={cn(
+                          "group transition-colors",
+                          isEven
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
+                        )}
                       >
+                        {/* Ações — pinned, matching the doc's exact recipe */}
+                        <td
+                          className={cn(
+                            "px-1 py-2 transition-colors",
+                            isEven
+                              ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
+                          )}
+                          style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 84, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openInfoPanel(model);
+                                    }}
+                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedModel(model);
+                                      setDrawerOpen(true);
+                                      navigate(`/admin/modelos-tarefas/${model.id}`, { replace: true });
+                                    }}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                  <span className="sr-only">Mais ações</span>
+                                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="w-52">
+                                <DropdownMenuItem
+                                  className="text-sm gap-2"
+                                  onClick={() => handleDuplicate(model)}
+                                  disabled={updatingThis}
+                                >
+                                  <Copy className="h-3.5 w-3.5 text-blue-600" />{" "}
+                                  Duplicar modelo
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-sm gap-2"
+                                  onClick={() => handleStatusChange(model, "ativa")}
+                                  disabled={model.status === "ativa"}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />{" "}
+                                  Marcar como ativo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-sm gap-2"
+                                  onClick={() => handleStatusChange(model, "inativa")}
+                                  disabled={model.status === "inativa"}
+                                >
+                                  <Circle className="h-3.5 w-3.5 text-slate-400" />{" "}
+                                  Marcar como inativo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-sm gap-2"
+                                  onClick={() => handleStatusChange(model, "em_revisao")}
+                                  disabled={model.status === "em_revisao"}
+                                >
+                                  <Eye className="h-3.5 w-3.5 text-amber-600" />{" "}
+                                  Enviar p/ revisão
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+
                         {/* Código */}
                         {isCol("code") && (
                           <td className="px-3 py-3 pl-4">
@@ -2401,15 +2612,9 @@ export default function AdminModelosTarefasPage() {
                         {/* Tipo */}
                         {isCol("type") && (
                           <td className="px-3 py-3">
-                            <span
-                              className={cn(
-                                "inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full",
-                                tc.bg,
-                                tc.color,
-                              )}
-                            >
+                            <NeonBadge color={TYPE_BADGE_COLOR[model.task_type] ?? "blue"}>
                               {tc.label}
-                            </span>
+                            </NeonBadge>
                           </td>
                         )}
 
@@ -2533,83 +2738,6 @@ export default function AdminModelosTarefasPage() {
                           </td>
                         )}
 
-                        {/* Ações */}
-                        <td className="px-3 py-3 pr-4 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <span className="sr-only">Ações</span>
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="currentColor"
-                                  viewBox="0 0 16 16"
-                                >
-                                  <circle cx="8" cy="3" r="1.5" />
-                                  <circle cx="8" cy="8" r="1.5" />
-                                  <circle cx="8" cy="13" r="1.5" />
-                                </svg>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem
-                                className="text-sm gap-2"
-                                onClick={() => {
-                                  setSelectedModel(model);
-                                  setDrawerOpen(true);
-                                  navigate(
-                                    `/admin/modelos-tarefas/${model.id}`,
-                                    { replace: true },
-                                  );
-                                }}
-                              >
-                                <Eye className="h-3.5 w-3.5" /> Ver detalhes
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-sm gap-2"
-                                onClick={() => handleDuplicate(model)}
-                                disabled={updatingThis}
-                              >
-                                <Copy className="h-3.5 w-3.5 text-blue-600" />{" "}
-                                Duplicar modelo
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-sm gap-2"
-                                onClick={() =>
-                                  handleStatusChange(model, "ativa")
-                                }
-                                disabled={model.status === "ativa"}
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />{" "}
-                                Marcar como ativo
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-sm gap-2"
-                                onClick={() =>
-                                  handleStatusChange(model, "inativa")
-                                }
-                                disabled={model.status === "inativa"}
-                              >
-                                <Circle className="h-3.5 w-3.5 text-slate-400" />{" "}
-                                Marcar como inativo
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-sm gap-2"
-                                onClick={() =>
-                                  handleStatusChange(model, "em_revisao")
-                                }
-                                disabled={model.status === "em_revisao"}
-                              >
-                                <Eye className="h-3.5 w-3.5 text-amber-600" />{" "}
-                                Enviar p/ revisão
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
                       </tr>
                     );
                   })}
@@ -2617,78 +2745,222 @@ export default function AdminModelosTarefasPage() {
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Bottom mirror bar — items-per-page + count + scrollbar mirror
+                + pagination, matching the top toolbar row exactly. */}
             {sorted.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex-wrap gap-2">
-                <p className="text-xs text-slate-500">
-                  {(() => {
-                    const start = Math.min(
-                      (page - 1) * pageSize + 1,
-                      sorted.length,
-                    );
-                    const end = Math.min(page * pageSize, sorted.length);
-                    return (
-                      <>
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
-                          {start}-{end}
-                        </span>{" "}
-                        de{" "}
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
-                          {sorted.length}
-                        </span>{" "}
-                        · Página{" "}
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
-                          {page}
-                        </span>{" "}
-                        de {totalPages}
-                      </>
-                    );
-                  })()}
-                </p>
-                <div className="flex items-center gap-0.5">
-                  <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    disabled={page === 1}
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  {getPageNumbers().map((p, idx) =>
-                    p === "..." ? (
-                      <span
-                        key={`dot-${idx}`}
-                        className="text-xs text-slate-300 px-1"
-                      >
-                        —
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => setPage(Number(p))}
-                        className={cn(
-                          "h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                          p === page
-                            ? "btn-brand text-white shadow-sm"
-                            : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
-                        )}
-                      >
-                        {p}
-                      </button>
-                    ),
-                  )}
-                  <button
-                    onClick={() => setPage(Math.min(totalPages, page + 1))}
-                    disabled={page === totalPages}
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <ItemsPerPageSelect
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(1);
+                    }}
+                    variant="bottom"
+                  />
+                  <CountText side="top" />
                 </div>
+
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={bottomScrollRef}
+                    onScroll={handleBottomBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 800, height: 1 }} />
+                  </div>
+                )}
+
+                {totalPages > 1 && <PaginationControls />}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Column config panel */}
+      <SlidePanel
+        open={colConfigOpen}
+        onClose={() => setColConfigOpen(false)}
+        title="Configurar colunas"
+        subtitle="Escolha quais colunas aparecem na tabela"
+        widthMode="compact"
+        compactWidth={360}
+        footer={
+          <div className="flex justify-between items-center">
+            <button
+              onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
+              className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              Restaurar padrão
+            </button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setColConfigOpen(false)}>
+              Fechar
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-4 flex-1 overflow-y-auto space-y-0.5">
+          <p className="text-[11px] text-slate-400 px-1 pb-2">
+            Sua preferência é salva automaticamente.
+          </p>
+          {ALL_COLUMNS.map((col) => (
+            <label
+              key={col.key}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <Checkbox
+                checked={visibleCols.has(col.key)}
+                onCheckedChange={() => toggleCol(col.key)}
+                disabled={col.required}
+              />
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-200 flex-1">
+                {col.label}
+              </span>
+              {col.required && (
+                <span className="text-[9px] uppercase tracking-wider text-slate-400">
+                  obrigatória
+                </span>
+              )}
+            </label>
+          ))}
+        </div>
+      </SlidePanel>
+
+      {/* "+" info panel — real fields already present on the row object
+          (no fetch needed: getCatalogTasks already returns product_links). */}
+      <SlidePanel
+        open={infoPanelOpen}
+        onClose={() => setInfoPanelOpen(false)}
+        title={infoPanelModel?.name}
+        subtitle={
+          infoPanelModel &&
+          `${infoPanelModel.code} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
+        }
+        widthMode="compact"
+        compactWidth={480}
+      >
+        {infoPanelModel && (
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            <div className="flex flex-wrap gap-2">
+              <NeonBadge color={STATUS_BADGE_COLOR[infoPanelModel.status] ?? "emerald"}>
+                {(STATUS_CONFIG[infoPanelModel.status] ?? STATUS_CONFIG.ativa).label}
+              </NeonBadge>
+              <NeonBadge color={TYPE_BADGE_COLOR[infoPanelModel.task_type] ?? "blue"}>
+                {(TYPE_CONFIG[infoPanelModel.task_type] ?? TYPE_CONFIG.execution).label}
+              </NeonBadge>
+              {infoPanelModel.requires_briefing && (
+                <NeonBadge color="blue">
+                  <HelpCircle className="h-3 w-3 mr-1 inline" /> Requer briefing
+                </NeonBadge>
+              )}
+              {infoPanelModel.requires_access && (
+                <NeonBadge color="orange">
+                  <ShieldCheck className="h-3 w-3 mr-1 inline" /> Requer acesso
+                </NeonBadge>
+              )}
+              {infoPanelModel.requires_files && (
+                <NeonBadge color="purple">
+                  <FileText className="h-3 w-3 mr-1 inline" /> Requer arquivos
+                </NeonBadge>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                Dados do modelo
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Complexidade</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    {COMPLEXITY_LABEL[infoPanelModel.complexity] ?? infoPanelModel.complexity ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Prioridade padrão</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    {PRIORITY_LABEL[infoPanelModel.default_priority] ?? infoPanelModel.default_priority ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Prazo padrão</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    {infoPanelModel.default_deadline_days ? `${infoPanelModel.default_deadline_days} dia(s)` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Horas estimadas</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    {infoPanelModel.estimated_hours ? `${infoPanelModel.estimated_hours}h` : "—"}
+                  </p>
+                </div>
+                {infoPanelModel.responsible_type && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Responsável</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">{infoPanelModel.responsible_type}</p>
+                  </div>
+                )}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Criado · Atualizado</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    {fmtDate(infoPanelModel.created_at)} · {fmtDate(infoPanelModel.updated_at)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {infoPanelModel.description && (
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Descrição</h3>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{infoPanelModel.description}</p>
+              </div>
+            )}
+
+            {infoPanelModel.objective && (
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Objetivo</h3>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{infoPanelModel.objective}</p>
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                Produtos vinculados
+                <span className="ml-1.5 inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-bold text-slate-600 dark:text-slate-300 align-middle">
+                  {infoPanelModel._count?.product_links ?? infoPanelModel.product_links?.length ?? 0}
+                </span>
+              </h3>
+              {(infoPanelModel.product_links?.length ?? 0) > 0 ? (
+                <div className="space-y-2">
+                  {infoPanelModel.product_links!.map((l) => (
+                    <div
+                      key={l.id}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded shrink-0">
+                          {l.product.id}
+                        </span>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{l.product.name}</p>
+                      </div>
+                      {l.is_mandatory && (
+                        <span className="flex-shrink-0 ml-3 text-[10px] font-bold text-orange-600 dark:text-orange-400">
+                          Obrigatório
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Nenhum produto vinculado a este modelo.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </SlidePanel>
 
       {/* Detail Drawer */}
       <ModelDetailDrawer
