@@ -105,6 +105,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 | [produtos.md](./docs/produtos.md)                               | Produto pai, variações, tarefas, etapas, testes, briefing, catálogo, onde editar   |
 | [telas-e-funcionalidades.md](./docs/telas-e-funcionalidades.md) | Mapa das páginas de cada portal + onde editar cada uma                             |
 | [ui-e-padroes.md](./docs/ui-e-padroes.md)                       | Padrões visuais, drawers laterais, tema, componentes reutilizáveis                 |
+| [padrao-tabela-empresas.md](./docs/padrao-tabela-empresas.md)   | Especificação completa do padrão de tabela (referência `admin/empresas`) — usar sempre que replicar o padrão em outra tela |
 | [regras-de-negocio.md](./docs/regras-de-negocio.md)             | Regras importantes (perfis, produtos, financeiro, permissões, segurança)           |
 | [boas-praticas-dev.md](./docs/boas-praticas-dev.md)             | Como mexer sem quebrar, identificar impacto, documentar mudanças                   |
 | [checklist-manutencao.md](./docs/checklist-manutencao.md)       | Checklists práticas: criar feature, revisar, preparar deploy, validar pós-deploy   |
@@ -114,15 +115,16 @@ A documentação técnica completa está em [`/docs`](./docs):
 ## Observações importantes para novos devs
 
 1. **Três modos de execução**: `dev:mock` (sem backend), `dev` (com backend local), `build` (produção). Flag via `.env.<modo>`.
-2. **Drawer lateral é o padrão** para criar/editar (nunca modal centralizado). Referência: `apps/frontend/components/company-create-slide-panel.tsx`.
-3. **Tema** vem de variáveis CSS do `SidebarContext` (`--app-brand-*`) — nunca hardcodear cor.
-4. **Produtos** têm base compartilhada (no pai) e diferenciais por variação — ver [docs/produtos.md](./docs/produtos.md).
-5. **Sempre testar em `mock` e `dev`** antes de subir.
-6. **Backup do banco** antes de qualquer migration em produção.
-7. **`.env` nunca vai pro git**. Use os `.env.example` como template.
-8. **Desativar em vez de deletar** (preserva histórico).
-9. **Sem SSR** — é SPA pura. Rotas cliente dependem do `.htaccess` no cPanel.
-10. Português na UI, inglês no código.
+2. **Drawer lateral é o padrão** para criar/editar/filtrar (nunca modal centralizado com backdrop). Usar o componente compartilhado `apps/frontend/components/slide-panel.tsx` (`<SlidePanel>`) — ver [docs/ui-e-padroes.md](./docs/ui-e-padroes.md).
+3. **Tabelas de listagem** seguem o padrão criado em `admin/empresas` (cards de estatística, badges "neon", coluna de ações fixa, paginação espelhada topo/rodapé). Ao replicar em outra tela, seguir **[docs/padrao-tabela-empresas.md](./docs/padrao-tabela-empresas.md)** à risca — não é para simplificar.
+4. **Tema** vem de variáveis CSS do `SidebarContext` (`--app-brand-*`) — nunca hardcodear cor.
+5. **Produtos** têm base compartilhada (no pai) e diferenciais por variação — ver [docs/produtos.md](./docs/produtos.md).
+6. **Sempre testar em `mock` e `dev`** antes de subir.
+7. **Backup do banco** antes de qualquer migration em produção.
+8. **`.env` nunca vai pro git**. Use os `.env.example` como template.
+9. **Desativar em vez de deletar** (preserva histórico).
+10. **Sem SSR** — é SPA pura. Rotas cliente dependem do `.htaccess` no cPanel.
+11. Português na UI, inglês no código.
 
 ---
 
