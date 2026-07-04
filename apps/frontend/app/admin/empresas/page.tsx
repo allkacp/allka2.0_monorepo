@@ -583,9 +583,17 @@ export default function EmpresasPage() {
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   useEffect(() => {
     const el = tableScrollRef.current;
+    // tableScrollRef is null while companiesLoading shows the early-return
+    // spinner (the table isn't mounted yet) — re-run once loading flips to
+    // false and the real table mounts, instead of only on colWidths/
+    // visibleCols changes, or the ResizeObserver never attaches and the
+    // scrollbar mirrors stay hidden forever regardless of actual overflow.
     if (!el) return;
+    // A few px of slack (scrollbar-width rounding, border-collapse edge
+    // cases) shouldn't count as "overflow" — only show the mirrors when
+    // there's genuinely more to scroll than that.
     const check = () =>
-      setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 1);
+      setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 8);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
@@ -594,7 +602,7 @@ export default function EmpresasPage() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [colWidths, visibleCols]);
+  }, [colWidths, visibleCols, companiesLoading]);
   const dragState = useRef<{
     colIndex: number;
     startX: number;
@@ -874,7 +882,11 @@ export default function EmpresasPage() {
       description: c.description || "",
       website: c.website || "",
       avatar: c.logo || c.avatar || null,
-      plan: "starter",
+      // Was hardcoded to "starter" — plan/partner_level/account_type must
+      // all derive from the same real value, or sort/filter on the Plano
+      // column (which reads company.plan) silently breaks against what's
+      // actually rendered (which reads partner_level/account_type).
+      plan: c.plan || c.partner_level || DEMO_PLANS[idx % DEMO_PLANS.length],
       users_count: c.users_count ?? c._count?.users ?? 0,
       projects_count: c.projects_count ?? c._count?.projects ?? 0,
       created_at: c.created_at || new Date().toISOString(),

@@ -36,6 +36,7 @@ import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import {
   getCompanyTypeLabel,
   getCompanyTypeInfo,
@@ -228,6 +229,16 @@ export default function AdminClientesPage() {
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
     useSorting<any>();
 
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([loading, visibleCols.size]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -328,6 +339,102 @@ export default function AdminClientesPage() {
   const totalUsers = clients.reduce((s, c) => s + (c._count?.users ?? 0), 0);
   const totalInvoices = clients.reduce((s, c) => s + (c._count?.invoices ?? 0), 0);
 
+  const PaginationControls = () => (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <button
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        disabled={page === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((p, index) =>
+        p === "..." ? (
+          <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+        ) : (
+          <button
+            key={index}
+            onClick={() => setPage(Number(p))}
+            title={p === page ? "Página atual" : `Ir para a página ${p}`}
+            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+              p === page
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+            }`}
+            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        disabled={page === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                placeholder="Pág."
+                aria-label="Ir para a página"
+                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={commitPageJump}
+                disabled={!pageJumpValue}
+                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  const CountText = ({ side = "bottom" as "top" | "bottom" }) => (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+            {(() => {
+              const start = total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total);
+              const end = Math.min(page * pageSize, total);
+              return (
+                <>
+                  {start}-{end} de{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{total}</span>{" "}
+                  cliente{total !== 1 ? "s" : ""}
+                </>
+              );
+            })()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6}>
+          Intervalo de clientes exibido nesta página, do total encontrado
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   return (
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
       <PageHeader
@@ -414,7 +521,7 @@ export default function AdminClientesPage() {
           </div>
         </div>
 
-        {/* Row 2 — items-per-page + count + numbered pagination (mirrors admin/empresas) */}
+        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination (mirrors admin/empresas) */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
           <div className="flex items-center gap-3">
             <ItemsPerPageSelect
@@ -422,100 +529,24 @@ export default function AdminClientesPage() {
               onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}
               variant="top"
             />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
-                    {(() => {
-                      const start = total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total);
-                      const end = Math.min(page * pageSize, total);
-                      return (
-                        <>
-                          {start}-{end} de{" "}
-                          <span className="font-semibold text-slate-600 dark:text-slate-300">{total}</span>{" "}
-                          cliente{total !== 1 ? "s" : ""}
-                        </>
-                      );
-                    })()}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Intervalo de clientes exibido nesta página, do total encontrado
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <CountText side="bottom" />
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                title="Página anterior"
-                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              {getPageNumbers().map((p, index) =>
-                p === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
-                ) : (
-                  <button
-                    key={index}
-                    onClick={() => setPage(Number(p))}
-                    title={p === page ? "Página atual" : `Ir para a página ${p}`}
-                    className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
-                      p === page
-                        ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                    }`}
-                    style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
-                  >
-                    {p}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                title="Próxima página"
-                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-              <TooltipProvider delayDuration={400}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        value={pageJumpValue}
-                        onChange={(e) => setPageJumpValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
-                        placeholder="Pág."
-                        aria-label="Ir para a página"
-                        className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <button
-                        onClick={commitPageJump}
-                        disabled={!pageJumpValue}
-                        className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
-                      >
-                        <span
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                          style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                        />
-                        <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
-                      </button>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          {/* Top horizontal scrollbar mirror — only rendered when the table
+              actually overflows its container. */}
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div style={{ minWidth: 960, height: 1 }} />
             </div>
           )}
+
+          {totalPages > 1 && <PaginationControls />}
         </div>
 
         {/* Table */}
@@ -535,7 +566,7 @@ export default function AdminClientesPage() {
             <span className="text-sm">Nenhum cliente encontrado</span>
           </div>
         ) : (
-          <div className="overflow-x-auto allka-table-scroll">
+          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll">
             <table className="w-full text-xs min-w-[960px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
@@ -774,6 +805,34 @@ export default function AdminClientesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Row 3 — bottom mirror of row 2 (items-per-page + count + scrollbar + pagination) */}
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <div className="flex items-center gap-3">
+              <ItemsPerPageSelect
+                value={pageSize.toString()}
+                onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}
+                variant="bottom"
+              />
+              <CountText side="top" />
+            </div>
+
+            {hasHorizontalOverflow && (
+              <div
+                ref={bottomScrollRef}
+                onScroll={handleBottomBarScroll}
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                style={{ height: 12 }}
+              >
+                <div style={{ minWidth: 960, height: 1 }} />
+              </div>
+            )}
+
+            {totalPages > 1 && <PaginationControls />}
           </div>
         )}
       </div>

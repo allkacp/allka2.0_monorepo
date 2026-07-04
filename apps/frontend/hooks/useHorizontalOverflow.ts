@@ -14,7 +14,9 @@ export function useHorizontalOverflow(
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const check = () => setHasOverflow(el.scrollWidth > el.clientWidth + 1);
+    // A few px of slack (scrollbar-width rounding, border-collapse edge
+    // cases) shouldn't count as "overflow" — only flag genuine overflow.
+    const check = () => setHasOverflow(el.scrollWidth > el.clientWidth + 8);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
